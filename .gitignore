@@ -426,3 +426,24 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# TripOps local configuration, caches and generated outputs
+.local/
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+**/dist/
+**/.dart_tool/
+**/.flutter-plugins*
+**/build/
+**/coverage/
+**/__pycache__/
+*.pyc
+**/appsettings.Local.json
+**/local.properties
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+**/ephemeral/
+**/Pods/
+**/.symlinks/

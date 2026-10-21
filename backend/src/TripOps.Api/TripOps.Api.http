@@ -1,0 +1,9 @@
+@TripOps.Api_HostAddress = http://localhost:5080
+
+GET {{TripOps.Api_HostAddress}}/api/v1/health
+Accept: application/json
+
+###
+
+GET {{TripOps.Api_HostAddress}}/openapi/v1.json
+Accept: application/json
