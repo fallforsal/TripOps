@@ -13,7 +13,6 @@ import {
   BookingAttractionCheckin,
   BookingIncident,
 } from "@/app/types";
-import { mockTourCompanies } from "@/app/data/mockData";
 import { AgencyLayout } from "./AgencyLayout";
 import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement, TourFormPage } from "./AgencyTourManagement";
@@ -335,7 +334,7 @@ export function AgencyDashboard({
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}
-            allCompanies={allCompanies || mockTourCompanies}
+            allCompanies={allCompanies || []}
             onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
@@ -403,7 +402,7 @@ export function AgencyDashboard({
             tours={tours}
             customTourRequests={customTourRequests}
             bookings={bookings}
-            allCompanies={allCompanies || mockTourCompanies}
+            allCompanies={allCompanies || []}
             onAcceptInvitation={handleAcceptCoHostInvitation}
             onRejectInvitation={handleRejectCoHostInvitation}
             onViewTour={onViewTour}

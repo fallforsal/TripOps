@@ -38,14 +38,7 @@ interface AdminDashboardProps {
   onRejectService?: (serviceId: string, reason: string) => void;
   onToggleHideService?: (serviceId: string, reason?: string) => void;
   onDeleteService?: (serviceId: string) => void;
-  onApproveProvider: (providerId: string) => void;
-  onRejectProvider: (
-    providerId: string,
-    reason?: string,
-  ) => void;
   onUpdateUserStatus: (userId: string, isLocked: boolean) => void;
-  onApproveCompany: (companyId: string) => void;
-  onRejectCompany: (companyId: string, reason: string) => void;
   systemBank: SystemBankAccount;
   onUpdateSystemBank: (bank: SystemBankAccount) => void;
   onSettleBooking: (
@@ -53,7 +46,7 @@ interface AdminDashboardProps {
     settledAmount: number,
     platformFee: number,
     targetAgencyId?: string,
-    bankReference?: string
+    bankReference?: string,
   ) => void;
   onSuspendCompany: (companyId: string, reason: string) => void;
   onLogout?: () => void;
@@ -80,11 +73,7 @@ export function AdminDashboard({
   onRejectService,
   onToggleHideService,
   onDeleteService,
-  onApproveProvider,
-  onRejectProvider,
   onUpdateUserStatus,
-  onApproveCompany,
-  onRejectCompany,
   systemBank,
   onUpdateSystemBank,
   onSettleBooking,
@@ -94,12 +83,10 @@ export function AdminDashboard({
   const [activeSection, setActiveSection] =
     useState<string>("partner-approvals");
 
-  const companyAdmins = users.filter(
-    (u) => u.role === "company_admin",
-  );
+  const companyAdmins = users.filter((u) => u.role === "company_admin");
 
   const pendingToursCount = tours.filter(
-    (t) => t.status === "pending_approval"
+    (t) => t.status === "pending_approval",
   ).length;
 
   const renderContent = () => {
@@ -117,17 +104,7 @@ export function AdminDashboard({
       case "partner-approvals":
       case "companies":
       case "approve-providers":
-        return (
-          <PartnerApprovalManagement
-            companies={companies}
-            companyAdmins={companyAdmins}
-            providers={providers}
-            onApproveCompany={onApproveCompany}
-            onRejectCompany={onRejectCompany}
-            onApproveProvider={onApproveProvider}
-            onRejectProvider={onRejectProvider}
-          />
-        );
+        return <PartnerApprovalManagement />;
       case "tours":
       case "approve-tours":
         return (
@@ -164,9 +141,7 @@ export function AdminDashboard({
       case "providers":
         return (
           <ProviderManagement
-            providers={providers.filter(
-              (p) => p.accountStatus === "approved",
-            )}
+            providers={providers.filter((p) => p.accountStatus === "approved")}
             services={services}
           />
         );

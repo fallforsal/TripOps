@@ -18,10 +18,11 @@ function figmaAssetResolver() {
 
 export default defineConfig({
   base: './',
+  server: { port: 5173, strictPort: true, proxy: { '/api': { target: 'http://localhost:5080', changeOrigin: false } } },
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
+    // Tailwind is not being actively used â€“ do not remove them
     react(),
     tailwindcss(),
   ],

@@ -38,7 +38,7 @@ export interface BusinessProfile {
   businessAddress: string;
   businessLicenseUrl?: string;
   description?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'suspended';
   rejectionReason?: string;
   approvedAt?: string;
   createdAt?: string;
@@ -70,7 +70,7 @@ export interface User {
   latitude?: number; // Vĩ độ
   longitude?: number; // Kinh độ
   businessDescription?: string;
-  accountStatus?: "pending" | "approved" | "rejected";
+  accountStatus?: "pending" | "approved" | "rejected" | "suspended";
   rejectionReason?: string;
   // Guide specific fields
   licenseNumber?: string;

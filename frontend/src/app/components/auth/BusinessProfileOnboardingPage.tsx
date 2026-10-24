@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { partnerService } from "@/app/services/partnerService";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Compass,
@@ -43,7 +45,10 @@ type VerificationStatus = "draft" | "pending" | "rejected";
 
 const cleanDisplayName = (name?: string) => {
   if (!name) return "";
-  return name.replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  return name
+    .replace(/\s*\(.*?\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 export function BusinessProfileOnboardingPage({
@@ -52,119 +57,122 @@ export function BusinessProfileOnboardingPage({
   onLogout,
   onSubmitSuccess,
 }: BusinessProfileOnboardingPageProps) {
-  const isAgency = currentUser.role === "agency" || currentUser.role === "company_admin";
+  const { refresh: refreshAccount } = useAuth();
+  const isAgency =
+    currentUser.role === "agency" || currentUser.role === "company_admin";
   const isProvider = currentUser.role === "provider";
-
-  // Xác định trạng thái ban đầu:
-  // Nếu công ty hoặc user đã có status = "rejected" thì hiển thị màn hình rejected
-  // Nếu có status = "pending" và đã có taxCode thì hiển thị pending
-  // Nếu chưa có thông tin thì ở trạng thái "draft" (form nhập)
-  const initialStatus: VerificationStatus =
-    company?.status === "rejected" || currentUser.accountStatus === "rejected"
-      ? "rejected"
-      : company?.status === "pending" || currentUser.accountStatus === "pending"
-      ? "pending"
-      : "draft";
-
-  const [currentViewStatus, setCurrentViewStatus] = useState<VerificationStatus>(initialStatus);
-
-  // Form state map CHÍNH XÁC theo các trường của bảng `business_profiles` & `users`:
-  // 1. business_name: string (Tên doanh nghiệp / Cơ sở)
-  // 2. tax_code: string (Mã số thuế)
-  // 3. phone: string (Số điện thoại liên hệ / hotline người đại diện - cập nhật users.phone)
-  // 4. business_address: string (Địa chỉ trụ sở đăng ký)
-  // 5. business_license_url: string (Tài liệu / File chụp GPKD)
-  // 6. description: string (Mô tả giới thiệu doanh nghiệp)
-  const [businessName, setBusinessName] = useState(
-    company?.name || currentUser.businessName || ""
+  const [profile, setProfile] = useState(currentUser.businessProfile);
+  const [currentViewStatus, setCurrentViewStatus] =
+    useState<VerificationStatus>(
+      profile?.status === "rejected" || profile?.status === "suspended"
+        ? "rejected"
+        : profile
+          ? "pending"
+          : "draft",
+    );
+  const [businessName, setBusinessName] = useState(profile?.businessName || "");
+  const [taxCode, setTaxCode] = useState(profile?.taxCode || "");
+  const [phone, setPhone] = useState(currentUser.phone || "");
+  const [address, setAddress] = useState(profile?.businessAddress || "");
+  const [description, setDescription] = useState(profile?.description || "");
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const licenseFileUploaded = Boolean(
+    licenseFile || profile?.businessLicenseUrl,
   );
-  const [taxCode, setTaxCode] = useState(
-    company?.taxCode || currentUser.taxCode || ""
-  );
-  const [phone, setPhone] = useState(
-    currentUser.phone || company?.phone || currentUser.businessPhone || ""
-  );
-  const [address, setAddress] = useState(
-    company?.address || currentUser.businessAddress || ""
-  );
-  const [description, setDescription] = useState(
-    company?.description || currentUser.businessDescription || ""
-  );
-  const [licenseFileUploaded, setLicenseFileUploaded] = useState(
-    Boolean(company?.licenseNumber || company?.taxCode)
-  );
-  const [licenseFileName, setLicenseFileName] = useState(
-    licenseFileUploaded
-      ? isAgency
-        ? "Giay_Phep_Kinh_Doanh_Lu_Hanh.pdf"
-        : "Giay_Phep_Dang_Ky_Kinh_Doanh.pdf"
-      : ""
-  );
-
-  // Rejection data từ database:
-  // Cột: rejection_reason (TEXT), updated_at (TIMESTAMP)
-  const [rejectionReason, setRejectionReason] = useState(
-    company?.rejectionReason ||
-      currentUser.rejectionReason ||
-      "Mã số thuế doanh nghiệp không trùng khớp với tên pháp nhân trên Cổng Thông tin Quốc gia về Đăng ký Doanh nghiệp. Bản chụp Giấy phép bị mờ góc không thấy rõ dấu mộc đỏ pháp lý. Vui lòng kiểm tra lại thông tin và chụp lại bản gốc rõ nét."
-  );
-  const [rejectedAt, setRejectedAt] = useState(
-    "2026-10-24 15:30:00"
-  );
-
-  // Submission state
+  const licenseFileName =
+    licenseFile?.name ||
+    (profile?.businessLicenseUrl ? "Ảnh giấy phép đã nộp" : "");
+  const rejectionReason =
+    profile?.rejectionReason ||
+    (profile?.status === "suspended"
+      ? "Hồ sơ đang bị đình chỉ. Vui lòng liên hệ hỗ trợ."
+      : "");
+  const rejectedAt = profile?.updatedAt
+    ? new Date(profile.updatedAt).toLocaleString("vi-VN")
+    : "";
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  async function refreshStatus() {
+    setIsRefreshing(true);
     setErrorMessage("");
-
-    if (!businessName.trim()) {
-      setErrorMessage("Vui lòng nhập tên công ty / doanh nghiệp (business_name)");
+    try {
+      const user = await refreshAccount();
+      setProfile(user.businessProfile);
+      setCurrentViewStatus(
+        user.businessProfile?.status === "rejected" ||
+          user.businessProfile?.status === "suspended"
+          ? "rejected"
+          : user.businessProfile
+            ? "pending"
+            : "draft",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể kiểm tra trạng thái",
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+  function selectLicense(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (
+      !["image/png", "image/jpeg"].includes(file.type) ||
+      file.size > 5 * 1024 * 1024
+    ) {
+      setErrorMessage("Chỉ nhận ảnh PNG/JPEG tối đa 5 MB.");
+      event.target.value = "";
       return;
     }
-    if (!taxCode.trim()) {
-      setErrorMessage("Vui lòng nhập mã số thuế doanh nghiệp (tax_code)");
-      return;
-    }
-    if (!phone.trim()) {
-      setErrorMessage("Vui lòng nhập số điện thoại liên hệ / hotline người đại diện");
-      return;
-    }
-    if (!address.trim()) {
-      setErrorMessage("Vui lòng nhập địa chỉ trụ sở kinh doanh");
+    setLicenseFile(file);
+    setErrorMessage("");
+  }
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setErrorMessage("");
+    if (
+      !businessName.trim() ||
+      !taxCode.trim() ||
+      !phone.trim() ||
+      !address.trim()
+    ) {
+      setErrorMessage(
+        "Vui lòng điền đầy đủ tên doanh nghiệp, mã số thuế, điện thoại và địa chỉ.",
+      );
       return;
     }
     if (!licenseFileUploaded) {
-      setErrorMessage("Vui lòng đính kèm ảnh chụp / file Giấy phép kinh doanh (business_license_url)");
+      setErrorMessage("Vui lòng chọn ảnh giấy phép kinh doanh.");
       return;
     }
-
+    const form = new FormData();
+    form.set("businessName", businessName.trim());
+    form.set("taxCode", taxCode.trim());
+    form.set("phone", phone.trim());
+    form.set("businessAddress", address.trim());
+    form.set("description", description.trim());
+    if (licenseFile) form.set("license", licenseFile);
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const newProfile: BusinessProfile = {
-        userId: currentUser.id,
-        businessName: businessName.trim(),
-        taxCode: taxCode.trim(),
-        businessAddress: address.trim(),
-        businessLicenseUrl: "https://tripops.vn/uploads/licenses/" + currentUser.id + "_license.pdf",
-        description: description.trim(),
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Cập nhật SĐT vào currentUser
-      currentUser.phone = phone.trim();
-
+    try {
+      const saved = await partnerService.submit(form);
+      setProfile(saved);
+      setLicenseFile(null);
       setCurrentViewStatus("pending");
-      if (onSubmitSuccess) {
-        onSubmitSuccess(newProfile);
-      }
-    }, 900);
-  };
+      onSubmitSuccess?.(saved);
+      await refreshAccount();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Không thể nộp hồ sơ",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F0F9FF] via-slate-50 to-white text-[#0F172A] font-sans antialiased flex flex-col justify-between">
@@ -191,47 +199,23 @@ export function BusinessProfileOnboardingPage({
 
           {/* User info, State Switcher Demo & Logout */}
           <div className="flex items-center gap-3">
-            {/* DEMO SWITCHER ĐỂ BẠN XEM NHANH CẢ 3 GIAO DIỆN */}
-            <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl text-[11px] font-semibold border border-slate-200">
-              <span className="px-2 text-slate-400 font-medium">Xem demo:</span>
-              <button
-                type="button"
-                onClick={() => setCurrentViewStatus("draft")}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  currentViewStatus === "draft"
-                    ? "bg-white text-[#075985] shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Form nộp hồ sơ
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentViewStatus("pending")}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  currentViewStatus === "pending"
-                    ? "bg-amber-500 text-white shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Chờ duyệt
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentViewStatus("rejected")}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  currentViewStatus === "rejected"
-                    ? "bg-red-600 text-white shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Bị từ chối
-              </button>
-            </div>
-
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isRefreshing || isSubmitting}
+              onClick={refreshStatus}
+              className="h-8.5 rounded-xl text-xs gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {isRefreshing ? "Đang kiểm tra..." : "Kiểm tra trạng thái"}
+            </Button>
             <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold text-slate-900">{cleanDisplayName(currentUser.name)}</div>
-              <div className="text-[11px] text-slate-500">{currentUser.email}</div>
+              <div className="text-xs font-bold text-slate-900">
+                {cleanDisplayName(currentUser.name)}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                {currentUser.email}
+              </div>
             </div>
 
             {onLogout && (
@@ -249,39 +233,15 @@ export function BusinessProfileOnboardingPage({
         </div>
       </header>
 
-      {/* DEMO SWITCHER MOBILE BAR */}
-      <div className="md:hidden bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center justify-between text-xs">
-        <span className="text-slate-500 font-medium">Trạng thái hồ sơ:</span>
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => setCurrentViewStatus("draft")}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-              currentViewStatus === "draft" ? "bg-white text-[#075985] shadow-xs" : "text-slate-600"
-            }`}
-          >
-            Form
-          </button>
-          <button
-            onClick={() => setCurrentViewStatus("pending")}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-              currentViewStatus === "pending" ? "bg-amber-500 text-white" : "text-slate-600"
-            }`}
-          >
-            Chờ duyệt
-          </button>
-          <button
-            onClick={() => setCurrentViewStatus("rejected")}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-              currentViewStatus === "rejected" ? "bg-red-600 text-white" : "text-slate-600"
-            }`}
-          >
-            Từ chối
-          </button>
-        </div>
-      </div>
-
-      {/* MAIN CONTAINER */}
       <main className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 flex-1">
+        {currentViewStatus !== "draft" && errorMessage && (
+          <p
+            role="alert"
+            className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs"
+          >
+            {errorMessage}
+          </p>
+        )}
         <AnimatePresence mode="wait">
           {/* ========================================================================= */}
           {/* TRƯỜNG HỢP 1: FORM NHẬP / CHỈNH SỬA HỒ SƠ PHÁP NHÂN (DRAFT) */}
@@ -310,8 +270,14 @@ export function BusinessProfileOnboardingPage({
                   </div>
                   <p className="text-xs text-amber-900/80 leading-relaxed">
                     Theo quy chuẩn của nền tảng TripOps, đối tác{" "}
-                    <strong>{isAgency ? "Doanh nghiệp Lữ hành" : "Nhà cung cấp Dịch vụ"}</strong>{" "}
-                    cần định danh pháp nhân (Mã số thuế & Giấy phép kinh doanh). Sau khi Quản trị viên duyệt, tài khoản sẽ được mở khóa toàn bộ quyền đăng bài và liên minh.
+                    <strong>
+                      {isAgency
+                        ? "Doanh nghiệp Lữ hành"
+                        : "Nhà cung cấp Dịch vụ"}
+                    </strong>{" "}
+                    cần định danh pháp nhân (Mã số thuế & Giấy phép kinh doanh).
+                    Sau khi Quản trị viên duyệt, tài khoản sẽ được mở khóa toàn
+                    bộ quyền đăng bài và liên minh.
                   </p>
                 </div>
               </div>
@@ -336,7 +302,9 @@ export function BusinessProfileOnboardingPage({
                       <UserIcon className="w-3.5 h-3.5 text-slate-400" />
                       <span>Họ và tên người đại diện</span>
                     </div>
-                    <div className="font-bold text-slate-900">{cleanDisplayName(currentUser.name)}</div>
+                    <div className="font-bold text-slate-900">
+                      {cleanDisplayName(currentUser.name)}
+                    </div>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
@@ -344,12 +312,17 @@ export function BusinessProfileOnboardingPage({
                       <Mail className="w-3.5 h-3.5 text-slate-400" />
                       <span>Email đăng nhập tài khoản</span>
                     </div>
-                    <div className="font-bold text-slate-900 truncate">{currentUser.email}</div>
+                    <div className="font-bold text-slate-900 truncate">
+                      {currentUser.email}
+                    </div>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-slate-500 italic">
-                  ℹ️ Khi đăng nhập bằng Google hoặc tạo tài khoản nhanh, bạn chưa cung cấp số điện thoại. Vui lòng nhập số điện thoại hotline/người đại diện ở form bên dưới để Ban quản trị liên hệ khi cần.
+                  ℹ️ Khi đăng nhập bằng Google hoặc tạo tài khoản nhanh, bạn
+                  chưa cung cấp số điện thoại. Vui lòng nhập số điện thoại
+                  hotline/người đại diện ở form bên dưới để Ban quản trị liên hệ
+                  khi cần.
                 </p>
               </div>
 
@@ -361,7 +334,8 @@ export function BusinessProfileOnboardingPage({
                     <span>2. Thông tin pháp nhân doanh nghiệp</span>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Vui lòng cung cấp đầy đủ thông tin pháp nhân để Ban Quản trị thẩm định và kích hoạt quyền kinh doanh.
+                    Vui lòng cung cấp đầy đủ thông tin pháp nhân để Ban Quản trị
+                    thẩm định và kích hoạt quyền kinh doanh.
                   </p>
                 </div>
 
@@ -376,12 +350,19 @@ export function BusinessProfileOnboardingPage({
                   {/* Trường 1: business_name */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                      <span>Tên doanh nghiệp / Cơ sở kinh doanh <span className="text-red-500">*</span></span>
+                      <span>
+                        Tên doanh nghiệp / Cơ sở kinh doanh{" "}
+                        <span className="text-red-500">*</span>
+                      </span>
                     </Label>
                     <Input
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder={isAgency ? "VD: Công ty Cổ phần Lữ hành Fiditour" : "VD: Tổ hợp Dịch vụ Du lịch Heritage"}
+                      placeholder={
+                        isAgency
+                          ? "VD: Công ty Cổ phần Lữ hành Fiditour"
+                          : "VD: Tổ hợp Dịch vụ Du lịch Heritage"
+                      }
                       className="text-xs h-9.5 bg-slate-50/50 focus:bg-white border-slate-300"
                     />
                   </div>
@@ -390,7 +371,10 @@ export function BusinessProfileOnboardingPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                        <span>Mã số thuế doanh nghiệp (MST) <span className="text-red-500">*</span></span>
+                        <span>
+                          Mã số thuế doanh nghiệp (MST){" "}
+                          <span className="text-red-500">*</span>
+                        </span>
                       </Label>
                       <Input
                         value={taxCode}
@@ -402,8 +386,13 @@ export function BusinessProfileOnboardingPage({
 
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                        <span>Số điện thoại liên hệ / Hotline CSKH <span className="text-red-500">*</span></span>
-                        <span className="text-[10px] text-slate-400 font-normal">Hotline CSKH / Người đại diện</span>
+                        <span>
+                          Số điện thoại liên hệ / Hotline CSKH{" "}
+                          <span className="text-red-500">*</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Hotline CSKH / Người đại diện
+                        </span>
                       </Label>
                       <Input
                         type="tel"
@@ -418,7 +407,10 @@ export function BusinessProfileOnboardingPage({
                   {/* Trường 4: business_address */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                      <span>Địa chỉ trụ sở kinh doanh <span className="text-red-500">*</span></span>
+                      <span>
+                        Địa chỉ trụ sở kinh doanh{" "}
+                        <span className="text-red-500">*</span>
+                      </span>
                     </Label>
                     <Input
                       value={address}
@@ -446,24 +438,33 @@ export function BusinessProfileOnboardingPage({
                     />
                   </div>
 
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={selectLicense}
+                  />
                   {/* Trường 6: business_license_url (Tải tài liệu GPKD) */}
                   <div className="space-y-1.5 pt-1">
                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                      <span>Ảnh chụp Giấy phép kinh doanh / Giấy phép lữ hành <span className="text-red-500">*</span></span>
+                      <span>
+                        Ảnh chụp Giấy phép kinh doanh / Giấy phép lữ hành{" "}
+                        <span className="text-red-500">*</span>
+                      </span>
                     </Label>
 
                     <div
-                      onClick={() => {
-                        const nextState = !licenseFileUploaded;
-                        setLicenseFileUploaded(nextState);
-                        setLicenseFileName(
-                          nextState
-                            ? isAgency
-                              ? "Giay_Phep_Kinh_Doanh_Lu_Hanh.pdf"
-                              : "Giay_Phep_Dang_Ky_Kinh_Doanh.pdf"
-                            : ""
-                        );
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Chọn ảnh giấy phép"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          fileInput.current?.click();
+                        }
                       }}
+                      onClick={() => fileInput.current?.click()}
                       className={`p-4 rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
                         licenseFileUploaded
                           ? "border-emerald-400 bg-emerald-50/60"
@@ -475,10 +476,13 @@ export function BusinessProfileOnboardingPage({
                           <FileCheck className="w-8 h-8 text-emerald-600" />
                           <div className="text-center">
                             <div className="text-xs font-bold text-emerald-800">
-                              Đã đính kèm: {licenseFileName || "Giay_Phep_Kinh_Doanh.pdf"}
+                              Đã đính kèm: {licenseFileName || "Ảnh giấy phép"}
                             </div>
                             <div className="text-[10px] text-emerald-600">
-                              Dung lượng: 2.5 MB · Trạng thái: Sẵn sàng tải lên lưu trữ URL · Nhấp để gỡ
+                              {licenseFile
+                                ? `${(licenseFile.size / 1024 / 1024).toFixed(2)} MB · Sẵn sàng tải lên`
+                                : "Đã lưu trên Cloudinary"}{" "}
+                              · Nhấp để chọn ảnh khác
                             </div>
                           </div>
                         </>
@@ -487,10 +491,11 @@ export function BusinessProfileOnboardingPage({
                           <Upload className="w-8 h-8 text-slate-400" />
                           <div className="text-center">
                             <div className="text-xs font-bold text-slate-800">
-                              Bấm để tải lên bản chụp Giấy phép kinh doanh / Giấy phép lữ hành
+                              Bấm để tải lên bản chụp Giấy phép kinh doanh /
+                              Giấy phép lữ hành
                             </div>
                             <div className="text-[10px] text-slate-500">
-                              Hỗ trợ định dạng PDF, JPG, PNG dung lượng tối đa 15MB
+                              Hỗ trợ ảnh JPG, PNG dung lượng tối đa 5 MB
                             </div>
                           </div>
                         </>
@@ -501,7 +506,8 @@ export function BusinessProfileOnboardingPage({
                   {/* NÚT SUBMIT */}
                   <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <span className="text-[11px] text-slate-500">
-                      🔒 Thông tin hồ sơ được bảo mật an toàn theo Tiêu chuẩn xác thực đối tác TripOps.
+                      🔒 Thông tin hồ sơ được bảo mật an toàn theo Tiêu chuẩn
+                      xác thực đối tác TripOps.
                     </span>
 
                     <Button
@@ -550,7 +556,9 @@ export function BusinessProfileOnboardingPage({
                     Hồ sơ Doanh nghiệp đang chờ Quản trị viên xét duyệt
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-                    Hồ sơ của bạn đã được tiếp nhận thành công. Ban Quản trị TripOps đang thẩm định tính hợp pháp của Mã số thuế và Giấy phép kinh doanh.
+                    Hồ sơ của bạn đã được tiếp nhận thành công. Ban Quản trị
+                    TripOps đang thẩm định tính hợp pháp của Mã số thuế và Giấy
+                    phép kinh doanh.
                   </p>
                 </div>
 
@@ -568,7 +576,9 @@ export function BusinessProfileOnboardingPage({
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>Bước 1: Đăng ký</span>
                       </div>
-                      <p className="text-[11px] text-emerald-800">Tài khoản thành viên đã kích hoạt</p>
+                      <p className="text-[11px] text-emerald-800">
+                        Tài khoản thành viên đã kích hoạt
+                      </p>
                     </div>
 
                     {/* Bước 2 */}
@@ -577,7 +587,9 @@ export function BusinessProfileOnboardingPage({
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>Bước 2: Nộp hồ sơ</span>
                       </div>
-                      <p className="text-[11px] text-emerald-800">Đã nộp Mã số thuế & Giấy phép</p>
+                      <p className="text-[11px] text-emerald-800">
+                        Đã nộp Mã số thuế & Giấy phép
+                      </p>
                     </div>
 
                     {/* Bước 3 */}
@@ -586,16 +598,22 @@ export function BusinessProfileOnboardingPage({
                         <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-spin-slow" />
                         <span>Bước 3: Thẩm định</span>
                       </div>
-                      <p className="text-[11px] text-amber-900 font-medium">Đang xử lý (Tối đa 24h làm việc)</p>
+                      <p className="text-[11px] text-amber-900 font-medium">
+                        Đang chờ Quản trị viên xét duyệt
+                      </p>
                     </div>
 
                     {/* Bước 4 */}
                     <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 space-y-1 opacity-70">
                       <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px]">
-                        <div className="w-4 h-4 rounded-full border-2 border-slate-400 flex items-center justify-center text-[9px]">4</div>
+                        <div className="w-4 h-4 rounded-full border-2 border-slate-400 flex items-center justify-center text-[9px]">
+                          4
+                        </div>
                         <span>Bước 4: Mở khóa</span>
                       </div>
-                      <p className="text-[11px] text-slate-500">Đăng tour, mở bán & liên minh</p>
+                      <p className="text-[11px] text-slate-500">
+                        Đăng tour, mở bán & liên minh
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -607,42 +625,71 @@ export function BusinessProfileOnboardingPage({
                       <Building2 className="w-4 h-4 text-[#075985]" />
                       <span>Thông tin hồ sơ đã gửi:</span>
                     </span>
-                    
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs text-slate-700">
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Tên doanh nghiệp</span>
-                      <span className="font-bold text-slate-900">{businessName || "Công ty Cổ phần Lữ hành Fiditour"}</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                        Tên doanh nghiệp
+                      </span>
+                      <span className="font-bold text-slate-900">
+                        {businessName || "Chưa cập nhật"}
+                      </span>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Mã số thuế (MST)</span>
-                      <span className="font-bold text-slate-900 font-mono">{taxCode || "0301012345"}</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                        Mã số thuế (MST)
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono">
+                        {taxCode || "Chưa cập nhật"}
+                      </span>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Số điện thoại liên hệ</span>
-                      <span className="font-bold text-slate-900 font-mono">{phone || currentUser.phone || "028 3930 9888"}</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                        Số điện thoại liên hệ
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono">
+                        {phone || currentUser.phone || "Chưa cập nhật"}
+                      </span>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Giấy phép kinh doanh</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                        Giấy phép kinh doanh
+                      </span>
                       <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
                         <FileCheck className="w-4 h-4" />
-                        <span>{licenseFileName || "Giay_Phep_Kinh_Doanh.pdf"}</span>
+                        <a
+                          href={profile?.businessLicenseUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          {licenseFileName || "Ảnh giấy phép"}
+                        </a>
                       </span>
                     </div>
 
                     <div className="sm:col-span-2">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Địa chỉ trụ sở kinh doanh</span>
-                      <span className="font-medium text-slate-800">{address || "218/1 Nguyễn Đình Chiểu, Phường Võ Thị Sáu, Quận 3, TP. Hồ Chí Minh"}</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                        Địa chỉ trụ sở kinh doanh
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {address ||
+                          "218/1 Nguyễn Đình Chiểu, Phường Võ Thị Sáu, Quận 3, TP. Hồ Chí Minh"}
+                      </span>
                     </div>
 
                     {description && (
                       <div className="sm:col-span-2">
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Mô tả giới thiệu</span>
-                        <span className="text-slate-600 line-clamp-2">{description}</span>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                          Mô tả giới thiệu
+                        </span>
+                        <span className="text-slate-600 line-clamp-2">
+                          {description}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -653,11 +700,12 @@ export function BusinessProfileOnboardingPage({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setCurrentViewStatus("draft")}
+                    onClick={refreshStatus}
+                    disabled={isRefreshing}
                     className="w-full sm:w-auto h-10 px-6 rounded-xl border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer gap-1.5 shadow-2xs"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Chỉnh sửa / Bổ sung lại hồ sơ</span>
+                    <span>Kiểm tra trạng thái hồ sơ</span>
                   </Button>
                 </div>
               </div>
@@ -690,7 +738,9 @@ export function BusinessProfileOnboardingPage({
                     Hồ sơ Doanh nghiệp không được phê duyệt
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-                    Rất tiếc, thông tin pháp nhân bạn gửi chưa đáp ứng đủ tiêu chuẩn kiểm duyệt của sàn du lịch TripOps. Vui lòng xem lý do chi tiết dưới đây.
+                    Rất tiếc, thông tin pháp nhân bạn gửi chưa đáp ứng đủ tiêu
+                    chuẩn kiểm duyệt của sàn du lịch TripOps. Vui lòng xem lý do
+                    chi tiết dưới đây.
                   </p>
                 </div>
 
@@ -713,7 +763,9 @@ export function BusinessProfileOnboardingPage({
                   <div className="text-[11px] text-red-800 flex items-start gap-1.5 pt-1">
                     <Info className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
                     <span>
-                      Bạn có thể chỉnh sửa lại Mã số thuế, tải lại bản chụp Giấy phép rõ nét hoặc cập nhật địa chỉ chính xác rồi gửi thẩm định lại bất kỳ lúc nào.
+                      Bạn có thể chỉnh sửa lại Mã số thuế, tải lại bản chụp Giấy
+                      phép rõ nét hoặc cập nhật địa chỉ chính xác rồi gửi thẩm
+                      định lại bất kỳ lúc nào.
                     </span>
                   </div>
                 </div>
@@ -722,21 +774,32 @@ export function BusinessProfileOnboardingPage({
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2.5 text-xs text-slate-700">
                   <div className="font-bold text-slate-900 pb-1 border-b border-slate-200 flex items-center justify-between">
                     <span>Thông tin hồ sơ cần cập nhật lại:</span>
-                    
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Tên pháp nhân đã nộp:</span>
-                      <span className="font-semibold text-slate-900">{businessName || "Fiditour"}</span>
+                      <span className="text-slate-400 block text-[10px]">
+                        Tên pháp nhân đã nộp:
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {businessName || "Chưa cập nhật"}
+                      </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Mã số thuế đã nộp:</span>
-                      <span className="font-semibold text-slate-900 font-mono">{taxCode || "0301012345"}</span>
+                      <span className="text-slate-400 block text-[10px]">
+                        Mã số thuế đã nộp:
+                      </span>
+                      <span className="font-semibold text-slate-900 font-mono">
+                        {taxCode || "Chưa cập nhật"}
+                      </span>
                     </div>
                     <div className="sm:col-span-2">
-                      <span className="text-slate-400 block text-[10px]">Địa chỉ trụ sở kinh doanh đã nộp:</span>
-                      <span className="font-semibold text-slate-900">{address || "218/1 Nguyễn Đình Chiểu, Q.3, TP.HCM"}</span>
+                      <span className="text-slate-400 block text-[10px]">
+                        Địa chỉ trụ sở kinh doanh đã nộp:
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {address || "Chưa cập nhật"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -746,6 +809,7 @@ export function BusinessProfileOnboardingPage({
                   <Button
                     type="button"
                     onClick={() => setCurrentViewStatus("draft")}
+                    disabled={profile?.status === "suspended"}
                     className="w-full sm:w-auto h-11 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md gap-2 cursor-pointer transition-all"
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -760,7 +824,8 @@ export function BusinessProfileOnboardingPage({
 
       {/* FOOTER */}
       <footer className="py-4 border-t border-slate-200 bg-white text-center text-xs text-slate-500">
-        TripOps B2B Multi-Role Tourism Platform · Cổng Xác thực Hồ sơ Pháp nhân Đối tác
+        TripOps B2B Multi-Role Tourism Platform · Cổng Xác thực Hồ sơ Pháp nhân
+        Đối tác
       </footer>
     </div>
   );

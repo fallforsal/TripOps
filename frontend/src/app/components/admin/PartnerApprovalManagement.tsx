@@ -1,5 +1,6 @@
+import { partnerService } from "@/app/services/partnerService";
+import { usePartnerApplications } from "@/app/hooks/usePartnerApplications";
 import { useState, useMemo } from "react";
-import { TourCompany, User } from "@/app/types";
 import {
   Building2,
   CheckCircle2,
@@ -50,187 +51,141 @@ export interface UnifiedPartnerItem {
   email: string;
   phone: string;
   address: string;
-  licenseNumber?: string;
   licenseUrl?: string;
   description?: string;
   status: "pending" | "approved" | "rejected" | "suspended";
   rejectionReason?: string;
-  approvalNote?: string;
   createdAt: string;
-  originalCompany?: TourCompany;
-  originalProvider?: User;
-}
-
-interface PartnerApprovalManagementProps {
-  companies: TourCompany[];
-  companyAdmins: User[];
-  providers: User[];
-  onApproveCompany: (companyId: string) => void;
-  onRejectCompany: (companyId: string, reason: string) => void;
-  onApproveProvider: (providerId: string) => void;
-  onRejectProvider: (providerId: string, reason?: string) => void;
 }
 
 const cleanDisplayName = (name?: string) => {
   if (!name) return "";
-  return name.replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  return name
+    .replace(/\s*\(.*?\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
-export function PartnerApprovalManagement({
-  companies,
-  companyAdmins,
-  providers,
-  onApproveCompany,
-  onRejectCompany,
-  onApproveProvider,
-  onRejectProvider,
-}: PartnerApprovalManagementProps) {
-  // 1. CHUYỂN ĐỔI VÀ HỢP NHẤT DỮ LIỆU ĐỐI TÁC (AGENCY & PROVIDER) VỀ DẠNG CHUẨN
-  const allPartners = useMemo<UnifiedPartnerItem[]>(() => {
-    const list: UnifiedPartnerItem[] = [];
-
-    // Danh sách Doanh nghiệp Lữ hành (Agency / TourCompany)
-    companies.forEach((comp) => {
-      const admin = companyAdmins.find((u) => u.companyId === comp.id || u.id === comp.adminId);
-      list.push({
-        id: comp.id,
-        type: "agency",
-        businessName: comp.name,
-        taxCode: comp.taxCode || "Chưa cập nhật",
-        representativeName: admin?.name || "Người đại diện pháp luật",
-        email: comp.email || admin?.email || "Chưa có email",
-        phone: comp.phone || admin?.phone || "Chưa có SĐT",
-        address: comp.address || "Chưa có địa chỉ",
-        licenseNumber: comp.licenseNumber,
-        licenseUrl: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600",
-        description: comp.description,
-        status: comp.status,
-        rejectionReason: comp.rejectionReason,
-        createdAt: comp.createdAt || "2026-09-01",
-        originalCompany: comp,
-      });
-    });
-
-    // Danh sách Nhà cung cấp Dịch vụ (Provider)
-    providers.forEach((prov) => {
-      list.push({
-        id: prov.id,
-        type: "provider",
-        businessName: prov.businessName || prov.name || "Cơ sở Cung ứng",
-        taxCode: prov.taxCode || "Chưa cập nhật",
-        representativeName: prov.name,
-        email: prov.email,
-        phone: prov.phone || prov.businessPhone || "Chưa có SĐT",
-        address: prov.businessAddress || prov.street || "Chưa có địa chỉ",
-        licenseUrl: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600",
-        description: prov.businessDescription,
-        status: prov.accountStatus || "pending",
-        rejectionReason: prov.rejectionReason,
-        createdAt: "2026-09-10",
-        originalProvider: prov,
-      });
-    });
-
-    return list;
-  }, [companies, companyAdmins, providers]);
-
+export function PartnerApprovalManagement() {
   // Filters & Search
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
-  const [roleFilter, setRoleFilter] = useState<"all" | "agency" | "provider">("all");
+  const [searchTerm, updateSearchTerm] = useState("");
+  const [statusFilter, updateStatusFilter] = useState<
+    "all" | "pending" | "approved" | "rejected"
+  >("pending");
+  const [roleFilter, updateRoleFilter] = useState<
+    "all" | "agency" | "provider"
+  >("all");
 
+  const [page, setPage] = useState(1);
+  const setSearchTerm = (value: string) => {
+    updateSearchTerm(value);
+    setPage(1);
+  };
+  const setStatusFilter = (
+    value: "all" | "pending" | "approved" | "rejected",
+  ) => {
+    updateStatusFilter(value);
+    setPage(1);
+  };
+  const setRoleFilter = (value: "all" | "agency" | "provider") => {
+    updateRoleFilter(value);
+    setPage(1);
+  };
+  const {
+    items,
+    total,
+    counts,
+    loading,
+    error: loadError,
+    refresh,
+  } = usePartnerApplications(statusFilter, roleFilter, searchTerm, page);
+  const allPartners = useMemo<UnifiedPartnerItem[]>(
+    () =>
+      items.map((item) => ({
+        id: String(item.profile.id),
+        type: item.role,
+        businessName: item.profile.businessName,
+        taxCode: item.profile.taxCode,
+        representativeName: item.name,
+        email: item.email,
+        phone: item.phone || "",
+        address: item.profile.businessAddress,
+        licenseUrl: item.profile.businessLicenseUrl,
+        description: item.profile.description,
+        status: item.profile.status,
+        rejectionReason: item.profile.rejectionReason,
+        createdAt: item.profile.createdAt || "",
+      })),
+    [items],
+  );
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState("");
   // Modals state
-  const [selectedPartner, setSelectedPartner] = useState<UnifiedPartnerItem | null>(null);
+  const [selectedPartner, setSelectedPartner] =
+    useState<UnifiedPartnerItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  
+
   // Modal Phê duyệt kèm lý do / ghi chú
-  const [approvingPartner, setApprovingPartner] = useState<UnifiedPartnerItem | null>(null);
-  const [approvalNote, setApprovalNote] = useState("");
+  const [approvingPartner, setApprovingPartner] =
+    useState<UnifiedPartnerItem | null>(null);
 
   // Modal Từ chối kèm lý do bắt buộc
-  const [rejectingPartner, setRejectingPartner] = useState<UnifiedPartnerItem | null>(null);
+  const [rejectingPartner, setRejectingPartner] =
+    useState<UnifiedPartnerItem | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
 
-  // Filtered partners
-  const filteredPartners = useMemo(() => {
-    return allPartners.filter((item) => {
-      // Filter status
-      if (statusFilter !== "all" && item.status !== statusFilter) {
-        return false;
-      }
-      // Filter role
-      if (roleFilter !== "all" && item.type !== roleFilter) {
-        return false;
-      }
-      // Search term
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchName = item.businessName.toLowerCase().includes(query);
-        const matchRep = item.representativeName.toLowerCase().includes(query);
-        const matchEmail = item.email.toLowerCase().includes(query);
-        const matchTax = item.taxCode.toLowerCase().includes(query);
-        const matchPhone = item.phone.toLowerCase().includes(query);
-        return matchName || matchRep || matchEmail || matchTax || matchPhone;
-      }
-      return true;
-    });
-  }, [allPartners, statusFilter, roleFilter, searchTerm]);
-
-  // Counts
-  const counts = useMemo(() => {
-    return {
-      all: allPartners.length,
-      pending: allPartners.filter((p) => p.status === "pending").length,
-      approved: allPartners.filter((p) => p.status === "approved").length,
-      rejected: allPartners.filter((p) => p.status === "rejected").length,
-    };
-  }, [allPartners]);
-
-  // Xử lý mở Modal duyệt
+  const filteredPartners = allPartners;
   const handleOpenApproveModal = (partner: UnifiedPartnerItem) => {
+    setReviewError("");
     setApprovingPartner(partner);
-    setApprovalNote(
-      partner.type === "agency"
-        ? "Hồ sơ pháp nhân và giấy phép lữ hành đã được thẩm định hợp lệ trên Cổng thông tin Quốc gia. Kích hoạt toàn bộ quyền đăng tour và liên minh bán hàng."
-        : "Thông tin cơ sở cung ứng dịch vụ và mã số thuế đã được kiểm tra đạt chuẩn. Kích hoạt quyền đăng bán dịch vụ trên sàn TripOps."
-    );
   };
-
-  // Xác nhận Phê duyệt
-  const handleConfirmApprove = () => {
-    if (!approvingPartner) return;
-    if (approvingPartner.type === "agency") {
-      onApproveCompany(approvingPartner.id);
-    } else {
-      onApproveProvider(approvingPartner.id);
+  const handleConfirmApprove = async () => {
+    if (!approvingPartner || isReviewing) return;
+    setIsReviewing(true);
+    setReviewError("");
+    try {
+      await partnerService.approve(Number(approvingPartner.id));
+      setApprovingPartner(null);
+      setShowDetailModal(false);
+      refresh();
+    } catch (error) {
+      setReviewError(
+        error instanceof Error ? error.message : "Không thể phê duyệt",
+      );
+    } finally {
+      setIsReviewing(false);
     }
-    setApprovingPartner(null);
-    setShowDetailModal(false);
   };
-
-  // Xử lý mở Modal từ chối
   const handleOpenRejectModal = (partner: UnifiedPartnerItem) => {
+    setReviewError("");
     setRejectingPartner(partner);
     setRejectReason("");
     setRejectError("");
   };
-
-  // Xác nhận Từ chối
-  const handleConfirmReject = () => {
-    if (!rejectingPartner) return;
+  const handleConfirmReject = async () => {
+    if (!rejectingPartner || isReviewing) return;
     if (!rejectReason.trim()) {
-      setRejectError("Vui lòng nhập lý do từ chối cụ thể để đối tác biết và sửa đổi hồ sơ!");
+      setRejectError("Vui lòng nhập lý do từ chối cụ thể.");
       return;
     }
-
-    if (rejectingPartner.type === "agency") {
-      onRejectCompany(rejectingPartner.id, rejectReason.trim());
-    } else {
-      onRejectProvider(rejectingPartner.id, rejectReason.trim());
+    setIsReviewing(true);
+    setReviewError("");
+    try {
+      await partnerService.reject(
+        Number(rejectingPartner.id),
+        rejectReason.trim(),
+      );
+      setRejectingPartner(null);
+      setShowDetailModal(false);
+      refresh();
+    } catch (error) {
+      setReviewError(
+        error instanceof Error ? error.message : "Không thể từ chối",
+      );
+    } finally {
+      setIsReviewing(false);
     }
-    setRejectingPartner(null);
-    setShowDetailModal(false);
   };
 
   // Quick preset lý do từ chối
@@ -254,7 +209,8 @@ export function PartnerApprovalManagement({
             Phê duyệt Hồ sơ Doanh nghiệp & Nhà cung cấp
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Thẩm định tính hợp pháp của Mã số thuế, Giấy phép kinh doanh (bảng <code>business_profiles</code>) trước khi cấp quyền bán hàng.
+            Thẩm định tính hợp pháp của Mã số thuế, Giấy phép kinh doanh (bảng{" "}
+            <code>business_profiles</code>) trước khi cấp quyền bán hàng.
           </p>
         </div>
 
@@ -264,8 +220,12 @@ export function PartnerApprovalManagement({
               {counts.pending}
             </div>
             <div>
-              <div className="text-xs font-bold text-amber-950">Có đơn chờ xét duyệt!</div>
-              <div className="text-[11px] text-amber-700">Cần xử lý trong vòng 24h</div>
+              <div className="text-xs font-bold text-amber-950">
+                Có đơn chờ xét duyệt!
+              </div>
+              <div className="text-[11px] text-amber-700">
+                Cần xử lý trong vòng 24h
+              </div>
             </div>
           </div>
         )}
@@ -287,7 +247,9 @@ export function PartnerApprovalManagement({
             <Building2 className="w-4 h-4 opacity-70" />
           </div>
           <div className="text-2xl font-black mt-2">{counts.all}</div>
-          <div className="text-[11px] mt-1 opacity-75">Bao gồm Agency & Nhà cung cấp</div>
+          <div className="text-[11px] mt-1 opacity-75">
+            Bao gồm Agency & Nhà cung cấp
+          </div>
         </div>
 
         {/* Chờ duyệt (Pending) */}
@@ -311,7 +273,9 @@ export function PartnerApprovalManagement({
               </span>
             )}
           </div>
-          <div className="text-[11px] mt-1 opacity-80">Hồ sơ đã nộp cần thẩm định</div>
+          <div className="text-[11px] mt-1 opacity-80">
+            Hồ sơ đã nộp cần thẩm định
+          </div>
         </div>
 
         {/* Đã duyệt (Approved) */}
@@ -328,7 +292,9 @@ export function PartnerApprovalManagement({
             <CheckCircle2 className="w-4 h-4" />
           </div>
           <div className="text-2xl font-black mt-2">{counts.approved}</div>
-          <div className="text-[11px] mt-1 opacity-80">Đang hoạt động trên sàn</div>
+          <div className="text-[11px] mt-1 opacity-80">
+            Đang hoạt động trên sàn
+          </div>
         </div>
 
         {/* Bị từ chối (Rejected) */}
@@ -345,7 +311,9 @@ export function PartnerApprovalManagement({
             <XCircle className="w-4 h-4" />
           </div>
           <div className="text-2xl font-black mt-2">{counts.rejected}</div>
-          <div className="text-[11px] mt-1 opacity-80">Cần bổ sung / nộp lại</div>
+          <div className="text-[11px] mt-1 opacity-80">
+            Cần bổ sung / nộp lại
+          </div>
         </div>
       </div>
 
@@ -377,7 +345,9 @@ export function PartnerApprovalManagement({
             <button
               onClick={() => setRoleFilter("all")}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                roleFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500"
+                roleFilter === "all"
+                  ? "bg-white text-slate-900 shadow-2xs font-bold"
+                  : "text-slate-500"
               }`}
             >
               Tất cả vai trò
@@ -385,7 +355,9 @@ export function PartnerApprovalManagement({
             <button
               onClick={() => setRoleFilter("agency")}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                roleFilter === "agency" ? "bg-amber-500 text-white shadow-2xs font-bold" : "text-slate-600"
+                roleFilter === "agency"
+                  ? "bg-amber-500 text-white shadow-2xs font-bold"
+                  : "text-slate-600"
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
@@ -394,7 +366,9 @@ export function PartnerApprovalManagement({
             <button
               onClick={() => setRoleFilter("provider")}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                roleFilter === "provider" ? "bg-emerald-600 text-white shadow-2xs font-bold" : "text-slate-600"
+                roleFilter === "provider"
+                  ? "bg-emerald-600 text-white shadow-2xs font-bold"
+                  : "text-slate-600"
               }`}
             >
               <Store className="w-3.5 h-3.5" />
@@ -406,14 +380,35 @@ export function PartnerApprovalManagement({
 
       {/* PARTNER LIST TABLE */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {filteredPartners.length === 0 ? (
+        {loading ? (
+          <div
+            role="status"
+            className="p-12 text-center text-sm text-slate-500"
+          >
+            Đang tải hồ sơ đối tác...
+          </div>
+        ) : loadError ? (
+          <div role="alert" className="p-12 text-center text-sm text-rose-700">
+            {loadError}
+            <Button
+              variant="outline"
+              onClick={refresh}
+              className="ml-3 rounded-xl"
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : filteredPartners.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
               <Search className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-800">Không tìm thấy đối tác nào phù hợp</h3>
+            <h3 className="text-base font-bold text-slate-800">
+              Không tìm thấy đối tác nào phù hợp
+            </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Thử thay đổi từ khóa tìm kiếm hoặc chuyển sang bộ lọc trạng thái khác.
+              Thử thay đổi từ khóa tìm kiếm hoặc chuyển sang bộ lọc trạng thái
+              khác.
             </p>
           </div>
         ) : (
@@ -425,12 +420,17 @@ export function PartnerApprovalManagement({
                   <th className="py-3.5 px-4">Người đại diện & Liên hệ</th>
                   <th className="py-3.5 px-4">Trụ sở & Giấy phép</th>
                   <th className="py-3.5 px-4">Trạng thái duyệt</th>
-                  <th className="py-3.5 px-4 text-right">Hành động kiểm duyệt</th>
+                  <th className="py-3.5 px-4 text-right">
+                    Hành động kiểm duyệt
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredPartners.map((item) => (
-                  <tr key={item.id} className="hover:bg-sky-50/30 transition-colors group">
+                  <tr
+                    key={item.id}
+                    className="hover:bg-sky-50/30 transition-colors group"
+                  >
                     {/* Cột 1: Thông tin Doanh nghiệp */}
                     <td className="py-4 px-4">
                       <div className="space-y-1">
@@ -445,20 +445,26 @@ export function PartnerApprovalManagement({
                                 : "bg-emerald-100 text-emerald-900 border border-emerald-200"
                             }`}
                           >
-                            {item.type === "agency" ? <Compass className="w-3 h-3" /> : <Store className="w-3 h-3" />}
-                            <span>{item.type === "agency" ? "Agency / Lữ hành" : "Nhà cung cấp"}</span>
+                            {item.type === "agency" ? (
+                              <Compass className="w-3 h-3" />
+                            ) : (
+                              <Store className="w-3 h-3" />
+                            )}
+                            <span>
+                              {item.type === "agency"
+                                ? "Agency / Lữ hành"
+                                : "Nhà cung cấp"}
+                            </span>
                           </span>
                         </div>
 
                         <div className="flex items-center gap-3 text-slate-500 text-[11px]">
                           <span>
-                            MST: <strong className="text-slate-800 font-mono">{item.taxCode}</strong>
+                            MST:{" "}
+                            <strong className="text-slate-800 font-mono">
+                              {item.taxCode}
+                            </strong>
                           </span>
-                          {item.licenseNumber && (
-                            <span>
-                              Số GP: <strong className="text-slate-800 font-mono">{item.licenseNumber}</strong>
-                            </span>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -466,7 +472,9 @@ export function PartnerApprovalManagement({
                     {/* Cột 2: Người đại diện */}
                     <td className="py-4 px-4">
                       <div className="space-y-0.5">
-                        <div className="font-bold text-slate-900">{item.representativeName}</div>
+                        <div className="font-bold text-slate-900">
+                          {item.representativeName}
+                        </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1">
                           <Mail className="w-3 h-3 text-slate-400" />
                           <span>{item.email}</span>
@@ -546,11 +554,13 @@ export function PartnerApprovalManagement({
                           className="h-8 px-2.5 text-xs text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span className="hidden lg:inline ml-1">Xem hồ sơ</span>
+                          <span className="hidden lg:inline ml-1">
+                            Xem hồ sơ
+                          </span>
                         </Button>
 
                         {/* Nút Phê duyệt (Có modal xác nhận & nhập ghi chú) */}
-                        {item.status !== "approved" && (
+                        {item.status === "pending" && (
                           <Button
                             type="button"
                             size="sm"
@@ -563,7 +573,7 @@ export function PartnerApprovalManagement({
                         )}
 
                         {/* Nút Từ chối (BẮT BUỘC NHẬP LÝ DO TẠI SAO) */}
-                        {item.status !== "rejected" && (
+                        {item.status === "pending" && (
                           <Button
                             type="button"
                             variant="outline"
@@ -585,10 +595,46 @@ export function PartnerApprovalManagement({
         )}
       </div>
 
+      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+        <span>
+          Trang {page} · Tổng {total} hồ sơ phù hợp
+        </span>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            disabled={loading || page <= 1}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            Trang trước
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            disabled={loading || page * 20 >= total}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Trang sau
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            disabled={loading}
+            onClick={refresh}
+          >
+            Tải lại
+          </Button>
+        </div>
+      </div>
       {/* ========================================================================= */}
       {/* MODAL 1: PHÊ DUYỆT HỒ SƠ ĐỐI TÁC (CÓ Ô NHẬP LỜI NHẮN / GHI CHÚ) */}
       {/* ========================================================================= */}
-      <Dialog open={Boolean(approvingPartner)} onOpenChange={(open) => !open && setApprovingPartner(null)}>
+      <Dialog
+        open={Boolean(approvingPartner)}
+        onOpenChange={(open) =>
+          !open && !isReviewing && setApprovingPartner(null)
+        }
+      >
         <DialogContent className="max-w-lg rounded-3xl p-6 bg-white text-slate-900 border border-slate-200 shadow-2xl">
           <DialogHeader>
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
@@ -599,7 +645,10 @@ export function PartnerApprovalManagement({
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               Cấp quyền chính thức hoạt động trên sàn cho:{" "}
-              <strong className="text-slate-900">{approvingPartner?.businessName}</strong> (MST: {approvingPartner?.taxCode})
+              <strong className="text-slate-900">
+                {approvingPartner?.businessName}
+              </strong>{" "}
+              (MST: {approvingPartner?.taxCode})
             </DialogDescription>
           </DialogHeader>
 
@@ -610,28 +659,23 @@ export function PartnerApprovalManagement({
                 <span>Quyền lợi sau khi được Admin phê duyệt:</span>
               </div>
               <p className="text-[11px] text-emerald-800 leading-relaxed">
-                Tài khoản sẽ được mở khóa 100% tính năng, được phép đăng tour/dịch vụ lên sàn công khai và tham gia liên minh hợp tác doanh nghiệp.
+                Tài khoản sẽ được mở khóa 100% tính năng, được phép đăng
+                tour/dịch vụ lên sàn công khai và tham gia liên minh hợp tác
+                doanh nghiệp.
               </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700">
-                Ghi chú phê duyệt / Lời nhắn kích hoạt (Lưu vào hồ sơ đối tác):
-              </Label>
-              <Textarea
-                value={approvalNote}
-                onChange={(e) => setApprovalNote(e.target.value)}
-                rows={3}
-                placeholder="Nhập ghi chú phê duyệt hoặc căn cứ thẩm định..."
-                className="text-xs bg-slate-50 focus:bg-white resize-none"
-              />
             </div>
           </div>
 
+          {reviewError && (
+            <p role="alert" className="text-xs text-rose-700">
+              {reviewError}
+            </p>
+          )}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
+              disabled={isReviewing}
               onClick={() => setApprovingPartner(null)}
               className="text-xs h-10 px-4 rounded-xl cursor-pointer"
             >
@@ -639,6 +683,7 @@ export function PartnerApprovalManagement({
             </Button>
             <Button
               type="button"
+              disabled={isReviewing}
               onClick={handleConfirmApprove}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl gap-1.5 cursor-pointer shadow-xs"
             >
@@ -652,7 +697,12 @@ export function PartnerApprovalManagement({
       {/* ========================================================================= */}
       {/* MODAL 2: TỪ CHỐI HỒ SƠ ĐỐI TÁC (BẮT BUỘC PHẢI NHẬP LÝ DO TẠI SAO) */}
       {/* ========================================================================= */}
-      <Dialog open={Boolean(rejectingPartner)} onOpenChange={(open) => !open && setRejectingPartner(null)}>
+      <Dialog
+        open={Boolean(rejectingPartner)}
+        onOpenChange={(open) =>
+          !open && !isReviewing && setRejectingPartner(null)
+        }
+      >
         <DialogContent className="max-w-lg rounded-3xl p-6 bg-white text-slate-900 border border-slate-200 shadow-2xl">
           <DialogHeader>
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mb-2">
@@ -662,7 +712,11 @@ export function PartnerApprovalManagement({
               Từ chối Phê duyệt Hồ sơ Đối tác
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Doanh nghiệp: <strong className="text-slate-900">{rejectingPartner?.businessName}</strong> (MST: {rejectingPartner?.taxCode})
+              Doanh nghiệp:{" "}
+              <strong className="text-slate-900">
+                {rejectingPartner?.businessName}
+              </strong>{" "}
+              (MST: {rejectingPartner?.taxCode})
             </DialogDescription>
           </DialogHeader>
 
@@ -673,16 +727,24 @@ export function PartnerApprovalManagement({
                 <span>Quy định kiểm duyệt bắt buộc:</span>
               </div>
               <p className="text-[11px] text-rose-800 leading-relaxed">
-                Quản trị viên <strong>bắt buộc phải ghi rõ lý do từ chối</strong> (lưu vào cột <code>rejection_reason</code> của bảng <code>business_profiles</code>) để đối tác biết chính xác điểm sai sót cần sửa đổi.
+                Quản trị viên{" "}
+                <strong>bắt buộc phải ghi rõ lý do từ chối</strong> (lưu vào cột{" "}
+                <code>rejection_reason</code> của bảng{" "}
+                <code>business_profiles</code>) để đối tác biết chính xác điểm
+                sai sót cần sửa đổi.
               </p>
             </div>
 
             {/* Ô NHẬP LÝ DO BẮT BUỘC */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                <span>Lý do từ chối hồ sơ (Bắt buộc) <span className="text-rose-600">*</span></span>
+                <span>
+                  Lý do từ chối hồ sơ (Bắt buộc){" "}
+                  <span className="text-rose-600">*</span>
+                </span>
               </Label>
               <Textarea
+                maxLength={2000}
                 value={rejectReason}
                 onChange={(e) => {
                   setRejectReason(e.target.value);
@@ -695,7 +757,9 @@ export function PartnerApprovalManagement({
                 }`}
               />
               {rejectError && (
-                <p className="text-[11px] text-rose-600 font-semibold">{rejectError}</p>
+                <p className="text-[11px] text-rose-600 font-semibold">
+                  {rejectError}
+                </p>
               )}
             </div>
 
@@ -723,10 +787,16 @@ export function PartnerApprovalManagement({
             </div>
           </div>
 
+          {reviewError && (
+            <p role="alert" className="text-xs text-rose-700">
+              {reviewError}
+            </p>
+          )}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
+              disabled={isReviewing}
               onClick={() => setRejectingPartner(null)}
               className="text-xs h-10 px-4 rounded-xl cursor-pointer"
             >
@@ -734,6 +804,7 @@ export function PartnerApprovalManagement({
             </Button>
             <Button
               type="button"
+              disabled={isReviewing}
               onClick={handleConfirmReject}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-10 px-5 rounded-xl gap-1.5 cursor-pointer shadow-xs"
             >
@@ -787,8 +858,8 @@ export function PartnerApprovalManagement({
                         selectedPartner.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-300"
                           : selectedPartner.status === "rejected"
-                          ? "bg-rose-50 text-rose-700 border-rose-300"
-                          : "bg-amber-50 text-amber-700 border-amber-300"
+                            ? "bg-rose-50 text-rose-700 border-rose-300"
+                            : "bg-amber-50 text-amber-700 border-amber-300"
                       }`}
                     >
                       {selectedPartner.status === "approved" && (
@@ -818,9 +889,16 @@ export function PartnerApprovalManagement({
                     {selectedPartner.businessName}
                   </h2>
                   <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
-                    <span>Hồ sơ thẩm định tư cách đối tác hệ sinh thái TripOps</span>
+                    <span>
+                      Hồ sơ thẩm định tư cách đối tác hệ sinh thái TripOps
+                    </span>
                     <span className="text-slate-300 hidden sm:inline">•</span>
-                    <span>Mã số thuế: <strong className="font-mono text-slate-700">{selectedPartner.taxCode}</strong></span>
+                    <span>
+                      Mã số thuế:{" "}
+                      <strong className="font-mono text-slate-700">
+                        {selectedPartner.taxCode}
+                      </strong>
+                    </span>
                   </p>
                 </div>
               </div>
@@ -898,7 +976,9 @@ export function PartnerApprovalManagement({
                             Họ và tên người đại diện
                           </span>
                           <span className="font-bold text-slate-900 text-sm mt-0.5 block">
-                            {cleanDisplayName(selectedPartner.representativeName)}
+                            {cleanDisplayName(
+                              selectedPartner.representativeName,
+                            )}
                           </span>
                         </div>
 
@@ -945,18 +1025,25 @@ export function PartnerApprovalManagement({
                       <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
                         <div className="flex items-center gap-3">
                           <div className="w-11 h-11 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                            PDF
+                            <FileText className="w-5 h-5" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="font-bold text-slate-900 text-xs truncate">
-                              Giay_Phep_KD_{selectedPartner.taxCode}.pdf
+                              Ảnh giấy phép kinh doanh
                             </div>
                             <div className="text-[11px] text-slate-500 mt-0.5">
-                              Dấu mộc đỏ pháp nhân · Định dạng hợp lệ
+                              Bản chụp do đối tác cung cấp
                             </div>
                           </div>
                         </div>
 
+                        {selectedPartner.licenseUrl && (
+                          <img
+                            src={selectedPartner.licenseUrl}
+                            alt="Ảnh giấy phép kinh doanh của đối tác"
+                            className="max-h-72 w-full object-contain rounded-xl bg-white"
+                          />
+                        )}
                         <a
                           href={selectedPartner.licenseUrl}
                           target="_blank"
@@ -989,7 +1076,8 @@ export function PartnerApprovalManagement({
                         <span>Nguyên tắc thẩm định sàn:</span>
                       </div>
                       <p className="text-[11px] text-slate-600 leading-relaxed">
-                        Đối chiếu chính xác Mã số thuế và tên pháp nhân với Cổng thông tin Quốc gia về ĐKKD trước khi bấm Phê duyệt.
+                        Đối chiếu chính xác Mã số thuế và tên pháp nhân với Cổng
+                        thông tin Quốc gia về ĐKKD trước khi bấm Phê duyệt.
                       </p>
                     </div>
                   </div>
@@ -1008,7 +1096,7 @@ export function PartnerApprovalManagement({
                 </Button>
 
                 <div className="flex items-center gap-2.5">
-                  {selectedPartner.status !== "rejected" && (
+                  {selectedPartner.status === "pending" && (
                     <Button
                       type="button"
                       variant="outline"
@@ -1023,7 +1111,7 @@ export function PartnerApprovalManagement({
                     </Button>
                   )}
 
-                  {selectedPartner.status !== "approved" && (
+                  {selectedPartner.status === "pending" && (
                     <Button
                       type="button"
                       onClick={() => {

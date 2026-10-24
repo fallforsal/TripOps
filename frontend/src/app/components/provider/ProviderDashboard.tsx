@@ -103,7 +103,7 @@ export function ProviderDashboard({
   };
 
   // Nếu nhà cung cấp chưa cập nhật hồ sơ pháp nhân / chưa duyệt: CHỈ HIỂN THỊ TRANG CẬP NHẬT HỒ SƠ
-  if (!currentUser.taxCode || currentUser.accountStatus === "pending") {
+  if (currentUser.businessProfile?.status !== "approved") {
     return (
       <BusinessProfileOnboardingPage
         currentUser={currentUser}
