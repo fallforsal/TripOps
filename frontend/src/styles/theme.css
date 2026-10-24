@@ -1,0 +1,75 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #F0F9FF;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  --primary: #0EA5E9;
+  --primary-hover: #0284C7;
+  --primary-dark: #075985;
+  --primary-light: #E0F2FE;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E0F2FE;
+  --secondary-foreground: #075985;
+  --muted: #F1F5F9;
+  --muted-foreground: #475569;
+  --accent: #F97316;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #CBD5E1;
+  --input: #CBD5E1;
+  --input-background: #FFFFFF;
+  --switch-background: #94A3B8;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #0EA5E9;
+  --chart-1: #0EA5E9;
+  --chart-2: #F97316;
+  --chart-3: #0284C7;
+  --chart-4: #FB923C;
+  --chart-5: #64748B;
+  --radius: 0.75rem;
+  --sidebar: #075985;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #0EA5E9;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(255, 255, 255, 0.1);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.15);
+  --sidebar-ring: #0EA5E9;
+}
+
+.dark {
+  --background: #0B1320;
+  --foreground: #F8FAFC;
+  --card: #111E30;
+  --card-foreground: #F8FAFC;
+  --popover: #111E30;
+  --popover-foreground: #F8FAFC;
+  --primary: #38BDF8;
+  --primary-foreground: #0B1320;
+  --secondary: #1E293B;
+  --secondary-foreground: #F8FAFC;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: #FB923C;
+  --accent-foreground: #0B1320;
+  --destructive: #F87171;
+  --destructive-foreground: #0B1320;
+  --border: #334155;
+  --input: #334155;
+  --ring: #38BDF8;
+  --sidebar: #08101C;
+  --sidebar-foreground: #F8FAFC;
+  --sidebar-primary: #38BDF8;
+  --sidebar-primary-foreground: #0B1320;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #F8FAFC;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #38BDF8;
+}

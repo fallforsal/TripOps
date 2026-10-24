@@ -1,0 +1,20 @@
+@import "tailwindcss" source(none);
+@source '../**/*.{js,ts,jsx,tsx}';
+
+@import "tw-animate-css";
+
+@theme {
+  --color-brand-primary: #0EA5E9;
+  --color-brand-primary-hover: #0284C7;
+  --color-brand-primary-dark: #075985;
+  --color-brand-primary-light: #E0F2FE;
+  
+  --color-brand-accent: #F97316;
+  --color-brand-accent-hover: #EA580C;
+
+  --color-surface-canvas: #F0F9FF;
+  --color-surface-card: #FFFFFF;
+  --color-surface-text: #0F172A;
+  --color-surface-muted: #475569;
+  --color-surface-border: #CBD5E1;
+}

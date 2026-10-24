@@ -1,0 +1,310 @@
+export interface ProvinceData {
+  name: string;
+  lat: number;
+  lng: number;
+  wards: string[];
+}
+
+export const vietnamAdministrativeData: Record<string, ProvinceData> = {
+  "Lâm Đồng": {
+    name: "Lâm Đồng",
+    lat: 11.9404,
+    lng: 108.4583,
+    wards: [
+      "Phường 1",
+      "Phường 2",
+      "Phường 3",
+      "Phường 4",
+      "Phường 5",
+      "Phường 6",
+      "Phường 7",
+      "Phường 8",
+      "Phường 9",
+      "Phường 10",
+      "Phường 11",
+      "Phường 12",
+      "Xã Tà Nung",
+      "Xã Trạm Hành",
+      "Xã Xuân Thọ",
+      "Xã Xuân Trường",
+      "Xã Lát",
+      "Xã Đạ Sar",
+      "Phường B'Lao",
+      "Phường Lộc Sơn",
+    ],
+  },
+  "Khánh Hòa": {
+    name: "Khánh Hòa",
+    lat: 12.2388,
+    lng: 109.1967,
+    wards: [
+      "Phường Lộc Thọ",
+      "Phường Vĩnh Nguyên",
+      "Phường Vĩnh Trường",
+      "Phường Tân Lập",
+      "Phường Phước Tiến",
+      "Phường Xương Huân",
+      "Phường Vạn Thắng",
+      "Phường Vĩnh Hải",
+      "Phường Vĩnh Phước",
+      "Xã Vĩnh Ngọc",
+      "Xã Vĩnh Thái",
+      "Phường Cam Nghĩa",
+      "Phường Cam Phúc Bắc",
+      "Xã Cam Hải Đông",
+    ],
+  },
+  "Kiên Giang": {
+    name: "Kiên Giang",
+    lat: 10.2899,
+    lng: 103.984,
+    wards: [
+      "Phường Dương Đông",
+      "Phường An Thới",
+      "Xã Gành Dầu",
+      "Xã Cửa Cạn",
+      "Xã Cửa Dương",
+      "Xã Hàm Ninh",
+      "Xã Dương Tơ",
+      "Xã Bãi Thơm",
+      "Xã Thổ Châu",
+      "Phường Vĩnh Thanh",
+      "Phường Rạch Sỏi",
+    ],
+  },
+  "Đà Nẵng": {
+    name: "Đà Nẵng",
+    lat: 16.0544,
+    lng: 108.2022,
+    wards: [
+      "Phường Hải Châu 1",
+      "Phường Hải Châu 2",
+      "Phường Thạch Thang",
+      "Phường Thanh Bình",
+      "Phường Thuận Phước",
+      "Phường Hòa Cường Bắc",
+      "Phường Hòa Cường Nam",
+      "Phường Phước Mỹ",
+      "Phường An Hải Bắc",
+      "Phường Mỹ An",
+      "Phường Khuê Mỹ",
+      "Xã Hòa Ninh (Bà Nà)",
+    ],
+  },
+  "Quảng Nam": {
+    name: "Quảng Nam",
+    lat: 15.8801,
+    lng: 108.338,
+    wards: [
+      "Phường Minh An (Phố cổ)",
+      "Phường Cẩm Phô",
+      "Phường Sơn Phong",
+      "Phường Cẩm Châu",
+      "Phường Cửa Đại",
+      "Phường Cẩm An (An Bàng)",
+      "Xã Cẩm Thanh",
+      "Xã Tân Hiệp (Cù Lao Chàm)",
+      "Phường An Mỹ",
+      "Phường Tân Thạnh",
+    ],
+  },
+  "Hồ Chí Minh": {
+    name: "Hồ Chí Minh",
+    lat: 10.8231,
+    lng: 106.6297,
+    wards: [
+      "Phường Bến Nghé",
+      "Phường Bến Thành",
+      "Phường Đa Kao",
+      "Phường Tân Định",
+      "Phường Phạm Ngũ Lão",
+      "Phường Thảo Điền",
+      "Phường An Phú",
+      "Phường Thủ Thiêm",
+      "Phường Tân Phong (Phú Mỹ Hưng)",
+      "Phường Tân Phú",
+      "Phường 1",
+      "Phường 2",
+      "Phường 4",
+      "Phường 6",
+    ],
+  },
+  "Hà Nội": {
+    name: "Hà Nội",
+    lat: 21.0285,
+    lng: 105.8542,
+    wards: [
+      "Phường Tràng Tiền",
+      "Phường Hàng Trống",
+      "Phường Hàng Bạc",
+      "Phường Hàng Gai",
+      "Phường Cửa Đông",
+      "Phường Điện Biên",
+      "Phường Quán Thánh",
+      "Phường Quảng An (Tây Hồ)",
+      "Phường Yên Phụ",
+      "Phường Nhật Tân",
+      "Phường Dịch Vọng Hậu",
+    ],
+  },
+  "Thừa Thiên Huế": {
+    name: "Thừa Thiên Huế",
+    lat: 16.4637,
+    lng: 107.5909,
+    wards: [
+      "Phường Vĩnh Ninh",
+      "Phường Phú Hội",
+      "Phường Thuận Thành",
+      "Phường Thuận Lộc",
+      "Phường Tây Lộc",
+      "Phường Vỹ Dạ",
+      "Phường Thủy Xuân",
+      "Xã Lộc Vĩnh (Lăng Cô)",
+    ],
+  },
+  "Bình Thuận": {
+    name: "Bình Thuận",
+    lat: 10.9804,
+    lng: 108.2615,
+    wards: [
+      "Phường Mũi Né",
+      "Phường Hàm Tiến",
+      "Phường Phú Hài",
+      "Phường Thanh Hải",
+      "Phường Đức Thắng",
+      "Xã Tiến Thành",
+    ],
+  },
+  "Bà Rịa - Vũng Tàu": {
+    name: "Bà Rịa - Vũng Tàu",
+    lat: 10.346,
+    lng: 107.0843,
+    wards: [
+      "Phường 1",
+      "Phường 2",
+      "Phường Thắng Tam (Bãi Sau)",
+      "Phường 7",
+      "Phường 8",
+      "Phường 10",
+      "Xã Long Hải",
+      "Huyện Côn Đảo",
+    ],
+  },
+  "Quảng Ninh": {
+    name: "Quảng Ninh",
+    lat: 20.9505,
+    lng: 107.0734,
+    wards: [
+      "Phường Bãi Cháy",
+      "Phường Hồng Gai",
+      "Phường Tuần Châu",
+      "Phường Hùng Thắng",
+      "Phường Hà Khẩu",
+      "Xã Quan Lạn",
+      "Xã Minh Châu",
+    ],
+  },
+  "Ninh Bình": {
+    name: "Ninh Bình",
+    lat: 20.2506,
+    lng: 105.9745,
+    wards: [
+      "Phường Vân Giang",
+      "Phường Thanh Bình",
+      "Phường Nam Thành",
+      "Xã Ninh Hải (Tam Cốc)",
+      "Xã Ninh Xuân (Hang Múa)",
+      "Xã Trường Yên (Tràng An)",
+      "Xã Gia Sinh (Bái Đính)",
+    ],
+  },
+  "Lào Cai": {
+    name: "Lào Cai",
+    lat: 22.3364,
+    lng: 103.8438,
+    wards: [
+      "Phường Sa Pa",
+      "Phường Cầu Mây",
+      "Phường Phan Si Păng",
+      "Xã Tả Van",
+      "Xã Tả Phìn",
+      "Xã Bản Hồ",
+      "Xã Mường Hoa",
+    ],
+  },
+  "Bình Định": {
+    name: "Bình Định",
+    lat: 13.782,
+    lng: 109.2194,
+    wards: [
+      "Phường Lê Lợi",
+      "Phường Nguyễn Văn Cừ",
+      "Phường Ghềnh Ráng",
+      "Xã Nhơn Lý (Kỳ Co)",
+      "Xã Nhơn Hải (Hòn Khô)",
+      "Xã Nhơn Hội",
+    ],
+  },
+  "Phú Yên": {
+    name: "Phú Yên",
+    lat: 13.0882,
+    lng: 109.3149,
+    wards: [
+      "Phường 1",
+      "Phường 7",
+      "Phường 9",
+      "Xã An Chấn (Bãi Xép)",
+      "Xã An Ninh Đông (Gành Đá Đĩa)",
+      "Xã Hòa Tâm",
+    ],
+  },
+  "Cần Thơ": {
+    name: "Cần Thơ",
+    lat: 10.0452,
+    lng: 105.7469,
+    wards: [
+      "Phường Tân An (Ninh Kiều)",
+      "Phường An Khánh",
+      "Phường Cái Khế",
+      "Phường Hưng Phú",
+      "Phường Lê Bình (Cái Răng)",
+    ],
+  },
+  "Hải Phòng": {
+    name: "Hải Phòng",
+    lat: 20.8449,
+    lng: 106.6881,
+    wards: [
+      "Phường Hoàng Văn Thụ",
+      "Phường Minh Khai",
+      "Thị trấn Cát Bà",
+      "Xã Việt Hải",
+      "Phường Vạn Hương (Đồ Sơn)",
+    ],
+  },
+};
+
+export const allVietnamProvinces = Object.keys(vietnamAdministrativeData);
+
+export function getWardsForProvince(provinceName: string): string[] {
+  if (vietnamAdministrativeData[provinceName]) {
+    return vietnamAdministrativeData[provinceName].wards;
+  }
+  return [
+    "Phường 1",
+    "Phường 2",
+    "Phường 3",
+    "Phường Trung Tâm",
+    "Xã Trung Tâm",
+  ];
+}
+
+export function getCoordinatesForProvince(provinceName: string): { lat: number; lng: number } {
+  if (vietnamAdministrativeData[provinceName]) {
+    return {
+      lat: vietnamAdministrativeData[provinceName].lat,
+      lng: vietnamAdministrativeData[provinceName].lng,
+    };
+  }
+  return { lat: 11.9404, lng: 108.4583 }; // Default Đà Lạt
+}
