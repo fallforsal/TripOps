@@ -258,6 +258,7 @@ export const mockUsers: User[] = [
     id: "company-admin-3",
     name: "Phạm Trung Hiếu",
     email: "company3@demo.com",
+    phone: "0912 345 678",
     role: "company_admin",
     companyId: "company-3",
     companyName: "Fiditour",
@@ -276,6 +277,18 @@ export const mockUsers: User[] = [
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
   },
   // Nhà cung cấp dịch vụ (Provider)
+  {
+    id: "provider-pending",
+    name: "Hoàng Minh Trí",
+    email: "provider.pending@tripops.vn",
+    phone: "0988 777 666",
+    aliasEmails: ["provider.pending@demo.com"],
+    role: "provider",
+    businessName: "Cơ sở Dịch vụ Mới",
+    accountStatus: "pending",
+    taxCode: "",
+    avatar: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200",
+  },
   {
     id: "provider-1",
     name: "Nguyễn Thị Mai (Heritage Provider)",

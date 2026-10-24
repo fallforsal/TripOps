@@ -1,4 +1,4 @@
-export type UserRole = "user" | "guide" | "admin" | "provider" | "company_admin";
+export type UserRole = "user" | "guide" | "admin" | "provider" | "agency" | "company_admin";
 
 export type ProviderType =
   | "accommodation" // Dịch vụ lưu trú
@@ -29,7 +29,24 @@ export interface TourCompany {
   totalBookings?: number;
 }
 
+
+export interface BusinessProfile {
+  id?: number | string;
+  userId: string;
+  businessName: string;
+  taxCode: string;
+  businessAddress: string;
+  businessLicenseUrl?: string;
+  description?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  approvedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface User {
+  businessProfile?: BusinessProfile;
   id: string;
   name: string;
   email: string;

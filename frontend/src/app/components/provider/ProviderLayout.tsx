@@ -243,6 +243,35 @@ export function ProviderLayout({
 
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full min-w-0">
+          {(!currentUser.taxCode || currentUser.accountStatus === "pending") && (
+            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/70 border-2 border-amber-300 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-2xs">
+                  ⚠️
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-amber-950 text-sm">
+                      Hồ sơ Nhà cung cấp chưa kích hoạt (Chưa nộp Business Profile)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-bold uppercase tracking-wider">
+                      Chờ xác minh
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                    Bạn đang ở chế độ <strong>Xem trước dịch vụ</strong>. Vui lòng cập nhật thông tin pháp nhân và tiện ích cơ sở tại mục <strong>Hồ sơ Doanh nghiệp</strong> để Admin phê duyệt đưa bài đăng dịch vụ lên sàn.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => onNavigate("profile")}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs shrink-0 cursor-pointer"
+              >
+                Đến trang Hồ sơ Doanh nghiệp →
+              </Button>
+            </div>
+          )}
           {children}
         </main>
       </div>

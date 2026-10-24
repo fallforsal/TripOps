@@ -14,17 +14,18 @@ import {
   BookingIncident,
 } from "@/app/types";
 import { mockTourCompanies } from "@/app/data/mockData";
-import { CompanyLayout } from "./CompanyLayout";
-import { CompanyOverview } from "./CompanyOverview";
-import { CompanyTourManagement, TourFormPage } from "./CompanyTourManagement";
-import { CompanyBookingManagement } from "./CompanyBookingManagement";
-import { CompanyGuideManagement } from "./CompanyGuideManagement";
-import { CompanyCustomRequests } from "./CompanyCustomRequests";
-import { CompanyBookingDetailPage } from "./CompanyBookingDetailPage";
-import { CompanyCoHostManagement } from "./CompanyCoHostManagement";
-import { CompanyServicesExplorer } from "./CompanyServicesExplorer";
+import { AgencyLayout } from "./AgencyLayout";
+import { AgencyOverview } from "./AgencyOverview";
+import { AgencyTourManagement, TourFormPage } from "./AgencyTourManagement";
+import { AgencyBookingManagement } from "./AgencyBookingManagement";
+import { AgencyGuideManagement } from "./AgencyGuideManagement";
+import { AgencyCustomRequests } from "./AgencyCustomRequests";
+import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
+import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
+import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
+import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
-interface CompanyDashboardProps {
+interface AgencyDashboardProps {
   currentUser: User;
   company: TourCompany;
   tours: Tour[];
@@ -58,7 +59,7 @@ interface CompanyDashboardProps {
   onLogout?: () => void;
 }
 
-export function CompanyDashboard({
+export function AgencyDashboard({
   currentUser,
   company,
   tours,
@@ -90,7 +91,7 @@ export function CompanyDashboard({
   onUpdateGuide,
   onRemoveGuide,
   onLogout,
-}: CompanyDashboardProps) {
+}: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [editingCoHostItem, setEditingCoHostItem] = useState<{
@@ -249,7 +250,7 @@ export function CompanyDashboard({
     switch (activeSection) {
       case "overview":
         return (
-          <CompanyOverview
+          <AgencyOverview
             company={company}
             tours={companyTours}
             bookings={companyBookings}
@@ -259,7 +260,7 @@ export function CompanyDashboard({
         );
       case "tours":
         return (
-          <CompanyTourManagement
+          <AgencyTourManagement
             tours={companyTours}
             company={company}
             onCreateTour={onCreateTour}
@@ -271,7 +272,7 @@ export function CompanyDashboard({
       case "bookings":
         if (currentSelectedBooking) {
           return (
-            <CompanyBookingDetailPage
+            <AgencyBookingDetailPage
               booking={currentSelectedBooking}
               guides={companyGuides}
               companyName={company.name}
@@ -293,7 +294,7 @@ export function CompanyDashboard({
           );
         }
         return (
-          <CompanyBookingManagement
+          <AgencyBookingManagement
             bookings={companyBookings}
             guides={companyGuides}
             companyName={company.name}
@@ -310,14 +311,14 @@ export function CompanyDashboard({
       case "services":
       case "provider-services":
         return (
-          <CompanyServicesExplorer
+          <AgencyServicesExplorer
             services={services}
             companyName={company.name}
           />
         );
       case "guides":
         return (
-          <CompanyGuideManagement
+          <AgencyGuideManagement
             guides={companyGuides}
             tours={companyTours}
             guideSchedules={guideSchedules}
@@ -330,7 +331,7 @@ export function CompanyDashboard({
         );
       case "custom-requests":
         return (
-          <CompanyCustomRequests
+          <AgencyCustomRequests
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}
@@ -397,7 +398,7 @@ export function CompanyDashboard({
           );
         }
         return (
-          <CompanyCoHostManagement
+          <AgencyCoHostManagement
             company={company}
             tours={tours}
             customTourRequests={customTourRequests}
@@ -414,8 +415,19 @@ export function CompanyDashboard({
     }
   };
 
+  // Nếu doanh nghiệp chưa được duyệt: CHỈ HIỂN THỊ DUY NHẤT TRANG BẮT BUỘC CẬP NHẬT HỒ SƠ
+  if (company.status !== "approved") {
+    return (
+      <BusinessProfileOnboardingPage
+        currentUser={currentUser}
+        company={company}
+        onLogout={onLogout}
+      />
+    );
+  }
+
   return (
-    <CompanyLayout
+    <AgencyLayout
       activeSection={activeSection}
       onNavigate={handleNavigateSection}
       company={company}
@@ -424,6 +436,9 @@ export function CompanyDashboard({
       onLogout={onLogout}
     >
       {renderContent()}
-    </CompanyLayout>
+    </AgencyLayout>
   );
 }
+
+// Backwards compatibility alias
+export const CompanyDashboard = AgencyDashboard;

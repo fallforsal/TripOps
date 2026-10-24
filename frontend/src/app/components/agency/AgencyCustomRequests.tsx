@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { mockTourCompanies } from "@/app/data/mockData";
 import {
@@ -16,11 +16,11 @@ import {
   ArrowRight,
   Filter,
 } from "lucide-react";
-import { TourFormPage } from "@/app/components/company/CompanyTourManagement";
-import { TourVersionHistoryModal } from "@/app/components/company/TourVersionHistoryModal";
-import { CoHostInvitationModal } from "@/app/components/company/CoHostInvitationModal";
+import { TourFormPage } from "@/app/components/agency/AgencyTourManagement";
+import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
+import { CoHostInvitationModal } from "@/app/components/agency/CoHostInvitationModal";
 
-interface CompanyCustomRequestsProps {
+interface AgencyCustomRequestsProps {
   requests: CustomTourRequest[];
   company: TourCompany;
   tours: Tour[];
@@ -51,7 +51,7 @@ function formatVND(n: number) {
   return n.toLocaleString("vi-VN") + " ₫";
 }
 
-export function CompanyCustomRequests({
+export function AgencyCustomRequests({
   requests,
   company,
   tours,
@@ -61,7 +61,7 @@ export function CompanyCustomRequests({
   onEditTour,
   onRestoreTourVersion,
   onViewTour,
-}: CompanyCustomRequestsProps) {
+}: AgencyCustomRequestsProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [designingRequest, setDesigningRequest] = useState<CustomTourRequest | null>(null);
   const [editingTourForRequest, setEditingTourForRequest] = useState<Tour | null>(null);

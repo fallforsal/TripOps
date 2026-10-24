@@ -11,11 +11,10 @@ import {
 import { AdminLayout } from "./AdminLayout";
 import { AdminDashboardOverview } from "./AdminDashboardOverview";
 import { AdminFinancialManagement } from "./AdminFinancialManagement";
-import { ProviderAccountApproval } from "./ProviderAccountApproval";
 import { ServicePostApproval } from "./ServicePostApproval";
 import { ProviderManagement } from "./ProviderManagement";
 import { UserManagement } from "./UserManagement";
-import { CompanyManagement } from "./CompanyManagement";
+import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
 import { AdminTourModeration } from "./AdminTourModeration";
 
 interface AdminDashboardProps {
@@ -93,7 +92,7 @@ export function AdminDashboard({
   onLogout,
 }: AdminDashboardProps) {
   const [activeSection, setActiveSection] =
-    useState<string>("companies");
+    useState<string>("partner-approvals");
 
   const companyAdmins = users.filter(
     (u) => u.role === "company_admin",
@@ -115,14 +114,18 @@ export function AdminDashboard({
             guideSchedules={guideSchedules}
           />
         );
+      case "partner-approvals":
       case "companies":
+      case "approve-providers":
         return (
-          <CompanyManagement
+          <PartnerApprovalManagement
             companies={companies}
             companyAdmins={companyAdmins}
+            providers={providers}
             onApproveCompany={onApproveCompany}
             onRejectCompany={onRejectCompany}
-            onSuspendCompany={onSuspendCompany}
+            onApproveProvider={onApproveProvider}
+            onRejectProvider={onRejectProvider}
           />
         );
       case "tours":
@@ -146,14 +149,7 @@ export function AdminDashboard({
             onSettleBooking={onSettleBooking}
           />
         );
-      case "approve-providers":
-        return (
-          <ProviderAccountApproval
-            providers={providers}
-            onApproveProvider={onApproveProvider}
-            onRejectProvider={onRejectProvider}
-          />
-        );
+
       case "services":
       case "approve-posts":
         return (

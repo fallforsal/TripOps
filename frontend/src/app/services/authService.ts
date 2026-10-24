@@ -109,8 +109,10 @@ export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
-  role: "user" | "provider";
-  // Provider specific fields
+  role: UserRole;
+  phone?: string;
+  companyId?: string;
+  companyName?: string;
   providerType?: string;
   businessName?: string;
   businessAddress?: string;
@@ -131,20 +133,28 @@ export const register = async (
       return createErrorResponse("Email đã được sử dụng");
     }
 
-    // Create new user
+    // Create new user with valid demo properties for their role
     const newUser: User = {
       id: "user-" + Date.now(),
       name: data.name,
       email: data.email,
+      phone: data.phone,
       role: data.role,
+      ...(data.role === "agency" && {
+        companyId: data.companyId || "company-1",
+        companyName: data.companyName || "Viettravel",
+      }),
       ...(data.role === "provider" && {
-        providerType: data.providerType as any,
-        businessName: data.businessName,
+        providerType: (data.providerType as any) || "accommodation",
+        businessName: data.businessName || "Heritage Resorts & Villas",
         businessAddress: data.businessAddress,
         businessPhone: data.businessPhone,
         businessEmail: data.businessEmail,
         taxCode: data.taxCode,
-        accountStatus: "pending",
+      }),
+      ...(data.role === "guide" && {
+        companyId: "company-1",
+        companyName: "Viettravel",
       }),
     };
 

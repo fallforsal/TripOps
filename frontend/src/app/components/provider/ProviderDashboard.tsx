@@ -6,6 +6,7 @@ import { ProviderServiceDetailPage } from "./ProviderServiceDetailPage";
 import { ProviderOverview } from "./ProviderOverview";
 import { ProviderCreateServicePage } from "./ProviderCreateServicePage";
 import { ProviderProfilePage } from "./ProviderProfilePage";
+import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface ProviderDashboardProps {
   currentUser: User;
@@ -100,6 +101,16 @@ export function ProviderDashboard({
     setSelectedServiceId(null);
     setActiveSection("services");
   };
+
+  // Nếu nhà cung cấp chưa cập nhật hồ sơ pháp nhân / chưa duyệt: CHỈ HIỂN THỊ TRANG CẬP NHẬT HỒ SƠ
+  if (!currentUser.taxCode || currentUser.accountStatus === "pending") {
+    return (
+      <BusinessProfileOnboardingPage
+        currentUser={currentUser}
+        onLogout={onLogout}
+      />
+    );
+  }
 
   return (
     <ProviderLayout

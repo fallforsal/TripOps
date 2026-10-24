@@ -11,7 +11,7 @@ import { ProviderDashboard } from "@/app/components/provider/ProviderDashboard";
 import { ServicePostManagement } from "@/app/components/provider/ServicePostManagement";
 import { CreatePostModal } from "@/app/components/provider/CreatePostModal";
 import { EditServiceModal } from "@/app/components/provider/EditServiceModal";
-import { CompanyDashboard } from "@/app/components/company/CompanyDashboard";
+import { AgencyDashboard } from "@/app/components/agency/AgencyDashboard";
 import { BookToursPage } from "@/app/components/BookToursPage";
 import { ContactPage } from "@/app/components/ContactPage";
 import { AboutPage } from "@/app/components/AboutPage";
@@ -1186,10 +1186,15 @@ function App() {
     return (
       <div className="min-h-screen bg-[#F0F9FF]">
         <RegisterScreen
-          onRegisterSuccess={() => {
-            setShowRegister(false);
-            setShowLogin(true);
+          onRegisterSuccess={(registeredUser?: User) => {
+            if (registeredUser) {
+              handleLogin(registeredUser);
+            } else {
+              setShowRegister(false);
+              setShowLogin(true);
+            }
           }}
+          onShowLogin={() => { setShowRegister(false); setShowLogin(true); }}
           onBack={() => setShowRegister(false)}
         />
       </div>
@@ -1221,11 +1226,11 @@ function App() {
     const displayedGuideSchedules =
       userGuideSchedules.length > 0 ? userGuideSchedules : guideSchedules;
 
-    // Company admin view
-    if (currentUser.role === "company_admin") {
+    // Agency view
+    if (currentUser.role === "company_admin" || currentUser.role === "agency") {
       const company = companies.find(
         (c) => c.id === currentUser.companyId,
-      );
+      ) || companies[0];
       if (company) {
         const companyGuides = users.filter(
           (u) => u.role === "guide" && u.companyId === company.id,
@@ -1236,7 +1241,7 @@ function App() {
             b.coHosts?.some((ch) => ch.companyId === company.id),
         );
         return (
-          <CompanyDashboard
+          <AgencyDashboard
             currentUser={currentUser}
             company={company}
             tours={tours}

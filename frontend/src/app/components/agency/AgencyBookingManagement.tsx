@@ -32,7 +32,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 
-export interface CompanyBookingManagementProps {
+export interface AgencyBookingManagementProps {
   bookings: Booking[];
   guides: User[];
   companyName: string;
@@ -146,7 +146,7 @@ function ContractModal({
   );
 }
 
-export function CompanyBookingManagement({
+export function AgencyBookingManagement({
   bookings,
   guides,
   companyName,
@@ -158,7 +158,7 @@ export function CompanyBookingManagement({
   onMarkFullyPaid,
   onGenerateContract,
   onViewBookingDetail,
-}: CompanyBookingManagementProps) {
+}: AgencyBookingManagementProps) {
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [contractBooking, setContractBooking] = useState<Booking | null>(null);

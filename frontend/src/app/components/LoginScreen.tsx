@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { User } from "@/app/types";
 import { login } from "@/app/services/authService";
 import { Compass, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
@@ -48,22 +48,34 @@ export function LoginScreen({
       badge: "User",
     },
     {
-      role: "Đơn vị chủ trì tour",
-      name: "Viettravel",
+      role: "Doanh nghiệp lữ hành (Agency Chủ trì)",
+      name: "Trần Quốc Bảo (Viettravel)",
       email: "viettravel.tour@gmail.com",
-      badge: "Host",
+      badge: "Agency",
     },
     {
-      role: "Đối tác liên minh",
-      name: "Hà Giang Discovery",
+      role: "Doanh nghiệp lữ hành (Agency Đối tác)",
+      name: "Vàng Mí Sùng (Hà Giang Discovery)",
       email: "hagiang.discovery@gmail.com",
-      badge: "Co-host",
+      badge: "Agency",
     },
     {
-      role: "Đối tác lưu trú & DV",
-      name: "Heritage Resorts",
+      role: "Lữ hành chờ duyệt (Onboarding Profile)",
+      name: "Phạm Trung Hiếu",
+      email: "company3@demo.com",
+      badge: "Chờ duyệt",
+    },
+    {
+      role: "Nhà cung cấp dịch vụ (Provider)",
+      name: "Heritage Resorts & Villas Đà Lạt",
       email: "provider.heritage@gmail.com",
       badge: "Provider",
+    },
+    {
+      role: "Nhà cung cấp chờ duyệt (Onboarding Profile)",
+      name: "Hoàng Minh Trí",
+      email: "provider.pending@tripops.vn",
+      badge: "Chờ duyệt",
     },
     {
       role: "Quản trị sàn TripOps",
