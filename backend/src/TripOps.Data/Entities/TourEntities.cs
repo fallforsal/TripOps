@@ -20,7 +20,8 @@ public class Tour : BaseEntity<int>, ISoftDelete
     public string? CancellationPolicy { get; set; }
     public string? Images { get; set; }
     public TourStatus Status { get; set; } = TourStatus.Draft;
-    public TourVisibility Visibility { get; set; } = TourVisibility.Public;
+    public TourVisibility Visibility { get; set; } = TourVisibility.Hidden;
+    public bool IsRequest { get; set; }
     public int Version { get; set; } = 1;
 
     public bool IsDeleted { get; set; }

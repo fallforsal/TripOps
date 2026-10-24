@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TripOps.Data.Common;
 using TripOps.Data.Entities;
+using TripOps.Data.Enums;
 
 namespace TripOps.Data;
 
@@ -59,6 +60,42 @@ public class TripOpsDbContext : DbContext
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
     public DbSet<AgencySubscription> AgencySubscriptions => Set<AgencySubscription>();
     public DbSet<SubscriptionPaymentHistory> SubscriptionPaymentHistories => Set<SubscriptionPaymentHistory>();
+
+    private void NormalizeTourStates()
+    {
+        foreach (var entry in ChangeTracker.Entries<Tour>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            var tour = entry.Entity;
+            if (entry.State == EntityState.Deleted)
+                entry.State = EntityState.Modified;
+            else if (!tour.IsDeleted && tour.Status != TourStatus.Deleted)
+            {
+                if (!Enum.IsDefined(tour.Status) || !Enum.IsDefined(tour.Visibility))
+                    throw new InvalidOperationException("Invalid tour status or visibility.");
+                if (tour.Status == TourStatus.Draft || tour.IsRequest)
+                    tour.Visibility = TourVisibility.Hidden;
+                continue;
+            }
+
+            tour.Status = TourStatus.Deleted;
+            tour.Visibility = TourVisibility.Hidden;
+            tour.IsDeleted = true;
+            tour.DeletedAt ??= DateTime.UtcNow;
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        NormalizeTourStates();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        NormalizeTourStates();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -148,8 +185,13 @@ public class TripOpsDbContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
             entity.Property(e => e.Code).HasMaxLength(50);
             entity.Property(e => e.BasePrice).HasPrecision(12, 2);
-            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
-            entity.Property(e => e.Visibility).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Status).HasConversion(
+                value => value.ToString().ToLowerInvariant(),
+                value => Enum.Parse<TourStatus>(value, true)).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Visibility).HasConversion(
+                value => value.ToString().ToLowerInvariant(),
+                value => Enum.Parse<TourVisibility>(value, true)).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.IsRequest).HasColumnName("is_request").HasDefaultValue(false);
             entity.HasOne(e => e.Agency)
                 .WithMany()
                 .HasForeignKey(e => e.AgencyId)

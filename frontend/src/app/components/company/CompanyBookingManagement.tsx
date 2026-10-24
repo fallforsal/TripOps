@@ -186,6 +186,19 @@ export function CompanyBookingManagement({
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-[#CBD5E1] shadow-xs">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#075985] flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-[#075985]" />
+            Đặt tour & Khách hàng
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+            Quản lý và điều hành các booking tour theo đoàn, phân bổ hướng dẫn viên và xuất phiếu thanh toán
+          </p>
+        </div>
+      </div>
+
       {/* Control bar: Search & Filters */}
       <div className="bg-white rounded-2xl border border-[#CBD5E1] p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-96">

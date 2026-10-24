@@ -215,7 +215,7 @@ export function AdminLayout({
         </div>
 
         {/* Content */}
-        <div className="p-6 lg:p-8">{children}</div>
+        <div className="p-6 lg:p-8 w-full">{children}</div>
       </main>
     </div>
   );

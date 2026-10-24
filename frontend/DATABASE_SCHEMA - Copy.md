@@ -89,7 +89,7 @@ Table tours {
   baseprice text
   min_participants int
   max_participants int
-  diemnoibat text
+  highlights text
   inclusions text
   exclusions text
   policies text
@@ -285,7 +285,6 @@ Table booking_participants {
   date_of_birth date
   gender varchar(20) // MALE, FEMALE, OTHER
   identity_card_number varchar(50) // CCCD / CMND / Hộ chiếu
-  phone varchar(30)
   note text // Ăn chay, dị ứng, say xe...
 
   // Giá chốt độc lập của chặng (Snapshot)

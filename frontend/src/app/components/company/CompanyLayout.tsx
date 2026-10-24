@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from "motion/react";
 ﻿import { useState } from "react";
 import {
   LayoutDashboard,
@@ -100,10 +101,10 @@ export function CompanyLayout({
                 onNavigate(item.id);
                 setMobileOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-xs font-medium ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-xs cursor-pointer ${
                 isActive
                   ? "bg-[#075985] text-white shadow-sm font-semibold"
-                  : "text-[#475569] hover:text-[#075985] hover:bg-[#F0F9FF]"
+                  : "text-[#475569] hover:text-[#075985] hover:bg-[#F0F9FF] font-medium"
               }`}
             >
               <Icon
@@ -113,9 +114,9 @@ export function CompanyLayout({
               />
               {!collapsed && (
                 <div className="flex items-center justify-between flex-1 min-w-0">
-                  <span className="truncate">{item.label}</span>
+                  <span className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
                   {item.badge && item.badge > 0 ? (
-                    <span className="bg-[#F97316] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1">
+                    <span className="bg-[#F97316] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1 shadow-xs">
                       {item.badge}
                     </span>
                   ) : null}
@@ -189,8 +190,18 @@ export function CompanyLayout({
         </div>
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {children}
+        <main className="flex-1 p-6 sm:p-8 w-full space-y-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

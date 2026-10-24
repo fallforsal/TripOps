@@ -44,15 +44,14 @@ public enum ServiceStatus
 public enum TourStatus
 {
     Draft,
-    Published,
-    Hidden,
-    Suspended
+    Completed,
+    Deleted
 }
 
 public enum TourVisibility
 {
-    Public,
-    Private
+    Hidden,
+    Public
 }
 
 public enum CustomRequestStatus

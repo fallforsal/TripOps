@@ -62,7 +62,7 @@ export function ProviderOverview({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-6 md:p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#075985] via-[#0284C7] to-[#0369A1] p-6 md:p-8 text-white shadow-xl">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold text-blue-100 border border-white/20">
@@ -97,8 +97,8 @@ export function ProviderOverview({
         </div>
 
         {/* Decorative blur circles */}
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none"></div>
-        <div className="absolute right-32 -bottom-20 w-80 h-80 rounded-full bg-purple-500/20 blur-3xl pointer-events-none"></div>
+        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
+        <div className="absolute right-32 -bottom-20 w-80 h-80 rounded-full bg-[#F97316]/20 blur-3xl pointer-events-none"></div>
       </div>
 
       {/* KPI Cards */}

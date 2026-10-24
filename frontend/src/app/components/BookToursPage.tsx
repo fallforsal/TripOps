@@ -80,7 +80,7 @@ export function BookToursPage({
 
   const filteredTours = tours.filter((tour) => {
     if (tour.tourType === "custom_request") return false;
-    if (tour.status && tour.status !== "published") return false;
+    if (tour.visibility === "hidden" || (tour.status && tour.status !== "published" && tour.status !== "completed")) return false;
 
     const matchesSearch =
       tour.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

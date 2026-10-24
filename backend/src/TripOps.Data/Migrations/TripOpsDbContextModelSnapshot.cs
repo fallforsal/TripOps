@@ -1389,6 +1389,12 @@ namespace TripOps.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsRequest")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_request");
+
                     b.Property<int?>("MaxGuests")
                         .HasColumnType("int");
 
