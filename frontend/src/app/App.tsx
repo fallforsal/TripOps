@@ -2,6 +2,7 @@ import { companyFromUser } from '@/app/services/authService';
 import { agencyTours, archiveAgencyTour, createAgencyTour, duplicateAgencyTour, fromApiTour, fromConfiguration, getPublicTour,
   hideAgencyTour, hideModeratedTour, moderationTours, publicTours, publishAgencyTour,
   restoreAgencyTour, updateAgencyTour } from '@/app/services/wf02Tours';
+import { createBooking } from '@/app/services/wf05Bookings';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -192,13 +193,46 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleBookingSubmit = (data: BookingSubmitData) => {
+  const handleBookingSubmit = async (data: BookingSubmitData) => {
     if (!currentUser) return;
     const tour = tours.find((t) => t.id === data.tourId);
     if (!tour) return;
 
+    let apiBookingCode = `BK${Date.now()}`;
+    let apiBookingId = `booking-${Date.now()}`;
+    let apiDepositAmount = 0;
+
+    const tourIdNum = Number(data.tourId);
+    if (Number.isSafeInteger(tourIdNum) && tourIdNum > 0) {
+      try {
+        const departureIso = data.tourStartDate ? new Date(data.tourStartDate).toISOString() : new Date().toISOString();
+        const apiRes = await createBooking({
+          tourId: tourIdNum,
+          startDate: departureIso,
+          contactName: data.contactName,
+          contactPhone: data.contactPhone,
+          contactEmail: data.contactEmail,
+          specialRequests: data.bookingNotes,
+          participants: data.passengers.map((p) => ({
+            fullName: p.fullName,
+            phoneNumber: p.phone,
+            dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth).toISOString() : undefined,
+            gender: p.gender === "female" ? "Nữ" : "Nam",
+            identityNumber: p.idNumber,
+          })),
+        });
+        apiBookingCode = apiRes.bookingCode;
+        apiBookingId = apiRes.id.toString();
+        apiDepositAmount = apiRes.depositAmount;
+        toast.success(`Đặt tour thành công! Mã đơn: ${apiRes.bookingCode}`);
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể gửi đơn đặt tour lên máy chủ");
+      }
+    }
+
     const newBooking = {
-      id: `booking-${Date.now()}`,
+      id: apiBookingId,
+      bookingCode: apiBookingCode,
       tourId: tour.id,
       tour,
       userId: currentUser.id,
@@ -223,7 +257,7 @@ function App() {
       customHotelChanges: data.customHotelChanges,
       customMealChanges: data.customMealChanges,
       locationChanges: data.locationChanges,
-      depositAmount: 0,
+      depositAmount: apiDepositAmount || 0,
       depositPaid: false,
       remainingAmount: data.totalPrice,
       paymentStatus: "unpaid" as const,
