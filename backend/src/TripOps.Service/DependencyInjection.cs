@@ -14,7 +14,9 @@ public static class DependencyInjection
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddScoped<Accounts.AccountService>();
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
+        services.AddScoped<TripOps.Data.Repositories.BookingRepository>();
         services.AddScoped<Tours.TourService>();
+        services.AddScoped<Bookings.BookingService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();
         services.AddHttpClient<Accounts.CloudinaryStorage>(client => client.Timeout = TimeSpan.FromSeconds(20));
         return services;
