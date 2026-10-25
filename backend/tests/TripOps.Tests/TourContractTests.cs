@@ -16,8 +16,7 @@ public sealed partial class TourFlowTests
     [InlineData("invertedAge", 422)] [InlineData("negativeTierPrice", 400)]
     [InlineData("zeroDayNumber", 400)] [InlineData("dayOutOfRange", 422)]
     [InlineData("invalidMeal", 400)] [InlineData("zeroStars", 400)] [InlineData("sixStars", 400)]
-    [InlineData("negativeStay", 400)] [InlineData("zeroActivityService", 400)]
-    [InlineData("negativeTransportService", 400)] [InlineData("zeroMealService", 400)] [InlineData("zeroHotelService", 400)]
+    [InlineData("negativeStay", 400)]
     public async Task Tour_contract_constraints_reject_invalid_values_without_writing(string invalid, int status)
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
@@ -37,11 +36,7 @@ public sealed partial class TourFlowTests
             "invalidMeal" => Complete() with { Timelines = [new(1, "Day", Meals: [new("Lunch", "Restaurant")])] },
             "zeroStars" => Complete() with { Timelines = [new(1, "Day", Accommodations: [new("Hotel", "Da Lat", StarRating: 0)])] },
             "sixStars" => Complete() with { Timelines = [new(1, "Day", Accommodations: [new("Hotel", "Da Lat", StarRating: 6)])] },
-            "negativeStay" => Complete() with { Timelines = [new(1, "Day", Accommodations: [new("Hotel", "Da Lat", NightsCount: -1)])] },
-            "zeroActivityService" => Complete() with { Timelines = [new(1, "Day", Activities: [new("Visit", ServiceId: 0)])] },
-            "negativeTransportService" => Complete() with { Timelines = [new(1, "Day", TransportationServiceId: -1)] },
-            "zeroMealService" => Complete() with { Timelines = [new(1, "Day", Meals: [new("lunch", "Restaurant", ServiceId: 0)])] },
-            _ => Complete() with { Timelines = [new(1, "Day", Accommodations: [new("Hotel", "Da Lat", ServiceId: 0)])] }
+            _ => Complete() with { Timelines = [new(1, "Day", Accommodations: [new("Hotel", "Da Lat", NightsCount: -1)])] }
         };
         Assert.Equal((HttpStatusCode)status, (await agency.PostAsJsonAsync(Root, config)).StatusCode);
         await app.Inspect(async db => {
@@ -57,16 +52,16 @@ public sealed partial class TourFlowTests
         var config = Complete() with {
             DurationDays = 1, DurationNights = 0,
             PricingTiers = [new("Adult", 12, null, 1500000)],
-            Timelines = [new(1, "Đà Nẵng trong ngày", TransportationServiceId: null,
-                Activities: [new("Cầu Rồng", ServiceId: null, EstimatedTime: new TimeSpan(8, 30, 0))],
-                Meals: [new("lunch", "Nhà hàng địa phương", ServiceId: null)],
-                Accommodations: [new("Thông tin khách sạn, không lưu trú qua đêm", "Đà Nẵng", ServiceId: null, NightsCount: 0)])]
+            Timelines = [new(1, "Đà Nẵng trong ngày",
+                Activities: [new("Cầu Rồng", EstimatedTime: new TimeSpan(8, 30, 0))],
+                Meals: [new("lunch", "Nhà hàng địa phương")],
+                Accommodations: [new("Thông tin khách sạn, không lưu trú qua đêm", "Đà Nẵng", NightsCount: 0)])]
         };
         var tour = await Create(agency, config);
         var day = tour.Configuration.Timelines![0];
-        Assert.Null(day.TransportationServiceId); Assert.Null(day.Activities![0].ServiceId);
-        Assert.Null(day.Meals![0].ServiceId); Assert.Null(day.Accommodations![0].ServiceId);
-        Assert.Equal(0, day.Accommodations[0].NightsCount);
+        Assert.Equal("Cầu Rồng", day.Activities![0].Name);
+        Assert.Equal("Nhà hàng địa phương", day.Meals![0].RestaurantName);
+        Assert.Equal(0, day.Accommodations![0].NightsCount);
         var persisted = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
         Assert.Equal(0, persisted.Configuration.Timelines![0].Accommodations![0].NightsCount);
         Assert.Null(tour.Configuration.PricingTiers![0].MaxAge);
@@ -113,7 +108,7 @@ public sealed partial class TourFlowTests
 
     [Theory]
     [InlineData("providerPending")] [InlineData("providerBanned")] [InlineData("deletedService")]
-    public async Task Service_references_require_eligible_Provider_and_nondeleted_service(string state)
+    public async Task Manual_tour_entries_do_not_depend_on_provider_state(string state)
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         await app.Inspect(async db => {
@@ -122,8 +117,8 @@ public sealed partial class TourFlowTests
             if (state == "deletedService") (await db.Services.SingleAsync(s => s.Id == 101)).IsDeleted = true;
             await db.SaveChangesAsync();
         });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(Root, Complete())).StatusCode);
-        await app.Inspect(async db => Assert.Equal(0, await db.Tours.CountAsync()));
+        Assert.Equal(HttpStatusCode.Created, (await agency.PostAsJsonAsync(Root, Complete())).StatusCode);
+        await app.Inspect(async db => Assert.Equal(1, await db.Tours.CountAsync()));
     }
 
     [Fact]

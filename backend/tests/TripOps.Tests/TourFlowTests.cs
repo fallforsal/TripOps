@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
+using TripOps.Service.Accounts;
 using TripOps.Service.Tours;
 
 namespace TripOps.Tests;
@@ -20,18 +22,41 @@ namespace TripOps.Tests;
 public sealed partial class TourFlowTests
 {
     private const string Root = "/api/v1/agency/tours";
+    private sealed class TourImageCloudHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            Assert.Equal("Basic", request.Headers.Authorization?.Scheme);
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Assert.Contains("tripops/tours/agency/", body);
+            Assert.DoesNotContain("authenticated", body);
+            return new HttpResponseMessage(HttpStatusCode.OK) {
+                Content = JsonContent.Create(new { secure_url = $"https://res.cloudinary.com/test/image/upload/v1/tripops/tours/agency/image{Calls}.png" }) };
+        }
+    }
     private sealed class App : WebApplicationFactory<Program>
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
-        public App() => connection.Open();
+        private readonly bool withCloudinary;
+        public TourImageCloudHandler Cloud { get; } = new();
+        public App(bool withCloudinary = false) { this.withCloudinary = withCloudinary; connection.Open(); }
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            if (withCloudinary) builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
+            }));
+            else builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
+            }));
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
                 services.AddDbContext<TripOpsDbContext>(o => o.UseSqlite(connection));
                 services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+                if (withCloudinary) services.AddHttpClient<CloudinaryStorage>().ConfigurePrimaryHttpMessageHandler(() => Cloud);
             });
         }
         public async Task Initialize()
@@ -79,10 +104,10 @@ public sealed partial class TourFlowTests
         BasePrice: 1500000.5m, MinGuests: 2, MaxGuests: 30, CancellationPolicy: "Cancellation terms",
         Images: ["https://example.test/tour.jpg"],
         PricingTiers: [new("Child", 0, 11, 750000), new("Adult", 12, null, 1500000, 1)],
-        Timelines: [new(1, "Arrival", TransportationServiceId: 104,
-            Activities: [new("Gardens", 101, EstimatedTime: TimeSpan.FromHours(9))],
-            Meals: [new("lunch", "Restaurant", 103), new("lunch", "Alternative", 103, IsDefault: false, PriceDifference: -10000)],
-            Accommodations: [new("Hotel", "Da Lat", 102), new("Premium", "Da Lat", 102, IsDefault: false, PriceDifference: 100000)]),
+        Timelines: [new(1, "Arrival",
+            Activities: [new("Gardens", EstimatedTime: TimeSpan.FromHours(9))],
+            Meals: [new("lunch", "Restaurant"), new("lunch", "Alternative", IsDefault: false, PriceDifference: -10000)],
+            Accommodations: [new("Hotel", "Da Lat"), new("Premium", "Da Lat", IsDefault: false, PriceDifference: 100000)]),
             new(2, "Departure")]);
     private static async Task<T> Read<T>(HttpResponseMessage response, HttpStatusCode expected = HttpStatusCode.OK)
     {
@@ -90,6 +115,54 @@ public sealed partial class TourFlowTests
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
     private static Task<TourDto> Create(HttpClient agency, TourConfiguration? config = null) => CreateCore(agency, config ?? Complete());
+
+    [Fact]
+    public async Task Agency_uploads_tour_images_and_primary_order_survives_draft_and_publication()
+    {
+        await using var app = new App(withCloudinary: true); await app.Initialize();
+        using var agency = await app.Login("agency"); using var customer = await app.Login("customer");
+        using var anonymous = app.CreateClient();
+        static MultipartFormDataContent Image(byte[] bytes)
+        {
+            var form = new MultipartFormDataContent();
+            var image = new ByteArrayContent(bytes); image.Headers.ContentType = new("image/png");
+            form.Add(image, "image", "tour.png");
+            return form;
+        }
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg==");
+        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync($"{Root}/images", form)).StatusCode);
+        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsync($"{Root}/images", form)).StatusCode);
+        using (var form = Image("not an image"u8.ToArray())) Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsync($"{Root}/images", form)).StatusCode);
+        Assert.Equal(0, app.Cloud.Calls);
+
+        string[] urls = new string[2];
+        for (var i = 0; i < urls.Length; i++)
+        {
+            using var form = Image(png);
+            var response = await agency.PostAsync($"{Root}/images", form);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            urls[i] = (await response.Content.ReadFromJsonAsync<TourImageUploadResponse>())!.Url;
+        }
+        Assert.Equal(2, app.Cloud.Calls);
+        var tour = await Create(agency, Complete() with { Images = [urls[1], urls[0]] });
+        Assert.Equal(urls[1], tour.Configuration.Images![0]);
+        var saved = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
+        Assert.Equal([urls[1], urls[0]], saved.Configuration.Images!);
+        tour = await Command(agency, tour, "publish");
+        var publicTour = (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
+        Assert.Equal([urls[1], urls[0]], publicTour.Configuration.Images!);
+    }
+
+    [Fact]
+    public async Task Tour_image_upload_reports_missing_server_cloudinary_configuration()
+    {
+        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
+        using var form = new MultipartFormDataContent();
+        var image = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg=="));
+        image.Headers.ContentType = new("image/png"); form.Add(image, "image", "tour.png");
+        var response = await agency.PostAsync($"{Root}/images", form);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
     private static async Task<TourDto> CreateCore(HttpClient agency, TourConfiguration config) =>
         await Read<TourDto>(await agency.PostAsJsonAsync(Root, config), HttpStatusCode.Created);
     private static async Task<TourDto> Command(HttpClient client, TourDto tour, string action, bool admin = false, string? reason = null) =>
@@ -137,17 +210,14 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync($"/api/v1/admin/tours/{tour.Id}/hide", new TourCommand(1, "Moderation"))).StatusCode);
     }
 
-    [Theory]
-    [InlineData(105)] [InlineData(106)] [InlineData(107)] [InlineData(108)] [InlineData(999)] [InlineData(102)]
-    public async Task Ineligible_or_wrong_category_service_is_rejected_atomically(int serviceId)
+    [Fact]
+    public async Task Manual_attraction_is_accepted_without_provider_service()
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
-        var config = Complete() with { Timelines = [new(1, "Day", Activities: [new("Invalid", serviceId)])] };
+        var config = Complete() with { Timelines = [new(1, "Day", Activities: [new("Manual visit")])] };
         var response = await agency.PostAsJsonAsync(Root, config);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Contains("traceId", await response.Content.ReadAsStringAsync());
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
-        await app.Inspect(async db => { Assert.Equal(0, await db.Tours.CountAsync()); Assert.Equal(0, await db.TourVersions.CountAsync()); });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await app.Inspect(async db => { Assert.Equal(1, await db.Tours.CountAsync()); Assert.Equal(1, await db.TourVersions.CountAsync()); });
     }
 
     [Theory]
@@ -233,15 +303,47 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Service_and_provider_eligibility_are_rechecked_before_publish()
+    public async Task Manual_departure_location_and_manual_meals_persist_through_edit_and_publish()
+    {
+        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
+        using var publicClient = app.CreateClient();
+        var manual = Complete() with {
+            DepartureLocation = "  TP. Hồ Chí Minh  ",
+            Timelines = [new(1, "Arrival",
+                Meals: [new("breakfast", "Bánh mì Hòa Mã", "Bánh mì chảo"),
+                    new("lunch", "Nhà hàng Hương Rừng", "Gà đồi, cơm lam"),
+                    new("lunch", "Nhà hàng Trúc Lâm Viên", "Cơm niêu", IsDefault: false, PriceDifference: 50000),
+                    new("dinner", "Lẩu gà lá é")]),
+                new(2, "Departure")] };
+        var tour = await Create(agency, manual);
+        Assert.Equal("TP. Hồ Chí Minh", tour.Configuration.DepartureLocation);
+        var stored = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
+        var meals = stored.Configuration.Timelines![0].Meals!;
+        Assert.Equal(4, meals.Length);
+        Assert.All(meals, m => Assert.False(string.IsNullOrWhiteSpace(m.RestaurantName)));
+        Assert.Contains(meals, m => m.RestaurantName == "Nhà hàng Trúc Lâm Viên" && !m.IsDefault && m.PriceDifference == 50000);
+
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, stored.Configuration with { DepartureLocation = "Hà Nội" }, "Edit departure")));
+        Assert.Equal("Hà Nội", tour.Configuration.DepartureLocation);
+        Assert.Equal(4, tour.Configuration.Timelines![0].Meals!.Length);
+        tour = await Command(agency, tour, "publish");
+        Assert.Equal("public", tour.Visibility);
+        var published = (await publicClient.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
+        Assert.Equal("Hà Nội", published.Configuration.DepartureLocation);
+
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, tour.Configuration with { DepartureLocation = "   " }, "Clear departure")));
+        Assert.Null(tour.Configuration.DepartureLocation);
+    }
+
+    [Fact]
+    public async Task Manual_tour_can_publish_when_provider_service_is_hidden()
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         var tour = await Create(agency);
         await app.Inspect(async db => { (await db.Services.SingleAsync(s => s.Id == 101)).Status = ServiceStatus.Hidden; await db.SaveChangesAsync(); });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
-        await app.Inspect(async db => { (await db.Services.SingleAsync(s => s.Id == 101)).Status = ServiceStatus.Approved; await db.SaveChangesAsync(); });
-        await app.Inspect(async db => { (await db.BusinessProfiles.SingleAsync(p => p.UserId == "provider")).Status = BusinessProfileStatus.Suspended; await db.SaveChangesAsync(); });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
     }
 
     [Fact]
@@ -355,7 +457,7 @@ public sealed partial class TourFlowTests
         var tour = await Read<TourDto>(await agency.PostAsJsonAsync("/api/v1/agency/ai/itinerary-drafts", new AiDraftRequest("Da Lat", 2)), HttpStatusCode.Created);
         Assert.True(tour.IsAiGenerated); Assert.Equal("draft", tour.Status); Assert.Equal("hidden", tour.Visibility);
         await using var invalid = app.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            services.AddSingleton<IItineraryDraftGenerator>(new DraftGenerator(Complete() with { Timelines = [new(1, "Day", Activities: [new("Unreviewed", 105)])] }))));
+            services.AddSingleton<IItineraryDraftGenerator>(new DraftGenerator(Complete() with { Timelines = [new(1, "Day", Activities: [new("Invalid time", EstimatedTime: TimeSpan.FromDays(1))])] }))));
         using var invalidClient = invalid.CreateClient();
         (await invalidClient.PostAsJsonAsync("/api/v1/auth/login", new { email = "agency@example.test", password = "TourTest123!" })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await invalidClient.PostAsJsonAsync("/api/v1/agency/ai/itinerary-drafts", new AiDraftRequest("Da Lat", 2))).StatusCode);

@@ -9,6 +9,7 @@ public class Tour : BaseEntity<int>, ISoftDelete
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public string? Destination { get; set; }
+    public string? DepartureLocation { get; set; }
     public string? OperationPeriod { get; set; }
     public string? Message { get; set; }
     public string? Code { get; set; }
@@ -60,8 +61,6 @@ public class TourPricingTier : BaseEntity<int>
 
 public class TourTimeline : BaseEntity<int>
 {
-    public int? TransportationServiceId { get; set; }
-    public virtual Service? TransportationService { get; set; }
     public int TourId { get; set; }
     public int DayNumber { get; set; }
     public string? Title { get; set; }
@@ -76,14 +75,12 @@ public class TourTimeline : BaseEntity<int>
 public class TouristAttraction : BaseEntity<int>
 {
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public TimeSpan? EstimatedTime { get; set; }
     public int OrderIndex { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourMeal : BaseEntity<int>
@@ -92,12 +89,11 @@ public class TourMeal : BaseEntity<int>
     public bool IsDefault { get; set; }
     public decimal PriceDifference { get; set; }
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
+  
     public string MealType { get; set; } = null!; // breakfast, lunch, dinner
     public string? Description { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourAccommodation : BaseEntity<int>
@@ -109,12 +105,11 @@ public class TourAccommodation : BaseEntity<int>
     public decimal PriceDifference { get; set; }
     public string? AddressNotes { get; set; }
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
+
     public string? HotelName { get; set; }
     public string? RoomType { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourVersion : BaseEntity<int>

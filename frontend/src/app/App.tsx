@@ -1228,7 +1228,7 @@ function App() {
         ) : currentPage === "tour-detail" && selectedTour ? (
           <TourDetailPage
             tour={selectedTour}
-            services={[]}
+            services={services}
             currentUser={currentUser}
             onBack={() => {
               setSelectedTour(null);

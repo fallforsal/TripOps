@@ -2,11 +2,11 @@ import type { DailyItinerary, Tour, TourHotel, TourMeal, TourPriceRow, TourVersi
 import { http } from "@/app/lib/http";
 
 type Tier = { name: string; minAge: number | null; maxAge: number | null; pricePerGuest: number; displayOrder: number };
-type Activity = { name: string; serviceId: number | null; description: string | null; estimatedTime: string | null; orderIndex: number };
-type Meal = { mealType: "breakfast" | "lunch" | "dinner"; restaurantName: string; serviceId: number | null; description: string | null; isDefault: boolean; priceDifference: number };
-type Accommodation = { hotelName: string; destinationName: string; serviceId: number | null; roomType: string | null; nightsCount: number; starRating: number; isDefault: boolean; priceDifference: number; addressNotes: string | null };
-type Day = { dayNumber: number; title: string; description: string | null; transportationServiceId: number | null; activities: Activity[]; meals: Meal[]; accommodations: Accommodation[] };
-export type TourConfiguration = { name: string; description: string | null; destination: string | null; durationDays: number; durationNights: number; basePrice: number; minGuests: number | null; maxGuests: number | null; operationPeriod: string | null; highlights: string | null; inclusions: string | null; exclusions: string | null; cancellationPolicy: string | null; message: string | null; images: string[]; pricingTiers: Tier[]; timelines: Day[] };
+type Activity = { name: string; description: string | null; estimatedTime: string | null; orderIndex: number };
+type Meal = { mealType: "breakfast" | "lunch" | "dinner"; restaurantName: string; description: string | null; isDefault: boolean; priceDifference: number };
+type Accommodation = { hotelName: string; destinationName: string; roomType: string | null; nightsCount: number; starRating: number; isDefault: boolean; priceDifference: number; addressNotes: string | null };
+type Day = { dayNumber: number; title: string; description: string | null; activities: Activity[]; meals: Meal[]; accommodations: Accommodation[] };
+export type TourConfiguration = { name: string; description: string | null; destination: string | null; departureLocation: string | null; durationDays: number; durationNights: number; basePrice: number; minGuests: number | null; maxGuests: number | null; operationPeriod: string | null; highlights: string | null; inclusions: string | null; exclusions: string | null; cancellationPolicy: string | null; message: string | null; images: string[]; pricingTiers: Tier[]; timelines: Day[] };
 export type ApiTour = { id: number; agencyId: string; code: string | null; status: "draft" | "completed" | "deleted"; visibility: "hidden" | "public"; isRequest: boolean; isAiGenerated: boolean; version: number; configuration: TourConfiguration; createdAt: string; updatedAt: string };
 type PublicTour = { id: number; code: string | null; version: number; configuration: TourConfiguration };
 type TourPage<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -21,15 +21,9 @@ const idNumber = (id: string) => {
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("Mã tour không hợp lệ.");
   return parsed;
 };
-const serviceId = (value?: string) => {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("Mã dịch vụ phải là số dương.");
-  return parsed;
-};
 const hotelOption = (hotel: TourHotel, destination: string, isDefault: boolean, delta = 0, nights = 1): Accommodation => ({
   hotelName: hotel.name.trim(), destinationName: hotel.destination?.trim() || destination,
-  serviceId: serviceId(hotel.serviceId), roomType: null, nightsCount: nights,
+  roomType: null, nightsCount: nights,
   starRating: hotel.stars || 3, isDefault, priceDifference: delta, addressNotes: hotel.address || hotel.description || null,
 });
 
@@ -48,24 +42,25 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
     day.title.trim() || day.locations?.length || day.meals?.length || day.hotel).map((day, index) => {
     const dayNumber = day.day || index + 1;
     const activities: Activity[] = (day.locations || []).map((place, orderIndex) => ({
-      name: place.name.trim(), serviceId: null, description: place.address?.trim() || null,
+      name: place.name.trim(), description: place.address?.trim() || null,
       estimatedTime: place.time ? `${place.time.slice(0, 5)}:00` : null, orderIndex,
     }));
     const meals: Meal[] = (day.meals || []).flatMap((meal: TourMeal) => [
-      { mealType: meal.type, restaurantName: (meal.serviceName || meal.description || "").trim(), serviceId: serviceId(meal.serviceId), description: meal.description || null, isDefault: true, priceDifference: 0 },
-      ...(meal.alternativeMeals || []).map(option => ({ mealType: meal.type, restaurantName: option.restaurantName.trim(), serviceId: null, description: option.description || null, isDefault: false, priceDifference: option.priceDifference })),
+      { mealType: meal.type, restaurantName: (meal.serviceName || meal.description || "").trim(), description: meal.description || null, isDefault: true, priceDifference: 0 },
+      ...(meal.alternativeMeals || []).map(option => ({ mealType: meal.type, restaurantName: option.restaurantName.trim(), description: option.description || null, isDefault: false, priceDifference: option.priceDifference })),
     ]);
     // Each hotel is one continuous stay anchored to its first night; alternatives are not additive.
     const hotel = hotelStays.length ? hotelStays.find(stay => stay.startDay === dayNumber)?.hotel : day.hotel;
     const stayNights = hotel ? (hotel.nights ?? nights) : 0;
     const accommodations: Accommodation[] = hotel ? [
       hotelOption(hotel, destination, true, 0, stayNights),
-      ...(hotel.alternativeHotels || []).map(option => hotelOption({ ...hotel, name: option.name, stars: option.stars || hotel.stars, address: option.address || hotel.address, serviceId: undefined }, destination, false, option.priceDifference, stayNights)),
+      ...(hotel.alternativeHotels || []).map(option => hotelOption({ ...hotel, name: option.name, stars: option.stars || hotel.stars, address: option.address || hotel.address }, destination, false, option.priceDifference, stayNights)),
     ] : [];
     return { dayNumber, title: day.title.trim(), description: day.description || null,
-      transportationServiceId: null, activities, meals, accommodations };
+      activities, meals, accommodations };
   });
   return { name: tour.name?.trim() || "", description: tour.description || null, destination: destination || null,
+    departureLocation: tour.departureLocation?.trim() || null,
     durationDays: days, durationNights: nights, basePrice: tour.price ?? 0,
     minGuests: tour.minGuests ?? null, maxGuests: tour.maxGuests ?? null,
     operationPeriod: tour.operationPeriod || null, highlights: text(tour.highlights),
@@ -85,7 +80,7 @@ export function fromConfiguration(id: number, code: string | null, version: numb
     const defaultHotel = day.accommodations?.find(option => option.isDefault);
     const hotel: TourHotel | undefined = defaultHotel ? {
       id: `hotel-${day.dayNumber}`, name: defaultHotel.hotelName, destination: defaultHotel.destinationName,
-      serviceId: defaultHotel.serviceId?.toString(), nights: defaultHotel.nightsCount,
+      nights: defaultHotel.nightsCount,
       stars: defaultHotel.starRating, pricePerNight: 0, address: defaultHotel.addressNotes || undefined,
       alternativeHotels: day.accommodations.filter(option => !option.isDefault).map((option, index) => ({
         id: `hotel-${day.dayNumber}-${index}`, name: option.hotelName, stars: option.starRating,
@@ -93,7 +88,7 @@ export function fromConfiguration(id: number, code: string | null, version: numb
       })),
     } : undefined;
     const meals: TourMeal[] = (day.meals || []).filter(m => m.isDefault).map((meal, index) => ({
-      id: `meal-${day.dayNumber}-${index}`, type: meal.mealType, serviceId: meal.serviceId?.toString(),
+      id: `meal-${day.dayNumber}-${index}`, type: meal.mealType,
       serviceName: meal.restaurantName, description: meal.description || undefined,
       alternativeMeals: day.meals.filter(option => option.mealType === meal.mealType && !option.isDefault).map((option, alternative) => ({
         id: `meal-${day.dayNumber}-${index}-${alternative}`, restaurantName: option.restaurantName,
@@ -117,7 +112,8 @@ export function fromConfiguration(id: number, code: string | null, version: numb
     numberOfNights: c.durationNights, price: c.basePrice, description: c.description || "",
     image: c.images?.[0] || "", images: c.images || [], rating: 0, minGuests: c.minGuests || 0,
     maxGuests: c.maxGuests || 0, highlights: lines(c.highlights), hotels,
-    itinerary, operationPeriod: c.operationPeriod || undefined, priceTable,
+    itinerary, operationPeriod: c.operationPeriod || undefined,
+    departureLocation: c.departureLocation || undefined, departureCity: c.departureLocation || undefined, priceTable,
     inclusions: lines(c.inclusions), exclusions: lines(c.exclusions), regulations: lines(c.cancellationPolicy),
     companyNote: c.message || "", companyId: options.agencyId, createdAt: options.createdAt,
     updatedAt: options.updatedAt, status: options.status || "completed", visibility: options.visibility || "public",
@@ -161,6 +157,11 @@ export async function moderationTours(): Promise<Tour[]> {
   return Promise.all(summaries.map(async item => fromApiTour(await http<ApiTour>(`/admin/tours/${item.id}`))));
 }
 export const getAgencyTour = (id: string) => http<ApiTour>(`/agency/tours/${idNumber(id)}`);
+export async function uploadTourImage(file: File): Promise<string> {
+  const body = new FormData();
+  body.append("image", file);
+  return (await http<{ url: string }>("/agency/tours/images", { method: "POST", body })).url;
+}
 export async function eligibleServices(category: string): Promise<EligibleService[]> {
   const items: EligibleService[] = [];
   for (let page = 1; ; page++) {
