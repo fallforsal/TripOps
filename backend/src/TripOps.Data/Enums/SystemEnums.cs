@@ -69,7 +69,9 @@ public enum CustomRequestStatus
 public enum BookingStatus
 {
     Pending,
+    Deposited,
     Confirmed,
+    Paid,
     InProgress,
     Completed,
     Cancelled,

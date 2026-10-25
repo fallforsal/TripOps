@@ -48,6 +48,9 @@ public sealed partial class TourFlowTests
             if (withCloudinary) builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
                 ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
             }));
+            else builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
+            }));
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
@@ -155,7 +158,7 @@ public sealed partial class TourFlowTests
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         using var form = new MultipartFormDataContent();
-        var image = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg=="));
+        var image = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg=="));
         image.Headers.ContentType = new("image/png"); form.Add(image, "image", "tour.png");
         var response = await agency.PostAsync($"{Root}/images", form);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);

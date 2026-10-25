@@ -10,6 +10,7 @@ import {
   TourAlternativeHotel,
   Location,
   TourVersion,
+  TourCoHost,
   CustomTourRequest,
 } from "@/app/types";
 import {
@@ -224,11 +225,7 @@ export function AgencyTourManagement({
           services={[]}
           currentUser={company as any}
           onBack={() => setViewingTour(null)}
-          onEditTour={onEditTour}
-          onDeleteTour={(id) => {
-            onDeleteTour(id);
-            setViewingTour(null);
-          }}
+
         />
       </div>
     );
@@ -403,7 +400,7 @@ export function AgencyTourManagement({
             <div className="flex items-center gap-2 bg-[#E0F2FE] px-3 py-1 rounded-xl border border-[#075985]/30 animate-in fade-in">
               <span className="text-xs font-bold text-[#075985]">Đã chọn {selectedTourIds.length} tour:</span>
               <button
-                onClick={() => handleBulkToggleVisibility("published")}
+                onClick={() => handleBulkToggleVisibility("public")}
                 className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded hover:bg-emerald-200"
               >
                 Mở bán
@@ -451,7 +448,7 @@ export function AgencyTourManagement({
         <div className="bg-white rounded-2xl border border-[#CBD5E1] p-16 text-center shadow-xs">
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500 font-medium">
-            {statusFilter === "active"
+            {statusFilter === "published"
               ? "Chưa có tour công khai nào đang mở bán"
               : statusFilter === "hidden"
               ? "Không có tour nào đang tạm dừng"
@@ -982,12 +979,16 @@ export function TourFormPage({
   customRequest,
   isCustomTour,
 }: TourFormPageProps) {
+  const customDays = customRequest ? Math.max(1, Math.round((Date.parse(customRequest.returnDate) - Date.parse(customRequest.departureDate)) / 86400000) + 1) : 3;
+  const customGuests = Number(customRequest?.numberOfPeople) || 2;
   const isCustom = isCustomTour || !!customRequest || tour?.tourType === "custom_request";
   const [changeNote, setChangeNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [showAIPlanner, setShowAIPlanner] = useState(false);
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [imageInputError, setImageInputError] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImageUrls = useRef<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -1018,22 +1019,22 @@ export function TourFormPage({
     tour?.tourCode ?? ""
   );
   const [name, setName] = useState(
-    tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destination} - Khách đoàn ${customRequest.customerName}` : "")
+    tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destinations} - Khách đoàn ${customRequest.contactName}` : "")
   );
   const [destination, setDestination] = useState(
-    tour?.destination ?? (customRequest?.destination ?? "")
+    tour?.destination ?? (customRequest?.destinations ?? "")
   );
   const [duration, setDuration] = useState(
-    tour?.duration ?? (customRequest ? `${customRequest.numberOfDays} ngày ${Math.max(1, customRequest.numberOfDays - 1)} đêm` : "3 ngày 2 đêm")
+    tour?.duration ?? (customRequest ? `${customDays} ngày ${Math.max(1, customDays - 1)} đêm` : "3 ngày 2 đêm")
   );
   const [numberOfDays, setNumberOfDays] = useState(
-    tour?.numberOfDays ?? (customRequest?.numberOfDays ?? 3)
+    tour?.numberOfDays ?? ((customRequest ? customDays : undefined) ?? 3)
   );
   const [numberOfNights, setNumberOfNights] = useState(
-    tour?.numberOfNights ?? (customRequest ? Math.max(1, customRequest.numberOfDays - 1) : 2)
+    tour?.numberOfNights ?? (customRequest ? Math.max(1, customDays - 1) : 2)
   );
   const [price, setPrice] = useState(
-    tour?.price ?? (customRequest?.estimatedBudget ? Math.round(customRequest.estimatedBudget / (customRequest.numberOfGuests || 1)) : 3500000)
+    tour?.price ?? (customRequest?.budgetPerPerson ? Number(customRequest.budgetPerPerson) : 3500000)
   );
 
   // Photos & Thumbnail
@@ -1051,13 +1052,13 @@ export function TourFormPage({
     tour?.departureLocation ?? ""
   );
   const [minGuests, setMinGuests] = useState(
-    tour?.minGuests ?? (customRequest?.numberOfGuests ?? 2)
+    tour?.minGuests ?? ((customRequest ? customGuests : undefined) ?? 2)
   );
   const [maxGuests, setMaxGuests] = useState(
-    tour?.maxGuests ?? (customRequest ? customRequest.numberOfGuests + 2 : 20)
+    tour?.maxGuests ?? (customRequest ? customGuests + 2 : 20)
   );
   const [description, setDescription] = useState(
-    tour?.description ?? (customRequest?.specialRequests ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.customerName}.\nYêu cầu đặc biệt: ${customRequest.specialRequests}` : "")
+    tour?.description ?? (customRequest?.additionalInfo ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.contactName}.\nYêu cầu đặc biệt: ${customRequest.additionalInfo}` : "")
   );
   const [highlights, setHighlights] = useState<string[]>(tour?.highlights || []);
   const [newHighlight, setNewHighlight] = useState("");
@@ -1574,7 +1575,39 @@ export function TourFormPage({
     });
   };
 
-  const uploadImages = async (files: FileList | null) => {
+  const addImageUrl = (overrideUrl?: string) => {
+    let raw = (overrideUrl || newImageUrl).trim();
+    if (!raw) {
+      setImageInputError("Vui lòng nhập đường link URL hình ảnh.");
+      return;
+    }
+    // Auto-fix missing protocol or http:
+    if (!/^https?:\/\//i.test(raw)) {
+      raw = `https://${raw}`;
+    } else if (raw.startsWith("http://")) {
+      raw = "https://" + raw.slice(7);
+    }
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== "https:") {
+        setImageInputError("Hình tour phải dùng đường dẫn bảo mật HTTPS.");
+        return;
+      }
+      if (url.href.length > 2048) {
+        setImageInputError("Đường dẫn quá dài (tối đa 2048 ký tự).");
+        return;
+      }
+      setImages(previous => [...previous, url.href]);
+      setNewImageUrl("");
+      setImageInputError("");
+      setSaveError("");
+    } catch {
+      setImageInputError("Đường dẫn hình ảnh không đúng định dạng.");
+    }
+
+    };
+
+const uploadImages = async (files: FileList | null) => {
     if (!files?.length || uploadingImages) return;
     setImageUploadError("");
     setUploadingImages(true);
@@ -1794,9 +1827,9 @@ export function TourFormPage({
       tourType: isCustom ? "custom_request" : (tour?.tourType || "public"),
       customRequestId: customRequest?.id || tour?.customRequestId,
       targetUserId: customRequest?.userId || tour?.targetUserId,
-      targetCustomerName: customRequest?.customerName || tour?.targetCustomerName,
-      targetCustomerPhone: customRequest?.customerPhone || tour?.targetCustomerPhone,
-      targetCustomerEmail: customRequest?.customerEmail || tour?.targetCustomerEmail,
+      targetCustomerName: customRequest?.contactName || tour?.targetCustomerName,
+      targetCustomerPhone: customRequest?.contactPhone || tour?.targetCustomerPhone,
+      targetCustomerEmail: customRequest?.contactEmail || tour?.targetCustomerEmail,
       version: isCustom ? nextVersion : tour?.version,
       changeNote: isCustom
         ? (changeNote.trim() || (tour ? `Cập nhật phiên bản v${nextVersion}` : "Phiên bản thiết kế đầu tiên theo yêu cầu"))
@@ -1838,7 +1871,7 @@ export function TourFormPage({
             </h1>
             <p className="text-xs text-gray-500">
               {isCustom
-                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || tour?.targetCustomerName || "Khách đặt riêng"}`
+                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
                 : (tour ? `Mã tour: ${tourCode || "T-NEW"} · Cập nhật thông tin chi tiết` : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá")}
             </p>
           </div>
@@ -1897,9 +1930,9 @@ export function TourFormPage({
               <span>🔒</span> TOUR THIẾT KẾ RIÊNG
             </span>
             <span className="text-sm font-semibold">
-              Khách hàng: <span className="text-purple-200">{customRequest?.customerName || tour?.targetCustomerName || "Yêu cầu từ khách"}</span>
-              {(customRequest?.customerPhone || tour?.targetCustomerPhone) && (
-                <span className="text-purple-300 ml-1">({customRequest?.customerPhone || tour?.targetCustomerPhone})</span>
+              Khách hàng: <span className="text-purple-200">{customRequest?.contactName || tour?.targetCustomerName || "Yêu cầu từ khách"}</span>
+              {(customRequest?.contactPhone || tour?.targetCustomerPhone) && (
+                <span className="text-purple-300 ml-1">({customRequest?.contactPhone || tour?.targetCustomerPhone})</span>
               )}
             </span>
             <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-purple-600">
@@ -2029,21 +2062,85 @@ export function TourFormPage({
                       Chọn ảnh từ máy tính. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện</strong>.
                     </p>
                   </div>
-                  <div>
-                    <input ref={imageInputRef} type="file" accept="image/png,image/jpeg" multiple className="hidden"
-                      onChange={event => { void uploadImages(event.target.files); event.target.value = ""; }}
-                      aria-label="Chọn ảnh tour từ máy tính" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => imageInputRef.current?.click()}
-                      disabled={uploadingImages}
-                      className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs gap-1.5 shadow-xs"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      {uploadingImages ? "Đang tải ảnh..." : "Tải ảnh từ máy tính"}
-                    </Button>
+                  <div className="w-full sm:w-auto space-y-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <input ref={imageInputRef} type="file" accept="image/png,image/jpeg" multiple className="hidden"
+                        onChange={event => { void uploadImages(event.target.files); event.target.value = ""; }}
+                        aria-label="Chọn ảnh tour từ máy tính" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={uploadingImages}
+                        className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-9 gap-1.5 shadow-xs font-semibold shrink-0"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        {uploadingImages ? "Đang tải ảnh..." : "Tải ảnh từ máy tính"}
+                      </Button>
+                      <span className="text-xs text-gray-400 self-center hidden sm:inline">hoặc</span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[260px]">
+                        <Input
+                          value={newImageUrl}
+                          onChange={event => {
+                            setNewImageUrl(event.target.value);
+                            if (imageInputError) setImageInputError("");
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addImageUrl();
+                            }
+                          }}
+                          placeholder="Dán link ảnh (VD: https://...)"
+                          className="bg-white text-xs h-9"
+                          aria-label="URL ảnh tour"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addImageUrl()}
+                          className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-9 shrink-0 gap-1 shadow-xs font-semibold"
+                        >
+                          Thêm URL
+                        </Button>
+                      </div>
+                    </div>
+                    {imageInputError && (
+                      <p className="text-[11px] text-red-600 font-medium">{imageInputError}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <span className="text-[10px] text-gray-500 font-medium">Gợi ý ảnh mẫu:</span>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Biển & Resort
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1528127269322-539801943592?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Hạ Long
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Hội An
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Sapa
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {imageUploadError && <p role="alert" className="text-xs text-red-700">{imageUploadError}</p>}

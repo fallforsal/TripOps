@@ -16,6 +16,8 @@ interface WishlistTour extends Tour {
 const mockWishlist: WishlistTour[] = [
   {
     id: "tour-1",
+    tourCode: "tour-1",
+    minGuests: 1,
     name: "Đà Lạt Romantic 3N2Đ",
     destination: "Đà Lạt",
     duration: "3 ngày 2 đêm",
@@ -32,6 +34,8 @@ const mockWishlist: WishlistTour[] = [
   },
   {
     id: "tour-2",
+    tourCode: "tour-2",
+    minGuests: 1,
     name: "Phú Quốc Tropical 4N3Đ",
     destination: "Phú Quốc",
     duration: "4 ngày 3 đêm",

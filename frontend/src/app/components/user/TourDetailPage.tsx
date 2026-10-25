@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Tour,
   Service,
@@ -52,6 +52,7 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
+import { formatTourCode } from "@/app/components/ui/utils";
 
 export interface TourDetailCustomData {
   customHotelChanges?: CustomHotelChange[];
@@ -948,7 +949,7 @@ function CustomTab({
                       Đối tác Nền tảng
                     </span>
                   )}
-                  {choice.mode === "system" && (choice.priceDifference !== undefined ? choice.priceDifference !== 0 : selectedSystem && priceDiffPerNight !== 0) && (
+                  {choice.mode === "system" && (priceDiffPerNight !== 0) && (
                     <span className={`text-xs font-bold ${(choice.priceDifference ?? priceDiffPerNight) > 0 ? "text-amber-600" : "text-emerald-600"}`}>
                       {(choice.priceDifference ?? priceDiffPerNight) > 0 ? "+" : ""}{formatVND(choice.priceDifference ?? priceDiffPerNight)}
                     </span>
@@ -2200,7 +2201,7 @@ export function TourDetailPage({
                 {tour.rating}
               </div>
               <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-xs text-white/70 font-medium mb-1">MÃ TOUR: {tour.tourCode}</p>
+                <p className="text-xs text-white/70 font-medium mb-1">MÃ TOUR: {formatTourCode(tour.tourCode)}</p>
                 <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">{tour.name}</h1>
               </div>
             </div>

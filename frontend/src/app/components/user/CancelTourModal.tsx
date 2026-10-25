@@ -5,7 +5,7 @@ import { Button } from "@/app/components/ui/button";
 interface CancelTourModalProps {
   bookingId: string;
   tourName?: string;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -15,15 +15,18 @@ export function CancelTourModal({
   onConfirm,
   onCancel,
 }: CancelTourModalProps) {
+  const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!reason.trim()) {
       setError("Vui lòng nhập lý do hủy tour");
       return;
     }
-    onConfirm(reason.trim());
+    if (saving) return;
+    setSaving(true);
+    try { await onConfirm(reason.trim()); } catch (error) { setError(error instanceof Error ? error.message : "Không hủy được đơn."); } finally { setSaving(false); }
   };
 
   return (
@@ -100,7 +103,7 @@ export function CancelTourModal({
             Không, giữ lại
           </Button>
           <Button
-            onClick={handleSubmit}
+            onClick={handleSubmit} disabled={saving}
             className="flex-1 bg-red-600 hover:bg-red-700 text-white"
           >
             Xác nhận hủy tour

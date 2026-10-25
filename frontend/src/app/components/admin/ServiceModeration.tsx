@@ -43,6 +43,7 @@ export function ServiceModeration({
     | "fnb"
     | "transportation"
     | "activity"
+    | "attraction"
   >("all");
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [serviceToReject, setServiceToReject] =

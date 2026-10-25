@@ -190,7 +190,7 @@ export function ServicesAroundPage({
                     <div className="space-y-2">
                       <Slider
                         value={priceRange}
-                        onValueChange={setPriceRange}
+                        onValueChange={values => setPriceRange([values[0], values[1]])}
                         max={10000000}
                         step={100000}
                       />

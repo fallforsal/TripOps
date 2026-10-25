@@ -2158,10 +2158,12 @@ export const mockTours: Tour[] = [
     companyId: "company-4",
     companyName: "Hà Giang Discovery Travel",
     rating: 4.9,
-    reviewsCount: 88,
-    availableDates: ["2026-11-15", "2026-11-25", "2026-12-05"],
+    minGuests: 1,
+    maxGuests: 30,
+    highlights: [],
     itinerary: [
       {
+        id: "legacy-day-1",
         day: 1,
         title: "Hà Giang – Quản Bạ – Núi Đôi Cô Tiên – Yên Minh",
         description:
@@ -2197,6 +2199,7 @@ export const mockTours: Tour[] = [
         ],
       },
       {
+        id: "legacy-day-2",
         day: 2,
         title: "Đồng Văn – Đèo Mã Pí Lèng – Đi Thuyền Sông Nho Quế",
         description:
@@ -2237,6 +2240,7 @@ export const mockTours: Tour[] = [
         ],
       },
       {
+        id: "legacy-day-3",
         day: 3,
         title: "Dinh Thự Vua Mèo – Nhà Của Pao – Tiễn Đoàn",
         description:
@@ -2294,7 +2298,7 @@ export const mockTours: Tour[] = [
       "Bảo hiểm du lịch mức 100.000.000đ/vụ",
     ],
     exclusions: ["Chi phí cá nhân", "Thuế VAT"],
-    tourType: "fixed",
+    tourType: "public",
   },
 ];
 
@@ -4230,6 +4234,8 @@ export const mockBookings: Booking[] = [
   // 6. BOOKING ĐÃ HỦY VÀ HOÀN TIỀN (CANCELLED / REFUNDED)
   {
     id: "booking-6",
+    bookingDate: "2026-01-01",
+    tourStartDate: "2026-01-25",
     tourId: "tour-5",
     tour: getMockTourById("tour-5"),
     userId: "user-1",

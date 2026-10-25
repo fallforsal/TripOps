@@ -649,7 +649,7 @@ export function AdminFinancialManagement({
                     platformFee: fee,
                     netPayout: net,
                     settlementStatus: a.settlementStatus || "ready",
-                    bankReference: a.bankReference,
+                    bankReference: a.bankReferenceCode,
                   };
                 })
               : coHosts.map((host) => {

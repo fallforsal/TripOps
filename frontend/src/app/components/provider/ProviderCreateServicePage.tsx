@@ -434,6 +434,7 @@ export function ProviderCreateServicePage({
 
     // Single unified payload saved to 1 table
     const fullPayload: Omit<Service, "id"> = {
+      rating: initialService?.rating || 0,
       providerId: currentUser.id,
       providerName: currentUser.businessName || currentUser.name,
       name,
@@ -928,7 +929,7 @@ export function ProviderCreateServicePage({
                   : "Khoảng giá dự kiến tính trên đầu người (VNĐ / Người)"}
               </h3>
               <p className="text-xs text-gray-500 mt-1">
-                {currentConfig.priceHint} giúp các đơn vị lữ hành ước lượng chi phí khi thiết kế tour
+                Mức giá tham khảo giúp các đơn vị lữ hành ước lượng chi phí khi thiết kế tour
               </p>
             </div>
 

@@ -72,24 +72,20 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         for (var i = 1; i < ages.Length; i++) Require(ages[i].MinAge > (ages[i - 1].MaxAge ?? 150), "Pricing age ranges overlap.");
         var days = config.Timelines ?? [];
         Require(days.Select(d => d.DayNumber).Distinct().Count() == days.Length && days.All(d => d.DayNumber <= config.DurationDays), "Invalid or duplicate itinerary day.");
-        var links = new List<(int Id, ServiceCategory Category)>();
         var stays = new List<(int StartDay, int EndDay)>();
         foreach (var day in days)
         {
-            if (day.TransportationServiceId is int transport) links.Add((transport, ServiceCategory.Transportation));
             var activities = day.Activities ?? [];
             Require(activities.Select(a => a.OrderIndex).Distinct().Count() == activities.Length, "Activity order must be unique within each day.");
             foreach (var activity in activities)
             {
                 Require(activity.EstimatedTime == null || activity.EstimatedTime >= TimeSpan.Zero && activity.EstimatedTime < TimeSpan.FromDays(1), "Activity time must be within a day.");
-                if (activity.ServiceId is int id) links.Add((id, ServiceCategory.Attraction));
             }
             var meals = day.Meals ?? [];
             foreach (var meal in meals)
             {
                 Require(meal.MealType is "breakfast" or "lunch" or "dinner", "Invalid meal type.");
                 Require(!meal.IsDefault || meal.PriceDifference == 0, "Default meal must have zero price difference.");
-                if (meal.ServiceId is int id) links.Add((id, ServiceCategory.Fnb));
             }
             foreach (var group in meals.GroupBy(m => m.MealType)) Require(group.Count(m => m.IsDefault) == 1, "Each meal group needs one default.");
             var hotels = day.Accommodations ?? [];
@@ -97,7 +93,6 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             {
                 Require(!hotel.IsDefault || hotel.PriceDifference == 0, "Default accommodation must have zero price difference.");
                 Require(day.DayNumber + hotel.NightsCount - 1 <= config.DurationNights, "Accommodation exceeds tour nights.");
-                if (hotel.ServiceId is int id) links.Add((id, ServiceCategory.Hotel));
             }
             if (hotels.Length > 0)
             {
@@ -121,8 +116,6 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             Require(days.Length == config.DurationDays, "An itinerary for every day is required for publication.");
             Require(config.MinGuests != null && config.MaxGuests != null, "Guest limits are required for publication.");
         }
-        var eligible = await repository.EligibleServices(links.Select(l => l.Id).Distinct().ToArray(), ct);
-        Require(links.All(l => eligible.Any(s => s.Id == l.Id && s.Category == l.Category)), "Linked services must be approved, match the option category, and belong to active approved Providers.");
     }
 
     private static TourConfiguration Configuration(Tour t) => new(t.Name, t.Description, t.Destination,
@@ -130,10 +123,10 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         t.Highlights, t.Inclusions, t.Exclusions, t.CancellationPolicy, t.Message,
         t.Images == null ? [] : JsonSerializer.Deserialize<string[]>(t.Images, Json),
         t.PricingTiers.OrderBy(p => p.DisplayOrder).ThenBy(p => p.Id).Select(p => new PricingTierInput(p.Name, p.MinAge, p.MaxAge, p.PricePerGuest, p.DisplayOrder)).ToArray(),
-        t.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description, d.TransportationServiceId,
-            d.Attractions.OrderBy(a => a.OrderIndex).Select(a => new ActivityInput(a.Name, a.ServiceId, a.Description, a.EstimatedTime, a.OrderIndex)).ToArray(),
-            d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName ?? "", m.ServiceId, m.Description, m.IsDefault, m.PriceDifference)).ToArray(),
-            d.Accommodations.OrderBy(a => a.Id).Select(a => new AccommodationInput(a.HotelName ?? "", a.DestinationName ?? "", a.ServiceId, a.RoomType, a.NightsCount, a.StarRating, a.IsDefault, a.PriceDifference, a.AddressNotes)).ToArray())).ToArray(),
+        t.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description,
+            d.Attractions.OrderBy(a => a.OrderIndex).Select(a => new ActivityInput(a.Name, a.Description, a.EstimatedTime, a.OrderIndex)).ToArray(),
+            d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName ?? "", m.Description, m.IsDefault, m.PriceDifference)).ToArray(),
+            d.Accommodations.OrderBy(a => a.Id).Select(a => new AccommodationInput(a.HotelName ?? "", a.DestinationName ?? "", a.RoomType, a.NightsCount, a.StarRating, a.IsDefault, a.PriceDifference, a.AddressNotes)).ToArray())).ToArray(),
         t.DepartureLocation);
 
     private static TourDto Dto(Tour t) => new(t.Id, t.AgencyId, t.Code, State(t.Status), State(t.Visibility), t.IsRequest, t.IsAiGenerated,
@@ -152,13 +145,13 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         tour.PricingTiers = (c.PricingTiers ?? []).Select(p => new TourPricingTier { Name = p.Name,
             MinAge = p.MinAge, MaxAge = p.MaxAge, DisplayOrder = p.DisplayOrder, PricePerGuest = Money(p.PricePerGuest) }).ToList();
         tour.Timelines = (c.Timelines ?? []).Select(d => new TourTimeline {
-            DayNumber = d.DayNumber, Title = d.Title, Description = d.Description, TransportationServiceId = d.TransportationServiceId,
-            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name, ServiceId = a.ServiceId,
+            DayNumber = d.DayNumber, Title = d.Title, Description = d.Description,
+            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name,
                 Description = a.Description, EstimatedTime = a.EstimatedTime, OrderIndex = a.OrderIndex }).ToList(),
             Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName,
-                ServiceId = m.ServiceId, Description = m.Description, IsDefault = m.IsDefault, PriceDifference = Money(m.PriceDifference) }).ToList(),
+                Description = m.Description, IsDefault = m.IsDefault, PriceDifference = Money(m.PriceDifference) }).ToList(),
             Accommodations = (d.Accommodations ?? []).Select(a => new TourAccommodation { HotelName = a.HotelName,
-                DestinationName = a.DestinationName, ServiceId = a.ServiceId, RoomType = a.RoomType, NightsCount = a.NightsCount,
+                DestinationName = a.DestinationName, RoomType = a.RoomType, NightsCount = a.NightsCount,
                 StarRating = a.StarRating, IsDefault = a.IsDefault, PriceDifference = Money(a.PriceDifference), AddressNotes = a.AddressNotes }).ToList()
         }).ToList();
     }
@@ -195,7 +188,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
         await Agency(actor, ct); await Validate(config, false, ct);
-        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid():N}", IsAiGenerated = aiGenerated };
+        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}", IsAiGenerated = aiGenerated };
         Apply(tour, config); repository.Add(tour);
         return await Save(tour, actor, "Created draft", ct);
     }

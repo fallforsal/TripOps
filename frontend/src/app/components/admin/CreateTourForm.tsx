@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Service,
   Tour,
@@ -57,6 +57,37 @@ export function CreateTourForm({
       "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800",
   });
 
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imageError, setImageError] = useState("");
+
+  const handleAddImageUrl = (overrideUrl?: string) => {
+    let raw = (overrideUrl || imageUrlInput).trim();
+    if (!raw) return;
+    if (!/^https?:\/\//i.test(raw)) {
+      raw = `https://${raw}`;
+    } else if (raw.startsWith("http://")) {
+      raw = "https://" + raw.slice(7);
+    }
+    try {
+      const url = new URL(raw);
+      setUploadedImages(prev => [...prev, url.href]);
+      setImageUrlInput("");
+      setImageError("");
+    } catch {
+      setImageError("URL hình ảnh không đúng định dạng.");
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    for (const file of Array.from(event.target.files || [])) {
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      reader.onload = () => setUploadedImages(previous => [...previous, String(reader.result)]);
+      reader.readAsDataURL(file);
+    }
+  };
+  const handleRemoveImage = (index: number) => setUploadedImages(previous => previous.filter((_, i) => i !== index));
   const [highlights, setHighlights] = useState<string[]>([""]);
   const [itinerary, setItinerary] = useState<DailyItinerary[]>([
     {
@@ -73,7 +104,7 @@ export function CreateTourForm({
 
   // Filter only accommodation services that are approved
   const accommodationServices = services.filter(
-    (s) => s.status === "approved" && s.category === "Lưu trú",
+    (s) => s.status === "approved" && s.category === "hotel",
   );
 
   const handleAddHighlight = () => {
@@ -180,6 +211,8 @@ export function CreateTourForm({
       price: parseFloat(formData.price),
       description: formData.description,
       maxGuests: parseInt(formData.maxGuests),
+      minGuests: Number(formData.minGuests) || 1,
+      images: uploadedImages,
       rating: 0, // New tours start with no rating
       image: formData.image,
       highlights: highlights.filter((h) => h.trim() !== ""),
@@ -448,15 +481,75 @@ export function CreateTourForm({
               Hình ảnh tour
             </h3>
 
+            {/* Nhập URL ảnh & Gợi ý ảnh mẫu */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={imageUrlInput}
+                  onChange={(e) => {
+                    setImageUrlInput(e.target.value);
+                    if (imageError) setImageError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddImageUrl();
+                    }
+                  }}
+                  placeholder="Dán link ảnh HTTPS (VD: https://images.unsplash.com/...)"
+                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-pink-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddImageUrl()}
+                  className="px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors"
+                >
+                  Thêm URL
+                </button>
+              </div>
+              {imageError && (
+                <p className="text-[11px] text-red-600 font-medium">{imageError}</p>
+              )}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-gray-500 font-medium">Gợi ý ảnh nhanh:</span>
+                <button
+                  type="button"
+                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800")}
+                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  Biển & Resort
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1528127269322-539801943592?w=800")}
+                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  Hạ Long
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800")}
+                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  Hội An
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800")}
+                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  Sapa
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block w-full cursor-pointer">
-                <div className="border-2 border-dashed border-pink-300 rounded-lg p-6 text-center hover:border-pink-500 hover:bg-pink-100 transition-colors">
-                  <Upload className="w-12 h-12 text-pink-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-gray-700">
-                    Click để upload hình ảnh
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    PNG, JPG, JPEG (tối đa 5MB)
+                <div className="border-2 border-dashed border-pink-300 rounded-lg p-5 text-center hover:border-pink-500 hover:bg-pink-100 transition-colors">
+                  <Upload className="w-8 h-8 text-pink-600 mx-auto mb-1.5" />
+                  <p className="text-xs font-semibold text-gray-700">
+                    Hoặc click để tải ảnh từ máy tính (PNG, JPG, tối đa 5MB)
                   </p>
                 </div>
                 <input

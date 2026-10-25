@@ -36,7 +36,7 @@ export function AdminLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuItems = [
+  const menuItems: { id: string; label: string; icon: typeof LayoutDashboard; badge?: number }[] = [
     {
       id: "dashboard",
       label: "Dashboard",

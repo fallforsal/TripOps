@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
 import { defaultSystemBankAccount } from "@/app/data/mockData";
 import {
@@ -48,25 +48,30 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { formatTourCode } from "@/app/components/ui/utils";
 
 interface UserBookingDetailPageProps {
   booking: Booking;
   systemBank?: SystemBankAccount;
   onBack: () => void;
-  onCancelBooking: (bookingId: string, reason: string) => void;
-  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => void;
+  onCancelBooking: (bookingId: string, reason: string) => void | Promise<void>;
+  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => void | Promise<void>;
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ xác nhận & chốt giá", color: "bg-amber-100 text-amber-800 border-amber-300" },
+  deposited: { label: "Đã đặt cọc", color: "bg-amber-50 text-amber-800 border-amber-300" },
+  in_progress: { label: "Đang diễn ra", color: "bg-blue-50 text-blue-800 border-blue-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  paid: { label: "Đã thanh toán đủ", color: "bg-teal-100 text-teal-800 border-teal-300" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-300" },
   completed: { label: "Đã hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-blue-300" },
   rejected: { label: "Đã từ chối", color: "bg-gray-100 text-gray-800 border-gray-300" },
 };
 
 const paymentStatusMap: Record<string, { label: string; color: string }> = {
+  partially_paid: { label: "Đã thanh toán một phần", color: "bg-amber-50 text-amber-800 border-amber-200" },
   unpaid: { label: "Chưa thanh toán (Thanh toán sau)", color: "bg-amber-50 text-amber-800 border-amber-200" },
   paid: { label: "Đã thanh toán", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "bg-[#F0F9FF] text-purple-800 border-[#F97316]/30" },
@@ -115,6 +120,8 @@ export function UserBookingDetailPage({
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequest | null>(null);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
   const [priceAdjustmentsModalOpen, setPriceAdjustmentsModalOpen] = useState(false);
 
@@ -361,7 +368,7 @@ export function UserBookingDetailPage({
 
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  Chi tiết đơn đặt tour #{booking.id}
+                  Chi tiết đơn đặt tour {booking.bookingCode || `#${booking.id}`}
                 </h1>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                   {st.label}
@@ -417,7 +424,7 @@ export function UserBookingDetailPage({
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono font-bold bg-[#E0F2FE] text-blue-800 px-2.5 py-0.5 rounded-full">
-                      {booking.tour.tourCode}
+                      {formatTourCode(booking.tour.tourCode)}
                     </span>
                     {isCoHosted ? (
                       <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
@@ -1436,7 +1443,7 @@ export function UserBookingDetailPage({
 
                 {/* Progress breakdown */}
                 {(() => {
-                  const totalPaidIntoSystem = (booking.paymentRequests ?? [])
+                  const totalPaidIntoSystem = booking.paidAmount ?? (booking.paymentRequests ?? [])
                     .filter((pr) => pr.status === "paid")
                     .reduce((sum, pr) => sum + pr.amount, 0);
                   const remainingToPay = Math.max(0, booking.totalPrice - totalPaidIntoSystem);
@@ -1469,7 +1476,7 @@ export function UserBookingDetailPage({
                 </div>
 
                 {/* PROMINENT 100% ESCROW PAYMENT BUTTON FOR CUSTOMER */}
-                {booking.paymentStatus !== "paid" && booking.status !== "cancelled" && (
+                {booking.paymentStatus !== "paid" && booking.status !== "cancelled" && booking.status !== "rejected" && (
                   <Button
                     onClick={() => {
                       const pr = (booking.paymentRequests && booking.paymentRequests.find((r) => r.status !== "paid")) || {
@@ -1486,7 +1493,7 @@ export function UserBookingDetailPage({
                     className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-9 gap-2 shadow-md rounded-xl"
                   >
                     <ShieldCheck className="w-4 h-4 text-emerald-200" />
-                    Thanh toán 100% qua Ký quỹ Hệ thống (Escrow)
+                    Thanh toán đợt tiếp theo
                   </Button>
                 )}
               </div>
@@ -1677,8 +1684,8 @@ export function UserBookingDetailPage({
           bookingId={booking.id}
           tourName={booking.tour.name}
           onCancel={() => setShowCancelModal(false)}
-          onConfirm={(reason) => {
-            onCancelBooking(booking.id, reason);
+          onConfirm={async (reason) => {
+            await onCancelBooking(booking.id, reason);
             setShowCancelModal(false);
           }}
         />
@@ -1727,7 +1734,7 @@ export function UserBookingDetailPage({
 
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 1: NỘI DUNG VÀ THỜI GIAN</p>
-              <p>Tour: <strong>{booking.tour.name}</strong> ({booking.tour.tourCode})</p>
+              <p>Tour: <strong>{booking.tour.name}</strong> ({formatTourCode(booking.tour.tourCode)})</p>
               <p>Khởi hành: <strong>{booking.tourStartDate || "Theo thỏa thuận"}</strong> · Thời gian: {booking.tour.duration}</p>
               <p>Số lượng khách: <strong>{booking.numberOfGuests} người</strong></p>
             </div>
@@ -1781,7 +1788,7 @@ export function UserBookingDetailPage({
                   <Landmark className="w-5 h-5 text-[#075985]" />
                   Thanh toán qua Tài khoản Hệ thống
                 </DialogTitle>
-              </DialogHeader>
+              </DialogHeader>{paymentError && <p role="alert" className="text-sm text-red-700">{paymentError}</p>}
 
               {/* Booking & Stage Summary */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-[#CBD5E1] space-y-2">
@@ -1917,13 +1924,17 @@ export function UserBookingDetailPage({
                 </ul>
 
                 <Button
-                  onClick={() => {
-                    if (onPayPaymentRequest) {
-                      onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
-                    }
-                    setSelectedPaymentRequest(null);
-                    setPaymentSuccessToast(true);
-                    setTimeout(() => setPaymentSuccessToast(false), 4000);
+                  disabled={paymentSaving}
+                  onClick={async () => {
+                    if (!onPayPaymentRequest || paymentSaving) return;
+                    setPaymentSaving(true); setPaymentError("");
+                    try {
+                      await onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
+                      setSelectedPaymentRequest(null);
+                      setPaymentSuccessToast(true);
+                    } catch (error) {
+                      setPaymentError(error instanceof Error ? error.message : "Không ghi nhận được thanh toán.");
+                    } finally { setPaymentSaving(false); }
                   }}
                   className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 gap-2 shadow-sm"
                 >
@@ -1962,7 +1973,7 @@ export function UserBookingDetailPage({
                 value={pFullName}
                 onChange={(e) => setPFullName(e.target.value)}
                 placeholder="VD: Nguyễn Văn An"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -1975,7 +1986,7 @@ export function UserBookingDetailPage({
                   type="date"
                   value={pDob}
                   onChange={(e) => setPDob(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -1986,7 +1997,7 @@ export function UserBookingDetailPage({
                 <select
                   value={pGender}
                   onChange={(e) => setPGender(e.target.value as "male" | "female")}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="male">Nam</option>
                   <option value="female">Nữ</option>
@@ -2006,7 +2017,7 @@ export function UserBookingDetailPage({
                     setPAgeGroup(ag);
                     setPPrice(calculatePassengerPrice(ag));
                   }}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="adult">Người lớn (Từ 12 tuổi)</option>
                   <option value="child_2_11">Trẻ em (2 - 11 tuổi)</option>
@@ -2022,7 +2033,7 @@ export function UserBookingDetailPage({
                   type="number"
                   value={pPrice}
                   onChange={(e) => setPPrice(Number(e.target.value))}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-bold text-teal-800"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-teal-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-bold"
                 />
               </div>
             </div>
@@ -2037,7 +2048,7 @@ export function UserBookingDetailPage({
                   value={pPhone}
                   onChange={(e) => setPPhone(e.target.value)}
                   placeholder="09xx xxx xxx"
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -2050,7 +2061,7 @@ export function UserBookingDetailPage({
                   value={pIdNumber}
                   onChange={(e) => setPIdNumber(e.target.value)}
                   placeholder="079xxxxxxxx"
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             </div>
@@ -2064,7 +2075,7 @@ export function UserBookingDetailPage({
                 value={pNotes}
                 onChange={(e) => setPNotes(e.target.value)}
                 placeholder="VD: Ăn chay trường, cần chỗ ngồi gần cửa sổ..."
-                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
 

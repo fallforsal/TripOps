@@ -39,7 +39,7 @@ internal sealed class AuthenticationDocumentTransformer(
             "Use logout before switching Agency/Admin accounts. The current backend does not issue or accept JWT access tokens. " +
             "The Authorize dialog describes the cookie scheme; browsers cannot set an HttpOnly cookie from that dialog.";
         document.Tags ??= new HashSet<OpenApiTag>();
-        foreach (var name in new[] { "Authentication", "Partner Management", "Service Management", "Tour Management", "Tour Moderation", "Tour Publishing", "Health" })
+        foreach (var name in new[] { "Authentication", "Partner Management", "Service Management", "Tour Management", "Tour Moderation", "Tour Publishing", "Booking Management", "Tour Operations", "Health" })
             if (!document.Tags.Any(tag => tag.Name == name)) document.Tags.Add(new OpenApiTag { Name = name });
         document.Components ??= new();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -114,6 +114,7 @@ internal sealed class EndpointDocumentationTransformer : IOpenApiOperationTransf
             AddError(504, "License storage request timed out.", problem);
         }
         TourOpenApiExamples.Apply(operation, action);
+        BookingOpenApiExamples.Apply(operation, action);
 
         void AddError(int code, string description, OpenApiSchema schema)
         {

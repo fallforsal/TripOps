@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Calendar,
   MapPin,
@@ -17,11 +17,12 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { CancelTourModal } from "./CancelTourModal";
+import { formatTourCode } from "@/app/components/ui/utils";
 import type { Booking } from "@/app/types";
 
 interface MyBookingsProps {
   bookings: Booking[];
-  onCancelBooking: (bookingId: string, reason: string) => void;
+  onCancelBooking: (bookingId: string, reason: string) => void | Promise<void>;
   onViewBookingDetail: (booking: Booking) => void;
 }
 
@@ -41,7 +42,10 @@ export function MyBookings({
   const filterTabs = [
     { id: "all", label: "Tất cả" },
     { id: "pending", label: "Chờ xác nhận" },
+    { id: "deposited", label: "Đã đặt cọc" },
     { id: "confirmed", label: "Đã xác nhận" },
+    { id: "paid", label: "Đã thanh toán đủ" },
+    { id: "in_progress", label: "Đang diễn ra" },
     { id: "completed", label: "Hoàn thành" },
     { id: "cancelled", label: "Đã hủy" },
     { id: "rejected", label: "Đã từ chối" },
@@ -55,6 +59,7 @@ export function MyBookings({
 
       const matchSearch =
         booking.id.toLowerCase().includes(term) ||
+        (booking.bookingCode || "").toLowerCase().includes(term) ||
         (booking.tour?.name || "").toLowerCase().includes(term) ||
         (booking.tour?.tourCode || "").toLowerCase().includes(term) ||
         (booking.tour?.destination || "").toLowerCase().includes(term);
@@ -63,15 +68,22 @@ export function MyBookings({
     });
   }, [bookings, filterStatus, searchTerm]);
 
-  const handleConfirmCancel = (reason: string) => {
+  const handleConfirmCancel = async (reason: string) => {
     if (showCancelModal) {
-      onCancelBooking(showCancelModal, reason);
+      await onCancelBooking(showCancelModal, reason);
       setShowCancelModal(null);
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "deposited":
+        return (
+          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <Clock className="w-3 h-3 text-amber-600" />
+            Đã đặt cọc
+          </span>
+        );
       case "confirmed":
         return (
           <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
@@ -79,6 +91,15 @@ export function MyBookings({
             Đã xác nhận
           </span>
         );
+      case "paid":
+        return (
+          <span className="px-2.5 py-1 bg-teal-100 text-teal-800 border border-teal-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <CheckCircle className="w-3 h-3 text-teal-600" />
+            Đã thanh toán đủ
+          </span>
+        );
+      case "in_progress":
+        return <span className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800">Đang diễn ra</span>;
       case "completed":
         return (
           <span className="px-2.5 py-1 bg-[#E0F2FE] text-blue-800 border border-blue-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
@@ -111,6 +132,7 @@ export function MyBookings({
 
   const getPaymentStatusBadge = (paymentStatus?: string) => {
     switch (paymentStatus) {
+      case "partially_paid": return <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">Đã thanh toán một phần</span>;
       case "paid":
         return (
           <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
@@ -223,20 +245,20 @@ export function MyBookings({
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredBookings.map((b) => {
-                    const canCancel = b.status === "pending" || b.status === "confirmed";
+                    const canCancel = b.status === "pending" || b.status === "deposited" || b.status === "confirmed";
 
                     return (
                       <tr key={b.id} className="hover:bg-teal-50/20 transition-colors group">
                         {/* 1. Mã đơn */}
-                        <td className="py-4 px-4 font-mono text-gray-500 font-bold whitespace-nowrap">
-                          #{b.id.replace("booking-", "")}
+                        <td className="py-4 px-4 font-mono text-gray-700 font-bold whitespace-nowrap">
+                          {b.bookingCode ? b.bookingCode : `#${b.id.replace("booking-", "")}`}
                         </td>
 
                         {/* 2. Tour du lịch */}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={b.tour?.image || ""}
+                              src={b.tour?.image || b.tour?.images?.[0] || "https://images.unsplash.com/photo-1528127269322-539801943592?w=800"}
                               alt={b.tour?.name || "Tour"}
                               className="w-14 h-11 rounded-lg object-cover flex-shrink-0 shadow-2xs border border-gray-100"
                             />
@@ -246,7 +268,7 @@ export function MyBookings({
                               </p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="font-mono text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded font-semibold">
-                                  {b.tour?.tourCode}
+                                  {formatTourCode(b.tour?.tourCode)}
                                 </span>
                                 <span className="text-[11px] text-gray-500 flex items-center gap-0.5">
                                   <MapPin className="w-3 h-3 text-gray-400" />

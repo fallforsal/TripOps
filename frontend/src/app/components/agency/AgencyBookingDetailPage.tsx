@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Booking,
   User,
@@ -97,9 +97,9 @@ interface AgencyBookingDetailPageProps {
   companyName: string;
   companyId?: string;
   onBack: () => void;
-  onApproveBooking: (bookingId: string) => void;
-  onRejectBooking: (bookingId: string, reason?: string) => void;
-  onAssignGuide: (bookingId: string, guideId: string) => void;
+  onApproveBooking: (bookingId: string) => void | Promise<void>;
+  onRejectBooking: (bookingId: string, reason?: string) => void | Promise<void>;
+  onAssignGuide: (bookingId: string, guideId: string, role?: string, notes?: string) => void | Promise<void>;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
   onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
@@ -113,13 +113,17 @@ interface AgencyBookingDetailPageProps {
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ duyệt", color: "bg-amber-100 text-amber-800 border-amber-200" },
+  deposited: { label: "Đã đặt cọc", color: "bg-amber-50 text-amber-800 border-amber-300" },
+  in_progress: { label: "Đang diễn ra", color: "bg-blue-50 text-blue-800 border-blue-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  paid: { label: "Đã thanh toán đủ", color: "bg-teal-100 text-teal-800 border-teal-300" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-200" },
   completed: { label: "Hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-[#CBD5E1]" },
   rejected: { label: "Từ chối", color: "bg-gray-100 text-gray-800 border-gray-200" },
 };
 
 const paymentStatusMap: Record<string, { label: string; color: string }> = {
+  partially_paid: { label: "Đã thanh toán một phần", color: "bg-amber-50 text-amber-800 border-amber-200" },
   unpaid: { label: "Chưa thanh toán", color: "bg-red-50 text-red-700 border-red-200" },
   paid: { label: "Đã thanh toán", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "bg-[#F0F9FF] text-[#EA580C] border-[#F97316]/30" },
@@ -214,6 +218,7 @@ export function AgencyBookingDetailPage({
     return [];
   });
 
+  useEffect(() => { setAssignedGuides(booking.assignedGuides || []); }, [booking.assignedGuides]);
   // Assign Guide Modal states
   const [selectedGuideToAdd, setSelectedGuideToAdd] = useState<string>("");
   const [selectedGuideRole, setSelectedGuideRole] = useState<string>("lead_guide");
@@ -466,14 +471,14 @@ export function AgencyBookingDetailPage({
         const updatedAssigned = [...assignedGuides, newAssignedGuide];
         setAssignedGuides(updatedAssigned);
         if (onUpdateAssignedGuides) {
-          onUpdateAssignedGuides(updatedAssigned);
+          onUpdateAssignedGuides(booking.id, updatedAssigned);
         }
       }
     }
 
     setAttractionCheckins(updatedCheckins);
     if (onUpdateAttractionCheckins) {
-      onUpdateAttractionCheckins(updatedCheckins);
+      onUpdateAttractionCheckins(booking.id, updatedCheckins);
     }
   };
 
@@ -949,7 +954,7 @@ export function AgencyBookingDetailPage({
   };
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
-  const handleApproveHappyCase = () => {
+  const handleApproveHappyCase = async () => {
     const updatedAgencies: BookingAgencyShare[] = agenciesList.map((a) => ({
       ...a,
       confirmationStatus: "confirmed" as const,
@@ -959,13 +964,13 @@ export function AgencyBookingDetailPage({
     setAgenciesList(updatedAgencies);
     onUpdateBookingAgencies?.(booking.id, updatedAgencies);
 
-    onApproveBooking(booking.id);
+    try { await onApproveBooking(booking.id); } catch (error) { alert(error instanceof Error ? error.message : "Không duyệt được đơn."); return; }
     setHappyCaseModalOpen(false);
     alert(`✓ Đã duyệt booking thành công!\n\n🏢 Đơn vị chủ trì đã xác nhận công ty và các bên liên minh có thể tham gia dẫn dắt đoàn theo đúng lịch trình.\n\n👉 Bước tiếp theo: Quý công ty vui lòng sử dụng nút "Tạo yêu cầu thanh toán" trên thanh công cụ để tạo các đợt thu (đặt cọc đợt 1, thanh toán đợt 2, v.v.) theo thỏa thuận với khách hàng.`);
   };
 
   // Multi-Guide Management Handlers
-  const handleConfirmAddGuide = () => {
+  const handleConfirmAddGuide = async () => {
     const targetGuide = guides.find((g) => g.id === selectedGuideToAdd);
     if (!targetGuide) {
       alert("Vui lòng chọn hướng dẫn viên để phân công!");
@@ -989,12 +994,9 @@ export function AgencyBookingDetailPage({
       assignedAt: new Date().toLocaleDateString("vi-VN"),
     };
 
-    const updated = [...assignedGuides, newAg];
-    setAssignedGuides(updated);
-    onUpdateAssignedGuides?.(booking.id, updated);
-    if (assignedGuides.length === 0) {
-      onAssignGuide?.(booking.id, targetGuide.id);
-    }
+    try {
+      await onAssignGuide(booking.id, targetGuide.id, selectedGuideRole === "lead_guide" ? "Lead" : "Assistant", selectedGuideNotes.trim() || undefined);
+    } catch (error) { alert(error instanceof Error ? error.message : "Không phân công được hướng dẫn viên."); return; }
     setAssignModalOpen(false);
     setSelectedGuideNotes("");
     alert(`✓ Đã phân công hướng dẫn viên ${targetGuide.name} vào đoàn thành công!`);
@@ -1474,7 +1476,7 @@ export function AgencyBookingDetailPage({
             </button>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">
-                Chi tiết Booking #{booking.id}
+                Chi tiết Booking {booking.bookingCode || `#${booking.id}`}
               </h1>
               <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                 {st.label}
@@ -1496,7 +1498,7 @@ export function AgencyBookingDetailPage({
 
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            {booking.status === "pending" && (
+            {(booking.status === "pending" || booking.status === "deposited") && (
               <>
                 {isCurrentCompanyLead ? (
                   <Button
@@ -1580,7 +1582,7 @@ export function AgencyBookingDetailPage({
       </div>
 
       {/* Provider Price Verification Notice for Pending Bookings */}
-      {booking.status === "pending" && (
+      {(booking.status === "pending" || booking.status === "deposited") && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 mb-6 flex items-start gap-3.5 shadow-2xs">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs">
@@ -1821,7 +1823,7 @@ export function AgencyBookingDetailPage({
               </div>
 
               {/* Happy Case Action Notice if Booking is Pending */}
-              {booking.status === "pending" && (
+              {(booking.status === "pending" || booking.status === "deposited") && (
                 <div className="bg-[#F0F9FF]/90 border border-[#CBD5E1] rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <p className="font-bold text-blue-950 text-xs flex items-center gap-1.5">

@@ -238,23 +238,24 @@ export function AIItineraryPlannerModal({
 
         const meals: TourMeal[] = [
           {
-            mealType: "breakfast",
-            name: day === 1 ? "Ăn sáng tự túc / trên đường đi" : `Buffet sáng tại khách sạn`,
-            price: 50000,
+            type: "breakfast",
+            serviceName: day === 1 ? "Ăn sáng tự túc / trên đường đi" : `Buffet sáng tại khách sạn`,
+            pricePerPerson: 50000,
           },
           {
-            mealType: "lunch",
-            name: `Bữa trưa đặc sản vùng miền tại nhà hàng địa phương`,
-            price: 150000,
+            type: "lunch",
+            serviceName: `Bữa trưa đặc sản vùng miền tại nhà hàng địa phương`,
+            pricePerPerson: 150000,
           },
           {
-            mealType: "dinner",
-            name: day === daysCount - 1 ? `Tiệc tối Gala Dinner ấm cúng toàn đoàn` : `Bữa tối ẩm thực truyền thống`,
-            price: 200000,
+            type: "dinner",
+            serviceName: day === daysCount - 1 ? `Tiệc tối Gala Dinner ấm cúng toàn đoàn` : `Bữa tối ẩm thực truyền thống`,
+            pricePerPerson: 200000,
           },
         ];
 
         itinerary.push({
+          id: `day-${day}`, date: "",
           day,
           title: dayTitle,
           description: dayDesc,
@@ -522,7 +523,7 @@ export function AIItineraryPlannerModal({
                         <Utensils className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="text-[11px]">
                           <strong>Bữa ăn đề xuất:</strong>{" "}
-                          {day.meals.map((m) => `${m.mealType === "breakfast" ? "Sáng" : m.mealType === "lunch" ? "Trưa" : "Tối"}: ${m.name}`).join(" • ")}
+                          {day.meals.map((m) => `${m.type === "breakfast" ? "Sáng" : m.type === "lunch" ? "Trưa" : "Tối"}: ${m.serviceName}`).join(" • ")}
                         </span>
                       </div>
                     )}
