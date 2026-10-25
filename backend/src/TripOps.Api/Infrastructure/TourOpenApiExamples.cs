@@ -23,13 +23,13 @@ internal static class TourOpenApiExamples
         Images: [],
         PricingTiers: [new("Em bé dưới 2 tuổi", 0, 1, 0), new("Trẻ em 2–11 tuổi", 2, 11, 2450000, 1), new("Người lớn", 12, null, 3500000, 2)],
         Timelines: [
-            new(1, "Đà Nẵng – Sơn Trà – biển Mỹ Khê", TransportationServiceId: null,
-                Activities: [new("Chùa Linh Ứng", ServiceId: null, EstimatedTime: new TimeSpan(8, 30, 0), OrderIndex: 0),
-                    new("Biển Mỹ Khê", ServiceId: null, EstimatedTime: new TimeSpan(15, 0, 0), OrderIndex: 1)],
-                Meals: [new("lunch", "Nhà hàng địa phương tại Đà Nẵng", ServiceId: null),
-                    new("lunch", "Phương án thực đơn chay", ServiceId: null, IsDefault: false, PriceDifference: -30000)],
-                Accommodations: [new("Khách sạn tiêu chuẩn tại Đà Nẵng", "Đà Nẵng", ServiceId: null, RoomType: "Phòng tiêu chuẩn", NightsCount: 2, StarRating: 3),
-                    new("Phương án khách sạn nâng hạng tại Đà Nẵng", "Đà Nẵng", ServiceId: null, RoomType: "Phòng superior", NightsCount: 2, StarRating: 4, IsDefault: false, PriceDifference: 150000)]),
+            new(1, "Đà Nẵng – Sơn Trà – biển Mỹ Khê",
+                Activities: [new("Chùa Linh Ứng", EstimatedTime: new TimeSpan(8, 30, 0), OrderIndex: 0),
+                    new("Biển Mỹ Khê", EstimatedTime: new TimeSpan(15, 0, 0), OrderIndex: 1)],
+                Meals: [new("lunch", "Nhà hàng địa phương tại Đà Nẵng"),
+                    new("lunch", "Phương án thực đơn chay", IsDefault: false, PriceDifference: -30000)],
+                Accommodations: [new("Khách sạn tiêu chuẩn tại Đà Nẵng", "Đà Nẵng", RoomType: "Phòng tiêu chuẩn", NightsCount: 2, StarRating: 3),
+                    new("Phương án khách sạn nâng hạng tại Đà Nẵng", "Đà Nẵng", RoomType: "Phòng superior", NightsCount: 2, StarRating: 4, IsDefault: false, PriceDifference: 150000)]),
             new(2, "Tham quan phố cổ Hội An", Activities: [new("Phố cổ Hội An", EstimatedTime: new TimeSpan(8, 30, 0))],
                 Meals: [new("lunch", "Nhà hàng địa phương tại Hội An")], Accommodations: []),
             new(3, "Cầu Rồng – kết thúc chương trình", Activities: [new("Cầu Rồng", EstimatedTime: new TimeSpan(9, 0, 0))], Accommodations: [])]);
@@ -92,10 +92,6 @@ internal static class TourOpenApiExamples
     internal static void DescribeProperty(Type type, string name, OpenApiSchema schema)
     {
         if (type.Namespace != typeof(TourConfiguration).Namespace) return;
-        if (name is "ServiceId" or "TransportationServiceId") {
-            schema.Description = "Optional. Use null for a manual entry, or a positive ID returned by the approved Agency service catalogue. Never use 0. The category and active approved Provider are checked.";
-            schema.Examples = [JsonValue.Create((int?)null)!];
-        }
         if (type == typeof(PricingTierInput)) {
             if (name == "MinAge") { schema.Description = "Required inclusive lower age; integer 0–150. Adjacent ranges must not share a boundary."; schema.Examples = [JsonValue.Create(12)!]; }
             if (name == "MaxAge") { schema.Description = "Inclusive upper age, or null for an open-ended tier. Must be >= minAge; age ranges cannot overlap."; schema.Examples = [JsonValue.Create((int?)null)!]; }
@@ -119,7 +115,7 @@ internal static class TourOpenApiExamples
         }
         if (name == "DayNumber") { schema.Description = "1-based, unique, and <= durationDays. Publication requires one day for each day of the tour."; schema.Examples = [JsonValue.Create(1)!]; }
         if (type == typeof(TourConfiguration) && name == "Images" && schema.Items is OpenApiSchema item) {
-            schema.Description = "Optional/null/empty list. Every supplied item must be an absolute HTTPS URL of at most 2048 characters. No image is fetched or uploaded by tour creation.";
+            schema.Description = "Optional/null/empty list of HTTPS image URLs, each at most 2048 characters. Upload local files with POST /api/v1/agency/tours/images first. The first URL is the primary image.";
             item.Format = "uri"; item.MaxLength = 2048; item.Pattern = "^[hH][tT][tT][pP][sS]://";
         }
     }

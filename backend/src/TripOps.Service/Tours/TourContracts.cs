@@ -26,15 +26,15 @@ public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
     [Range(typeof(decimal), "0", "9999999999")] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0);
 public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, StringLength(255)] string Title,
-    [StringLength(10000)] string? Description = null, [Range(1, int.MaxValue)] int? TransportationServiceId = null,
+    [StringLength(10000)] string? Description = null,
     ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
-public sealed record ActivityInput([Required, StringLength(255)] string Name, [Range(1, int.MaxValue)] int? ServiceId = null,
+public sealed record ActivityInput([Required, StringLength(255)] string Name,
     [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
 public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "dinner")] string MealType, [Required, StringLength(255)] string RestaurantName,
-    [Range(1, int.MaxValue)] int? ServiceId = null, [StringLength(10000)] string? Description = null, bool IsDefault = true,
+    [StringLength(10000)] string? Description = null, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
-    [Required, StringLength(255)] string DestinationName, [Range(1, int.MaxValue)] int? ServiceId = null,
+    [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
@@ -51,6 +51,7 @@ public sealed record TourDto(int Id, string AgencyId, string? Code, string Statu
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
     DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration);
+public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price);
 public sealed record TourListItem(int Id, string Name, string? Destination, decimal BasePrice,
     string Status, string Visibility, int Version);

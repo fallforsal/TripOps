@@ -10,6 +10,12 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config)
     private string Setting(string key) => config[$"Cloudinary:{key}"] is { Length: > 0 } value ? value
         : throw new AccountException(503, "Chưa cấu hình Cloudinary trên server.");
     public async Task<string> Upload(string userId, byte[] bytes, string mime, CancellationToken ct)
+        => await UploadImage(userId, bytes, mime, "licenses", authenticated: true, ct);
+
+    public async Task<string> UploadTourImage(string agencyId, byte[] bytes, string mime, CancellationToken ct)
+        => await UploadImage(agencyId, bytes, mime, "tours", authenticated: false, ct);
+
+    private async Task<string> UploadImage(string userId, byte[] bytes, string mime, string folder, bool authenticated, CancellationToken ct)
     {
         var png = bytes.Length >= 8 && bytes.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10});
         var jpg = bytes.Length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
@@ -18,15 +24,18 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config)
         var cloud = Setting("CloudName"); var key = Setting("ApiKey"); var secret = Setting("ApiSecret");
         using var body = new MultipartFormDataContent();
         var file = new ByteArrayContent(bytes); file.Headers.ContentType = new MediaTypeHeaderValue(mime);
-        body.Add(file, "file", png ? "license.png" : "license.jpg");
-        body.Add(new StringContent($"tripops/licenses/{userId}/{Guid.NewGuid():N}"), "public_id");
-        body.Add(new StringContent("authenticated"), "type");
+        body.Add(file, "file", png ? (authenticated ? "license.png" : "tour.png") : (authenticated ? "license.jpg" : "tour.jpg"));
+        body.Add(new StringContent($"tripops/{folder}/{userId}/{Guid.NewGuid():N}"), "public_id");
+        if (authenticated) body.Add(new StringContent("authenticated"), "type");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(cloud)}/image/upload") { Content = body };
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{key}:{secret}")));
         using var response = await Send(request, ct);
         if (!response.IsSuccessStatusCode) throw new AccountException(502, "Không thể tải ảnh lên Cloudinary. Vui lòng thử lại.");
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        return json.RootElement.GetProperty("secure_url").GetString()!;
+        var url = json.RootElement.GetProperty("secure_url").GetString();
+        if (url is null || url.Length > 2048 || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            throw new AccountException(502, "Cloudinary returned an invalid image URL.");
+        return url;
     }
     private async Task<HttpResponseMessage> Send(HttpRequestMessage request, CancellationToken ct)
     {

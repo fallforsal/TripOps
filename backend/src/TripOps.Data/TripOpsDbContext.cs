@@ -224,8 +224,6 @@ public class TripOpsDbContext : DbContext
 
         modelBuilder.Entity<TourTimeline>(entity =>
         {
-            entity.HasOne(e => e.TransportationService).WithMany().HasForeignKey(e => e.TransportationServiceId)
-                .OnDelete(DeleteBehavior.Restrict);
             entity.ToTable("tour_timeline");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).HasMaxLength(255);
@@ -244,10 +242,6 @@ public class TripOpsDbContext : DbContext
                 .WithMany(t => t.Attractions)
                 .HasForeignKey(e => e.TourTimelineId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Service)
-                .WithMany()
-                .HasForeignKey(e => e.ServiceId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TourMeal>(entity =>
@@ -261,10 +255,6 @@ public class TripOpsDbContext : DbContext
                 .WithMany(t => t.Meals)
                 .HasForeignKey(e => e.TourTimelineId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Service)
-                .WithMany()
-                .HasForeignKey(e => e.ServiceId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TourAccommodation>(entity =>
@@ -283,10 +273,6 @@ public class TripOpsDbContext : DbContext
                 .WithMany(t => t.Accommodations)
                 .HasForeignKey(e => e.TourTimelineId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Service)
-                .WithMany()
-                .HasForeignKey(e => e.ServiceId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TourVersion>(entity =>

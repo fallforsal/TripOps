@@ -1502,8 +1502,7 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("NightsCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasDefaultValue(1)
-                        .HasSentinel(-1);
+                        .HasDefaultValue(1);
 
                     b.Property<decimal>("PriceDifference")
                         .HasPrecision(19, 2)
@@ -1512,9 +1511,6 @@ namespace TripOps.Data.Migrations
                     b.Property<string>("RoomType")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("ServiceId")
-                        .HasColumnType("int");
 
                     b.Property<int>("StarRating")
                         .ValueGeneratedOnAdd()
@@ -1528,8 +1524,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ServiceId");
 
                     b.HasIndex("TourTimelineId");
 
@@ -1667,9 +1661,6 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.Property<int?>("ServiceId")
-                        .HasColumnType("int");
-
                     b.Property<int>("TourTimelineId")
                         .HasColumnType("int");
 
@@ -1677,8 +1668,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ServiceId");
 
                     b.HasIndex("TourTimelineId");
 
@@ -1757,17 +1746,12 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("TourId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("TransportationServiceId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("TourId");
-
-                    b.HasIndex("TransportationServiceId");
 
                     b.ToTable("tour_timeline", (string)null);
                 });
@@ -1842,9 +1826,6 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("OrderIndex")
                         .HasColumnType("int");
 
-                    b.Property<int?>("ServiceId")
-                        .HasColumnType("int");
-
                     b.Property<int>("TourTimelineId")
                         .HasColumnType("int");
 
@@ -1852,8 +1833,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ServiceId");
 
                     b.HasIndex("TourTimelineId");
 
@@ -2359,18 +2338,11 @@ namespace TripOps.Data.Migrations
 
             modelBuilder.Entity("TripOps.Data.Entities.TourAccommodation", b =>
                 {
-                    b.HasOne("TripOps.Data.Entities.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TripOps.Data.Entities.TourTimeline", "TourTimeline")
                         .WithMany("Accommodations")
                         .HasForeignKey("TourTimelineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Service");
 
                     b.Navigation("TourTimeline");
                 });
@@ -2407,18 +2379,11 @@ namespace TripOps.Data.Migrations
 
             modelBuilder.Entity("TripOps.Data.Entities.TourMeal", b =>
                 {
-                    b.HasOne("TripOps.Data.Entities.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TripOps.Data.Entities.TourTimeline", "TourTimeline")
                         .WithMany("Meals")
                         .HasForeignKey("TourTimelineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Service");
 
                     b.Navigation("TourTimeline");
                 });
@@ -2442,14 +2407,7 @@ namespace TripOps.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TripOps.Data.Entities.Service", "TransportationService")
-                        .WithMany()
-                        .HasForeignKey("TransportationServiceId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Tour");
-
-                    b.Navigation("TransportationService");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.TourVersion", b =>
@@ -2470,18 +2428,11 @@ namespace TripOps.Data.Migrations
 
             modelBuilder.Entity("TripOps.Data.Entities.TouristAttraction", b =>
                 {
-                    b.HasOne("TripOps.Data.Entities.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TripOps.Data.Entities.TourTimeline", "TourTimeline")
                         .WithMany("Attractions")
                         .HasForeignKey("TourTimelineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Service");
 
                     b.Navigation("TourTimeline");
                 });

@@ -61,8 +61,6 @@ public class TourPricingTier : BaseEntity<int>
 
 public class TourTimeline : BaseEntity<int>
 {
-    public int? TransportationServiceId { get; set; }
-    public virtual Service? TransportationService { get; set; }
     public int TourId { get; set; }
     public int DayNumber { get; set; }
     public string? Title { get; set; }
@@ -77,14 +75,12 @@ public class TourTimeline : BaseEntity<int>
 public class TouristAttraction : BaseEntity<int>
 {
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public TimeSpan? EstimatedTime { get; set; }
     public int OrderIndex { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourMeal : BaseEntity<int>
@@ -98,7 +94,6 @@ public class TourMeal : BaseEntity<int>
     public string? Description { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourAccommodation : BaseEntity<int>
@@ -115,7 +110,6 @@ public class TourAccommodation : BaseEntity<int>
     public string? RoomType { get; set; }
 
     public virtual TourTimeline TourTimeline { get; set; } = null!;
-    public virtual Service? Service { get; set; }
 }
 
 public class TourVersion : BaseEntity<int>

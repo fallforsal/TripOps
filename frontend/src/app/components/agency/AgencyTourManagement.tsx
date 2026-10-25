@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Tour,
   TourCompany,
@@ -81,7 +81,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
-import { eligibleServices, type EligibleService } from "@/app/services/wf02Tours";
+import { uploadTourImage } from "@/app/services/wf02Tours";
 import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 
 export interface AgencyTourManagementProps {
@@ -988,17 +988,12 @@ export function TourFormPage({
   const [saveError, setSaveError] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [showAIPlanner, setShowAIPlanner] = useState(false);
-  const [newImageUrl, setNewImageUrl] = useState("");
-  const [serviceOptions, setServiceOptions] = useState<EligibleService[]>([]);
-  const [serviceError, setServiceError] = useState("");
-  useEffect(() => {
-    if (isCustom) return;
-    let active = true;
-    eligibleServices("hotel")
-      .then(options => { if (active) setServiceOptions(options); })
-      .catch(error => { if (active) setServiceError(error instanceof Error ? error.message : "Không tải được danh mục dịch vụ."); });
-    return () => { active = false; };
-  }, [isCustom]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const pendingImageUrls = useRef<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [imageUploadError, setImageUploadError] = useState("");
+  useEffect(() => () => pendingImageUrls.current.forEach(URL.revokeObjectURL), []);
 
   const handleApplyAIItinerary = (generated: {
     name: string;
@@ -1042,7 +1037,9 @@ export function TourFormPage({
   );
 
   // Photos & Thumbnail
-  const initialImages: string[] = tour?.images || (tour?.image ? [tour.image] : []);
+  const savedImages = tour?.images?.length ? tour.images : (tour?.image ? [tour.image] : []);
+  const initialImages: string[] = tour?.image && savedImages.includes(tour.image)
+    ? [tour.image, ...savedImages.filter(image => image !== tour.image)] : savedImages;
   const [images, setImages] = useState<string[]>(initialImages);
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(0);
 
@@ -1577,23 +1574,35 @@ export function TourFormPage({
     });
   };
 
-  const addImageUrl = () => {
-    try {
-      const url = new URL(newImageUrl.trim());
-      if (url.protocol !== "https:" || url.href.length > 2048) throw new Error();
-      setImages(previous => [...previous, url.href]);
-      setNewImageUrl("");
-      setSaveError("");
-    } catch { setSaveError("Hình tour phải là URL HTTPS hợp lệ, tối đa 2048 ký tự."); }
+  const uploadImages = async (files: FileList | null) => {
+    if (!files?.length || uploadingImages) return;
+    setImageUploadError("");
+    setUploadingImages(true);
+    for (const file of Array.from(files)) {
+      if (!(["image/png", "image/jpeg"].includes(file.type)) || file.size > 5 * 1024 * 1024 || file.size === 0) {
+        setImageUploadError("Chỉ nhận ảnh PNG/JPEG tối đa 5 MB.");
+        continue;
+      }
+      const preview = URL.createObjectURL(file);
+      pendingImageUrls.current.push(preview);
+      setPendingImages(previous => [...previous, preview]);
+      try {
+        const url = await uploadTourImage(file);
+        setImages(previous => [...previous, url]);
+      } catch (error) {
+        setImageUploadError(error instanceof Error ? error.message : "Không thể tải ảnh lên. Vui lòng thử lại.");
+      } finally {
+        setPendingImages(previous => previous.filter(url => url !== preview));
+        pendingImageUrls.current = pendingImageUrls.current.filter(url => url !== preview);
+        URL.revokeObjectURL(preview);
+      }
+    }
+    setUploadingImages(false);
   };
 
   const removeImage = (idx: number) => {
-    if (images.length <= 1) return;
-    const updated = images.filter((_, i) => i !== idx);
-    setImages(updated);
-    if (thumbnailIndex >= updated.length) {
-      setThumbnailIndex(0);
-    }
+    setImages(previous => previous.filter((_, i) => i !== idx));
+    setThumbnailIndex(previous => idx === previous ? 0 : idx < previous ? previous - 1 : previous);
   };
 
   // Drag and drop state & swap for attraction points
@@ -1683,6 +1692,7 @@ export function TourFormPage({
   };
 
   const handleSubmit = async (mode: "draft" | "complete_public" = "complete_public") => {
+    if (uploadingImages) { setSaveError("Vui lòng chờ ảnh tải lên hoàn tất."); return; }
     const isDraft = mode === "draft";
     if (!isDraft && !name.trim()) {
       alert("Vui lòng nhập tên tour trước khi hoàn tất.");
@@ -1690,6 +1700,7 @@ export function TourFormPage({
     }
     const finalTourCode = tourCode.trim();
     const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
+    const orderedImages = chosenThumbnail ? [chosenThumbnail, ...images.filter((_, index) => index !== thumbnailIndex)] : [];
 
     let nextVersion = tour?.version || 1;
     let nextVersionHistory = tour?.versionHistory ? [...tour.versionHistory] : [];
@@ -1756,7 +1767,7 @@ export function TourFormPage({
       numberOfNights,
       price: finalTourPrice,
       image: chosenThumbnail,
-      images,
+      images: orderedImages,
       operationPeriod,
       minGuests,
       maxGuests,
@@ -1806,7 +1817,6 @@ export function TourFormPage({
   return (
     <div className="bg-slate-50 min-h-screen pb-16 space-y-6 -m-6">
       {saveError && <div role="alert" className="mx-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</div>}
-      {serviceError && <div role="alert" className="mx-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{serviceError} Bạn vẫn có thể nhập dịch vụ thủ công.</div>}
       {/* Sticky Top Header Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-4">
@@ -2013,27 +2023,30 @@ export function TourFormPage({
                   <div>
                     <Label className="text-sm font-bold text-blue-950 flex items-center gap-2">
                       <ImageIcon className="w-4 h-4 text-[#075985]" />
-                      Hình ảnh của Tour (URL HTTPS &amp; Chọn Thumbnail)
+                      Hình ảnh của Tour (Tải ảnh &amp; Chọn Thumbnail)
                     </Label>
                     <p className="text-xs text-[#075985] mt-0.5">
-                      Dán URL ảnh HTTPS. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện</strong>.
+                      Chọn ảnh từ máy tính. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện</strong>.
                     </p>
                   </div>
                   <div>
-                    <Input value={newImageUrl} onChange={event => setNewImageUrl(event.target.value)}
-                      placeholder="https://example.com/tour.jpg" className="mb-2" aria-label="URL ảnh tour" />
+                    <input ref={imageInputRef} type="file" accept="image/png,image/jpeg" multiple className="hidden"
+                      onChange={event => { void uploadImages(event.target.files); event.target.value = ""; }}
+                      aria-label="Chọn ảnh tour từ máy tính" />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={addImageUrl}
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadingImages}
                       className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs gap-1.5 shadow-xs"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      Thêm ảnh từ URL
+                      {uploadingImages ? "Đang tải ảnh..." : "Tải ảnh từ máy tính"}
                     </Button>
                   </div>
                 </div>
+                {imageUploadError && <p role="alert" className="text-xs text-red-700">{imageUploadError}</p>}
 
                 {/* Thumbnails grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
@@ -2059,8 +2072,7 @@ export function TourFormPage({
                             Chọn làm Thumbnail
                           </div>
                         )}
-                        {images.length > 1 && (
-                          <button
+                        <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2070,11 +2082,16 @@ export function TourFormPage({
                             title="Xóa ảnh"
                           >
                             <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
+                        </button>
                       </div>
                     );
                   })}
+                  {pendingImages.map((img, idx) => (
+                    <div key={`uploading-${idx}`} className="relative rounded-2xl overflow-hidden border-2 border-blue-200 aspect-video opacity-60">
+                      <img src={img} alt={`Ảnh đang tải ${idx + 1}`} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white text-xs font-semibold">Đang tải...</div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -2404,16 +2421,6 @@ export function TourFormPage({
                                   placeholder="VD: Khách sạn Đà Lạt Palace Heritage"
                                   className={`mt-1 text-xs ${isHotelLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
                                 />
-                                <select value={hotel.serviceId || ""} disabled={isHotelLocked}
-                                  onChange={e => {
-                                    const selected = serviceOptions.find(option => String(option.id) === e.target.value);
-                                    updateHotel(hotel.id || "", { serviceId: selected ? String(selected.id) : undefined,
-                                      name: selected?.name || hotel.name });
-                                  }} className="mt-2 w-full h-9 px-2 text-xs border border-gray-300 rounded-md bg-white">
-                                  <option value="">Nhập khách sạn thủ công (không liên kết Service)</option>
-                                  {serviceOptions.filter(option => option.category === "hotel").map(option =>
-                                    <option key={option.id} value={option.id}>{option.name} · #{option.id}</option>)}
-                                </select>
                               </div>
                               <div>
                                 <Label className="text-xs font-semibold text-gray-700">Điểm đến / Khu vực lưu trú</Label>
