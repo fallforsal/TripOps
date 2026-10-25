@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Calendar,
   MapPin,
@@ -55,6 +55,7 @@ export function MyBookings({
 
       const matchSearch =
         booking.id.toLowerCase().includes(term) ||
+        (booking.bookingCode || "").toLowerCase().includes(term) ||
         (booking.tour?.name || "").toLowerCase().includes(term) ||
         (booking.tour?.tourCode || "").toLowerCase().includes(term) ||
         (booking.tour?.destination || "").toLowerCase().includes(term);
@@ -228,15 +229,15 @@ export function MyBookings({
                     return (
                       <tr key={b.id} className="hover:bg-teal-50/20 transition-colors group">
                         {/* 1. Mã đơn */}
-                        <td className="py-4 px-4 font-mono text-gray-500 font-bold whitespace-nowrap">
-                          #{b.id.replace("booking-", "")}
+                        <td className="py-4 px-4 font-mono text-gray-700 font-bold whitespace-nowrap">
+                          {b.bookingCode ? b.bookingCode : `#${b.id.replace("booking-", "")}`}
                         </td>
 
                         {/* 2. Tour du lịch */}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={b.tour?.image || ""}
+                              src={b.tour?.image || b.tour?.images?.[0] || "https://images.unsplash.com/photo-1528127269322-539801943592?w=800"}
                               alt={b.tour?.name || "Tour"}
                               className="w-14 h-11 rounded-lg object-cover flex-shrink-0 shadow-2xs border border-gray-100"
                             />

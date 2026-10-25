@@ -469,6 +469,7 @@ export interface BookingAssignedGuide {
 
 export interface Booking {
   id: string;
+  bookingCode?: string;
   tourId: string;
   tour: Tour;
   userId: string;

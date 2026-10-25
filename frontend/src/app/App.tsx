@@ -2,7 +2,7 @@ import { companyFromUser } from '@/app/services/authService';
 import { agencyTours, archiveAgencyTour, createAgencyTour, duplicateAgencyTour, fromApiTour, fromConfiguration, getPublicTour,
   hideAgencyTour, hideModeratedTour, moderationTours, publicTours, publishAgencyTour,
   restoreAgencyTour, updateAgencyTour } from '@/app/services/wf02Tours';
-import { createBooking } from '@/app/services/wf05Bookings';
+import { cancelBooking, createBooking, depositBooking, fromApiBooking, getBookingDetail, getCustomerBookings, BookingDto } from '@/app/services/wf05Bookings';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -113,6 +113,38 @@ function App() {
   }, [currentUser?.id, currentUser?.role]);
   const [bookings, setBookings] =
     useState<Booking[]>(mockBookings);
+
+  async function refreshCustomerBookings() {
+    if (!currentUser || currentUser.role !== "user") return;
+    try {
+      const pageData = await getCustomerBookings();
+      if (!pageData?.items) return;
+      const details = await Promise.all(
+        pageData.items.map(async (item) => {
+          try {
+            return await getBookingDetail(item.id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const apiBookings = details
+        .filter((d): d is BookingDto => d !== null)
+        .map((dto) => fromApiBooking(dto, tours, currentUser));
+
+      setBookings((prev) => {
+        const apiIds = new Set(apiBookings.map((b) => b.id));
+        const nonApiBookings = prev.filter((b) => !apiIds.has(b.id));
+        return [...apiBookings, ...nonApiBookings];
+      });
+    } catch (err) {
+      console.error("Failed to load customer bookings", err);
+    }
+  }
+
+  useEffect(() => {
+    refreshCustomerBookings();
+  }, [currentUser?.id, currentUser?.role, tours]);
   const [services, setServices] =
     useState<Service[]>(mockServices);
   const [guideSchedules, setGuideSchedules] = useState<
@@ -160,10 +192,21 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleViewUserBookingDetail = (booking: Booking) => {
+  const handleViewUserBookingDetail = async (booking: Booking) => {
     setSelectedUserBooking(booking);
     setCurrentPage("user-booking-detail");
     window.scrollTo({ top: 0, behavior: "smooth" });
+    const numericId = Number(booking.id);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const detail = await getBookingDetail(numericId);
+        const converted = fromApiBooking(detail, tours, currentUser);
+        setSelectedUserBooking(converted);
+        setBookings((prev) => prev.map((b) => (b.id === booking.id ? converted : b)));
+      } catch (err) {
+        console.error("Failed to fetch fresh booking detail", err);
+      }
+    }
   };
 
   const handleViewTour = (tour: Tour) => {
@@ -225,6 +268,9 @@ function App() {
         apiBookingId = apiRes.id.toString();
         apiDepositAmount = apiRes.depositAmount;
         toast.success(`Đặt tour thành công! Mã đơn: ${apiRes.bookingCode}`);
+        const apiBooking = fromApiBooking(apiRes, tours, currentUser);
+        setBookings((prev) => [apiBooking, ...prev]);
+        return;
       } catch (err: any) {
         toast.error(err?.message || "Không thể gửi đơn đặt tour lên máy chủ");
       }
@@ -303,10 +349,26 @@ function App() {
     setBookings([...bookings, newBooking]);
   };
 
-  const handleCancelBooking = (
+  const handleCancelBooking = async (
     bookingId: string,
     reason?: string,
   ) => {
+    const numericId = Number(bookingId);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const updatedDto = await cancelBooking(numericId, reason || "Khách hàng yêu cầu hủy đơn");
+        toast.success("Hủy đơn đặt tour thành công");
+        const converted = fromApiBooking(updatedDto, tours, currentUser);
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? converted : b)));
+        if (selectedUserBooking?.id === bookingId) {
+          setSelectedUserBooking(converted);
+        }
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể hủy đơn đặt tour trên máy chủ");
+      }
+    }
+
     setBookings(
       bookings.map((booking) =>
         booking.id === bookingId
@@ -319,6 +381,18 @@ function App() {
           : booking,
       ),
     );
+    if (selectedUserBooking?.id === bookingId) {
+      setSelectedUserBooking((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "cancelled" as const,
+              cancellationReason: reason,
+              rejectedBy: "customer" as const,
+            }
+          : null,
+      );
+    }
   };
 
   const handleRejectBooking = (
@@ -880,10 +954,30 @@ function App() {
   };
 
   // Customer pays a payment request (into System Escrow Account)
-  const handlePayPaymentRequest = (
+  const handlePayPaymentRequest = async (
     bookingId: string,
     paymentRequestId: string,
   ) => {
+    const numericId = Number(bookingId);
+    const targetBooking = bookings.find((b) => b.id === bookingId);
+    const targetRequest = targetBooking?.paymentRequests?.find((pr) => pr.id === paymentRequestId);
+    const payAmount = targetRequest ? targetRequest.amount : (targetBooking?.depositAmount || targetBooking?.totalPrice || 1000000);
+
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const updatedDto = await depositBooking(numericId, payAmount, `PAY-${Date.now()}`);
+        toast.success(`Thanh toán thành công ${payAmount.toLocaleString("vi-VN")}đ!`);
+        const converted = fromApiBooking(updatedDto, tours, currentUser);
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? converted : b)));
+        if (selectedUserBooking?.id === bookingId) {
+          setSelectedUserBooking(converted);
+        }
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể thực hiện thanh toán lên máy chủ");
+      }
+    }
+
     setBookings((prev) =>
       prev.map((b) => {
         if (b.id !== bookingId) return b;
@@ -918,7 +1012,6 @@ function App() {
           .filter((pr) => pr.status === "paid")
           .reduce((sum, pr) => sum + pr.amount, 0);
         const remaining = Math.max(0, b.totalPrice - totalPaid);
-        const isFullyPaid = remaining === 0;
 
         return {
           ...b,

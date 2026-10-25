@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
 import { defaultSystemBankAccount } from "@/app/data/mockData";
 import {
@@ -361,7 +361,7 @@ export function UserBookingDetailPage({
 
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  Chi tiết đơn đặt tour #{booking.id}
+                  Chi tiết đơn đặt tour {booking.bookingCode || `#${booking.id}`}
                 </h1>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                   {st.label}
