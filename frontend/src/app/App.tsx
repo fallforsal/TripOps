@@ -2,7 +2,7 @@ import { companyFromUser } from '@/app/services/authService';
 import { agencyTours, archiveAgencyTour, createAgencyTour, duplicateAgencyTour, fromApiTour, fromConfiguration, getPublicTour,
   hideAgencyTour, hideModeratedTour, moderationTours, publicTours, publishAgencyTour,
   restoreAgencyTour, updateAgencyTour } from '@/app/services/wf02Tours';
-import { cancelBooking, createBooking, decideBooking, depositBooking, fromApiBooking, getAgencyBookingDetail, getAgencyBookings, getBookingDetail, getCustomerBookings, BookingDto } from '@/app/services/wf05Bookings';
+import { assignGuide, cancelBooking, createBooking, decideBooking, depositBooking, fromApiBooking, getAgencyBookingDetail, getAgencyBookings, getBookingDetail, getCustomerBookings, getGuideBookingDetail, getGuideBookings, recordAttendance, reportIncident, BookingDto } from '@/app/services/wf05Bookings';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -170,9 +170,68 @@ function App() {
     }
   }
 
+  async function refreshGuideBookings() {
+    if (!currentUser || currentUser.role !== "guide") return;
+    try {
+      const pageData = await getGuideBookings();
+      if (!pageData?.items) return;
+      const details = await Promise.all(
+        pageData.items.map(async (item) => {
+          try {
+            return await getGuideBookingDetail(item.id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const apiBookings = details
+        .filter((d): d is BookingDto => d !== null)
+        .map((dto) => fromApiBooking(dto, tours, currentUser));
+
+      setBookings((prev) => {
+        const apiIds = new Set(apiBookings.map((b) => b.id));
+        const nonApiBookings = prev.filter((b) => !apiIds.has(b.id));
+        return [...apiBookings, ...nonApiBookings];
+      });
+
+      // Synchronize guideSchedules with assigned trips
+      setGuideSchedules((prev) => {
+        const newSchedules: GuideSchedule[] = apiBookings.map((b) => {
+          const existing = prev.find((s) => s.booking.id === b.id);
+          if (existing) {
+            return {
+              ...existing,
+              booking: b,
+              tour: b.tour,
+            };
+          }
+          return {
+            id: `schedule-${b.id}`,
+            guideId: currentUser.id,
+            guideName: currentUser.name,
+            tour: b.tour,
+            booking: b,
+            startDate: b.tourStartDate,
+            endDate: b.tourStartDate,
+            status: "confirmed",
+            completedLocations: [],
+            departureRollCallCompleted: b.passengers?.some((p) => (p as any).attendanceStatus === "CheckedIn") || false,
+            incidents: [],
+          };
+        });
+        const scheduleIds = new Set(newSchedules.map((s) => s.id));
+        const remaining = prev.filter((s) => !scheduleIds.has(s.id));
+        return [...newSchedules, ...remaining];
+      });
+    } catch (err) {
+      console.error("Failed to load guide bookings", err);
+    }
+  }
+
   useEffect(() => {
     refreshCustomerBookings();
     refreshAgencyBookings();
+    refreshGuideBookings();
   }, [currentUser?.id, currentUser?.role, tours]);
   const [services, setServices] =
     useState<Service[]>(mockServices);
@@ -611,10 +670,26 @@ function App() {
     );
   };
 
-  const handleAssignGuide = (
+  const handleAssignGuide = async (
     bookingId: string,
     guideId: string,
   ) => {
+    const numericId = Number(bookingId);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const updatedDto = await assignGuide(numericId, guideId, "Lead", "Hướng dẫn viên phụ trách chính đoàn khách");
+        toast.success(`Đã phân công HDV cho đơn booking #${updatedDto.bookingCode || updatedDto.id}!`);
+        const converted = fromApiBooking(updatedDto, tours, currentUser);
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? converted : b)));
+        if (selectedUserBooking?.id === bookingId) {
+          setSelectedUserBooking(converted);
+        }
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể phân công HDV trên máy chủ");
+      }
+    }
+
     const guide = users.find((u) => u.id === guideId && u.role === "guide") ||
       users.find((u) => u.id === guideId && u.role === "guide");
     if (!guide) return;
@@ -1201,10 +1276,35 @@ function App() {
   };
 
   // Departure roll call handler (Guide)
-  const handleDepartureRollCall = (
+  const handleDepartureRollCall = async (
     scheduleId: string,
     passengers: BookingPassenger[]
   ) => {
+    const currentSchedule = guideSchedules.find((s) => s.id === scheduleId);
+    const bookingIdNum = Number(currentSchedule?.booking?.id);
+
+    if (Number.isSafeInteger(bookingIdNum) && bookingIdNum > 0) {
+      try {
+        await Promise.all(
+          passengers.map(async (p) => {
+            const partId = Number(p.id);
+            if (Number.isSafeInteger(partId) && partId > 0) {
+              const status =
+                p.departureAttendance === "present"
+                  ? "CheckedIn"
+                  : p.departureAttendance === "absent"
+                  ? "Absent"
+                  : "CheckedIn";
+              await recordAttendance(bookingIdNum, partId, status);
+            }
+          })
+        );
+        toast.success("Đã ghi nhận điểm danh hành khách lên máy chủ!");
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể đồng bộ điểm danh lên máy chủ");
+      }
+    }
+
     setGuideSchedules((prev) =>
       prev.map((s) => {
         if (s.id === scheduleId) {
@@ -1227,10 +1327,28 @@ function App() {
   };
 
   // Report incident handler (Guide)
-  const handleReportIncident = (
+  const handleReportIncident = async (
     scheduleId: string,
     incident: Omit<IncidentReport, "id" | "reportedAt">
   ) => {
+    const currentSchedule = guideSchedules.find((s) => s.id === scheduleId);
+    const bookingIdNum = Number(currentSchedule?.booking?.id);
+
+    if (Number.isSafeInteger(bookingIdNum) && bookingIdNum > 0) {
+      try {
+        await reportIncident(
+          bookingIdNum,
+          incident.category || "Operational",
+          incident.location ? `[${incident.category || "Sự cố"}] Tại ${incident.location}` : `Sự cố ${incident.category || "vận hành"}`,
+          incident.description,
+          incident.severity === "high" ? "High" : incident.severity === "low" ? "Low" : "Medium"
+        );
+        toast.success("Báo cáo sự cố tour đã được gửi đến bộ phận điều hành!");
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể gửi báo cáo sự cố lên máy chủ");
+      }
+    }
+
     setGuideSchedules((prev) =>
       prev.map((s) => {
         if (s.id === scheduleId) {
