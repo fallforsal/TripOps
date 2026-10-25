@@ -70,6 +70,7 @@ export interface User {
   latitude?: number; // Vĩ độ
   longitude?: number; // Kinh độ
   businessDescription?: string;
+  bio?: string;
   accountStatus?: "pending" | "approved" | "rejected" | "suspended";
   rejectionReason?: string;
   // Guide specific fields
@@ -83,11 +84,15 @@ export interface User {
 }
 
 export interface Location {
+  description?: string;
   id: string;
   name: string;
   address: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  image?: string;
+  notes?: string;
+  category?: string;
   time?: string;
   checkedIn?: boolean;
   checkInTime?: string;
@@ -128,6 +133,7 @@ export interface TourAlternativeHotel {
 }
 
 export interface TourHotel {
+  roomType?: string;
   id?: string;
   serviceId?: string;
   name: string;
@@ -147,7 +153,7 @@ export interface TourHotel {
 export interface DailyItinerary {
   id: string;
   day: number;
-  date: string;
+  date?: string;
   title: string;
   description: string;
   locations: Location[];
@@ -227,6 +233,7 @@ export interface CustomLocationChange {
 }
 
 export interface CustomHotelChange {
+  priceDifference?: number;
   destination: string;
   originalHotelName?: string;
   originalPricePerNight?: number;
@@ -300,6 +307,8 @@ export interface BookingPriceAdjustment {
 
 // Bảng booking_agencies: Quản lý phân chia chặng, doanh thu và giải ngân cho từng công ty
 export interface BookingAgencyShare {
+  quoteConfirmed?: boolean;
+  role?: string;
   id?: string;
   bookingId: string;
   agencyId: string;
@@ -380,6 +389,7 @@ export interface Tour {
   companyNote?: string;
   // Reviews
   reviews?: TourReview[];
+  reviewsCount?: number;
   // Company info
   companyId?: string;
   companyName?: string;
@@ -468,6 +478,7 @@ export interface BookingAssignedGuide {
 }
 
 export interface Booking {
+  createdAt?: string;
   id: string;
   bookingCode?: string;
   tourId: string;
@@ -477,9 +488,12 @@ export interface Booking {
   userEmail: string;
   numberOfGuests: number;
   totalPrice: number;
-  status: "pending" | "deposited" | "confirmed" | "paid" | "completed" | "cancelled" | "rejected";
+  status: "pending" | "deposited" | "confirmed" | "paid" | "in_progress" | "completed" | "cancelled" | "rejected";
   bookingDate: string;
   tourStartDate: string;
+  tourEndDate?: string;
+  paidAmount?: number;
+  guideIncidents?: IncidentReport[];
   companyId?: string;
   companyName?: string;
   guideId?: string;
@@ -488,7 +502,7 @@ export interface Booking {
   guidePhone?: string;
   assignedGuides?: BookingAssignedGuide[]; // Danh sách nhiều HDV cho tour đoàn đông hoặc tour liên minh
   // Payment
-  paymentStatus?: "unpaid" | "paid" | "refunded";
+  paymentStatus?: "unpaid" | "partially_paid" | "paid" | "refunded";
   depositAmount?: number;
   depositPaid?: boolean;
   remainingAmount?: number;
@@ -544,7 +558,7 @@ export interface IncidentReport {
   guideId: string;
   guideName: string;
   title: string;
-  category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other";
+  category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other" | "transport" | "service_provider";
   severity: "low" | "medium" | "high" | "critical";
   description: string;
   images?: string[];
@@ -621,6 +635,10 @@ export interface BookingIncident {
 }
 
 export interface Service {
+  cuisine?: string;
+  priceRange?: string;
+  difficulty?: string;
+  updatedAt?: string;
   id: string;
   providerId: string;
   providerName: string;
@@ -629,6 +647,7 @@ export interface Service {
     | "hotel"
     | "fnb"
     | "restaurant"
+    | "eatery"
     | "attraction"
     | "activity"
     | "transportation";
@@ -682,6 +701,7 @@ export interface Service {
 
 // Room booking for accommodation providers
 export interface RoomBooking {
+  paymentStatus?: "unpaid" | "paid" | "refunded";
   id: string;
   serviceId: string;
   serviceName: string;
@@ -694,7 +714,7 @@ export interface RoomBooking {
   numberOfGuests: number;
   numberOfRooms: number;
   totalPrice: number;
-  status: "pending" | "confirmed" | "cancelled" | "completed";
+  status: "pending" | "confirmed" | "cancelled" | "completed" | "rejected";
   bookingDate: string;
   specialRequests?: string;
   rejectionReason?: string;

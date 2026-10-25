@@ -53,14 +53,15 @@ interface UserBookingDetailPageProps {
   booking: Booking;
   systemBank?: SystemBankAccount;
   onBack: () => void;
-  onCancelBooking: (bookingId: string, reason: string) => void;
-  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => void;
+  onCancelBooking: (bookingId: string, reason: string) => void | Promise<void>;
+  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => void | Promise<void>;
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ xác nhận & chốt giá", color: "bg-amber-100 text-amber-800 border-amber-300" },
   deposited: { label: "Đã đặt cọc", color: "bg-amber-50 text-amber-800 border-amber-300" },
+  in_progress: { label: "Đang diễn ra", color: "bg-blue-50 text-blue-800 border-blue-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
   paid: { label: "Đã thanh toán đủ", color: "bg-teal-100 text-teal-800 border-teal-300" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-300" },
@@ -69,6 +70,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
 };
 
 const paymentStatusMap: Record<string, { label: string; color: string }> = {
+  partially_paid: { label: "Đã thanh toán một phần", color: "bg-amber-50 text-amber-800 border-amber-200" },
   unpaid: { label: "Chưa thanh toán (Thanh toán sau)", color: "bg-amber-50 text-amber-800 border-amber-200" },
   paid: { label: "Đã thanh toán", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "bg-[#F0F9FF] text-purple-800 border-[#F97316]/30" },
@@ -117,6 +119,8 @@ export function UserBookingDetailPage({
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequest | null>(null);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
   const [priceAdjustmentsModalOpen, setPriceAdjustmentsModalOpen] = useState(false);
 
@@ -1438,7 +1442,7 @@ export function UserBookingDetailPage({
 
                 {/* Progress breakdown */}
                 {(() => {
-                  const totalPaidIntoSystem = (booking.paymentRequests ?? [])
+                  const totalPaidIntoSystem = booking.paidAmount ?? (booking.paymentRequests ?? [])
                     .filter((pr) => pr.status === "paid")
                     .reduce((sum, pr) => sum + pr.amount, 0);
                   const remainingToPay = Math.max(0, booking.totalPrice - totalPaidIntoSystem);
@@ -1471,7 +1475,7 @@ export function UserBookingDetailPage({
                 </div>
 
                 {/* PROMINENT 100% ESCROW PAYMENT BUTTON FOR CUSTOMER */}
-                {booking.paymentStatus !== "paid" && booking.status !== "cancelled" && (
+                {booking.paymentStatus !== "paid" && booking.status !== "cancelled" && booking.status !== "rejected" && (
                   <Button
                     onClick={() => {
                       const pr = (booking.paymentRequests && booking.paymentRequests.find((r) => r.status !== "paid")) || {
@@ -1488,7 +1492,7 @@ export function UserBookingDetailPage({
                     className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-9 gap-2 shadow-md rounded-xl"
                   >
                     <ShieldCheck className="w-4 h-4 text-emerald-200" />
-                    Thanh toán 100% qua Ký quỹ Hệ thống (Escrow)
+                    Thanh toán đợt tiếp theo
                   </Button>
                 )}
               </div>
@@ -1679,8 +1683,8 @@ export function UserBookingDetailPage({
           bookingId={booking.id}
           tourName={booking.tour.name}
           onCancel={() => setShowCancelModal(false)}
-          onConfirm={(reason) => {
-            onCancelBooking(booking.id, reason);
+          onConfirm={async (reason) => {
+            await onCancelBooking(booking.id, reason);
             setShowCancelModal(false);
           }}
         />
@@ -1783,7 +1787,7 @@ export function UserBookingDetailPage({
                   <Landmark className="w-5 h-5 text-[#075985]" />
                   Thanh toán qua Tài khoản Hệ thống
                 </DialogTitle>
-              </DialogHeader>
+              </DialogHeader>{paymentError && <p role="alert" className="text-sm text-red-700">{paymentError}</p>}
 
               {/* Booking & Stage Summary */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-[#CBD5E1] space-y-2">
@@ -1919,13 +1923,17 @@ export function UserBookingDetailPage({
                 </ul>
 
                 <Button
-                  onClick={() => {
-                    if (onPayPaymentRequest) {
-                      onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
-                    }
-                    setSelectedPaymentRequest(null);
-                    setPaymentSuccessToast(true);
-                    setTimeout(() => setPaymentSuccessToast(false), 4000);
+                  disabled={paymentSaving}
+                  onClick={async () => {
+                    if (!onPayPaymentRequest || paymentSaving) return;
+                    setPaymentSaving(true); setPaymentError("");
+                    try {
+                      await onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
+                      setSelectedPaymentRequest(null);
+                      setPaymentSuccessToast(true);
+                    } catch (error) {
+                      setPaymentError(error instanceof Error ? error.message : "Không ghi nhận được thanh toán.");
+                    } finally { setPaymentSaving(false); }
                   }}
                   className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 gap-2 shadow-sm"
                 >

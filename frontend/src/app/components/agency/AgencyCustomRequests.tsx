@@ -112,28 +112,15 @@ export function AgencyCustomRequests({
   if (designingRequest) {
     return (
       <TourFormPage
-        companyId={company.id}
-        companyName={company.name}
-        companyLogo={company.logo}
-        onSave={handleSaveTourFromRequest}
-        onCancel={() => {
+        company={company}
+        tour={editingTourForRequest || null}
+        onSubmit={handleSaveTourFromRequest}
+        onBack={() => {
           setDesigningRequest(null);
           setEditingTourForRequest(null);
         }}
-        isCustomDesign={true}
-        customRequestData={{
-          id: designingRequest.id,
-          destinations: designingRequest.destinations,
-          departureDate: designingRequest.departureDate,
-          returnDate: designingRequest.returnDate,
-          numberOfPeople: designingRequest.numberOfPeople,
-          budgetPerPerson: designingRequest.budgetPerPerson,
-          contactName: designingRequest.contactName,
-          businessName: designingRequest.businessName,
-          specialRequirements: designingRequest.specialRequirements,
-          version: editingTourForRequest ? (editingTourForRequest.version || 1) + 1 : 1,
-        }}
-        initialTour={editingTourForRequest || undefined}
+        isCustomTour={true}
+        customRequest={designingRequest}
       />
     );
   }
@@ -208,10 +195,10 @@ export function AgencyCustomRequests({
       {/* Modals */}
       {versionHistoryTour && (
         <TourVersionHistoryModal
-          open={Boolean(versionHistoryTour)}
+          isOpen={Boolean(versionHistoryTour)}
           onClose={() => setVersionHistoryTour(null)}
           tour={versionHistoryTour}
-          onRestoreVersion={(verNum) => {
+          onRestoreVersion={(tourId, verNum) => {
             onRestoreTourVersion?.(versionHistoryTour.id, verNum);
             setVersionHistoryTour(null);
           }}
@@ -351,13 +338,13 @@ function RequestGroupSection({
               {/* Collapsible Details */}
               {isExp && (
                 <div className="p-6 bg-[#F0F9FF] border-t border-[#CBD5E1] space-y-6">
-                  {req.specialRequirements && (
+                  {req.additionalInfo && (
                     <div className="space-y-1 bg-white p-4 rounded-xl border border-[#CBD5E1]">
                       <span className="text-xs uppercase font-semibold tracking-wider text-[#F97316]">
                         Yêu cầu & Ghi chú từ khách hàng:
                       </span>
                       <p className="text-xs text-[#0F172A]/80 font-light leading-relaxed">
-                        {req.specialRequirements}
+                        {req.additionalInfo}
                       </p>
                     </div>
                   )}

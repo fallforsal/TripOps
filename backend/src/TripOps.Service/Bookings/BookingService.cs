@@ -39,9 +39,28 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         foreach (var p in request.Participants)
         {
             decimal price = tour.BasePrice;
-            if (p.PricingTierId.HasValue && tiers.TryGetValue(p.PricingTierId.Value, out var tier))
+            int? age = null;
+            if (p.DateOfBirth.HasValue)
             {
+                var birth = p.DateOfBirth.Value.Date;
+                if (birth > request.StartDate.Date)
+                    throw new BookingException(422, "Ngày sinh không được sau ngày khởi hành.");
+                age = request.StartDate.Year - birth.Year;
+                if (birth.AddYears(age.Value) > request.StartDate.Date) age--;
+            }
+            if (p.PricingTierId.HasValue)
+            {
+                if (!tiers.TryGetValue(p.PricingTierId.Value, out var tier))
+                    throw new BookingException(422, "Nhóm giá không thuộc tour đang đặt.");
+                if (age.HasValue && ((tier.MinAge.HasValue && age < tier.MinAge) || (tier.MaxAge.HasValue && age > tier.MaxAge)))
+                    throw new BookingException(422, "Nhóm giá không phù hợp với tuổi hành khách.");
                 price = tier.PricePerGuest;
+            }
+            else if (age.HasValue)
+            {
+                var tier = tour.PricingTiers.OrderBy(t => t.DisplayOrder).FirstOrDefault(t =>
+                    (!t.MinAge.HasValue || age >= t.MinAge) && (!t.MaxAge.HasValue || age <= t.MaxAge));
+                if (tier is not null) price = tier.PricePerGuest;
             }
 
             totalAmount += price;
@@ -215,8 +234,11 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền phân công hướng dẫn viên.");
 
         var guide = await repository.FindUser(request.GuideId, ct);
-        if (guide is null || guide.Status != UserStatus.Active)
+        if (guide is null || guide.Role != UserRole.TourGuide || guide.Status != UserStatus.Active)
             throw new BookingException(404, "Hướng dẫn viên không tồn tại hoặc đã bị vô hiệu hóa.");
+
+        if (booking.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress))
+            throw new BookingException(422, "Chỉ phân công hướng dẫn viên cho đơn đã được Agency xác nhận.");
 
         var existing = booking.AssignedGuides.FirstOrDefault(ag => ag.GuideId == request.GuideId);
         if (existing is null)
@@ -242,6 +264,9 @@ public sealed class BookingService(BookingRepository repository, AccountService 
     }
 
     // WF06: Guide xem danh sách tour được giao
+    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(CancellationToken ct) =>
+        (await repository.AvailableGuides(ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
+
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
@@ -316,5 +341,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             b.AssignedGuides.Select(ag => new AssignedGuideDto(
                 ag.Id, ag.GuideId, ag.Guide?.Name ?? "", ag.Guide?.Phone,
                 ag.Role, ag.Status, ag.Notes)).ToList(),
-            b.CreatedAt, b.UpdatedAt);
+            b.CreatedAt, b.UpdatedAt,
+            b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
+                i.Id, i.BookingId, i.Title, i.Description, i.ResolutionNotes, i.Status.ToString(), i.CreatedAt)).ToList());
 }

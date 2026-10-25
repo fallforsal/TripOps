@@ -93,6 +93,11 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public Task<User?> FindUser(string userId, CancellationToken ct) =>
         db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);
 
+    public Task<List<User>> AvailableGuides(CancellationToken ct) =>
+        db.Users.AsNoTracking()
+            .Where(u => u.Role == UserRole.TourGuide && u.Status == UserStatus.Active)
+            .OrderBy(u => u.Name).ToListAsync(ct);
+
     public Task<BookingParticipant?> FindParticipant(int participantId, CancellationToken ct) =>
         db.BookingParticipants.Include(p => p.Booking)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);

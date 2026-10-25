@@ -40,7 +40,7 @@ interface BookingFormPageProps {
   customMealChanges?: CustomMealChange[];
   locationChanges?: CustomLocationChange[];
   onBack: () => void;
-  onSubmit: (data: BookingSubmitData) => void;
+  onSubmit: (data: BookingSubmitData) => void | Promise<void>;
   onGoHome?: () => void;
   onViewMyBookings?: () => void;
 }
@@ -252,6 +252,8 @@ export function BookingFormPage({
   onViewMyBookings,
 }: BookingFormPageProps) {
   const [step, setStep] = useState<Step>(2);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Step 2 state
   const initialStartDate =
@@ -436,9 +438,7 @@ export function BookingFormPage({
 
           const rawDob = findVal(["ngày sinh", "ngaysinh", "dob", "birth"]);
           let dateOfBirth = parseDateString(rawDob) || rawDob;
-          if (!dateOfBirth) {
-            dateOfBirth = "1995-01-01";
-          }
+          // Missing birth dates stay empty so the user can correct them before submitting.
 
           const rawGender = findVal(["giới tính", "gioitinh", "gender"]).toLowerCase();
           const gender: "male" | "female" =
@@ -515,15 +515,20 @@ export function BookingFormPage({
     reader.readAsArrayBuffer(file);
   };
 
-  const isStep2Valid =
+  const guestCountValid = passengers.length >= Math.max(1, tour.minGuests || 1) && (!tour.maxGuests || passengers.length <= tour.maxGuests);
+  const isStep2Valid = guestCountValid &&
     tourStartDate.trim() &&
-    passengers.every((p) => p.fullName.trim() && p.dateOfBirth) &&
+    passengers.every((p) => p.fullName.trim() && p.dateOfBirth && !Number.isNaN(Date.parse(p.dateOfBirth)) && p.dateOfBirth <= tourStartDate) &&
     contactName.trim() &&
     contactPhone.trim() &&
     contactEmail.trim();
 
-  const handleConfirm = () => {
-    onSubmit({
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+    await onSubmit({
       tourId: tour.id,
       tourStartDate,
       passengers,
@@ -541,10 +546,15 @@ export function BookingFormPage({
       locationChanges,
     });
     setStep(4);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Không gửi được đơn đặt tour. Vui lòng thử lại.");
+    } finally { setSubmitting(false); }
   };
 
   return (
     <div className="min-h-screen bg-[#F0F9FF]">
+      {submitError && <p role="alert" className="mx-auto max-w-4xl border border-red-200 bg-red-50 p-4 text-red-800">{submitError}</p>}
+      {step === 2 && !guestCountValid && <p role="status" className="mx-auto max-w-4xl bg-amber-50 p-4 text-amber-900">Tour nhận tối thiểu {Math.max(1, tour.minGuests || 1)}{tour.maxGuests ? ` và tối đa ${tour.maxGuests}` : ""} hành khách. Vui lòng bổ sung danh sách khách trước khi tiếp tục.</p>}
       {/* Header */}
       <div className="bg-white border-b border-[#CBD5E1] sticky top-0 z-20">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -1242,6 +1252,7 @@ export function BookingFormPage({
               </Button>
               <Button
                 onClick={handleConfirm}
+                disabled={submitting}
                 className="bg-teal-600 hover:bg-teal-700 text-white gap-2 px-8 shadow-sm text-sm font-bold"
               >
                 Gửi yêu cầu đặt tour (Thanh toán sau)

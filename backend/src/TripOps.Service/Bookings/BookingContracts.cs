@@ -70,7 +70,10 @@ public sealed record BookingDto(
     IReadOnlyList<ParticipantDto> Participants,
     IReadOnlyList<AssignedGuideDto> AssignedGuides,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    IReadOnlyList<IncidentDto>? Incidents = null);
+
+public sealed record AvailableGuideDto(string Id, string Name, string? Phone);
 
 public sealed record BookingListItem(
     int Id,

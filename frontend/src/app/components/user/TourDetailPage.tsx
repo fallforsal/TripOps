@@ -948,7 +948,7 @@ function CustomTab({
                       Đối tác Nền tảng
                     </span>
                   )}
-                  {choice.mode === "system" && (choice.priceDifference !== undefined ? choice.priceDifference !== 0 : selectedSystem && priceDiffPerNight !== 0) && (
+                  {choice.mode === "system" && (priceDiffPerNight !== 0) && (
                     <span className={`text-xs font-bold ${(choice.priceDifference ?? priceDiffPerNight) > 0 ? "text-amber-600" : "text-emerald-600"}`}>
                       {(choice.priceDifference ?? priceDiffPerNight) > 0 ? "+" : ""}{formatVND(choice.priceDifference ?? priceDiffPerNight)}
                     </span>

@@ -45,24 +45,24 @@ interface GuideDashboardProps {
     locationId: string,
     image?: string,
     note?: string
-  ) => void;
+  ) => void | Promise<void>;
   onDepartureRollCall?: (
     scheduleId: string,
     passengers: BookingPassenger[]
-  ) => void;
+  ) => void | Promise<void>;
   onReportIncident?: (
     scheduleId: string,
     incident: Omit<IncidentReport, "id" | "reportedAt">
-  ) => void;
+  ) => void | Promise<void>;
   onWrapUpTour?: (
     scheduleId: string,
     wrapUpReport: { rating?: number; notes: string }
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateNotes?: (
     scheduleId: string,
     personalNotes: string,
     guideNotesList?: GuideSchedule["guideNotesList"]
-  ) => void;
+  ) => void | Promise<void>;
 }
 
 export function GuideDashboard({
@@ -99,11 +99,11 @@ export function GuideDashboard({
       const parsed = new Date(currentSchedule.booking.tourStartDate);
       if (!isNaN(parsed.getTime())) return parsed;
     }
-    return new Date(2026, 9, 15); // Month is 0-indexed: 9 = October
+    return new Date();
   });
 
   const [selectedCalendarDateStr, setSelectedCalendarDateStr] = useState<string>(
-    "2026-10-15"
+    () => calendarDate.toLocaleDateString("sv-SE")
   );
 
   // Local state for passengers of current schedule
@@ -122,6 +122,8 @@ export function GuideDashboard({
 
   // Roll call search & notice
   const [passengerSearch, setPassengerSearch] = useState("");
+  const [operationSaving, setOperationSaving] = useState(false);
+  const [operationError, setOperationError] = useState("");
   const [rollCallSavedNotice, setRollCallSavedNotice] = useState<string | null>(
     null
   );
@@ -159,21 +161,8 @@ export function GuideDashboard({
   const [incidentLocation, setIncidentLocation] = useState("");
 
   // Local state for incidents
-  const [localIncidents, setLocalIncidents] = useState<IncidentReport[]>(
-    currentSchedule?.incidents || [
-      {
-        id: "inc-demo-1",
-        category: "transport",
-        severity: "medium",
-        description:
-          "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
-        reportedAt: "09:30",
-        status: "resolved",
-        location: "Bến phà Rạch Miễu",
-      },
-    ]
-  );
-
+  const [localIncidents, setLocalIncidents] = useState<IncidentReport[]>(currentSchedule?.incidents || []);
+  useEffect(() => { setLocalIncidents(currentSchedule?.incidents || []); }, [currentSchedule]);
   // Quick SOS Hotline Modal
   const [showHotlineModal, setShowHotlineModal] = useState(false);
 
@@ -395,15 +384,15 @@ export function GuideDashboard({
   };
 
   // Save departure roll call
-  const handleSaveDepartureRollCall = () => {
-    if (!currentSchedule) return;
-    if (onDepartureRollCall) {
-      onDepartureRollCall(currentSchedule.id, passengers);
-    }
-    setRollCallSavedNotice(
-      `✓ Đã chốt điểm danh khởi hành: ${presentCount} có mặt / ${passengers.length} khách.`
-    );
-    setTimeout(() => setRollCallSavedNotice(null), 3500);
+  const handleSaveDepartureRollCall = async () => {
+    if (!currentSchedule || operationSaving) return;
+    setOperationSaving(true); setOperationError("");
+    try {
+      await onDepartureRollCall?.(currentSchedule.id, passengers);
+      setRollCallSavedNotice(`Đã lưu điểm danh: ${presentCount} có mặt / ${passengers.length} khách.`);
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "Không lưu được điểm danh.");
+    } finally { setOperationSaving(false); }
   };
 
   // Save Sổ tay ghi chép nhanh
@@ -417,35 +406,22 @@ export function GuideDashboard({
   };
 
   // Create Incident
-  const handleCreateIncident = () => {
-    if (!incidentDescription.trim() || !currentSchedule) return;
-    const newInc: IncidentReport = {
-      id: `inc-${Date.now()}`,
-      category: incidentCategory,
-      severity: incidentSeverity,
-      description: incidentDescription.trim(),
-      location: incidentLocation.trim() || "Tại điểm tham quan",
-      reportedAt: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "reported",
-    };
-    setLocalIncidents([newInc, ...localIncidents]);
-    if (onReportIncident) {
-      onReportIncident(currentSchedule.id, {
-        category: incidentCategory,
-        severity: incidentSeverity,
-        description: incidentDescription.trim(),
-        location: incidentLocation.trim(),
-        status: "reported",
+  const handleCreateIncident = async () => {
+    if (!incidentDescription.trim() || !currentSchedule || operationSaving) return;
+    setOperationSaving(true); setOperationError("");
+    try {
+      await onReportIncident?.(currentSchedule.id, {
+        bookingId: currentSchedule.booking.id, tourId: currentSchedule.booking.tourId,
+        tourName: tour?.name || "", guideId: currentSchedule.booking.guideId || "",
+        guideName: currentSchedule.booking.guideName || "", title: `Sự cố ${incidentCategory}`,
+        category: incidentCategory, severity: incidentSeverity,
+        description: incidentDescription.trim(), location: incidentLocation.trim(), status: "reported",
       });
-    }
-    setShowIncidentModal(false);
-    setIncidentDescription("");
-    setIncidentLocation("");
-    // Switch to incidents tab so user sees it right away
-    setOperationSubTab("incidents");
+      setShowIncidentModal(false); setIncidentDescription(""); setIncidentLocation("");
+      setOperationSubTab("incidents");
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "Không lưu được báo cáo sự cố.");
+    } finally { setOperationSaving(false); }
   };
 
   // Wrap-up Tour submit
@@ -591,13 +567,14 @@ export function GuideDashboard({
                   {/* Tour Switcher Dropdown */}
                   {schedules.length > 1 && (
                     <select
-                      value={selectedScheduleId}
+                      aria-label="Chọn đoàn được phân công"
+                      value={selectedScheduleId || currentSchedule?.id}
                       onChange={(e) => setSelectedScheduleId(e.target.value)}
                       className="bg-white/20 text-white text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/30 focus:outline-hidden max-w-[110px] truncate"
                     >
                       {schedules.map((s, idx) => (
                         <option key={s.id} value={s.id} className="text-slate-900">
-                          Đoàn {idx + 1}: {s.booking.tour.name.slice(0, 12)}...
+                          {s.booking.bookingCode || `Đoàn ${idx + 1}`} · {s.booking.contactName || s.booking.userName}
                         </option>
                       ))}
                     </select>
@@ -897,6 +874,8 @@ export function GuideDashboard({
                       return (
                         <div
                           key={sch.id}
+                          role="button" tabIndex={0} aria-label={`Chọn đoàn ${sch.booking.bookingCode || sch.booking.id}`}
+                          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedScheduleId(sch.id); } }}
                           onClick={() => {
                             setSelectedScheduleId(sch.id);
                           }}
@@ -909,7 +888,7 @@ export function GuideDashboard({
                           <div className="min-w-0 pr-2">
                             <span className="font-bold text-slate-900 block truncate">
                               {sch.booking.tour.name}
-                            </span>
+                            </span><span className="block text-xs text-slate-600">{sch.booking.bookingCode} · {sch.booking.contactName || sch.booking.userName}</span>
                             <span className="text-[10px] text-slate-500">
                               Khởi hành: {sch.booking.tourStartDate} · {sch.booking.tour.destination}
                             </span>
@@ -1158,7 +1137,8 @@ export function GuideDashboard({
                       </p>
                     </div>
 
-                    {rollCallSavedNotice && (
+                    {operationError && <p role="alert" className="p-3 text-sm text-red-700">{operationError}</p>}
+                {rollCallSavedNotice && (
                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>{rollCallSavedNotice}</span>
@@ -1300,7 +1280,7 @@ export function GuideDashboard({
                     {/* Save Button */}
                     <div className="pt-2">
                       <Button
-                        onClick={handleSaveDepartureRollCall}
+                        onClick={handleSaveDepartureRollCall} disabled={operationSaving}
                         className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -1647,7 +1627,7 @@ export function GuideDashboard({
             <DialogDescription className="text-[11px] text-slate-500">
               Gửi thông tin về trung tâm điều hành lữ hành
             </DialogDescription>
-          </DialogHeader>
+          </DialogHeader>{operationError && <p role="alert" className="text-sm text-red-700">{operationError}</p>}
 
           <div className="space-y-3 pt-2">
             <div>
@@ -1703,7 +1683,7 @@ export function GuideDashboard({
               </Button>
               <Button
                 size="sm"
-                disabled={!incidentDescription.trim()}
+                disabled={operationSaving || !incidentDescription.trim()}
                 onClick={handleCreateIncident}
                 className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
               >

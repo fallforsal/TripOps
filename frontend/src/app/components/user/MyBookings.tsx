@@ -21,7 +21,7 @@ import type { Booking } from "@/app/types";
 
 interface MyBookingsProps {
   bookings: Booking[];
-  onCancelBooking: (bookingId: string, reason: string) => void;
+  onCancelBooking: (bookingId: string, reason: string) => void | Promise<void>;
   onViewBookingDetail: (booking: Booking) => void;
 }
 
@@ -44,6 +44,7 @@ export function MyBookings({
     { id: "deposited", label: "Đã đặt cọc" },
     { id: "confirmed", label: "Đã xác nhận" },
     { id: "paid", label: "Đã thanh toán đủ" },
+    { id: "in_progress", label: "Đang diễn ra" },
     { id: "completed", label: "Hoàn thành" },
     { id: "cancelled", label: "Đã hủy" },
     { id: "rejected", label: "Đã từ chối" },
@@ -66,9 +67,9 @@ export function MyBookings({
     });
   }, [bookings, filterStatus, searchTerm]);
 
-  const handleConfirmCancel = (reason: string) => {
+  const handleConfirmCancel = async (reason: string) => {
     if (showCancelModal) {
-      onCancelBooking(showCancelModal, reason);
+      await onCancelBooking(showCancelModal, reason);
       setShowCancelModal(null);
     }
   };
@@ -96,6 +97,8 @@ export function MyBookings({
             Đã thanh toán đủ
           </span>
         );
+      case "in_progress":
+        return <span className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800">Đang diễn ra</span>;
       case "completed":
         return (
           <span className="px-2.5 py-1 bg-[#E0F2FE] text-blue-800 border border-blue-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
@@ -128,6 +131,7 @@ export function MyBookings({
 
   const getPaymentStatusBadge = (paymentStatus?: string) => {
     switch (paymentStatus) {
+      case "partially_paid": return <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">Đã thanh toán một phần</span>;
       case "paid":
         return (
           <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">

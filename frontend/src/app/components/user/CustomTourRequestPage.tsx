@@ -147,7 +147,7 @@ export function CustomTourRequestPage({
         {/* Business info */}
         <Section icon={<Building2 className="w-4 h-4 text-gray-500" />} title="THÔNG TIN DOANH NGHIỆP">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Tên doanh nghiệp, tổ chức của bạn:" placeholder="Tên đầy đủ, viết tắt, Tiếng Anh hoặc Tiếng Việt">
+            <Field label="Tên doanh nghiệp, tổ chức của bạn:">
               <input type="text" value={form.businessName} onChange={set("businessName")} placeholder="Tên đầy đủ, viết tắt, Tiếng Anh hoặc Tiếng Việt" className={inputCls} />
             </Field>
             <Field label="Email liên hệ (email công ty):">

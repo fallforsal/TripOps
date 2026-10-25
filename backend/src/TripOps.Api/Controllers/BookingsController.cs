@@ -5,7 +5,7 @@ using TripOps.Service.Bookings;
 
 namespace TripOps.Api.Controllers;
 
-[ApiController, Authorize, Route("api/v1/bookings")]
+[ApiController, Authorize(Roles = "user"), Route("api/v1/bookings")]
 [Tags("Booking Management")]
 public sealed class CustomerBookingsController(BookingService bookings) : ControllerBase
 {
@@ -50,6 +50,12 @@ public sealed class CustomerBookingsController(BookingService bookings) : Contro
 public sealed class AgencyBookingsController(BookingService bookings) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+    [HttpGet("available-guides")]
+    [EndpointSummary("List active tour guides available for booking assignment")]
+    [ProducesResponseType<IReadOnlyList<AvailableGuideDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> AvailableGuides(CancellationToken ct) =>
+        Ok(await bookings.AvailableGuides(ct));
 
     [HttpGet]
     [EndpointSummary("List bookings for tours owned by the authenticated agency")]

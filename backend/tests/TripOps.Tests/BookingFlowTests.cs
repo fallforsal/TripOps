@@ -56,6 +56,13 @@ public sealed class BookingFlowTests
             guide.PasswordHash = hasher.HashPassword(guide, "Password123!");
             db.Users.Add(guide);
 
+            foreach (var (id, role) in new[] { ("customer2", UserRole.User), ("guide2", UserRole.TourGuide), ("agency2", UserRole.TravelAgency) })
+            {
+                var other = new User { Id = id, Name = id, Email = $"{id}@example.test", Role = role, Status = UserStatus.Active };
+                other.PasswordHash = hasher.HashPassword(other, "Password123!");
+                db.Users.Add(other);
+            }
+
             var tour = new Tour
             {
                 Id = 1,
@@ -143,12 +150,16 @@ public sealed class BookingFlowTests
         Assert.NotNull(deposited);
         Assert.Equal(1500000, deposited.PaidAmount);
         Assert.Equal("PartiallyPaid", deposited.PaymentStatus);
-        Assert.Equal("Confirmed", deposited.Status);
+        Assert.Equal("Deposited", deposited.Status);
 
         // 4. Agency xem danh sách booking và duyệt
         var agencyListRes = await agency.GetFromJsonAsync<BookingPage<BookingListItem>>("/api/v1/agency/bookings");
         Assert.NotNull(agencyListRes);
         Assert.Single(agencyListRes.Items);
+
+        var decisionRes = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/decision", new BookingDecisionRequest("approve", "Đã kiểm tra đơn"));
+        Assert.Equal(HttpStatusCode.OK, decisionRes.StatusCode);
+        Assert.Equal("Confirmed", (await decisionRes.Content.ReadFromJsonAsync<BookingDto>())!.Status);
 
         // 5. Agency phân công Hướng dẫn viên
         var assignRes = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/guide-assignments", new GuideAssignmentRequest("guide1", "Lead", "HDV trưởng"));
@@ -178,5 +189,66 @@ public sealed class BookingFlowTests
         var incident = await incidentRes.Content.ReadFromJsonAsync<IncidentDto>();
         Assert.NotNull(incident);
         Assert.Contains("Thời tiết", incident.Title);
+
+        var reloaded = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.Equal("CheckedIn", reloaded!.Participants.Single(p => p.Id == participantId).AttendanceStatus);
+        Assert.Contains(reloaded.Incidents!, i => i.Id == incident.Id);
+    }
+
+    private static CreateBookingRequest Sample(params ParticipantInput[] participants) => new(
+        1, DateTime.UtcNow.Date.AddDays(10), "Customer One", "0901234567", "customer1@example.test", null,
+        participants.Length > 0 ? participants : [new ParticipantInput("Adult", null, new DateTime(1990, 1, 1), "Nam", null, null)]);
+
+    [Fact]
+    public async Task DepositRequiresAgencyDecision_AndPartialDepositIsAccumulated()
+    {
+        using var app = new App(); await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var agency = await app.Client("agency1@example.test");
+        var create = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
+        var booking = (await create.Content.ReadFromJsonAsync<BookingDto>())!;
+        var partial = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(100000, "PARTIAL", null));
+        Assert.Equal("Pending", (await partial.Content.ReadFromJsonAsync<BookingDto>())!.Status);
+        var rest = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(booking.DepositAmount - 100000, "REST", null));
+        var deposited = (await rest.Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal("Deposited", deposited.Status);
+        Assert.Equal(booking.DepositAmount, deposited.PaidAmount);
+        var decision = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
+        Assert.Equal("Confirmed", (await decision.Content.ReadFromJsonAsync<BookingDto>())!.Status);
+    }
+
+    [Fact]
+    public async Task PricingUsesAgeWhenFrontendDoesNotSendTier_AndRejectsForeignOrWrongTier()
+    {
+        using var app = new App(); await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var child = new ParticipantInput("Child", null, DateTime.UtcNow.Date.AddYears(-8), "Nam", null, null);
+        var response = await customer.PostAsJsonAsync("/api/v1/bookings", Sample(child));
+        Assert.Equal(2000000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.TotalAmount);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync("/api/v1/bookings", Sample(child with { PricingTierId = 999 }))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync("/api/v1/bookings", Sample(child with { PricingTierId = 2 }))).StatusCode);
+    }
+
+    [Fact]
+    public async Task BookingPermissionsAndGuideAssignmentAreEnforced()
+    {
+        using var app = new App(); await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var otherCustomer = await app.Client("customer2@example.test");
+        var agency = await app.Client("agency1@example.test");
+        var otherAgency = await app.Client("agency2@example.test");
+        var otherGuide = await app.Client("guide2@example.test");
+        var created = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
+        var id = (await created.Content.ReadFromJsonAsync<BookingDto>())!.Id;
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherCustomer.GetAsync($"/api/v1/bookings/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherAgency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherGuide.GetAsync($"/api/v1/guide/bookings/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync("/api/v1/bookings", Sample())).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/guide-assignments", new GuideAssignmentRequest("guide1", "Lead", null))).StatusCode);
+        await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/decision", new BookingDecisionRequest("approve", null));
+        Assert.Equal(HttpStatusCode.NotFound, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/guide-assignments", new GuideAssignmentRequest("customer1", "Lead", null))).StatusCode);
+        var directory = await agency.GetFromJsonAsync<List<AvailableGuideDto>>("/api/v1/agency/bookings/available-guides");
+        Assert.Equal(2, directory!.Count);
+        Assert.DoesNotContain(directory, g => g.Id == "customer1");
     }
 }

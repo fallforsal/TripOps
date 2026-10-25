@@ -10,6 +10,7 @@ import {
   TourAlternativeHotel,
   Location,
   TourVersion,
+  TourCoHost,
   CustomTourRequest,
 } from "@/app/types";
 import {
@@ -224,11 +225,7 @@ export function AgencyTourManagement({
           services={[]}
           currentUser={company as any}
           onBack={() => setViewingTour(null)}
-          onEditTour={onEditTour}
-          onDeleteTour={(id) => {
-            onDeleteTour(id);
-            setViewingTour(null);
-          }}
+
         />
       </div>
     );
@@ -403,7 +400,7 @@ export function AgencyTourManagement({
             <div className="flex items-center gap-2 bg-[#E0F2FE] px-3 py-1 rounded-xl border border-[#075985]/30 animate-in fade-in">
               <span className="text-xs font-bold text-[#075985]">Đã chọn {selectedTourIds.length} tour:</span>
               <button
-                onClick={() => handleBulkToggleVisibility("published")}
+                onClick={() => handleBulkToggleVisibility("public")}
                 className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded hover:bg-emerald-200"
               >
                 Mở bán
@@ -451,7 +448,7 @@ export function AgencyTourManagement({
         <div className="bg-white rounded-2xl border border-[#CBD5E1] p-16 text-center shadow-xs">
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500 font-medium">
-            {statusFilter === "active"
+            {statusFilter === "published"
               ? "Chưa có tour công khai nào đang mở bán"
               : statusFilter === "hidden"
               ? "Không có tour nào đang tạm dừng"
@@ -982,6 +979,8 @@ export function TourFormPage({
   customRequest,
   isCustomTour,
 }: TourFormPageProps) {
+  const customDays = customRequest ? Math.max(1, Math.round((Date.parse(customRequest.returnDate) - Date.parse(customRequest.departureDate)) / 86400000) + 1) : 3;
+  const customGuests = Number(customRequest?.numberOfPeople) || 2;
   const isCustom = isCustomTour || !!customRequest || tour?.tourType === "custom_request";
   const [changeNote, setChangeNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1023,22 +1022,22 @@ export function TourFormPage({
     tour?.tourCode ?? ""
   );
   const [name, setName] = useState(
-    tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destination} - Khách đoàn ${customRequest.customerName}` : "")
+    tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destinations} - Khách đoàn ${customRequest.contactName}` : "")
   );
   const [destination, setDestination] = useState(
-    tour?.destination ?? (customRequest?.destination ?? "")
+    tour?.destination ?? (customRequest?.destinations ?? "")
   );
   const [duration, setDuration] = useState(
-    tour?.duration ?? (customRequest ? `${customRequest.numberOfDays} ngày ${Math.max(1, customRequest.numberOfDays - 1)} đêm` : "3 ngày 2 đêm")
+    tour?.duration ?? (customRequest ? `${customDays} ngày ${Math.max(1, customDays - 1)} đêm` : "3 ngày 2 đêm")
   );
   const [numberOfDays, setNumberOfDays] = useState(
-    tour?.numberOfDays ?? (customRequest?.numberOfDays ?? 3)
+    tour?.numberOfDays ?? ((customRequest ? customDays : undefined) ?? 3)
   );
   const [numberOfNights, setNumberOfNights] = useState(
-    tour?.numberOfNights ?? (customRequest ? Math.max(1, customRequest.numberOfDays - 1) : 2)
+    tour?.numberOfNights ?? (customRequest ? Math.max(1, customDays - 1) : 2)
   );
   const [price, setPrice] = useState(
-    tour?.price ?? (customRequest?.estimatedBudget ? Math.round(customRequest.estimatedBudget / (customRequest.numberOfGuests || 1)) : 3500000)
+    tour?.price ?? (customRequest?.budgetPerPerson ? Number(customRequest.budgetPerPerson) : 3500000)
   );
 
   // Photos & Thumbnail
@@ -1054,13 +1053,13 @@ export function TourFormPage({
     tour?.departureLocation ?? ""
   );
   const [minGuests, setMinGuests] = useState(
-    tour?.minGuests ?? (customRequest?.numberOfGuests ?? 2)
+    tour?.minGuests ?? ((customRequest ? customGuests : undefined) ?? 2)
   );
   const [maxGuests, setMaxGuests] = useState(
-    tour?.maxGuests ?? (customRequest ? customRequest.numberOfGuests + 2 : 20)
+    tour?.maxGuests ?? (customRequest ? customGuests + 2 : 20)
   );
   const [description, setDescription] = useState(
-    tour?.description ?? (customRequest?.specialRequests ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.customerName}.\nYêu cầu đặc biệt: ${customRequest.specialRequests}` : "")
+    tour?.description ?? (customRequest?.additionalInfo ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.contactName}.\nYêu cầu đặc biệt: ${customRequest.additionalInfo}` : "")
   );
   const [highlights, setHighlights] = useState<string[]>(tour?.highlights || []);
   const [newHighlight, setNewHighlight] = useState("");
@@ -1784,9 +1783,9 @@ export function TourFormPage({
       tourType: isCustom ? "custom_request" : (tour?.tourType || "public"),
       customRequestId: customRequest?.id || tour?.customRequestId,
       targetUserId: customRequest?.userId || tour?.targetUserId,
-      targetCustomerName: customRequest?.customerName || tour?.targetCustomerName,
-      targetCustomerPhone: customRequest?.customerPhone || tour?.targetCustomerPhone,
-      targetCustomerEmail: customRequest?.customerEmail || tour?.targetCustomerEmail,
+      targetCustomerName: customRequest?.contactName || tour?.targetCustomerName,
+      targetCustomerPhone: customRequest?.contactPhone || tour?.targetCustomerPhone,
+      targetCustomerEmail: customRequest?.contactEmail || tour?.targetCustomerEmail,
       version: isCustom ? nextVersion : tour?.version,
       changeNote: isCustom
         ? (changeNote.trim() || (tour ? `Cập nhật phiên bản v${nextVersion}` : "Phiên bản thiết kế đầu tiên theo yêu cầu"))
@@ -1829,7 +1828,7 @@ export function TourFormPage({
             </h1>
             <p className="text-xs text-gray-500">
               {isCustom
-                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || tour?.targetCustomerName || "Khách đặt riêng"}`
+                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
                 : (tour ? `Mã tour: ${tourCode || "T-NEW"} · Cập nhật thông tin chi tiết` : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá")}
             </p>
           </div>
@@ -1888,9 +1887,9 @@ export function TourFormPage({
               <span>🔒</span> TOUR THIẾT KẾ RIÊNG
             </span>
             <span className="text-sm font-semibold">
-              Khách hàng: <span className="text-purple-200">{customRequest?.customerName || tour?.targetCustomerName || "Yêu cầu từ khách"}</span>
-              {(customRequest?.customerPhone || tour?.targetCustomerPhone) && (
-                <span className="text-purple-300 ml-1">({customRequest?.customerPhone || tour?.targetCustomerPhone})</span>
+              Khách hàng: <span className="text-purple-200">{customRequest?.contactName || tour?.targetCustomerName || "Yêu cầu từ khách"}</span>
+              {(customRequest?.contactPhone || tour?.targetCustomerPhone) && (
+                <span className="text-purple-300 ml-1">({customRequest?.contactPhone || tour?.targetCustomerPhone})</span>
               )}
             </span>
             <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-purple-600">

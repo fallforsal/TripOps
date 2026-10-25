@@ -111,9 +111,8 @@ export function AgencyDashboard({
       b.coHosts?.some((ch) => ch.companyId === company.id) ||
       b.tour?.coHosts?.some((ch) => ch.companyId === company.id)
   );
-  const companyGuides = guides.filter(
-    (g) => g.companyId === company.id,
-  );
+  // The assignment directory comes from BE; guides need not have a mock companyId.
+  const companyGuides = guides;
   const companyCustomRequests = customTourRequests.filter(
     (r) =>
       r.targetCompanyId === company.id ||

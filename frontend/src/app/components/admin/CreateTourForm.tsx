@@ -57,6 +57,16 @@ export function CreateTourForm({
       "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800",
   });
 
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    for (const file of Array.from(event.target.files || [])) {
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      reader.onload = () => setUploadedImages(previous => [...previous, String(reader.result)]);
+      reader.readAsDataURL(file);
+    }
+  };
+  const handleRemoveImage = (index: number) => setUploadedImages(previous => previous.filter((_, i) => i !== index));
   const [highlights, setHighlights] = useState<string[]>([""]);
   const [itinerary, setItinerary] = useState<DailyItinerary[]>([
     {
@@ -73,7 +83,7 @@ export function CreateTourForm({
 
   // Filter only accommodation services that are approved
   const accommodationServices = services.filter(
-    (s) => s.status === "approved" && s.category === "Lưu trú",
+    (s) => s.status === "approved" && s.category === "hotel",
   );
 
   const handleAddHighlight = () => {
@@ -180,6 +190,8 @@ export function CreateTourForm({
       price: parseFloat(formData.price),
       description: formData.description,
       maxGuests: parseInt(formData.maxGuests),
+      minGuests: Number(formData.minGuests) || 1,
+      images: uploadedImages,
       rating: 0, // New tours start with no rating
       image: formData.image,
       highlights: highlights.filter((h) => h.trim() !== ""),
