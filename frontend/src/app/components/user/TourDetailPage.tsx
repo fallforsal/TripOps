@@ -50,7 +50,7 @@ import {
   DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
-import { mockUsers, mockTourCompanies } from "@/app/data/mockData";
+import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 
 export interface TourDetailCustomData {
@@ -443,40 +443,6 @@ function PricingTab({ tour }: { tour: Tour }) {
 
 // -------- Custom Tab --------
 
-const SYSTEM_HOTELS = [
-  { name: "Khách sạn Đà Lạt Palace Heritage", pricePerNight: 2800000, description: "Khách sạn cổ kính – View hồ Xuân Hương thơ mộng" },
-  { name: "Dalat Edensee Lake Resort & Spa", pricePerNight: 3200000, description: "Resort ven hồ Tuyền Lâm – Không gian nghỉ dưỡng đẳng cấp" },
-  { name: "Ana Mandara Villas Dalat Resort", pricePerNight: 3550000, description: "Khu resort biệt thự Pháp cổ giữa rừng thông bạt ngàn" },
-  { name: "MerPerle Dalat Hotel", pricePerNight: 4000000, description: "Khách sạn phong cách cổ điển lộng lẫy, dịch vụ chuẩn mực" },
-  { name: "Tuyền Lâm Lake View Resort", pricePerNight: 4600000, description: "Khu nghỉ dưỡng cao cấp hòa quyện thiên nhiên hồ Tuyền Lâm" },
-  { name: "Terracotta Hotel & Resort Dalat", pricePerNight: 3100000, description: "Resort bán đảo hồ Tuyền Lâm với nhiều tiện ích thư giãn" },
-  { name: "TTC Hotel Premium Ngọc Lan", pricePerNight: 2450000, description: "Khách sạn ngay chợ Đà Lạt, view toàn cảnh hồ Xuân Hương" },
-  { name: "Khách sạn Sammy Đà Lạt", pricePerNight: 2200000, description: "Khách sạn phong cách Pháp trung tâm thành phố, tiện nghi" },
-  { name: "Khách sạn Golf 3 Đà Lạt", pricePerNight: 2000000, description: "Khách sạn ngay phố đi bộ, thuận tiện mua sắm và ẩm thực" },
-];
-
-const SYSTEM_RESTAURANTS: Array<{ name: string; mealType: "breakfast" | "lunch" | "dinner"; pricePerPerson: number; description: string }> = [
-  // Bữa sáng (Breakfast)
-  { name: "Buffet sáng tiêu chuẩn tại Khách sạn", mealType: "breakfast", pricePerPerson: 70000, description: "Buffet sáng phong phú nhiều món Á - Âu kèm trà, cà phê tại khách sạn" },
-  { name: "Bánh căn Lệ Đà Lạt", mealType: "breakfast", pricePerPerson: 50000, description: "Bánh căn giòn rụm xíu mại trứng cút, nước mắm hành mỡ cay nồng" },
-  { name: "Bánh mì xíu mại Hoàng Diệu", mealType: "breakfast", pricePerPerson: 45000, description: "Bánh mì giòn chấm chén xíu mại nóng hổi béo ngậy đặc sản Đà Lạt" },
-  { name: "Phở thố đá Chu Gia Đà Lạt", mealType: "breakfast", pricePerPerson: 85000, description: "Phở bò thố đá sôi sục giữ trọn hương vị tươi ngọt đậm đà" },
-  { name: "Bún bò Huế ấp Ánh Sáng", mealType: "breakfast", pricePerPerson: 65000, description: "Tô bún bò đậm đà thơm mùi sả ruốc hương vị cố đô giữa lòng phố núi" },
-
-  // Bữa trưa (Lunch)
-  { name: "Nhà hàng Hương Rừng Đà Lạt", mealType: "lunch", pricePerPerson: 120000, description: "Đặc sản gà đồi, cơm lam, rau củ tươi organic Đà Lạt" },
-  { name: "Nhà hàng Trúc Lâm Viên", mealType: "lunch", pricePerPerson: 140000, description: "Cơm niêu gia đình, cá kho tộ, canh atiso sườn non" },
-  { name: "Nhà hàng Làng Nướng Đà Lạt", mealType: "lunch", pricePerPerson: 160000, description: "Thịt rừng nướng ngói, rau rừng xào tỏi thơm lừng" },
-  { name: "Nhà hàng Leguda Buffet Rau Cáp Treo", mealType: "lunch", pricePerPerson: 150000, description: "Buffet không giới hạn các loại rau tươi sạch trên đỉnh đồi Robin" },
-  
-  // Bữa tối (Dinner)
-  { name: "Nhà hàng Chợ Đêm & Phố Ẩm Thực Đà Lạt", mealType: "dinner", pricePerPerson: 90000, description: "Ẩm thực đường phố: bánh tráng nướng, sữa đậu nành, dâu lắc" },
-  { name: "Nhà hàng Dalat Palace Ristorante", mealType: "dinner", pricePerPerson: 320000, description: "Ẩm thực Âu - Á cao cấp sang trọng" },
-  { name: "Nhà hàng Lẩu Gà Lá É Tao Ngộ", mealType: "dinner", pricePerPerson: 130000, description: "Đặc sản lẩu gà lá é trứ danh thơm cay ấm bụng đêm sương mù" },
-  { name: "Nhà hàng Quán Nướng Chu", mealType: "dinner", pricePerPerson: 180000, description: "Các món nướng đá nóng, bò tơ nướng sa tế đậm đà" },
-  { name: "Nhà hàng La Viet Coffee & Fine Dining", mealType: "dinner", pricePerPerson: 220000, description: "Trải nghiệm ẩm thực phong cách hiện đại kết hợp cà phê nguyên bản" },
-];
-
 interface HotelChoice {
   mode: "system" | "custom" | "provider";
   systemName?: string;
@@ -583,7 +549,7 @@ function getDestinationGroups(tour: Tour): DestinationHotelState[] {
         defaultHotel: defHotel,
         hotelChoice: defHotel
           ? { mode: "system", systemName: defHotel.name, systemStars: defHotel.stars || 4, systemPricePerNight: defHotel.pricePerNight }
-          : { mode: "system", systemName: SYSTEM_HOTELS[0].name, systemStars: 4, systemPricePerNight: SYSTEM_HOTELS[0].pricePerNight },
+          : { mode: "system", systemName: "", systemStars: 0, systemPricePerNight: 0 },
       });
     }
   });
@@ -946,12 +912,7 @@ function CustomTab({
         {Object.values(destHotels).map((group) => {
           const { destination, nightCount, defaultHotel: defHotel, hotelChoice: choice } = group;
           const isExpanded = expandedHotelDest === destination;
-          const selectedSystem = choice.mode === "system"
-            ? SYSTEM_HOTELS.find((h) => h.name === choice.systemName)
-            : null;
-          const priceDiffPerNight = selectedSystem && defHotel
-            ? selectedSystem.pricePerNight - defHotel.pricePerNight
-            : 0;
+          const priceDiffPerNight = choice.priceDifference || 0;
 
           return (
             <div key={destination} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -1065,20 +1026,6 @@ function CustomTab({
                               diff: alt.priceDifference,
                               pricePerNight: (defHotel.pricePerNight || 0) + alt.priceDifference,
                             });
-                          });
-                        } else {
-                          // Fallback to SYSTEM_HOTELS if no alternatives configured yet
-                          SYSTEM_HOTELS.forEach((h) => {
-                            if (h.name !== defHotel?.name) {
-                              const diff = defHotel ? h.pricePerNight - defHotel.pricePerNight : 0;
-                              options.push({
-                                name: h.name,
-                                stars: h.stars || 4,
-                                description: h.description,
-                                diff,
-                                pricePerNight: h.pricePerNight,
-                              });
-                            }
                           });
                         }
 
@@ -1603,17 +1550,6 @@ function CustomTab({
                                               description: alt.description || alt.address || "",
                                               diff: alt.priceDifference,
                                               pricePerPerson: (defaultMeal.pricePerPerson || 0) + alt.priceDifference,
-                                            });
-                                          });
-                                        } else {
-                                          // Fallback sang danh mục nhà hàng hệ thống
-                                          SYSTEM_RESTAURANTS.filter((r) => r.mealType === mealType && r.name !== defaultMeal.serviceName).forEach((r) => {
-                                            const diff = r.pricePerPerson - (defaultMeal.pricePerPerson ?? 0);
-                                            options.push({
-                                              name: r.name,
-                                              description: r.description,
-                                              diff,
-                                              pricePerPerson: r.pricePerPerson,
                                             });
                                           });
                                         }
@@ -2560,11 +2496,8 @@ export function TourDetailPage({
               )}
 
               {tour.companyName && (() => {
-                const matchedCompany = mockTourCompanies.find(
-                  (c) => c.id === tour.companyId || c.name.toLowerCase() === tour.companyName?.toLowerCase()
-                );
-                const companyPhone = tour.companyPhone || matchedCompany?.phone || "1900 1234";
-                const companyEmail = tour.companyEmail || matchedCompany?.email || "info@viettravel.com.vn";
+                const companyPhone = tour.companyPhone;
+                const companyEmail = tour.companyEmail;
 
                 return (
                   <div className="border-t border-gray-100 pt-4 space-y-2.5">
@@ -2576,23 +2509,23 @@ export function TourDetailPage({
                     </div>
 
                     <div className="space-y-1 text-xs text-gray-600 pl-0.5">
-                      <div className="flex items-center gap-2">
+                      {companyPhone && <div className="flex items-center gap-2">
                         <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>SĐT: <strong className="text-gray-900 font-medium">{companyPhone}</strong></span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                      </div>}
+                      {companyEmail && <div className="flex items-center gap-2">
                         <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>Email: <strong className="text-gray-900 font-medium">{companyEmail}</strong></span>
-                      </div>
+                      </div>}
                     </div>
 
-                    <a
+                    {companyPhone && <a
                       href={`tel:${companyPhone.replace(/\s+/g, "")}`}
                       className="w-full flex items-center justify-center gap-2 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Phone className="w-4 h-4 text-emerald-600" />
                       Gọi tư vấn miễn phí
-                    </a>
+                    </a>}
                   </div>
                 );
               })()}

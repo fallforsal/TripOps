@@ -38,8 +38,11 @@ public enum ServiceStatus
     Active,
     Draft,
     Hidden,
-    Suspended
+    Suspended,
+    Approved
 }
+
+public enum TourApprovalStatus { NotSubmitted, Pending, Approved, Rejected }
 
 public enum TourStatus
 {

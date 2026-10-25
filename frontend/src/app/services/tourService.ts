@@ -1,248 +1,55 @@
-/**
- * Tour Service
- * Quản lý tours - CRUD operations
- */
+import type { Tour } from "@/app/types";
+import { createApiResponse, createErrorResponse, type ApiResponse } from "./api.config";
+import { archiveAgencyTour, createAgencyTour, fromApiTour, fromConfiguration, getAgencyTour, getPublicTour, hideAgencyTour,
+  publicTours, updateAgencyTour } from "./wf02Tours";
 
-import { Tour } from "@/app/types";
-import { mockTours } from "@/app/data/mockData";
-import {
-  mockApiCall,
-  createApiResponse,
-  createErrorResponse,
-  ApiResponse,
-} from "./api.config";
-
-/**
- * Lấy danh sách tất cả tours
- * GET /api/tours
- */
-export const getAllTours = async (): Promise<
-  ApiResponse<Tour[]>
-> => {
+function failure(error: unknown) {
+  return createErrorResponse(error instanceof Error ? error.message : "Không thể tải tour.");
+}
+export async function getAllTours(): Promise<ApiResponse<Tour[]>> {
+  try { return createApiResponse(await publicTours()); } catch (error) { return failure(error); }
+}
+export async function getTourById(tourId: string): Promise<ApiResponse<Tour>> {
   try {
-    const response = await mockApiCall<Tour[]>(mockTours);
-    return createApiResponse(response);
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * Lấy chi tiết một tour
- * GET /api/tours/:id
- */
-export const getTourById = async (
-  tourId: string,
-): Promise<ApiResponse<Tour>> => {
-  try {
-    const tour = mockTours.find((t) => t.id === tourId);
-
-    if (!tour) {
-      return createErrorResponse("Tour không tồn tại");
-    }
-
-    const response = await mockApiCall<Tour>(tour);
-    return createApiResponse(response);
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * Tìm kiếm tours
- * GET /api/tours/search?q=keyword&destination=...
- */
+    const detail = await getPublicTour(tourId);
+    return createApiResponse(fromConfiguration(detail.id, detail.code, detail.version, detail.configuration));
+  } catch (error) { return failure(error); }
+}
 export interface TourSearchParams {
-  keyword?: string;
-  destination?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  duration?: string;
+  keyword?: string; destination?: string; minPrice?: number; maxPrice?: number; duration?: string;
 }
-
-export const searchTours = async (
-  params: TourSearchParams,
-): Promise<ApiResponse<Tour[]>> => {
+export async function searchTours(params: TourSearchParams): Promise<ApiResponse<Tour[]>> {
   try {
-    let filteredTours = [...mockTours];
-
-    // Filter by keyword
-    if (params.keyword) {
-      const keyword = params.keyword.toLowerCase();
-      filteredTours = filteredTours.filter(
-        (t) =>
-          t.name.toLowerCase().includes(keyword) ||
-          t.description.toLowerCase().includes(keyword) ||
-          t.destination.toLowerCase().includes(keyword),
-      );
-    }
-
-    // Filter by destination
-    if (params.destination) {
-      filteredTours = filteredTours.filter((t) =>
-        t.destination
-          .toLowerCase()
-          .includes(params.destination!.toLowerCase()),
-      );
-    }
-
-    // Filter by price range
-    if (params.minPrice) {
-      filteredTours = filteredTours.filter(
-        (t) => t.price >= params.minPrice!,
-      );
-    }
-    if (params.maxPrice) {
-      filteredTours = filteredTours.filter(
-        (t) => t.price <= params.maxPrice!,
-      );
-    }
-
-    // Filter by duration
-    if (params.duration) {
-      filteredTours = filteredTours.filter(
-        (t) => t.duration === params.duration,
-      );
-    }
-
-    const response = await mockApiCall<Tour[]>(filteredTours);
-    return createApiResponse(response);
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * Tạo tour mới (Admin only)
- * POST /api/tours
- */
-export interface CreateTourRequest {
-  name: string;
-  destination: string;
-  duration: string;
-  numberOfDays?: number;
-  numberOfNights?: number;
-  price: number;
-  description: string;
-  image: string;
-  maxGuests: number;
-  highlights: string[];
-  itinerary: any[];
-  createdBy: string;
-  createdByName: string;
-  createdByEmail: string;
+    const tours = await publicTours();
+    return createApiResponse(tours.filter(tour =>
+      (!params.keyword || `${tour.name} ${tour.description} ${tour.destination}`.toLowerCase().includes(params.keyword.toLowerCase())) &&
+      (!params.destination || tour.destination.toLowerCase().includes(params.destination.toLowerCase())) &&
+      (params.minPrice == null || tour.price >= params.minPrice) &&
+      (params.maxPrice == null || tour.price <= params.maxPrice) &&
+      (!params.duration || tour.duration === params.duration)));
+  } catch (error) { return failure(error); }
 }
-
-export const createTour = async (
-  tourData: CreateTourRequest,
-): Promise<ApiResponse<Tour>> => {
-  try {
-    // Generate tour code
-    const tourNumber = mockTours.length + 1;
-    const tourCode = `T${tourNumber.toString().padStart(3, "0")}`;
-
-    const newTour: Tour = {
-      id: "tour-" + Date.now(),
-      tourCode,
-      ...tourData,
-      rating: 0,
-      bookings: 0,
-      createdAt: new Date().toLocaleDateString("vi-VN"),
-    };
-
-    // In production, this would POST to API
-    const response = await mockApiCall<Tour>(newTour);
-    return createApiResponse(response, "Tạo tour thành công");
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * Cập nhật tour (Admin only)
- * PUT /api/tours/:id
- */
-export const updateTour = async (
-  tourId: string,
-  updates: Partial<Tour>,
-): Promise<ApiResponse<Tour>> => {
-  try {
-    const tourIndex = mockTours.findIndex(
-      (t) => t.id === tourId,
-    );
-
-    if (tourIndex === -1) {
-      return createErrorResponse("Tour không tồn tại");
-    }
-
-    const updatedTour = { ...mockTours[tourIndex], ...updates };
-
-    // In production, this would PUT to API
-    const response = await mockApiCall<Tour>(updatedTour);
-    return createApiResponse(
-      response,
-      "Cập nhật tour thành công",
-    );
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * Xóa tour (Admin only)
- * DELETE /api/tours/:id
- */
-export const deleteTour = async (
-  tourId: string,
-): Promise<ApiResponse<null>> => {
-  try {
-    const tourIndex = mockTours.findIndex(
-      (t) => t.id === tourId,
-    );
-
-    if (tourIndex === -1) {
-      return createErrorResponse("Tour không tồn tại");
-    }
-
-    // In production, this would DELETE from API
-    await mockApiCall(null);
-    return createApiResponse(null, "Xóa tour thành công");
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
-
-/**
- * AI Search - Tìm kiếm tour bằng câu tự nhiên
- * POST /api/tours/ai-search
- */
-export interface AISearchRequest {
-  query: string; // Câu mô tả tự nhiên của user
+export interface CreateTourRequest extends Partial<Tour> { name: string; }
+export async function createTour(data: CreateTourRequest): Promise<ApiResponse<Tour>> {
+  try { return createApiResponse(fromApiTour(await createAgencyTour(data)), "Đã lưu bản nháp."); }
+  catch (error) { return failure(error); }
 }
-
-export const aiSearchTours = async (
-  request: AISearchRequest,
-): Promise<ApiResponse<Tour[]>> => {
+export async function updateTour(id: string, data: Partial<Tour>): Promise<ApiResponse<Tour>> {
   try {
-    // Trong production, API sẽ xử lý NLP và trả về kết quả phù hợp
-    // Mock: Tìm kiếm đơn giản dựa trên keywords
-    const keywords = request.query.toLowerCase().split(" ");
-
-    const matchedTours = mockTours.filter((tour) => {
-      const searchText =
-        `${tour.name} ${tour.description} ${tour.destination} ${tour.highlights.join(" ")}`.toLowerCase();
-      return keywords.some((keyword) =>
-        searchText.includes(keyword),
-      );
-    });
-
-    // Simulate AI processing delay (longer than normal API)
-    const response = await mockApiCall<Tour[]>(
-      matchedTours,
-      1000,
-    );
-    return createApiResponse(response);
-  } catch (error) {
-    return createErrorResponse("Lỗi kết nối đến server");
-  }
-};
+    const current = await getAgencyTour(id);
+    return createApiResponse(fromApiTour(await updateAgencyTour(id, current.version, { ...fromApiTour(current), ...data })), "Đã cập nhật tour.");
+  } catch (error) { return failure(error); }
+}
+export async function deleteTour(id: string): Promise<ApiResponse<null>> {
+  try {
+    const current = await getAgencyTour(id);
+    const version = current.visibility === "public"
+      ? (await hideAgencyTour(id, current.version, "Agency lưu trữ tour.")).version : current.version;
+    await archiveAgencyTour(id, version);
+    return createApiResponse(null, "Đã lưu trữ tour.");
+  } catch (error) { return failure(error); }
+}
+export interface AISearchRequest { query: string }
+export async function aiSearchTours(request: AISearchRequest): Promise<ApiResponse<Tour[]>> {
+  return searchTours({ keyword: request.query });
+}

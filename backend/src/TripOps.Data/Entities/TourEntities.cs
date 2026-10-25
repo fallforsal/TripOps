@@ -8,6 +8,9 @@ public class Tour : BaseEntity<int>, ISoftDelete
     public string AgencyId { get; set; } = null!;
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
+    public string? Destination { get; set; }
+    public string? OperationPeriod { get; set; }
+    public string? Message { get; set; }
     public string? Code { get; set; }
     public int DurationDays { get; set; }
     public int DurationNights { get; set; }
@@ -22,7 +25,14 @@ public class Tour : BaseEntity<int>, ISoftDelete
     public TourStatus Status { get; set; } = TourStatus.Draft;
     public TourVisibility Visibility { get; set; } = TourVisibility.Hidden;
     public bool IsRequest { get; set; }
+    public bool IsAiGenerated { get; set; }
     public int Version { get; set; } = 1;
+    public TourApprovalStatus ApprovalStatus { get; set; } = TourApprovalStatus.NotSubmitted;
+    public int? SubmittedVersion { get; set; }
+    public int? ApprovedVersion { get; set; }
+    public string? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? RejectionReason { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
@@ -36,6 +46,9 @@ public class Tour : BaseEntity<int>, ISoftDelete
 
 public class TourPricingTier : BaseEntity<int>
 {
+    public int? MinAge { get; set; }
+    public int? MaxAge { get; set; }
+    public int DisplayOrder { get; set; }
     public int TourId { get; set; }
     public string Name { get; set; } = null!;
     public int MinGuests { get; set; }
@@ -47,6 +60,8 @@ public class TourPricingTier : BaseEntity<int>
 
 public class TourTimeline : BaseEntity<int>
 {
+    public int? TransportationServiceId { get; set; }
+    public virtual Service? TransportationService { get; set; }
     public int TourId { get; set; }
     public int DayNumber { get; set; }
     public string? Title { get; set; }
@@ -73,6 +88,9 @@ public class TouristAttraction : BaseEntity<int>
 
 public class TourMeal : BaseEntity<int>
 {
+    public string? RestaurantName { get; set; }
+    public bool IsDefault { get; set; }
+    public decimal PriceDifference { get; set; }
     public int TourTimelineId { get; set; }
     public int? ServiceId { get; set; }
     public string MealType { get; set; } = null!; // breakfast, lunch, dinner
@@ -84,6 +102,12 @@ public class TourMeal : BaseEntity<int>
 
 public class TourAccommodation : BaseEntity<int>
 {
+    public string? DestinationName { get; set; }
+    public int NightsCount { get; set; } = 1;
+    public int StarRating { get; set; } = 3;
+    public bool IsDefault { get; set; }
+    public decimal PriceDifference { get; set; }
+    public string? AddressNotes { get; set; }
     public int TourTimelineId { get; set; }
     public int? ServiceId { get; set; }
     public string? HotelName { get; set; }
@@ -95,6 +119,8 @@ public class TourAccommodation : BaseEntity<int>
 
 public class TourVersion : BaseEntity<int>
 {
+    public string? CreatedBy { get; set; }
+    public decimal? Price { get; set; }
     public int TourId { get; set; }
     public int VersionNumber { get; set; }
     public string SnapshotData { get; set; } = null!; // JSON

@@ -46,7 +46,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
     context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-builder.Services.AddOpenApi();
+builder.Services.AddTripOpsOpenApi();
 builder.Services.AddHealthChecks();
 if (builder.Environment.IsDevelopment())
 {
@@ -83,7 +83,14 @@ if (app.Environment.IsDevelopment())
 {
     app.UseCors("Development");
     app.MapOpenApi();
-    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "TripOps v1"));
+    app.UseSwaggerUI(options => {
+        options.SwaggerEndpoint("/openapi/v1.json", "TripOps WF01 & WF02 v1");
+        options.DocumentTitle = "TripOps API testing";
+        options.EnableFilter();
+        options.EnableDeepLinking();
+        options.DisplayRequestDuration();
+        options.ConfigObject.AdditionalItems["withCredentials"] = true;
+    });
 }
 // Liveness only: neither endpoint asserts database or external integrations are ready.
 app.UseRateLimiter();

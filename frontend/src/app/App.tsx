@@ -1,6 +1,10 @@
 import { companyFromUser } from '@/app/services/authService';
+import { agencyTours, archiveAgencyTour, createAgencyTour, duplicateAgencyTour, fromApiTour, fromConfiguration, getPublicTour,
+  hideAgencyTour, hideModeratedTour, moderationTours, publicTours, publishAgencyTour,
+  restoreAgencyTour, updateAgencyTour } from '@/app/services/wf02Tours';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { RegisterScreen } from "@/app/components/RegisterScreen";
 import { UnifiedHeader } from "@/app/components/UnifiedHeader";
@@ -47,7 +51,6 @@ import {
   CustomMealChange,
   CustomLocationChange,
   SystemBankAccount,
-  TourVersion,
   BookingPriceAdjustment,
   BookingAgencyShare,
   BookingAssignedGuide,
@@ -55,7 +58,6 @@ import {
   BookingIncident,
 } from "@/app/types";
 import {
-  mockTours,
   mockBookings,
   mockServices,
   mockGuideSchedules,
@@ -77,7 +79,37 @@ function App() {
   const [currentPage, setCurrentPage] =
     useState<string>("home");
   const [previousPage, setPreviousPage] = useState<string>("home");
-  const [tours, setTours] = useState<Tour[]>(mockTours);
+  const [tours, setTours] = useState<Tour[]>([]);
+  const [tourLoading, setTourLoading] = useState(true);
+  const [tourError, setTourError] = useState("");
+  const [tourNotice, setTourNotice] = useState("");
+  useEffect(() => { if (tourNotice) { toast.success(tourNotice); setTourNotice(""); } }, [tourNotice]);
+  async function refreshTours() {
+    const publicItems = await publicTours();
+    const privateItems = currentUser?.role === "agency" ? await agencyTours()
+      : currentUser?.role === "admin" ? await moderationTours() : [];
+    const byId = new Map<string, Tour>();
+    for (const tour of publicItems) byId.set(tour.id, tour);
+    for (const tour of privateItems) byId.set(tour.id, tour);
+    setTours([...byId.values()]);
+  }
+  useEffect(() => {
+    let active = true;
+    setTourLoading(true);
+    setTourError("");
+    (async () => {
+      const publicItems = await publicTours();
+      const privateItems = currentUser?.role === "agency" ? await agencyTours()
+        : currentUser?.role === "admin" ? await moderationTours() : [];
+      if (!active) return;
+      const byId = new Map<string, Tour>();
+      for (const tour of publicItems) byId.set(tour.id, tour);
+      for (const tour of privateItems) byId.set(tour.id, tour);
+      setTours([...byId.values()]);
+    })().catch(error => { if (active) setTourError(error instanceof Error ? error.message : "Không tải được tour."); })
+      .finally(() => { if (active) setTourLoading(false); });
+    return () => { active = false; };
+  }, [currentUser?.id, currentUser?.role]);
   const [bookings, setBookings] =
     useState<Booking[]>(mockBookings);
   const [services, setServices] =
@@ -138,6 +170,11 @@ function App() {
     setSelectedTour(tour);
     setCurrentPage("tour-detail");
     window.scrollTo({ top: 0, behavior: "smooth" });
+    if (tour.visibility === "public") {
+      void getPublicTour(tour.id).then(latest =>
+        setSelectedTour(fromConfiguration(latest.id, latest.code, latest.version, latest.configuration)))
+        .catch(error => toast.error(error instanceof Error ? error.message : "Không tải được chi tiết tour."));
+    }
   };
 
   const handleOpenBookingForm = (
@@ -888,31 +925,50 @@ function App() {
   };
 
   // Company admin - tour CRUD
-  const handleCompanyCreateTour = (
+  const handleCompanyCreateTour = async (
     tourData: Omit<Tour, "id"> & { id?: string },
   ) => {
-    const newTour: Tour = {
-      ...tourData,
-      id: tourData.id || `tour-${Date.now()}`,
-      status: tourData.status || "pending_approval",
-      bookings: 0,
-    };
-    setTours([...tours, newTour]);
+    if (tourData.is_request) throw new Error("Tour theo yêu cầu chưa có API tạo riêng.");
+    const created = await createAgencyTour(tourData);
+    const result = tourData.visibility === "public" ? await publishAgencyTour(String(created.id), created.version) : created;
+    await refreshTours();
+    setTourNotice(result.visibility === "public" ? "Tour đã được đăng bán." : "Bản nháp đã được lưu.");
+    return fromApiTour(result);
   };
 
-  const handleCompanyEditTour = (
+  const handleCompanyEditTour = async (
     tourId: string,
     tourData: Partial<Tour>,
   ) => {
-    setTours(
-      tours.map((t) =>
-        t.id === tourId ? { ...t, ...tourData } : t,
-      ),
-    );
+    const current = tours.find(t => t.id === tourId);
+    if (!current) throw new Error("Không tìm thấy tour.");
+    if (tourData.is_request) throw new Error("Tour theo yêu cầu chưa có API chỉnh sửa riêng.");
+    const visibilityOnly = Object.keys(tourData).every(key => ["status", "visibility"].includes(key));
+    if (visibilityOnly) {
+      if (tourData.visibility === "public") await publishAgencyTour(tourId, current.version || 1);
+      else if (tourData.visibility === "hidden") await hideAgencyTour(tourId, current.version || 1, "Agency tạm ẩn tour.");
+    } else {
+      const updated = await updateAgencyTour(tourId, current.version || 1, { ...current, ...tourData });
+      if (tourData.visibility === "public") await publishAgencyTour(tourId, updated.version);
+    }
+    await refreshTours();
+    setTourNotice("Tour đã được cập nhật.");
   };
 
-  const handleCompanyDeleteTour = (tourId: string) => {
-    setTours(tours.filter((t) => t.id !== tourId));
+  const handleCompanyDeleteTour = async (tourId: string) => {
+    const current = tours.find(t => t.id === tourId);
+    if (!current) throw new Error("Không tìm thấy tour.");
+    const version = current.visibility === "public"
+      ? (await hideAgencyTour(tourId, current.version || 1, "Agency lưu trữ tour.")).version
+      : current.version || 1;
+    await archiveAgencyTour(tourId, version);
+    await refreshTours();
+    setTourNotice("Tour đã được lưu trữ.");
+  };
+  const handleCompanyDuplicateTour = async (tourId: string, name: string) => {
+    await duplicateAgencyTour(tourId, name);
+    await refreshTours();
+    setTourNotice("Đã tạo bản nháp từ tour này.");
   };
 
   // Company Guide workforce handlers
@@ -947,41 +1003,13 @@ function App() {
     setUsers((prev) => prev.filter((u) => u.id !== guideId));
   };
 
-  // Tour moderation handlers (Admin)
-  const handleApproveTour = (tourId: string) => {
-    setTours((prev) =>
-      prev.map((t) =>
-        t.id === tourId
-          ? { ...t, status: "published" as const, rejectionReason: undefined, hiddenReason: undefined }
-          : t
-      )
-    );
-  };
-
-  const handleToggleHideTour = (tourId: string, reason?: string) => {
-    setTours((prev) =>
-      prev.map((t) => {
-        if (t.id !== tourId) return t;
-        const willHide = t.status !== "hidden";
-        return {
-          ...t,
-          status: willHide ? ("hidden" as const) : ("published" as const),
-          hiddenReason: willHide
-            ? (reason || "Thông tin tour bị tạm ẩn do không chính xác hoặc không phù hợp")
-            : undefined,
-        };
-      })
-    );
-  };
-
-  const handleRejectTour = (tourId: string, reason: string) => {
-    setTours((prev) =>
-      prev.map((t) =>
-        t.id === tourId
-          ? { ...t, status: "rejected" as const, rejectionReason: reason }
-          : t
-      )
-    );
+  // Admin moderation happens after publication; it never grants publication.
+  const handleToggleHideTour = async (tourId: string, reason?: string) => {
+    const current = tours.find(t => t.id === tourId);
+    if (!current || current.visibility !== "public") throw new Error("Tour không còn công khai.");
+    await hideModeratedTour(tourId, current.version || 1, reason?.trim() || "Thông tin tour cần được kiểm tra.");
+    await refreshTours();
+    setTourNotice("Tour đã được tạm ẩn để kiểm tra.");
   };
 
   // Departure roll call handler (Guide)
@@ -1087,54 +1115,18 @@ function App() {
     }
   };
 
-  const handleRestoreTourVersion = (tourId: string, versionNumber: number) => {
-    const currentTour = tours.find((t) => t.id === tourId);
-    if (!currentTour) return;
-
-    const targetVersion = currentTour.versionHistory?.find(
-      (v) => v.version === versionNumber
-    );
-    if (!targetVersion) {
-      alert(`Không tìm thấy phiên bản v${versionNumber} trong lịch sử lưu trữ.`);
-      return;
-    }
-
-    const currentBackup: TourVersion = {
-      version: currentTour.version || 1,
-      createdAt: new Date().toISOString(),
-      createdByName: currentTour.companyName || "Hệ thống",
-      changeNote: `Bản sao lưu trước khi khôi phục về phiên bản v${versionNumber}`,
-      tourSnapshot: JSON.parse(JSON.stringify(currentTour)),
-    };
-
-    const nextVer = (currentTour.version || 1) + 1;
-    const restoredSnapshot = JSON.parse(JSON.stringify(targetVersion.tourSnapshot));
-
-    const restoredTour: Tour = {
-      ...restoredSnapshot,
-      id: currentTour.id,
-      version: nextVer,
-      changeNote: `Khôi phục từ dữ liệu phiên bản v${versionNumber} (${new Date(targetVersion.createdAt).toLocaleDateString("vi-VN")})`,
-      versionHistory: [currentBackup, ...(currentTour.versionHistory || [])],
-    };
-
-    setTours((prev) => prev.map((t) => (t.id === tourId ? restoredTour : t)));
-
-    if (currentTour.customRequestId) {
-      setCustomTourRequests((prev) =>
-        prev.map((r) =>
-          r.id === currentTour.customRequestId
-            ? { ...r, currentVersion: nextVer, companyNote: restoredTour.changeNote }
-            : r
-        )
-      );
-    }
-
-    alert(`Đã khôi phục thành công tour về phiên bản v${versionNumber}! Phiên bản hiện tại là v${nextVer}.`);
+  const handleRestoreTourVersion = async (tourId: string, versionNumber: number) => {
+    const currentTour = tours.find(t => t.id === tourId);
+    if (!currentTour) throw new Error("Không tìm thấy tour.");
+    await restoreAgencyTour(tourId, versionNumber, currentTour.version || 1);
+    await refreshTours();
+    setTourNotice(`Đã khôi phục v${versionNumber} thành bản nháp mới.`);
   };
 
   if (sessionLoading) return <div className="p-10 text-center">Đang kiểm tra phiên đăng nhập...</div>;
   if (sessionError || authError) return <div role="alert" className="p-10 text-center text-red-700">{sessionError || authError}<button className="block mx-auto mt-4 underline" onClick={() => window.location.reload()}>Thử lại</button></div>;
+  if (tourLoading) return <div role="status" className="p-10 text-center text-[#075985]">Đang tải tour từ máy chủ...</div>;
+  if (tourError) return <div role="alert" className="p-10 text-center text-red-700">{tourError}<button className="block mx-auto mt-4 underline" onClick={() => window.location.reload()}>Thử lại</button></div>;
 
   // Show register screen
   if (showRegister) {
@@ -1209,6 +1201,7 @@ function App() {
             onCreateTour={handleCompanyCreateTour}
             onEditTour={handleCompanyEditTour}
             onDeleteTour={handleCompanyDeleteTour}
+            onDuplicateTour={handleCompanyDuplicateTour}
             onAddGuide={handleAddGuide}
             onUpdateGuide={handleUpdateGuide}
             onRemoveGuide={handleRemoveGuide}
@@ -1285,10 +1278,7 @@ function App() {
               )}
               users={users}
               companies={companies}
-              onApproveTour={handleApproveTour}
-              onRejectTour={handleRejectTour}
               onToggleHideTour={handleToggleHideTour}
-              onDeleteTour={handleDeleteTour}
               onApproveBooking={handleApproveBooking}
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
@@ -1378,7 +1368,7 @@ function App() {
         ) : currentPage === "tour-detail" && selectedTour ? (
           <TourDetailPage
             tour={selectedTour}
-            services={services}
+            services={[]}
             currentUser={currentUser}
             onBack={() => {
               setSelectedTour(null);

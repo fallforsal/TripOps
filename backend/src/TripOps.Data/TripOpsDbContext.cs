@@ -63,6 +63,8 @@ public class TripOpsDbContext : DbContext
 
     private void NormalizeTourStates()
     {
+        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Tour history is immutable.");
         foreach (var entry in ChangeTracker.Entries<Tour>()
                      .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
@@ -184,6 +186,14 @@ public class TripOpsDbContext : DbContext
             entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
             entity.Property(e => e.Code).HasMaxLength(50);
+            entity.Property(e => e.Destination).HasMaxLength(255);
+            entity.Property(e => e.OperationPeriod).HasMaxLength(255);
+            entity.Property(e => e.Version).IsConcurrencyToken();
+            entity.Property(e => e.ApprovalStatus).HasConversion<string>().HasMaxLength(30)
+                .HasDefaultValue(TourApprovalStatus.NotSubmitted);
+            entity.Property(e => e.ReviewedBy).HasMaxLength(36);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
+            entity.Property(e => e.RejectionReason).HasMaxLength(2000);
             entity.Property(e => e.BasePrice).HasPrecision(12, 2);
             entity.Property(e => e.Status).HasConversion(
                 value => value.ToString().ToLowerInvariant(),
@@ -213,6 +223,8 @@ public class TripOpsDbContext : DbContext
 
         modelBuilder.Entity<TourTimeline>(entity =>
         {
+            entity.HasOne(e => e.TransportationService).WithMany().HasForeignKey(e => e.TransportationServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.ToTable("tour_timeline");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).HasMaxLength(255);
@@ -239,6 +251,8 @@ public class TripOpsDbContext : DbContext
 
         modelBuilder.Entity<TourMeal>(entity =>
         {
+            entity.Property(e => e.PriceDifference).HasPrecision(19, 2);
+            entity.Property(e => e.RestaurantName).HasMaxLength(255);
             entity.ToTable("tour_meals");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.MealType).HasMaxLength(50).IsRequired();
@@ -254,6 +268,12 @@ public class TripOpsDbContext : DbContext
 
         modelBuilder.Entity<TourAccommodation>(entity =>
         {
+            // Zero is a valid allocation; it must not be mistaken for an unset
+            // value and replaced with the database's default of one night.
+            entity.Property(e => e.NightsCount).HasDefaultValue(1).HasSentinel(-1);
+            entity.Property(e => e.StarRating).HasDefaultValue(3);
+            entity.Property(e => e.PriceDifference).HasPrecision(19, 2);
+            entity.Property(e => e.DestinationName).HasMaxLength(255);
             entity.ToTable("tour_accommodations");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.HotelName).HasMaxLength(255);
@@ -270,6 +290,10 @@ public class TripOpsDbContext : DbContext
 
         modelBuilder.Entity<TourVersion>(entity =>
         {
+            entity.HasIndex(e => new { e.TourId, e.VersionNumber }).IsUnique();
+            entity.Property(e => e.CreatedBy).HasMaxLength(36);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+            entity.Property(e => e.Price).HasPrecision(19, 2);
             entity.ToTable("tour_versions");
             entity.HasKey(e => e.Id);
             entity.HasOne(e => e.Tour)

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -42,6 +43,7 @@ public sealed class AccountsFlowTests
                 ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
             }));
             builder.ConfigureServices(services => {
+                services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
                 services.AddDbContext<TripOpsDbContext>(options => options.UseSqlite(connection));

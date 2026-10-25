@@ -37,6 +37,7 @@ interface AgencyDashboardProps {
   onCreateTour: (tour: Omit<Tour, "id">) => void;
   onEditTour: (tourId: string, tour: Partial<Tour>) => void;
   onDeleteTour: (tourId: string) => void;
+  onDuplicateTour?: (tourId: string, name: string) => Promise<void>;
   onApproveBooking: (bookingId: string) => void;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
@@ -71,6 +72,7 @@ export function AgencyDashboard({
   onCreateTour,
   onEditTour,
   onDeleteTour,
+  onDuplicateTour,
   onApproveBooking,
   onRejectBooking,
   onAssignGuide,
@@ -265,6 +267,7 @@ export function AgencyDashboard({
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
             onDeleteTour={onDeleteTour}
+            onDuplicateTour={onDuplicateTour}
             onRestoreTourVersion={onRestoreTourVersion}
           />
         );

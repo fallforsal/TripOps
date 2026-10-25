@@ -27,8 +27,6 @@ interface AdminDashboardProps {
   users: User[];
   guideSchedules: GuideSchedule[];
   companies: TourCompany[];
-  onApproveTour?: (tourId: string) => void;
-  onRejectTour?: (tourId: string, reason: string) => void;
   onToggleHideTour?: (tourId: string, reason?: string) => void;
   onDeleteTour?: (tourId: string) => void;
   onApproveBooking?: (bookingId: string) => void;
@@ -62,8 +60,6 @@ export function AdminDashboard({
   users,
   guideSchedules,
   companies,
-  onApproveTour,
-  onRejectTour,
   onToggleHideTour,
   onDeleteTour,
   onApproveBooking,
@@ -85,9 +81,7 @@ export function AdminDashboard({
 
   const companyAdmins = users.filter((u) => u.role === "company_admin");
 
-  const pendingToursCount = tours.filter(
-    (t) => t.status === "pending_approval",
-  ).length;
+  const pendingToursCount = 0;
 
   const renderContent = () => {
     switch (activeSection) {
@@ -112,9 +106,6 @@ export function AdminDashboard({
             tours={tours}
             services={services}
             onToggleHideTour={onToggleHideTour}
-            onDeleteTour={onDeleteTour}
-            onApproveTour={onApproveTour || (() => {})}
-            onRejectTour={onRejectTour || (() => {})}
           />
         );
       case "finance":

@@ -391,6 +391,7 @@ export interface Tour {
   createdByName?: string;
   createdByEmail?: string;
   createdAt?: string;
+  updatedAt?: string;
   bookings?: number;
   // Custom tour design fields (Thiết kế tour riêng theo yêu cầu)
   tourType?: "public" | "custom_request";

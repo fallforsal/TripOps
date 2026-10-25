@@ -441,6 +441,7 @@ FodyWeavers.xsd
 **/__pycache__/
 *.pyc
 **/appsettings.Local.json
+/backend/appsettings.Development.json
 **/local.properties
 **/Generated.xcconfig
 **/flutter_export_environment.sh

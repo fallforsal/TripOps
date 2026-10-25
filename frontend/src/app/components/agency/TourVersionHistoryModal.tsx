@@ -75,11 +75,7 @@ export function TourVersionHistoryModal({
             {tour.name}
           </DialogTitle>
           <DialogDescription className="text-xs text-gray-500">
-            Dành riêng cho khách:{" "}
-            <strong className="text-gray-800">
-              {tour.targetCustomerName || "Khách yêu cầu"}
-            </strong>{" "}
-            • Phiên bản đang áp dụng:{" "}
+            Lịch sử cấu hình tour • Phiên bản hiện tại:{" "}
             <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
               v{currentVersionNum}
             </span>
@@ -92,7 +88,7 @@ export function TourVersionHistoryModal({
             <div>
               <p className="font-semibold">Cơ chế bảo toàn &amp; Khôi phục (Backup &amp; Rollback):</p>
               <p className="text-blue-800 text-[11px] mt-0.5">
-                Mỗi khi công ty cập nhật thiết kế tour theo trao đổi riêng với khách hàng, hệ thống tự động lưu trữ một bản sao snapshot hoàn chỉnh. Bạn có thể khôi phục lại bất kỳ phiên bản nào trước đó mà không lo mất mát dữ liệu.
+                Mỗi thay đổi được lưu thành một bản ghi cấu hình. Khôi phục phiên bản cũ sẽ tạo bản nháp mới và giữ nguyên lịch sử.
               </p>
             </div>
           </div>
@@ -108,7 +104,7 @@ export function TourVersionHistoryModal({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-gray-900 text-sm">
-                        Phiên bản hiện tại (Đang hiển thị cho khách)
+                        Phiên bản hiện tại ({tour.visibility === "public" ? "Đang hiển thị cho khách" : "Chưa công khai"})
                       </span>
                       <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-300">
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -117,7 +113,7 @@ export function TourVersionHistoryModal({
                     </div>
                     <p className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                       <Clock className="w-3 h-3" />
-                      Cập nhật: {formatDate(tour.createdAt || new Date().toISOString())}
+                      Cập nhật: {formatDate(tour.updatedAt || tour.createdAt || "")}
                       {tour.companyName && ` • Bởi: ${tour.companyName}`}
                     </p>
                   </div>
@@ -140,7 +136,7 @@ export function TourVersionHistoryModal({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/70 text-xs text-gray-700">
                 <div className="bg-white p-2 rounded-lg border border-gray-100">
                   <p className="text-[10px] text-gray-400">Thời lượng</p>
-                  <p className="font-semibold text-gray-900">{tour.duration || `${tour.numberOfDays || 3}N${tour.numberOfNights || 2}Đ`}</p>
+                  <p className="font-semibold text-gray-900">{tour.duration || `${tour.numberOfDays ?? 0}N${tour.numberOfNights ?? 0}Đ`}</p>
                 </div>
                 <div className="bg-white p-2 rounded-lg border border-gray-100">
                   <p className="text-[10px] text-gray-400">Khách sạn</p>
@@ -265,7 +261,7 @@ export function TourVersionHistoryModal({
                             </div>
                             <div>
                               <span className="text-[10px] text-gray-400 block">Điểm khởi hành &amp; Đến:</span>
-                              <span className="font-semibold text-gray-800">{snap.departureCity || "TP.HCM"} → {snap.destination}</span>
+                              <span className="font-semibold text-gray-800">{snap.departureCity ? `${snap.departureCity} → ` : ""}{snap.destination}</span>
                             </div>
                           </div>
 

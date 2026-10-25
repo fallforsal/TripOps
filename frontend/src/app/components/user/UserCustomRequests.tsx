@@ -1,6 +1,5 @@
 ﻿import { useState } from "react";
 import { CustomTourRequest, Tour } from "@/app/types";
-import { mockTours } from "@/app/data/mockData";
 import {
   Clock,
   CheckCircle,
@@ -102,9 +101,7 @@ export function UserCustomRequests({
         const isExp = expanded === req.id;
 
         // Find matching tour designed for this request
-        const matchingTour =
-          tours.find((t) => t.id === req.designedTourId || t.customRequestId === req.id) ||
-          mockTours.find((t) => t.id === req.designedTourId || t.customRequestId === req.id);
+        const matchingTour = tours.find((t) => t.id === req.designedTourId || t.customRequestId === req.id);
 
         const isItineraryOpen = expandedItinerary[req.id] ?? false;
 

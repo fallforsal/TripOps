@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Tour,
   TourCompany,
@@ -56,8 +56,9 @@ import {
   UserPlus,
   Tag,
   Lock,
+  History,
 } from "lucide-react";
-import { mockTourCompanies, mockServices } from "@/app/data/mockData";
+import { mockTourCompanies } from "@/app/data/mockData";
 import { Button } from "@/app/components/ui/button";
 import {
   AlertDialog,
@@ -80,14 +81,16 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
+import { eligibleServices, type EligibleService } from "@/app/services/wf02Tours";
 import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 
 export interface AgencyTourManagementProps {
   tours: Tour[];
   company: TourCompany;
-  onCreateTour: (tour: Omit<Tour, "id">) => void;
-  onEditTour: (tourId: string, tour: Partial<Tour>) => void;
-  onDeleteTour: (tourId: string) => void;
+  onCreateTour: (tour: Omit<Tour, "id">) => void | Promise<unknown>;
+  onEditTour: (tourId: string, tour: Partial<Tour>) => void | Promise<unknown>;
+  onDeleteTour: (tourId: string) => void | Promise<unknown>;
+  onDuplicateTour?: (tourId: string, name: string) => Promise<void>;
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
 }
 
@@ -105,17 +108,21 @@ export function AgencyTourManagement({
   onCreateTour,
   onEditTour,
   onDeleteTour,
+  onDuplicateTour,
   onRestoreTourVersion,
 }: AgencyTourManagementProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
 
   // Hộp thoại xác nhận UI cao cấp (AlertDialog) cho các hành động: Nhân bản, Ẩn/Hiện, Xóa
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   // Trang xem chi tiết tour riêng biệt (không mở popup)
   const [viewingTour, setViewingTour] = useState<Tour | null>(null);
+  const [versionTour, setVersionTour] = useState<Tour | null>(null);
 
   // Chế độ xem & Bộ lọc
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -161,38 +168,32 @@ export function AgencyTourManagement({
     });
 
   // Xử lý thực thi hành động sau khi người dùng xác nhận trên AlertDialog
-  const handleExecuteConfirmedAction = () => {
+  const handleExecuteConfirmedAction = async () => {
     if (!pendingAction) return;
     const { type, tour } = pendingAction;
-
-    if (type === "duplicate") {
-      const newTourCode = `T${Date.now().toString().slice(-4)}`;
-      const duplicatedTourData: Omit<Tour, "id"> = {
-        ...JSON.parse(JSON.stringify(tour)),
-        tourCode: newTourCode,
-        name: `${tour.name} (Bản sao)`,
-        status: "published",
-        bookings: 0,
-        createdAt: new Date().toLocaleDateString("vi-VN"),
-        companyId: company.id,
-        companyName: company.name,
-        companyLogo: company.logo,
-      };
-      onCreateTour(duplicatedTourData);
-      setCopiedNotice(`Đã nhân bản thành công "${tour.name}" thành bản sao mới!`);
-    } else if (type === "hide") {
-      onEditTour(tour.id, { visibility: "hidden" });
-      setCopiedNotice(`Đã tạm ẩn tour "${tour.name}". Khách hàng sẽ không tìm thấy tour trên sàn.`);
-    } else if (type === "publish") {
-      onEditTour(tour.id, { status: "completed", visibility: "public" });
-      setCopiedNotice(`Đã mở bán lại tour "${tour.name}" công khai trên nền tảng TripOps.`);
-    } else if (type === "delete") {
-      onDeleteTour(tour.id);
-      setCopiedNotice(`Đã xóa vĩnh viễn tour "${tour.name}" khỏi hệ thống.`);
+    setActionBusy(true); setActionError("");
+    try {
+      if (type === "duplicate") {
+        if (!onDuplicateTour) throw new Error("Không thể nhân bản tour này.");
+        await onDuplicateTour(tour.id, `${tour.name} (Bản sao)`);
+        setCopiedNotice(`Đã tạo bản nháp từ "${tour.name}".`);
+      } else if (type === "hide") {
+        await onEditTour(tour.id, { visibility: "hidden" });
+        setCopiedNotice(`Đã tạm ẩn tour "${tour.name}".`);
+      } else if (type === "publish") {
+        await onEditTour(tour.id, { status: "completed", visibility: "public" });
+        setCopiedNotice(`Đã đăng bán tour "${tour.name}".`);
+      } else if (type === "delete") {
+        await onDeleteTour(tour.id);
+        setCopiedNotice(`Đã lưu trữ tour "${tour.name}".`);
+      }
+      setPendingAction(null);
+      setTimeout(() => setCopiedNotice(null), 3500);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không thể cập nhật tour.");
+    } finally {
+      setActionBusy(false);
     }
-
-    setPendingAction(null);
-    setTimeout(() => setCopiedNotice(null), 3500);
   };
 
   // Bulk actions
@@ -204,13 +205,14 @@ export function AgencyTourManagement({
     }
   };
 
-  const handleBulkToggleVisibility = (toVisibility: "public" | "hidden") => {
-    selectedTourIds.forEach((id) => {
-      onEditTour(id, { visibility: toVisibility, status: "completed" });
-    });
-    setCopiedNotice(`Đã cập nhật khả năng hiển thị ${selectedTourIds.length} tour đã chọn!`);
-    setSelectedTourIds([]);
-    setTimeout(() => setCopiedNotice(null), 3000);
+  const handleBulkToggleVisibility = async (toVisibility: "public" | "hidden") => {
+    setActionBusy(true); setActionError("");
+    try {
+      for (const id of selectedTourIds) await onEditTour(id, { visibility: toVisibility, status: "completed" });
+      setCopiedNotice(`Đã cập nhật ${selectedTourIds.length} tour.`);
+      setSelectedTourIds([]);
+    } catch (error) { setActionError(error instanceof Error ? error.message : "Không thể cập nhật tour."); }
+    finally { setActionBusy(false); }
   };
 
   // 1. Nếu đang mở xem chi tiết tour -> Render trang TourDetailPage RIÊNG BIỆT (Toàn màn hình)
@@ -219,7 +221,7 @@ export function AgencyTourManagement({
       <div className="w-full bg-[#F0F9FF] min-h-screen">
         <TourDetailPage
           tour={viewingTour}
-          services={mockServices}
+          services={[]}
           currentUser={company as any}
           onBack={() => setViewingTour(null)}
           onEditTour={onEditTour}
@@ -243,12 +245,12 @@ export function AgencyTourManagement({
           setShowCreateModal(false);
           setEditingTour(null);
         }}
-        onSubmit={(data) => {
+        onSubmit={async (data) => {
           if (editingTour) {
-            onEditTour(editingTour.id, data);
+            await onEditTour(editingTour.id, data);
             setEditingTour(null);
           } else {
-            onCreateTour(data as Omit<Tour, "id">);
+            await onCreateTour(data as Omit<Tour, "id">);
             setShowCreateModal(false);
           }
         }}
@@ -259,6 +261,7 @@ export function AgencyTourManagement({
   // 3. Màn hình Quản Lý Tour chính
   return (
     <div className="space-y-6 w-full">
+      {actionError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
       {/* HEADER: TIÊU ĐỀ & NÚT TÁC VỤ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -476,11 +479,9 @@ export function AgencyTourManagement({
                 <div>
                   {/* Ảnh bìa & Thẻ Tag */}
                   <div className="relative h-48 overflow-hidden bg-slate-100">
-                    <img
-                      src={tour.image || (tour.images && tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
-                      alt={tour.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                    {tour.image ? <img src={tour.image} alt={tour.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      : <div className="w-full h-full flex items-center justify-center text-slate-400"><ImageIcon className="w-10 h-10" /></div>}
 
                     {/* Checkbox chọn hàng loạt */}
                     <div className="absolute top-2.5 left-2.5 z-10">
@@ -498,7 +499,7 @@ export function AgencyTourManagement({
 
                     <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs rounded-full px-2.5 py-1 flex items-center gap-1 shadow-sm">
                       <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                      <span className="text-xs font-bold text-slate-800">{tour.rating || 5.0}</span>
+                      <span className="text-xs font-bold text-slate-800">{tour.rating || "—"}</span>
                     </div>
 
                     <div className="absolute top-2.5 left-9 flex items-center gap-1.5 flex-wrap">
@@ -626,6 +627,10 @@ export function AgencyTourManagement({
                       >
                         <Edit className="w-4 h-4" />
                       </button>
+                      <button type="button" title="Lịch sử phiên bản" onClick={() => setVersionTour(tour)}
+                        className="p-1.5 text-slate-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg">
+                        <History className="w-4 h-4" />
+                      </button>
 
                       {/* Nhân bản tour (có hộp thoại xác nhận) */}
                       <button
@@ -640,7 +645,7 @@ export function AgencyTourManagement({
                       {/* Xóa tour (có hộp thoại xác nhận) */}
                       <button
                         type="button"
-                        title="Xóa tour vĩnh viễn"
+                        title="Lưu trữ tour"
                         onClick={() => setPendingAction({ type: "delete", tour })}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                       >
@@ -701,18 +706,16 @@ export function AgencyTourManagement({
 
                       <td className="p-3.5">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={tour.image || (tour.images && tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
-                            alt={tour.name}
-                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
-                          />
+                          {tour.image ? <img src={tour.image} alt={tour.name}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0" />
+                            : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400"><ImageIcon className="w-5 h-5" /></div>}
                           <div>
                             <div className="flex items-center gap-1.5 mb-0.5">
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-[#075985]">
                                 {tour.tourCode || "T-NEW"}
                               </span>
                               <span className="flex items-center text-[10px] text-amber-500 font-bold">
-                                ★ {tour.rating || 5.0}
+                                ★ {tour.rating || "—"}
                               </span>
                             </div>
                             <p
@@ -802,6 +805,10 @@ export function AgencyTourManagement({
                           >
                             <Edit className="w-4 h-4" />
                           </button>
+                          <button type="button" title="Lịch sử phiên bản" onClick={() => setVersionTour(tour)}
+                            className="p-1.5 text-slate-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg">
+                            <History className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             title="Nhân bản tour (Duplicate)"
@@ -812,7 +819,7 @@ export function AgencyTourManagement({
                           </button>
                           <button
                             type="button"
-                            title="Xóa tour vĩnh viễn"
+                            title="Lưu trữ tour"
                             onClick={() => setPendingAction({ type: "delete", tour })}
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
                           >
@@ -832,6 +839,11 @@ export function AgencyTourManagement({
       {/* ========================================================================= */}
       {/* HỘP THOẠI XÁC NHẬN HÀNH ĐỘNG (ALERT DIALOG UI CAO CẤP)                   */}
       {/* ========================================================================= */}
+      <TourVersionHistoryModal isOpen={!!versionTour} onClose={() => setVersionTour(null)}
+        tour={versionTour} onRestoreVersion={(id, version) => {
+          void Promise.resolve(onRestoreTourVersion?.(id, version)).catch(error =>
+            setActionError(error instanceof Error ? error.message : "Không thể khôi phục phiên bản."));
+        }} />
       <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
         <AlertDialogContent className="max-w-md p-6 rounded-2xl bg-white shadow-xl border border-slate-200">
           <AlertDialogHeader className="space-y-3">
@@ -860,7 +872,7 @@ export function AgencyTourManagement({
 
               <div>
                 <AlertDialogTitle className="text-base font-bold text-slate-900 leading-snug">
-                  {pendingAction?.type === "delete" && "Xác nhận xóa vĩnh viễn tour"}
+                  {pendingAction?.type === "delete" && "Xác nhận lưu trữ tour"}
                   {pendingAction?.type === "hide" && "Xác nhận tạm dừng mở bán tour"}
                   {pendingAction?.type === "publish" && "Xác nhận mở bán lại tour"}
                   {pendingAction?.type === "duplicate" && "Xác nhận nhân bản tour"}
@@ -874,11 +886,9 @@ export function AgencyTourManagement({
             {/* Tour Info Preview Box */}
             {pendingAction?.tour && (
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3 text-left">
-                <img
-                  src={pendingAction.tour.image || (pendingAction.tour.images && pendingAction.tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
-                  alt={pendingAction.tour.name}
-                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
-                />
+                {pendingAction.tour.image ? <img src={pendingAction.tour.image} alt={pendingAction.tour.name}
+                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0" />
+                  : <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><ImageIcon className="w-5 h-5" /></div>}
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-slate-900 truncate">{pendingAction.tour.name}</p>
                   <p className="text-[11px] text-slate-500">{pendingAction.tour.destination} · {pendingAction.tour.duration}</p>
@@ -890,7 +900,7 @@ export function AgencyTourManagement({
             <AlertDialogDescription className="text-xs text-slate-600 leading-relaxed text-left">
               {pendingAction?.type === "delete" && (
                 <span className="text-rose-700 font-medium">
-                  Cảnh báo: Hành động này không thể hoàn tác! Toàn bộ thông tin lịch trình, bảng giá độ tuổi và hình ảnh của tour này sẽ bị xóa khỏi hệ thống.
+                  Tour sẽ được lưu trữ và ẩn khỏi danh sách đang bán. Lịch sử phiên bản và cấu hình vẫn được giữ trong hệ thống.
                 </span>
               )}
               {pendingAction?.type === "hide" && (
@@ -922,7 +932,8 @@ export function AgencyTourManagement({
             </AlertDialogCancel>
 
             <AlertDialogAction
-              onClick={handleExecuteConfirmedAction}
+              onClick={(event) => { event.preventDefault(); void handleExecuteConfirmedAction(); }}
+              disabled={actionBusy}
               className={`text-xs font-bold text-white px-4 h-9 transition-colors ${
                 pendingAction?.type === "delete"
                   ? "bg-rose-600 hover:bg-rose-700"
@@ -933,7 +944,7 @@ export function AgencyTourManagement({
                   : "bg-[#075985] hover:bg-[#F97316]"
               }`}
             >
-              {pendingAction?.type === "delete" && "Xóa vĩnh viễn"}
+              {pendingAction?.type === "delete" && "Lưu trữ tour"}
               {pendingAction?.type === "hide" && "Tạm dừng bán"}
               {pendingAction?.type === "publish" && (pendingAction.tour.status === "draft" ? "Đăng bán ngay" : "Mở bán lại")}
               {pendingAction?.type === "duplicate" && "Tạo bản sao"}
@@ -952,7 +963,7 @@ export interface TourFormPageProps {
   tour: Tour | null;
   company: TourCompany;
   onBack: () => void;
-  onSubmit: (data: Partial<Tour>) => void;
+  onSubmit: (data: Partial<Tour>) => void | Promise<unknown>;
   customRequest?: CustomTourRequest | null;
   isCustomTour?: boolean;
 }
@@ -973,9 +984,21 @@ export function TourFormPage({
 }: TourFormPageProps) {
   const isCustom = isCustomTour || !!customRequest || tour?.tourType === "custom_request";
   const [changeNote, setChangeNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [showAIPlanner, setShowAIPlanner] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [serviceOptions, setServiceOptions] = useState<EligibleService[]>([]);
+  const [serviceError, setServiceError] = useState("");
+  useEffect(() => {
+    if (isCustom) return;
+    let active = true;
+    Promise.all([eligibleServices("hotel"), eligibleServices("fnb")])
+      .then(groups => { if (active) setServiceOptions(groups.flat()); })
+      .catch(error => { if (active) setServiceError(error instanceof Error ? error.message : "Không tải được danh mục dịch vụ."); });
+    return () => { active = false; };
+  }, [isCustom]);
 
   const handleApplyAIItinerary = (generated: {
     name: string;
@@ -997,7 +1020,7 @@ export function TourFormPage({
 
   // Tab 1: General Info
   const [tourCode, setTourCode] = useState(
-    tour?.tourCode ?? (isCustom ? `TC-${Date.now().toString().slice(-4)}` : `T${Date.now().toString().slice(-4)}`)
+    tour?.tourCode ?? ""
   );
   const [name, setName] = useState(
     tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destination} - Khách đoàn ${customRequest.customerName}` : "")
@@ -1019,24 +1042,16 @@ export function TourFormPage({
   );
 
   // Photos & Thumbnail
-  const initialImages: string[] = tour?.images && tour.images.length > 0
-    ? tour.images
-    : tour?.image
-    ? [tour.image]
-    : [
-        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800",
-        "https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800",
-        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-      ];
+  const initialImages: string[] = tour?.images || (tour?.image ? [tour.image] : []);
   const [images, setImages] = useState<string[]>(initialImages);
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(0);
 
   // Operation period & Departure location
   const [operationPeriod, setOperationPeriod] = useState(
-    tour?.operationPeriod ?? "Khởi hành theo thỏa thuận với khách"
+    tour?.operationPeriod ?? ""
   );
   const [departureLocation, setDepartureLocation] = useState(
-    tour?.departureLocation ?? (tour?.departureCity ?? "TP. Hồ Chí Minh")
+    tour?.departureLocation ?? ""
   );
   const [minGuests, setMinGuests] = useState(
     tour?.minGuests ?? (customRequest?.numberOfGuests ?? 2)
@@ -1047,15 +1062,7 @@ export function TourFormPage({
   const [description, setDescription] = useState(
     tour?.description ?? (customRequest?.specialRequests ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.customerName}.\nYêu cầu đặc biệt: ${customRequest.specialRequests}` : "")
   );
-  const [highlights, setHighlights] = useState<string[]>(
-    tour?.highlights && tour.highlights.length > 0
-      ? tour.highlights
-      : [
-          "Tham quan danh lam thắng cảnh đặc sắc nhất điểm đến",
-          "Thưởng thức các bữa ăn đặc sản địa phương phong phú",
-          "Nghỉ dưỡng tại hệ thống khách sạn/resort tiêu chuẩn cao",
-        ]
-  );
+  const [highlights, setHighlights] = useState<string[]>(tour?.highlights || []);
   const [newHighlight, setNewHighlight] = useState("");
 
   // Co-Hosting Alliance & Segment Quotation States (Hỗ trợ liên minh đa công ty)
@@ -1269,46 +1276,7 @@ export function TourFormPage({
   };
 
   // Tab 2 - Section 1: Danh sách Khách sạn lưu trú & Cấu hình Đổi hạng khách sạn
-  const [hotels, setHotels] = useState<TourHotel[]>(() => {
-    if (tour?.hotels && tour.hotels.length > 0) {
-      return JSON.parse(JSON.stringify(tour.hotels));
-    }
-    const found = tour?.itinerary?.find((d) => d.hotel)?.hotel;
-    const defaultAlternatives: TourAlternativeHotel[] = [
-      { id: "alt-1", name: "Dalat Edensee Lake Resort & Spa", stars: 5, priceDifference: 400000, description: "Resort ven hồ Tuyền Lâm – Không gian nghỉ dưỡng đẳng cấp" },
-    ];
-
-    if (found) {
-      return [
-        {
-          id: "hotel-1",
-          name: found.name,
-          destination: tour?.destination || "Đà Lạt",
-          nights: tour?.numberOfNights ?? 2,
-          stars: found.stars || 4,
-          pricePerNight: found.pricePerNight || 2800000,
-          description: found.description || "Khách sạn cao cấp view đẹp",
-          address: found.address || "Trung tâm thành phố",
-          allowCustomHotelRequest: true,
-          alternativeHotels: defaultAlternatives,
-        },
-      ];
-    }
-    return [
-      {
-        id: "hotel-1",
-        name: "Khách sạn Đà Lạt Palace Heritage",
-        destination: tour?.destination || "Đà Lạt",
-        nights: tour?.numberOfNights ?? 2,
-        stars: 5,
-        pricePerNight: 2800000,
-        description: "Khách sạn cổ kính trung tâm thành phố, view hồ Xuân Hương",
-        address: "02 Trần Phú, Phường 3, TP. Đà Lạt",
-        allowCustomHotelRequest: true,
-        alternativeHotels: defaultAlternatives,
-      },
-    ];
-  });
+  const [hotels, setHotels] = useState<TourHotel[]>(tour?.hotels || []);
   const [expandedHotelId, setExpandedHotelId] = useState<string | null>("hotel-1");
 
   const addHotel = () => {
@@ -1526,85 +1494,14 @@ export function TourFormPage({
   };
 
   // Tab 2: Lịch trình chi tiết
-  const [itinerary, setItinerary] = useState<DailyItinerary[]>(
-    tour?.itinerary && tour.itinerary.length > 0
-      ? JSON.parse(JSON.stringify(tour.itinerary))
-      : [
-          {
-            id: `day-1`,
-            day: 1,
-            date: "2026-03-01",
-            title: "TP.HCM – Đà Lạt (Ăn trưa, tối)",
-            description: "Hướng dẫn viên Viettravel đón đoàn tại điểm hẹn, xuất phát đi Đà Lạt. Tới nơi nhận phòng khách sạn, ăn trưa nhà hàng địa phương. Buổi chiều tham quan hồ Xuân Hương và Nhà thờ Con Gà. Tối dạo chợ đêm Đà Lạt và thưởng thức ẩm thực đặc sản.",
-            destinationCity: "Đà Lạt",
-            hotel: {
-              name: "Khách sạn Đà Lạt Palace Heritage",
-              pricePerNight: 2800000,
-              description: "Khách sạn cổ kính trung tâm thành phố, view hồ Xuân Hương",
-            },
-            meals: [
-              { type: "lunch", serviceName: "Nhà hàng Hương Rừng Đà Lạt", description: "Đặc sản gà đồi, cơm lam, rau củ tươi organic Đà Lạt", pricePerPerson: 120000 },
-              { type: "dinner", serviceName: "Nhà hàng Chợ Đêm & Phố Ẩm Thực Đà Lạt", description: "Ẩm thực đường phố: bánh tráng nướng, sữa đậu nành", pricePerPerson: 90000 },
-            ],
-            locations: [
-              { id: "loc-1-1", name: "Hồ Xuân Hương", address: "01 Trần Quốc Toản, Phường 1, Đà Lạt", time: "14:00" },
-              { id: "loc-1-2", name: "Nhà thờ Con Gà", address: "Trần Phú, Phường 3, Đà Lạt", time: "15:30" },
-              { id: "loc-1-3", name: "Chợ đêm Đà Lạt", address: "Nguyễn Thị Minh Khai, Phường 1, Đà Lạt", time: "19:00" },
-            ],
-          },
-          {
-            id: `day-2`,
-            day: 2,
-            date: "2026-03-02",
-            title: "Khám phá Đà Lạt (Ăn sáng, trưa, tối)",
-            description: "Sau bữa sáng tại khách sạn, đoàn khởi hành tham quan Thung lũng tình yêu, Mê Linh Coffee Garden và Thác Datanla. Buổi chiều ghé Quảng trường Lâm Viên ngắm hoàng hôn. Tối ăn nhà hàng đặc sản địa phương.",
-            destinationCity: "Đà Lạt",
-            hotel: {
-              name: "Khách sạn Đà Lạt Palace Heritage",
-              pricePerNight: 2800000,
-              description: "Khách sạn cổ kính trung tâm thành phố",
-            },
-            meals: [
-              { type: "breakfast", serviceName: "Khách sạn Đà Lạt Palace Heritage", description: "Buffet sáng tại khách sạn", pricePerPerson: 0 },
-              { type: "lunch", serviceName: "Nhà hàng Làng Nướng Đà Lạt", description: "Đặc sản nướng Đà Lạt", pricePerPerson: 130000 },
-              { type: "dinner", serviceName: "Nhà hàng La Viet", description: "Ẩm thực Việt Nam đặc sắc", pricePerPerson: 150000 },
-            ],
-            locations: [
-              { id: "loc-2-1", name: "Thung lũng tình yêu", address: "Phường 4, Đà Lạt", time: "08:30" },
-              { id: "loc-2-2", name: "Mê Linh Coffee Garden", address: "Đường Hồ Tùng Mậu, Phường 3, Đà Lạt", time: "11:00" },
-              { id: "loc-2-3", name: "Thác Datanla", address: "Đèo Prenn, Phường 3, Đà Lạt", time: "14:00" },
-              { id: "loc-2-4", name: "Quảng trường Lâm Viên", address: "Trần Quốc Toản, Phường 1, Đà Lạt", time: "17:00" },
-            ],
-          },
-          {
-            id: `day-3`,
-            day: 3,
-            date: "2026-03-03",
-            title: "Đà Lạt – TP.HCM (Ăn sáng, trưa)",
-            description: "Ăn sáng tại khách sạn, trả phòng. Tham quan Ga Đà Lạt – công trình kiến trúc Pháp cổ điển. Ghé Vườn hoa thành phố chụp ảnh lưu niệm. Ăn trưa rồi lên xe trở về TP.HCM, kết thúc tour.",
-            destinationCity: "Đà Lạt",
-            meals: [
-              { type: "breakfast", serviceName: "Khách sạn Đà Lạt Palace Heritage", description: "Buffet sáng tại khách sạn", pricePerPerson: 0 },
-              { type: "lunch", serviceName: "Nhà hàng Trúc Lâm Viên", description: "Cơm phần đặc sản Đà Lạt", pricePerPerson: 100000 },
-            ],
-            locations: [
-              { id: "loc-3-1", name: "Ga Đà Lạt", address: "Quang Trung, Phường 10, Đà Lạt", time: "08:00" },
-              { id: "loc-3-2", name: "Vườn hoa thành phố", address: "Đường Hồ Tùng Mậu, Phường 3, Đà Lạt", time: "09:30" },
-            ],
-          },
-        ]
-  );
+  const [itinerary, setItinerary] = useState<DailyItinerary[]>(tour?.itinerary?.length
+    ? JSON.parse(JSON.stringify(tour.itinerary))
+    : [{ id: 'day-1', day: 1, date: '', title: '', description: '', locations: [], meals: [] }]);
 
   // Tab 3: Bảng giá vé theo độ tuổi
-  const [priceTable, setPriceTable] = useState<TourPriceRow[]>(
-    tour?.priceTable && tour.priceTable.length > 0
-      ? JSON.parse(JSON.stringify(tour.priceTable))
-      : [
-          { ageGroup: "adult", ageGroupLabel: "Người lớn", ageRange: "Từ 11 tuổi trở lên", minAge: 11, maxAge: 120, price: 3500000 },
-          { ageGroup: "child_2_11", ageGroupLabel: "Trẻ em (2–11 tuổi)", ageRange: "Từ 2 đến dưới 11 tuổi", minAge: 2, maxAge: 10, price: 2450000 },
-          { ageGroup: "child_under_2", ageGroupLabel: "Em bé (dưới 2 tuổi)", ageRange: "Dưới 2 tuổi", minAge: 0, maxAge: 1, price: 0 },
-        ]
-  );
+  const [priceTable, setPriceTable] = useState<TourPriceRow[]>(tour?.priceTable?.length
+    ? JSON.parse(JSON.stringify(tour.priceTable))
+    : [{ ageGroup: 'adult', ageGroupLabel: 'Người lớn', minAge: 0, price: 0 }]);
 
   const handleAddPriceRow = () => {
     if (!isLeadCompany) {
@@ -1660,42 +1557,10 @@ export function TourFormPage({
   }, [isCoHostedTour, coHostsList.length, myQuoteAdult, myQuoteChild, myQuoteInfant, myCustomQuotes]);
 
   // Tab 4: Quy định & Chính sách
-  const [inclusions, setInclusions] = useState<string[]>(
-    tour?.inclusions && tour.inclusions.length > 0
-      ? tour.inclusions
-      : [
-          "Xe du lịch máy lạnh đưa đón và tham quan suốt tuyến theo chương trình.",
-          "Khách sạn tiêu chuẩn (2–3 khách/phòng tiện nghi).",
-          "Các bữa ăn chính và ăn sáng buffet theo chương trình.",
-          "Vé vào cổng các điểm tham quan có trong lịch trình.",
-          "Hướng dẫn viên chuyên nghiệp nhiệt tình phục vụ đoàn suốt tuyến.",
-          "Bảo hiểm du lịch tối đa 50.000.000đ/người.",
-          "Nước suối đóng chai (1 chai/người/ngày).",
-        ]
-  );
-  const [exclusions, setExclusions] = useState<string[]>(
-    tour?.exclusions && tour.exclusions.length > 0
-      ? tour.exclusions
-      : [
-          "Chi phí cá nhân: giặt ủi, điện thoại, thức uống minibar ngoài chương trình.",
-          "Phụ thu phòng đơn (nếu khách đi 1 mình có nhu cầu ở riêng).",
-          "Tiền bồi dưỡng (tip) cho tài xế và hướng dẫn viên (tùy tâm).",
-          "Thuế VAT (xuất hóa đơn theo yêu cầu).",
-        ]
-  );
-  const [regulations, setRegulations] = useState<string[]>(
-    tour?.regulations && tour.regulations.length > 0
-      ? tour.regulations
-      : [
-          "Quý khách vui lòng có mặt tại điểm hẹn trước giờ khởi hành 15–30 phút.",
-          "Mang theo giấy tờ tùy thân hợp lệ (CMND/CCCD/Hộ chiếu bản gốc).",
-          "Trẻ em phải có người lớn đi kèm và mang theo giấy khai sinh.",
-          "Lịch trình có thể thay đổi thứ tự điểm đến theo tình hình thực tế nhưng vẫn đảm bảo đủ điểm.",
-        ]
-  );
-  const [companyNote, setCompanyNote] = useState(
-    tour?.companyNote ?? `${company.name.toUpperCase()} KÍNH CHÚC QUÝ KHÁCH MỘT CHUYẾN ĐI THÚ VỊ VÀ Ý NGHĨA!`
-  );
+  const [inclusions, setInclusions] = useState<string[]>(tour?.inclusions || []);
+  const [exclusions, setExclusions] = useState<string[]>(tour?.exclusions || []);
+  const [regulations, setRegulations] = useState<string[]>(tour?.regulations || []);
+  const [companyNote, setCompanyNote] = useState(tour?.companyNote || '');
 
   const [newInclusion, setNewInclusion] = useState("");
   const [newExclusion, setNewExclusion] = useState("");
@@ -1713,23 +1578,14 @@ export function TourFormPage({
     });
   };
 
-  // Handle local image file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
-        if (result) {
-          setImages((prev) => [...prev, result]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const addImageUrl = () => {
+    try {
+      const url = new URL(newImageUrl.trim());
+      if (url.protocol !== "https:" || url.href.length > 2048) throw new Error();
+      setImages(previous => [...previous, url.href]);
+      setNewImageUrl("");
+      setSaveError("");
+    } catch { setSaveError("Hình tour phải là URL HTTPS hợp lệ, tối đa 2048 ký tự."); }
   };
 
   const removeImage = (idx: number) => {
@@ -1827,13 +1683,13 @@ export function TourFormPage({
     }
   };
 
-  const handleSubmit = (mode: "draft" | "complete_hidden" | "complete_public" = "complete_public") => {
+  const handleSubmit = async (mode: "draft" | "complete_public" = "complete_public") => {
     const isDraft = mode === "draft";
     if (!isDraft && !name.trim()) {
       alert("Vui lòng nhập tên tour trước khi hoàn tất.");
       return;
     }
-    const finalTourCode = tourCode.trim() || tour?.tourCode || (isCustom ? `TC-${Date.now().toString().slice(-4)}` : `T${Date.now().toString().slice(-4)}`);
+    const finalTourCode = tourCode.trim();
     const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
 
     let nextVersion = tour?.version || 1;
@@ -1923,7 +1779,7 @@ export function TourFormPage({
       platformFeeRate: 0,
       pricingStatus: updatedCoHosts?.every((ch) => ch.quoteStatus === "submitted") ? "quoted" : "pending_partner_quote",
       status: isDraft ? "draft" : "completed",
-      visibility: isDraft || mode === "complete_hidden" ? "hidden" : "public",
+      visibility: isDraft ? "hidden" : "public",
       is_request: isCustom,
       tourType: isCustom ? "custom_request" : (tour?.tourType || "public"),
       customRequestId: customRequest?.id || tour?.customRequestId,
@@ -1938,8 +1794,10 @@ export function TourFormPage({
       versionHistory: isCustom ? nextVersionHistory : tour?.versionHistory,
     };
 
-    onSubmit(tourData);
-    onBack();
+    setSaving(true); setSaveError("");
+    try { await onSubmit(tourData); onBack(); }
+    catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể lưu tour."); }
+    finally { setSaving(false); }
   };
 
   const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
@@ -1948,6 +1806,8 @@ export function TourFormPage({
 
   return (
     <div className="bg-slate-50 min-h-screen pb-16 space-y-6 -m-6">
+      {saveError && <div role="alert" className="mx-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</div>}
+      {serviceError && <div role="alert" className="mx-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{serviceError} Bạn vẫn có thể nhập dịch vụ thủ công.</div>}
       {/* Sticky Top Header Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-4">
@@ -1996,26 +1856,15 @@ export function TourFormPage({
             type="button"
             variant="outline"
             onClick={() => handleSubmit("draft")}
+            disabled={saving}
             className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs font-semibold"
             title="Lưu bản nháp để tiếp tục chỉnh sửa sau"
           >
             Lưu bản nháp
           </Button>
-          {!isCustom && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("complete_hidden")}
-              className="border-slate-400 text-slate-700 hover:bg-slate-100 text-xs font-semibold"
-              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
-            >
-              Lưu hoàn tất (Chưa đăng)
-            </Button>
-          )}
           <Button
             type="button"
-            disabled={!name.trim() || !destination.trim()}
+            disabled={saving || !name.trim() || !destination.trim()}
             onClick={() => handleSubmit("complete_public")}
             className={`${
               isCustom
@@ -2165,31 +2014,24 @@ export function TourFormPage({
                   <div>
                     <Label className="text-sm font-bold text-blue-950 flex items-center gap-2">
                       <ImageIcon className="w-4 h-4 text-[#075985]" />
-                      Hình ảnh của Tour (Tải lên từ máy tính &amp; Chọn Thumbnail)
+                      Hình ảnh của Tour (URL HTTPS &amp; Chọn Thumbnail)
                     </Label>
                     <p className="text-xs text-[#075985] mt-0.5">
-                      Chọn ảnh từ máy tính. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện (Thumbnail)</strong> chính thức.
+                      Dán URL ảnh HTTPS. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện</strong>.
                     </p>
                   </div>
                   <div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="tour-file-uploader"
-                    />
+                    <Input value={newImageUrl} onChange={event => setNewImageUrl(event.target.value)}
+                      placeholder="https://example.com/tour.jpg" className="mb-2" aria-label="URL ảnh tour" />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={addImageUrl}
                       className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs gap-1.5 shadow-xs"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      Tải ảnh từ máy tính
+                      Thêm ảnh từ URL
                     </Button>
                   </div>
                 </div>
@@ -2246,11 +2088,11 @@ export function TourFormPage({
                   </Label>
                   <Input
                     value={tourCode}
-                    onChange={(e) => setTourCode(e.target.value)}
-                    placeholder="VD: ĐL3N2Đ-A hoặc T001"
+                    readOnly
+                    placeholder="Hệ thống tạo mã khi lưu"
                     className="mt-1 font-bold text-[#075985] uppercase"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Mã định danh duy nhất (VD: ĐL3N2Đ-A, PQ4N3Đ...)</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Mã Tour do máy chủ cấp khi lưu bản nháp.</p>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -2301,14 +2143,16 @@ export function TourFormPage({
                 <div>
                   <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                    Điểm khởi hành <span className="text-red-500">*</span>
+                    Điểm khởi hành
                   </Label>
                   <Input
                     value={departureLocation}
                     onChange={(e) => setDepartureLocation(e.target.value)}
+                    disabled={!isCustom}
                     placeholder="VD: TP. Hồ Chí Minh / Hà Nội"
                     className="mt-1"
                   />
+                  {!isCustom && <p className="text-[11px] text-gray-500 mt-1">API Tour hiện chưa lưu điểm khởi hành riêng.</p>}
                 </div>
 
                 <div>
@@ -2563,6 +2407,16 @@ export function TourFormPage({
                                   placeholder="VD: Khách sạn Đà Lạt Palace Heritage"
                                   className={`mt-1 text-xs ${isHotelLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
                                 />
+                                <select value={hotel.serviceId || ""} disabled={isHotelLocked}
+                                  onChange={e => {
+                                    const selected = serviceOptions.find(option => String(option.id) === e.target.value);
+                                    updateHotel(hotel.id || "", { serviceId: selected ? String(selected.id) : undefined,
+                                      name: selected?.name || hotel.name });
+                                  }} className="mt-2 w-full h-9 px-2 text-xs border border-gray-300 rounded-md bg-white">
+                                  <option value="">Nhập khách sạn thủ công (không liên kết Service)</option>
+                                  {serviceOptions.filter(option => option.category === "hotel").map(option =>
+                                    <option key={option.id} value={option.id}>{option.name} · #{option.id}</option>)}
+                                </select>
                               </div>
                               <div>
                                 <Label className="text-xs font-semibold text-gray-700">Điểm đến / Khu vực lưu trú</Label>
@@ -3308,6 +3162,16 @@ export function TourFormPage({
                                               placeholder="VD: Nhà hàng Hương Rừng Đà Lạt"
                                               className={`mt-1 text-xs ${isMealLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
                                             />
+                                            <select value={meal.serviceId || ""} disabled={isMealLocked}
+                                              onChange={e => {
+                                                const selected = serviceOptions.find(option => String(option.id) === e.target.value);
+                                                updateMealField(dIdx, mIdx, { serviceId: selected ? String(selected.id) : undefined,
+                                                  serviceName: selected?.name || meal.serviceName });
+                                              }} className="mt-2 w-full h-9 px-2 text-xs border border-gray-300 rounded-md bg-white">
+                                              <option value="">Nhập nhà hàng thủ công (không liên kết Service)</option>
+                                              {serviceOptions.filter(option => option.category === "fnb").map(option =>
+                                                <option key={option.id} value={option.id}>{option.name} · #{option.id}</option>)}
+                                            </select>
                                           </div>
                                           <div className="sm:col-span-12">
                                             <Label className="text-xs font-semibold text-gray-700">Mô tả thực đơn tiêu chuẩn (Đã bao gồm trong giá tour - 0đ chênh lệch)</Label>
@@ -4787,24 +4651,13 @@ export function TourFormPage({
             type="button"
             variant="outline"
             onClick={() => handleSubmit("draft")}
+            disabled={saving}
             className="border-amber-500 text-amber-700 hover:bg-amber-50 font-semibold"
           >
             Lưu bản nháp
           </Button>
-          {!isCustom && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("complete_hidden")}
-              className="border-slate-400 text-slate-700 hover:bg-slate-100 font-semibold"
-              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
-            >
-              Lưu hoàn tất (Chưa đăng)
-            </Button>
-          )}
           <Button
-            disabled={!name.trim() || !destination.trim()}
+            disabled={saving || !name.trim() || !destination.trim()}
             onClick={() => handleSubmit("complete_public")}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
           >
