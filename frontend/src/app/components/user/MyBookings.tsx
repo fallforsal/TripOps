@@ -17,6 +17,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { CancelTourModal } from "./CancelTourModal";
+import { formatTourCode } from "@/app/components/ui/utils";
 import type { Booking } from "@/app/types";
 
 interface MyBookingsProps {
@@ -267,7 +268,7 @@ export function MyBookings({
                               </p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="font-mono text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded font-semibold">
-                                  {b.tour?.tourCode}
+                                  {formatTourCode(b.tour?.tourCode)}
                                 </span>
                                 <span className="text-[11px] text-gray-500 flex items-center gap-0.5">
                                   <MapPin className="w-3 h-3 text-gray-400" />

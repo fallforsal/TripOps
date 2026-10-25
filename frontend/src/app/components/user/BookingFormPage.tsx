@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from "react";
+import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Tour, BookingPassenger, TourPriceRow, CustomHotelChange, CustomLocationChange, CustomMealChange } from "@/app/types";
 import {
@@ -31,6 +31,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
+import { formatTourCode } from "@/app/components/ui/utils";
 
 interface BookingFormPageProps {
   tour: Tour;
@@ -600,7 +601,7 @@ export function BookingFormPage({
               </h2>
               <div className="space-y-2 text-sm text-gray-700 mb-4">
                 <p className="font-semibold text-gray-900">{tour.name}</p>
-                <p><span className="text-gray-400">Mã tour:</span> {tour.tourCode}</p>
+                <p><span className="text-gray-400">Mã tour:</span> {formatTourCode(tour.tourCode)}</p>
                 <p><span className="text-gray-400">Thời gian:</span> {tour.duration}</p>
                 {tour.operationPeriod && (
                   <p><span className="text-gray-400">Mùa tour / Thời gian hoạt động:</span> {tour.operationPeriod}</p>
@@ -982,7 +983,7 @@ export function BookingFormPage({
                   <img src={tour.image} alt={tour.name} className="w-20 h-16 rounded-lg object-cover flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900">{tour.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Mã: {tour.tourCode}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Mã: {formatTourCode(tour.tourCode)}</p>
                     <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-600">
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{tour.duration}</span>
                       <span className="flex items-center gap-1 font-semibold text-teal-700 bg-[#E0F2FE] px-2 py-0.5 rounded"><Calendar className="w-3.5 h-3.5" />Khởi hành: {tourStartDate}</span>

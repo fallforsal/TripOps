@@ -193,7 +193,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
         await Agency(actor, ct); await Validate(config, false, ct);
-        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid():N}", IsAiGenerated = aiGenerated };
+        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}", IsAiGenerated = aiGenerated };
         Apply(tour, config); repository.Add(tour);
         return await Save(tour, actor, "Created draft", ct);
     }

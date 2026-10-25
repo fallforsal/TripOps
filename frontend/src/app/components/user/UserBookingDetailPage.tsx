@@ -48,6 +48,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { formatTourCode } from "@/app/components/ui/utils";
 
 interface UserBookingDetailPageProps {
   booking: Booking;
@@ -423,7 +424,7 @@ export function UserBookingDetailPage({
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono font-bold bg-[#E0F2FE] text-blue-800 px-2.5 py-0.5 rounded-full">
-                      {booking.tour.tourCode}
+                      {formatTourCode(booking.tour.tourCode)}
                     </span>
                     {isCoHosted ? (
                       <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
@@ -1733,7 +1734,7 @@ export function UserBookingDetailPage({
 
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 1: NỘI DUNG VÀ THỜI GIAN</p>
-              <p>Tour: <strong>{booking.tour.name}</strong> ({booking.tour.tourCode})</p>
+              <p>Tour: <strong>{booking.tour.name}</strong> ({formatTourCode(booking.tour.tourCode)})</p>
               <p>Khởi hành: <strong>{booking.tourStartDate || "Theo thỏa thuận"}</strong> · Thời gian: {booking.tour.duration}</p>
               <p>Số lượng khách: <strong>{booking.numberOfGuests} người</strong></p>
             </div>
@@ -1972,7 +1973,7 @@ export function UserBookingDetailPage({
                 value={pFullName}
                 onChange={(e) => setPFullName(e.target.value)}
                 placeholder="VD: Nguyễn Văn An"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -1985,7 +1986,7 @@ export function UserBookingDetailPage({
                   type="date"
                   value={pDob}
                   onChange={(e) => setPDob(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -1996,7 +1997,7 @@ export function UserBookingDetailPage({
                 <select
                   value={pGender}
                   onChange={(e) => setPGender(e.target.value as "male" | "female")}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="male">Nam</option>
                   <option value="female">Nữ</option>
@@ -2016,7 +2017,7 @@ export function UserBookingDetailPage({
                     setPAgeGroup(ag);
                     setPPrice(calculatePassengerPrice(ag));
                   }}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="adult">Người lớn (Từ 12 tuổi)</option>
                   <option value="child_2_11">Trẻ em (2 - 11 tuổi)</option>
@@ -2032,7 +2033,7 @@ export function UserBookingDetailPage({
                   type="number"
                   value={pPrice}
                   onChange={(e) => setPPrice(Number(e.target.value))}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-bold text-teal-800"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-teal-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-bold"
                 />
               </div>
             </div>
@@ -2047,7 +2048,7 @@ export function UserBookingDetailPage({
                   value={pPhone}
                   onChange={(e) => setPPhone(e.target.value)}
                   placeholder="09xx xxx xxx"
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -2060,7 +2061,7 @@ export function UserBookingDetailPage({
                   value={pIdNumber}
                   onChange={(e) => setPIdNumber(e.target.value)}
                   placeholder="079xxxxxxxx"
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             </div>
@@ -2074,7 +2075,7 @@ export function UserBookingDetailPage({
                 value={pNotes}
                 onChange={(e) => setPNotes(e.target.value)}
                 placeholder="VD: Ăn chay trường, cần chỗ ngồi gần cửa sổ..."
-                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
 

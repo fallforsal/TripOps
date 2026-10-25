@@ -988,6 +988,7 @@ export function TourFormPage({
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [showAIPlanner, setShowAIPlanner] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [imageInputError, setImageInputError] = useState("");
   const [serviceOptions, setServiceOptions] = useState<EligibleService[]>([]);
   const [serviceError, setServiceError] = useState("");
   useEffect(() => {
@@ -1577,14 +1578,35 @@ export function TourFormPage({
     });
   };
 
-  const addImageUrl = () => {
+  const addImageUrl = (overrideUrl?: string) => {
+    let raw = (overrideUrl || newImageUrl).trim();
+    if (!raw) {
+      setImageInputError("Vui lòng nhập đường link URL hình ảnh.");
+      return;
+    }
+    // Auto-fix missing protocol or http:
+    if (!/^https?:\/\//i.test(raw)) {
+      raw = `https://${raw}`;
+    } else if (raw.startsWith("http://")) {
+      raw = "https://" + raw.slice(7);
+    }
     try {
-      const url = new URL(newImageUrl.trim());
-      if (url.protocol !== "https:" || url.href.length > 2048) throw new Error();
+      const url = new URL(raw);
+      if (url.protocol !== "https:") {
+        setImageInputError("Hình tour phải dùng đường dẫn bảo mật HTTPS.");
+        return;
+      }
+      if (url.href.length > 2048) {
+        setImageInputError("Đường dẫn quá dài (tối đa 2048 ký tự).");
+        return;
+      }
       setImages(previous => [...previous, url.href]);
       setNewImageUrl("");
+      setImageInputError("");
       setSaveError("");
-    } catch { setSaveError("Hình tour phải là URL HTTPS hợp lệ, tối đa 2048 ký tự."); }
+    } catch {
+      setImageInputError("Đường dẫn hình ảnh không đúng định dạng.");
+    }
   };
 
   const removeImage = (idx: number) => {
@@ -2019,19 +2041,69 @@ export function TourFormPage({
                       Dán URL ảnh HTTPS. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện</strong>.
                     </p>
                   </div>
-                  <div>
-                    <Input value={newImageUrl} onChange={event => setNewImageUrl(event.target.value)}
-                      placeholder="https://example.com/tour.jpg" className="mb-2" aria-label="URL ảnh tour" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addImageUrl}
-                      className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs gap-1.5 shadow-xs"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      Thêm ảnh từ URL
-                    </Button>
+                  <div className="w-full sm:w-auto sm:min-w-[340px] space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={newImageUrl}
+                        onChange={event => {
+                          setNewImageUrl(event.target.value);
+                          if (imageInputError) setImageInputError("");
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addImageUrl();
+                          }
+                        }}
+                        placeholder="Dán link ảnh (VD: https://...)"
+                        className="bg-white text-xs h-9"
+                        aria-label="URL ảnh tour"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addImageUrl()}
+                        className="bg-white border-blue-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-9 shrink-0 gap-1.5 shadow-xs font-semibold"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Thêm ảnh
+                      </Button>
+                    </div>
+                    {imageInputError && (
+                      <p className="text-[11px] text-red-600 font-medium">{imageInputError}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <span className="text-[10px] text-gray-500 font-medium">Gợi ý ảnh mẫu:</span>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Biển & Resort
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1528127269322-539801943592?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Hạ Long
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Hội An
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addImageUrl("https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800")}
+                        className="text-[10px] bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                      >
+                        Sapa
+                      </button>
+                    </div>
                   </div>
                 </div>
 
