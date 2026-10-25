@@ -30,7 +30,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 
-interface CompanyServicesExplorerProps {
+interface AgencyServicesExplorerProps {
   services: Service[];
   companyName?: string;
 }
@@ -566,10 +566,10 @@ function ExplorerOsmMap({
 // =========================================================================
 // MAIN COMPONENT: COMPANY SERVICES EXPLORER
 // =========================================================================
-export function CompanyServicesExplorer({
+export function AgencyServicesExplorer({
   services,
   companyName = "Công ty Lữ hành",
-}: CompanyServicesExplorerProps) {
+}: AgencyServicesExplorerProps) {
   // Only show approved services
   const approvedServices = services.filter(
     (s) => s.status === "approved" || !s.status

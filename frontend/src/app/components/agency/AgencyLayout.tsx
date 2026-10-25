@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 
-interface CompanyLayoutProps {
+interface AgencyLayoutProps {
   children: React.ReactNode;
   activeSection: string;
   onNavigate: (section: string) => void;
@@ -27,7 +27,7 @@ interface CompanyLayoutProps {
   onLogout?: () => void;
 }
 
-export function CompanyLayout({
+export function AgencyLayout({
   children,
   activeSection,
   onNavigate,
@@ -35,7 +35,7 @@ export function CompanyLayout({
   currentUser,
   coHostingBadgeCount,
   onLogout,
-}: CompanyLayoutProps) {
+}: AgencyLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -50,39 +50,49 @@ export function CompanyLayout({
   ];
 
   const SidebarContent = () => (
-    <>
-      {/* Brand & User Profile Header */}
+    <div className="flex flex-col h-full bg-white border-r border-[#CBD5E1]">
+      {/* Header / Brand */}
       <div className="p-4 border-b border-[#CBD5E1]">
         <div className="flex items-center justify-between gap-2">
           {!collapsed && (
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-[#075985] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm">
-                {company.name ? company.name.substring(0, 2).toUpperCase() : "TO"}
-              </div>
+              {company.logo ? (
+                <img
+                  src={company.logo}
+                  alt={company.name}
+                  className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-[#CBD5E1] shadow-2xs"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-[#075985] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-2xs">
+                  {company.name.slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="font-serif font-semibold text-[#075985] text-sm truncate">
+                <h3 className="font-serif font-bold text-[#075985] text-sm truncate">
                   {company.name}
-                </p>
-                <span className="text-[10px] uppercase tracking-wider text-[#475569] block -mt-0.5 font-medium truncate">
+                </h3>
+                <p className="text-[10px] text-[#475569] truncate font-medium">
                   {currentUser.name}
-                </span>
+                </p>
               </div>
             </div>
           )}
+
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 hover:bg-[#F0F9FF] rounded-lg transition-colors hidden lg:flex items-center justify-center border border-[#CBD5E1] text-[#475569]"
+            className="hidden lg:flex p-1.5 hover:bg-[#F0F9FF] rounded-lg border border-[#CBD5E1] text-[#475569] hover:text-[#075985] transition-colors"
             title={collapsed ? "Mở rộng menu" : "Thu gọn"}
           >
             {collapsed ? (
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-4 h-4" />
             ) : (
-              <ChevronLeft className="w-3.5 h-3.5" />
+              <ChevronLeft className="w-4 h-4" />
             )}
           </button>
+
           <button
             onClick={() => setMobileOpen(false)}
-            className="p-2 hover:bg-[#F0F9FF] rounded-lg transition-colors lg:hidden text-[#475569]"
+            className="lg:hidden p-1.5 hover:bg-[#F0F9FF] rounded-lg border border-[#CBD5E1] text-[#475569]"
           >
             <X className="w-4 h-4" />
           </button>
@@ -90,10 +100,11 @@ export function CompanyLayout({
       </div>
 
       {/* Navigation */}
-      <nav className="p-3 space-y-1.5 flex-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
+
           return (
             <button
               key={item.id}
@@ -101,25 +112,26 @@ export function CompanyLayout({
                 onNavigate(item.id);
                 setMobileOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-xs cursor-pointer ${
+              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group cursor-pointer ${
                 isActive
                   ? "bg-[#075985] text-white shadow-sm font-semibold"
-                  : "text-[#475569] hover:text-[#075985] hover:bg-[#F0F9FF] font-medium"
+                  : "text-[#475569] hover:bg-[#F0F9FF] hover:text-[#075985]"
               }`}
+              title={collapsed ? item.label : undefined}
             >
               <Icon
-                className={`w-4 h-4 flex-shrink-0 ${
-                  isActive ? "text-[#F97316]" : "text-[#475569]"
+                className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${
+                  isActive ? "text-[#F97316]" : "text-[#475569] group-hover:text-[#075985]"
                 }`}
               />
               {!collapsed && (
-                <div className="flex items-center justify-between flex-1 min-w-0">
+                <div className="flex-1 flex items-center justify-between min-w-0">
                   <span className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
-                  {item.badge && item.badge > 0 ? (
-                    <span className="bg-[#F97316] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1 shadow-xs">
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#EA580C] text-white">
                       {item.badge}
                     </span>
-                  ) : null}
+                  )}
                 </div>
               )}
             </button>
@@ -132,14 +144,14 @@ export function CompanyLayout({
         <div className="p-3 border-t border-[#CBD5E1]">
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
             {!collapsed && <span>Đăng xuất</span>}
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 
   return (

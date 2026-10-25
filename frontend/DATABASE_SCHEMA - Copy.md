@@ -14,15 +14,15 @@ Table users {
 
 Table business_profiles {
   id int [pk, increment]
-  user_id int [unique] // hoặc gắn reference: > users.id
-  business_name varchar(255)
-  tax_code varchar(50)
-  business_address text
-  business_license_url text
-  description text
-  status varchar(50)
-  rejection_reason text
-  approved_at timestamp
+  user_id varchar(36) [unique, not null, note: 'FK tới users.id - Một tài khoản Agency hoặc Provider chỉ có 1 hồ sơ doanh nghiệp']
+  business_name varchar(255) [not null, note: 'Tên pháp nhân công ty lữ hành hoặc tên cơ sở kinh doanh dịch vụ']
+  tax_code varchar(50) [not null, note: 'Mã số thuế doanh nghiệp']
+  business_address text [not null, note: 'Địa chỉ trụ sở đăng ký kinh doanh']
+  business_license_url text [note: 'Đường dẫn file ảnh / tài liệu Giấy phép kinh doanh / Giấy phép lữ hành']
+  description text [note: 'Mô tả, giới thiệu tóm tắt năng lực công ty hoặc cơ sở']
+  status varchar(50) [not null, default: 'pending', note: 'Trạng thái xét duyệt: pending (chờ duyệt), approved (đã duyệt), rejected (từ chối)']
+  rejection_reason text [note: 'Lý do từ chối nếu Admin không duyệt']
+  approved_at timestamp [note: 'Thời điểm Admin phê duyệt hồ sơ']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }

@@ -1,0 +1,1544 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "workflow",
+  "quality": "standard",
+  "startedAt": "2026-10-24T17:53:18.193Z",
+  "specification": {
+    "path": "D:\\Test\\.archify\\auth-register-flow-20261025-005500\\candidate.json",
+    "sha256": "557b532bfecb78b4e6183c4dae68645bb61723ddee800f13fa4a46ec6d20f5ac",
+    "bytes": 6907
+  },
+  "artifact": {
+    "path": "D:\\SEP\\TripOps\\auth-register-flow.html",
+    "sha256": "4e0892bca312243a028dbd6aa2a7b2c6734e7123de0041e4f3a0f94fd9e2343e",
+    "bytes": 829805
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "E:\\NodeJS\\node.exe",
+        "D:\\Test\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "workflow",
+        "D:\\Test\\.archify\\auth-register-flow-20261025-005500\\candidate.json",
+        "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "--quality",
+        "standard",
+        "--repo-root",
+        "D:\\Test\\TripOps",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "557b532bfecb78b4e6183c4dae68645bb61723ddee800f13fa4a46ec6d20f5ac",
+          "bytes": 6907
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "standard",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 1,
+          "compositionIssues": [
+            {
+              "severity": "warning",
+              "code": "composition/desktop-readability",
+              "nodeId": "node_full_access",
+              "owner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": null,
+              "requestedTargetMet": null,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1338,
+              "scale": 0.695067264573991,
+              "text": "Đăng bán tour / dịch vụ công khai",
+              "detail": "context",
+              "sourceFontPx": 6.6,
+              "projectedFontPx": 4.5874439461883405,
+              "minimumProjectedFontPx": 6
+            }
+          ]
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 4233,
+      "command": [
+        "E:\\NodeJS\\node.exe",
+        "D:\\Test\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "workflow",
+        "D:\\Test\\.archify\\auth-register-flow-20261025-005500\\candidate.json",
+        "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "--quality",
+        "standard",
+        "--repo-root",
+        "D:\\Test\\TripOps",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "3ae24e3b-fb19-4f79-a6af-5f5a840c1a3b",
+        "ok": true,
+        "command": "deliver",
+        "type": "workflow",
+        "input": "D:\\Test\\.archify\\auth-register-flow-20261025-005500\\candidate.json",
+        "output": "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "specification": {
+          "sha256": "557b532bfecb78b4e6183c4dae68645bb61723ddee800f13fa4a46ec6d20f5ac",
+          "bytes": 6907
+        },
+        "artifact": {
+          "sha256": "4e0892bca312243a028dbd6aa2a7b2c6734e7123de0041e4f3a0f94fd9e2343e",
+          "bytes": 829805
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "standard",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 1,
+          "compositionIssues": [
+            {
+              "severity": "warning",
+              "code": "composition/desktop-readability",
+              "nodeId": "node_full_access",
+              "owner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": null,
+              "requestedTargetMet": null,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1338,
+              "scale": 0.695067264573991,
+              "text": "Đăng bán tour / dịch vụ công khai",
+              "detail": "context",
+              "sourceFontPx": 6.6,
+              "projectedFontPx": 4.5874439461883405,
+              "minimumProjectedFontPx": 6
+            }
+          ]
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "https://github.com/Thien-isme/TripOps",
+          "revision": "825224a9008f35a05f10a72e924ea2a4f56b0f47",
+          "references": 8
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 980,
+      "command": [
+        "E:\\NodeJS\\node.exe",
+        "D:\\Test\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "check",
+        "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "artifact": {
+          "sha256": "4e0892bca312243a028dbd6aa2a7b2c6734e7123de0041e4f3a0f94fd9e2343e",
+          "bytes": 829805
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "standard",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 1
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 17,
+            "desktopReadabilityIssues": 1,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 4.5874439461883405,
+            "maxBends": 0,
+            "routesOverSuggestedBends": 0,
+            "maxStretch": 1,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 8,
+            "minInteriorSegmentPx": null,
+            "shortSegmentCount": 3,
+            "shortEndpointSegmentCount": 3,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": []
+          },
+          "leadingSpace": {
+            "measured": false,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": null,
+            "requestedTargetMet": null,
+            "hardFloorPx": 6,
+            "hardFloorMet": false,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "node_full_access"
+            },
+            "minimumSourceTextPx": 6.6,
+            "minimumProjectedTextPx": 4.5874439461883405,
+            "semanticTextCount": 23
+          },
+          "issues": [
+            {
+              "severity": "warning",
+              "code": "composition/desktop-readability",
+              "nodeId": "node_full_access",
+              "owner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": null,
+              "requestedTargetMet": null,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1338,
+              "scale": 0.695067264573991,
+              "text": "Đăng bán tour / dịch vụ công khai",
+              "detail": "context",
+              "sourceFontPx": 6.6,
+              "projectedFontPx": 4.5874439461883405,
+              "minimumProjectedFontPx": 6
+            }
+          ]
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "3ae24e3b-fb19-4f79-a6af-5f5a840c1a3b"
+      }
+    },
+    "browser-check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 7013,
+      "command": [
+        "E:\\NodeJS\\node.exe",
+        "D:\\Test\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "browser-check",
+        "D:\\SEP\\TripOps\\auth-register-flow.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "pass",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "3ae24e3b-fb19-4f79-a6af-5f5a840c1a3b",
+        "artifact": {
+          "path": "D:\\SEP\\TripOps\\auth-register-flow.html",
+          "sha256": "4e0892bca312243a028dbd6aa2a7b2c6734e7123de0041e4f3a0f94fd9e2343e",
+          "bytes": 829805
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        },
+        "diagnostics": [],
+        "containment": {
+          "status": "pass",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 68,
+                "diagramChromePx": 78,
+                "svgPx": 531,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 105,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 105,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 105,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 594,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 117,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 117,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 117,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1856,
+              "diagramWidth": 1826,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 721,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 142,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 142,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 142,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 738,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 145,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 145,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 145,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "themeStates": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            }
+          ]
+        },
+        "readability": {
+          "status": "pass",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 68,
+                "diagramChromePx": 78,
+                "svgPx": 531,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 105,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 105,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 105,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 594,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 117,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 117,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 117,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1856,
+              "diagramWidth": 1826,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 721,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 142,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 142,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 142,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 738,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 145,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 145,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 145,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "viewerChrome": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 68,
+                "diagramChromePx": 78,
+                "svgPx": 531,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 105,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 105,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 105,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 52,
+                  "spaceAboveNodesPx": 41,
+                  "spaceBelowNodesPx": 11
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 594,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 117,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 117,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 117,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 59,
+                  "spaceAboveNodesPx": 46,
+                  "spaceBelowNodesPx": 12
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1856,
+              "diagramWidth": 1826,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 721,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 142,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 142,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 142,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 71,
+                  "spaceAboveNodesPx": 56,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 738,
+                "cardsPx": 0,
+                "viewBoxHeight": 528
+              },
+              "viewBoxWidth": 1338,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 145,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "node_select_role",
+                    "node_user_activated",
+                    "node_submit_profile"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 145,
+                  "nodeCount": 4,
+                  "nodeIds": [
+                    "node_oauth_or_form",
+                    "node_create_account",
+                    "node_b2b_sandbox",
+                    "node_full_access"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                },
+                {
+                  "frameId": "lane-2",
+                  "heightPx": 145,
+                  "nodeCount": 1,
+                  "nodeIds": [
+                    "node_admin_verify"
+                  ],
+                  "nodeSpanPx": 73,
+                  "spaceAboveNodesPx": 57,
+                  "spaceBelowNodesPx": 15
+                }
+              ],
+              "minimumProjectedNodeTextPx": 6.6,
+              "minimumProjectedNonEdgeTextPx": 6.6,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Đăng bán tour / dịch vụ công khai",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "node_full_access"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "auth-register-flow.browser-check.json",
+          "files": []
+        }
+      }
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "diagnostics": [],
+  "evidence": {
+    "receipt": "D:\\SEP\\TripOps\\auth-register-flow.finalize.json",
+    "summaryReceipt": "D:\\SEP\\TripOps\\auth-register-flow.finalize-summary.json",
+    "browserCheckReceipt": "D:\\SEP\\TripOps\\auth-register-flow.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "finishedAt": "2026-10-24T17:53:31.831Z",
+  "durationMs": 13638,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-24T07:34:48.517Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

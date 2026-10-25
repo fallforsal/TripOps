@@ -12,6 +12,8 @@ public static class DependencyInjection
     {
         services.AddTripOpsData(configuration);
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
+        services.AddScoped<Accounts.AccountService>();
+        services.AddHttpClient<Accounts.CloudinaryStorage>(client => client.Timeout = TimeSpan.FromSeconds(20));
         return services;
     }
 }

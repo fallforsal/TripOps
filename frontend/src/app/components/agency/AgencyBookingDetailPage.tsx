@@ -91,7 +91,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 
-interface CompanyBookingDetailPageProps {
+interface AgencyBookingDetailPageProps {
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -161,7 +161,7 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
   return age >= 0 ? age : 0;
 }
 
-export function CompanyBookingDetailPage({
+export function AgencyBookingDetailPage({
   booking,
   guides,
   companyName,
@@ -179,7 +179,7 @@ export function CompanyBookingDetailPage({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
-}: CompanyBookingDetailPageProps) {
+}: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [assignModalOpen, setAssignModalOpen] = useState(false);

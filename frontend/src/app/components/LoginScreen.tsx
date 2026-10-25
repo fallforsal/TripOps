@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { User } from "@/app/types";
 import { login } from "@/app/services/authService";
 import { Compass, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
@@ -39,45 +39,6 @@ export function LoginScreen({
       setIsLoading(false);
     }
   };
-
-  const demoAccounts = [
-    {
-      role: "Khách hàng cá nhân",
-      name: "Tập đoàn FPT",
-      email: "khachhang.fpt@gmail.com",
-      badge: "User",
-    },
-    {
-      role: "Đơn vị chủ trì tour",
-      name: "Viettravel",
-      email: "viettravel.tour@gmail.com",
-      badge: "Host",
-    },
-    {
-      role: "Đối tác liên minh",
-      name: "Hà Giang Discovery",
-      email: "hagiang.discovery@gmail.com",
-      badge: "Co-host",
-    },
-    {
-      role: "Đối tác lưu trú & DV",
-      name: "Heritage Resorts",
-      email: "provider.heritage@gmail.com",
-      badge: "Provider",
-    },
-    {
-      role: "Quản trị sàn TripOps",
-      name: "Admin Platform",
-      email: "admin.platform@gmail.com",
-      badge: "Admin",
-    },
-    {
-      role: "Hướng dẫn viên lữ hành",
-      name: "Trần Thị Bích",
-      email: "guide@demo.com",
-      badge: "Guide",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-[#F0F9FF] text-[#0F172A] font-sans antialiased py-28 px-4 flex items-center justify-center">
@@ -159,33 +120,6 @@ export function LoginScreen({
               {isLoading ? "Đang xử lý đăng nhập..." : "Đăng nhập ngay"}
             </button>
           </form>
-
-          {/* Demo Accounts List */}
-          <div className="pt-4 border-t border-[#CBD5E1] space-y-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#475569] block">
-              Chọn nhanh tài khoản thử nghiệm (Mật khẩu: 1):
-            </span>
-            <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-              {demoAccounts.map((acc, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setEmail(acc.email);
-                    setPassword("1");
-                  }}
-                  className="p-2.5 rounded-xl border border-[#CBD5E1] hover:border-[#075985] hover:bg-[#F0F9FF] cursor-pointer transition-all flex items-center justify-between"
-                >
-                  <div>
-                    <div className="text-xs font-semibold text-[#075985]">{acc.name}</div>
-                    <div className="text-[10px] text-[#475569]">{acc.email}</div>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E0F2FE] text-[#075985] font-medium">
-                    {acc.badge}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
 
           <div className="text-center pt-2">
             <p className="text-xs text-[#475569]">
