@@ -48,7 +48,9 @@ export interface AgencyBookingManagementProps {
 
 const statusMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
   pending: { label: "Chờ chốt giá & duyệt", bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-300" },
+  deposited: { label: "Đã đặt cọc", bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-400" },
   confirmed: { label: "Đã xác nhận", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  paid: { label: "Đã thanh toán đủ", bg: "bg-teal-50", text: "text-teal-800", border: "border-teal-300" },
   cancelled: { label: "Đã hủy", bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
   completed: { label: "Hoàn thành", bg: "bg-[#F0F9FF]", text: "text-[#075985]", border: "border-[#CBD5E1]" },
   rejected: { label: "Từ chối", bg: "bg-gray-100", text: "text-gray-700", border: "border-[#CBD5E1]" },
@@ -183,7 +185,7 @@ export function AgencyBookingManagement({
         (b.contactPhone ?? "").includes(search)
     );
 
-  const pendingCount = bookings.filter((b) => b.status === "pending").length;
+  const pendingCount = bookings.filter((b) => b.status === "pending" || b.status === "deposited").length;
 
   return (
     <div className="space-y-6">
@@ -422,8 +424,8 @@ export function AgencyBookingManagement({
                             Xem chi tiết
                           </Button>
 
-                          {/* Quick Approve / Reject for Pending */}
-                          {booking.status === "pending" && (
+                          {/* Quick Approve / Reject for Pending or Deposited */}
+                          {(booking.status === "pending" || booking.status === "deposited") && (
                             <>
                               <Button
                                 size="sm"

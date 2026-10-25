@@ -145,7 +145,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         if (booking.Tour?.AgencyId != agencyId)
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền duyệt đơn này.");
 
-        if (booking.Status != BookingStatus.Pending)
+        if (booking.Status is not (BookingStatus.Pending or BookingStatus.Deposited))
             throw new BookingException(422, $"Không thể duyệt đơn đặt đang ở trạng thái {booking.Status}.");
 
         if (request.Decision == "approve")
@@ -175,12 +175,17 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         booking.PaidAmount = Money(booking.PaidAmount + request.Amount);
 
         if (booking.PaidAmount >= booking.TotalAmount)
+        {
             booking.PaymentStatus = PaymentStatus.Paid;
+            if (booking.Status is BookingStatus.Pending or BookingStatus.Deposited or BookingStatus.Confirmed)
+                booking.Status = BookingStatus.Paid;
+        }
         else if (booking.PaidAmount > 0)
+        {
             booking.PaymentStatus = PaymentStatus.PartiallyPaid;
-
-        if (booking.PaidAmount >= booking.DepositAmount && booking.Status == BookingStatus.Pending)
-            booking.Status = BookingStatus.Confirmed;
+            if (booking.PaidAmount >= booking.DepositAmount && booking.Status == BookingStatus.Pending)
+                booking.Status = BookingStatus.Deposited;
+        }
 
         await repository.SaveChangesAsync(ct);
         return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);

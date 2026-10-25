@@ -477,7 +477,7 @@ export interface Booking {
   userEmail: string;
   numberOfGuests: number;
   totalPrice: number;
-  status: "pending" | "confirmed" | "cancelled" | "completed" | "rejected";
+  status: "pending" | "deposited" | "confirmed" | "paid" | "completed" | "cancelled" | "rejected";
   bookingDate: string;
   tourStartDate: string;
   companyId?: string;

@@ -41,7 +41,9 @@ export function MyBookings({
   const filterTabs = [
     { id: "all", label: "Tất cả" },
     { id: "pending", label: "Chờ xác nhận" },
+    { id: "deposited", label: "Đã đặt cọc" },
     { id: "confirmed", label: "Đã xác nhận" },
+    { id: "paid", label: "Đã thanh toán đủ" },
     { id: "completed", label: "Hoàn thành" },
     { id: "cancelled", label: "Đã hủy" },
     { id: "rejected", label: "Đã từ chối" },
@@ -73,11 +75,25 @@ export function MyBookings({
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "deposited":
+        return (
+          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <Clock className="w-3 h-3 text-amber-600" />
+            Đã đặt cọc
+          </span>
+        );
       case "confirmed":
         return (
           <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
             Đã xác nhận
+          </span>
+        );
+      case "paid":
+        return (
+          <span className="px-2.5 py-1 bg-teal-100 text-teal-800 border border-teal-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <CheckCircle className="w-3 h-3 text-teal-600" />
+            Đã thanh toán đủ
           </span>
         );
       case "completed":
@@ -224,7 +240,7 @@ export function MyBookings({
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredBookings.map((b) => {
-                    const canCancel = b.status === "pending" || b.status === "confirmed";
+                    const canCancel = b.status === "pending" || b.status === "deposited" || b.status === "confirmed";
 
                     return (
                       <tr key={b.id} className="hover:bg-teal-50/20 transition-colors group">

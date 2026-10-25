@@ -1148,9 +1148,12 @@ function App() {
           .filter((pr) => pr.status === "paid")
           .reduce((sum, pr) => sum + pr.amount, 0);
         const remaining = Math.max(0, b.totalPrice - totalPaid);
+        const isFullyPaid = remaining === 0;
+        const nextStatus = isFullyPaid ? ("paid" as const) : ("deposited" as const);
 
         return {
           ...b,
+          status: b.status === "confirmed" ? (isFullyPaid ? ("paid" as const) : "confirmed") : nextStatus,
           paymentRequests: updatedPaymentRequests,
           remainingAmount: remaining,
           paymentStatus: "paid" as const,

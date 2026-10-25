@@ -60,7 +60,9 @@ interface UserBookingDetailPageProps {
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ xác nhận & chốt giá", color: "bg-amber-100 text-amber-800 border-amber-300" },
+  deposited: { label: "Đã đặt cọc", color: "bg-amber-50 text-amber-800 border-amber-300" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  paid: { label: "Đã thanh toán đủ", color: "bg-teal-100 text-teal-800 border-teal-300" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-300" },
   completed: { label: "Đã hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-blue-300" },
   rejected: { label: "Đã từ chối", color: "bg-gray-100 text-gray-800 border-gray-300" },

@@ -57,7 +57,7 @@ export interface BookingDto {
   totalAmount: number;
   depositAmount: number;
   paidAmount: number;
-  status: "Pending" | "Confirmed" | "InProgress" | "Completed" | "Cancelled" | "Rejected";
+  status: "Pending" | "Deposited" | "Confirmed" | "Paid" | "InProgress" | "Completed" | "Cancelled" | "Rejected";
   paymentStatus: "Unpaid" | "PartiallyPaid" | "Paid" | "Refunded";
   contactName?: string;
   contactPhone?: string;
@@ -213,9 +213,11 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
     updatedAt: dto.updatedAt || dto.createdAt,
   };
 
-  const statusMap: Record<string, "pending" | "confirmed" | "cancelled" | "completed" | "rejected"> = {
+  const statusMap: Record<string, "pending" | "deposited" | "confirmed" | "paid" | "completed" | "cancelled" | "rejected"> = {
     pending: "pending",
+    deposited: "deposited",
     confirmed: "confirmed",
+    paid: "paid",
     inprogress: "confirmed",
     completed: "completed",
     cancelled: "cancelled",
