@@ -187,6 +187,7 @@ public class TripOpsDbContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
             entity.Property(e => e.Code).HasMaxLength(50);
             entity.Property(e => e.Destination).HasMaxLength(255);
+            entity.Property(e => e.DepartureLocation).HasMaxLength(255);
             entity.Property(e => e.OperationPeriod).HasMaxLength(255);
             entity.Property(e => e.Version).IsConcurrencyToken();
             entity.Property(e => e.ApprovalStatus).HasConversion<string>().HasMaxLength(30)

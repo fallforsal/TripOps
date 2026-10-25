@@ -19,7 +19,8 @@ public sealed record TourConfiguration(
     [StringLength(10000)] string? Message = null,
     string[]? Images = null,
     PricingTierInput[]? PricingTiers = null,
-    TimelineInput[]? Timelines = null);
+    TimelineInput[]? Timelines = null,
+    [StringLength(255)] string? DepartureLocation = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,

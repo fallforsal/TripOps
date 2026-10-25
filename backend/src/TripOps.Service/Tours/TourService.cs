@@ -133,7 +133,8 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         t.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description, d.TransportationServiceId,
             d.Attractions.OrderBy(a => a.OrderIndex).Select(a => new ActivityInput(a.Name, a.ServiceId, a.Description, a.EstimatedTime, a.OrderIndex)).ToArray(),
             d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName ?? "", m.ServiceId, m.Description, m.IsDefault, m.PriceDifference)).ToArray(),
-            d.Accommodations.OrderBy(a => a.Id).Select(a => new AccommodationInput(a.HotelName ?? "", a.DestinationName ?? "", a.ServiceId, a.RoomType, a.NightsCount, a.StarRating, a.IsDefault, a.PriceDifference, a.AddressNotes)).ToArray())).ToArray());
+            d.Accommodations.OrderBy(a => a.Id).Select(a => new AccommodationInput(a.HotelName ?? "", a.DestinationName ?? "", a.ServiceId, a.RoomType, a.NightsCount, a.StarRating, a.IsDefault, a.PriceDifference, a.AddressNotes)).ToArray())).ToArray(),
+        t.DepartureLocation);
 
     private static TourDto Dto(Tour t) => new(t.Id, t.AgencyId, t.Code, State(t.Status), State(t.Visibility), t.IsRequest, t.IsAiGenerated,
         t.Version, Configuration(t), t.CreatedAt, t.UpdatedAt);
@@ -142,6 +143,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     {
         repository.RemoveConfiguration(tour);
         tour.Name = c.Name.Trim(); tour.Description = c.Description; tour.Destination = c.Destination;
+        tour.DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim();
         tour.DurationDays = c.DurationDays; tour.DurationNights = c.DurationNights; tour.BasePrice = Money(c.BasePrice);
         tour.MinGuests = c.MinGuests; tour.MaxGuests = c.MaxGuests; tour.OperationPeriod = c.OperationPeriod;
         tour.Highlights = c.Highlights; tour.Inclusions = c.Inclusions; tour.Exclusions = c.Exclusions;

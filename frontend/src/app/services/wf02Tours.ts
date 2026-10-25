@@ -6,7 +6,7 @@ type Activity = { name: string; serviceId: number | null; description: string | 
 type Meal = { mealType: "breakfast" | "lunch" | "dinner"; restaurantName: string; serviceId: number | null; description: string | null; isDefault: boolean; priceDifference: number };
 type Accommodation = { hotelName: string; destinationName: string; serviceId: number | null; roomType: string | null; nightsCount: number; starRating: number; isDefault: boolean; priceDifference: number; addressNotes: string | null };
 type Day = { dayNumber: number; title: string; description: string | null; transportationServiceId: number | null; activities: Activity[]; meals: Meal[]; accommodations: Accommodation[] };
-export type TourConfiguration = { name: string; description: string | null; destination: string | null; durationDays: number; durationNights: number; basePrice: number; minGuests: number | null; maxGuests: number | null; operationPeriod: string | null; highlights: string | null; inclusions: string | null; exclusions: string | null; cancellationPolicy: string | null; message: string | null; images: string[]; pricingTiers: Tier[]; timelines: Day[] };
+export type TourConfiguration = { name: string; description: string | null; destination: string | null; departureLocation: string | null; durationDays: number; durationNights: number; basePrice: number; minGuests: number | null; maxGuests: number | null; operationPeriod: string | null; highlights: string | null; inclusions: string | null; exclusions: string | null; cancellationPolicy: string | null; message: string | null; images: string[]; pricingTiers: Tier[]; timelines: Day[] };
 export type ApiTour = { id: number; agencyId: string; code: string | null; status: "draft" | "completed" | "deleted"; visibility: "hidden" | "public"; isRequest: boolean; isAiGenerated: boolean; version: number; configuration: TourConfiguration; createdAt: string; updatedAt: string };
 type PublicTour = { id: number; code: string | null; version: number; configuration: TourConfiguration };
 type TourPage<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -52,7 +52,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       estimatedTime: place.time ? `${place.time.slice(0, 5)}:00` : null, orderIndex,
     }));
     const meals: Meal[] = (day.meals || []).flatMap((meal: TourMeal) => [
-      { mealType: meal.type, restaurantName: (meal.serviceName || meal.description || "").trim(), serviceId: serviceId(meal.serviceId), description: meal.description || null, isDefault: true, priceDifference: 0 },
+      { mealType: meal.type, restaurantName: (meal.serviceName || meal.description || "").trim(), serviceId: null, description: meal.description || null, isDefault: true, priceDifference: 0 },
       ...(meal.alternativeMeals || []).map(option => ({ mealType: meal.type, restaurantName: option.restaurantName.trim(), serviceId: null, description: option.description || null, isDefault: false, priceDifference: option.priceDifference })),
     ]);
     // Each hotel is one continuous stay anchored to its first night; alternatives are not additive.
@@ -66,6 +66,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       transportationServiceId: null, activities, meals, accommodations };
   });
   return { name: tour.name?.trim() || "", description: tour.description || null, destination: destination || null,
+    departureLocation: tour.departureLocation?.trim() || null,
     durationDays: days, durationNights: nights, basePrice: tour.price ?? 0,
     minGuests: tour.minGuests ?? null, maxGuests: tour.maxGuests ?? null,
     operationPeriod: tour.operationPeriod || null, highlights: text(tour.highlights),
@@ -117,7 +118,8 @@ export function fromConfiguration(id: number, code: string | null, version: numb
     numberOfNights: c.durationNights, price: c.basePrice, description: c.description || "",
     image: c.images?.[0] || "", images: c.images || [], rating: 0, minGuests: c.minGuests || 0,
     maxGuests: c.maxGuests || 0, highlights: lines(c.highlights), hotels,
-    itinerary, operationPeriod: c.operationPeriod || undefined, priceTable,
+    itinerary, operationPeriod: c.operationPeriod || undefined,
+    departureLocation: c.departureLocation || undefined, departureCity: c.departureLocation || undefined, priceTable,
     inclusions: lines(c.inclusions), exclusions: lines(c.exclusions), regulations: lines(c.cancellationPolicy),
     companyNote: c.message || "", companyId: options.agencyId, createdAt: options.createdAt,
     updatedAt: options.updatedAt, status: options.status || "completed", visibility: options.visibility || "public",

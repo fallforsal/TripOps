@@ -1375,6 +1375,10 @@ namespace TripOps.Data.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DepartureLocation")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 

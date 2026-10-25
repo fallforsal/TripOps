@@ -9,6 +9,7 @@ public class Tour : BaseEntity<int>, ISoftDelete
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
     public string? Destination { get; set; }
+    public string? DepartureLocation { get; set; }
     public string? OperationPeriod { get; set; }
     public string? Message { get; set; }
     public string? Code { get; set; }
@@ -92,7 +93,7 @@ public class TourMeal : BaseEntity<int>
     public bool IsDefault { get; set; }
     public decimal PriceDifference { get; set; }
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
+  
     public string MealType { get; set; } = null!; // breakfast, lunch, dinner
     public string? Description { get; set; }
 
@@ -109,7 +110,7 @@ public class TourAccommodation : BaseEntity<int>
     public decimal PriceDifference { get; set; }
     public string? AddressNotes { get; set; }
     public int TourTimelineId { get; set; }
-    public int? ServiceId { get; set; }
+
     public string? HotelName { get; set; }
     public string? RoomType { get; set; }
 

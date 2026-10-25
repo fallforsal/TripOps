@@ -1512,7 +1512,6 @@ function CustomTab({
                                       <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                                       🌟 Đối tác Nền tảng
                                     </button>
-                                    {defaultMeal.allowCustomMealRequest !== false && (
                                       <button
                                         type="button"
                                         onClick={() => updateMealChoice(day.id, mealType, { mode: "custom" })}
@@ -1525,7 +1524,6 @@ function CustomTab({
                                         <Edit3 className="w-3.5 h-3.5" />
                                         Tự đề xuất
                                       </button>
-                                    )}
                                   </div>
 
                                   {/* System restaurant list */}

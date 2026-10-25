@@ -994,8 +994,8 @@ export function TourFormPage({
   useEffect(() => {
     if (isCustom) return;
     let active = true;
-    Promise.all([eligibleServices("hotel"), eligibleServices("fnb")])
-      .then(groups => { if (active) setServiceOptions(groups.flat()); })
+    eligibleServices("hotel")
+      .then(options => { if (active) setServiceOptions(options); })
       .catch(error => { if (active) setServiceError(error instanceof Error ? error.message : "Không tải được danh mục dịch vụ."); });
     return () => { active = false; };
   }, [isCustom]);
@@ -1414,7 +1414,6 @@ export function TourFormPage({
       serviceName: `Nhà hàng đặc sản (${label})`,
       description: "Thực đơn tiêu chuẩn theo chương trình tour",
       pricePerPerson: defaultPrice,
-      allowCustomMealRequest: true,
       alternativeMeals: [],
       createdByCompanyId: company.id,
       createdByCompanyName: company.name,
@@ -2148,11 +2147,9 @@ export function TourFormPage({
                   <Input
                     value={departureLocation}
                     onChange={(e) => setDepartureLocation(e.target.value)}
-                    disabled={!isCustom}
                     placeholder="VD: TP. Hồ Chí Minh / Hà Nội"
                     className="mt-1"
                   />
-                  {!isCustom && <p className="text-[11px] text-gray-500 mt-1">API Tour hiện chưa lưu điểm khởi hành riêng.</p>}
                 </div>
 
                 <div>
@@ -3162,16 +3159,6 @@ export function TourFormPage({
                                               placeholder="VD: Nhà hàng Hương Rừng Đà Lạt"
                                               className={`mt-1 text-xs ${isMealLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
                                             />
-                                            <select value={meal.serviceId || ""} disabled={isMealLocked}
-                                              onChange={e => {
-                                                const selected = serviceOptions.find(option => String(option.id) === e.target.value);
-                                                updateMealField(dIdx, mIdx, { serviceId: selected ? String(selected.id) : undefined,
-                                                  serviceName: selected?.name || meal.serviceName });
-                                              }} className="mt-2 w-full h-9 px-2 text-xs border border-gray-300 rounded-md bg-white">
-                                              <option value="">Nhập nhà hàng thủ công (không liên kết Service)</option>
-                                              {serviceOptions.filter(option => option.category === "fnb").map(option =>
-                                                <option key={option.id} value={option.id}>{option.name} · #{option.id}</option>)}
-                                            </select>
                                           </div>
                                           <div className="sm:col-span-12">
                                             <Label className="text-xs font-semibold text-gray-700">Mô tả thực đơn tiêu chuẩn (Đã bao gồm trong giá tour - 0đ chênh lệch)</Label>
@@ -3298,25 +3285,6 @@ export function TourFormPage({
                                             </div>
                                           )}
 
-                                          {/* Toggle custom request */}
-                                          <div className="flex items-center gap-2 pt-1 text-xs">
-                                            <input
-                                              type="checkbox"
-                                              id={`custom-meal-req-${mealKey}`}
-                                              disabled={isMealLocked}
-                                              checked={meal.allowCustomMealRequest !== false}
-                                              onChange={(e) =>
-                                                updateMealField(dIdx, mIdx, { allowCustomMealRequest: e.target.checked })
-                                              }
-                                              className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer disabled:cursor-not-allowed"
-                                            />
-                                            <label
-                                              htmlFor={`custom-meal-req-${mealKey}`}
-                                              className={`text-gray-700 font-medium text-[11px] ${isMealLocked ? "cursor-not-allowed opacity-75" : "cursor-pointer"}`}
-                                            >
-                                              Cho phép khách tự đề xuất nhà hàng khác ngoài danh sách (công ty sẽ báo giá sau khi nhận booking)
-                                            </label>
-                                          </div>
                                         </div>
                                       </div>
                                     )}
@@ -4109,7 +4077,7 @@ export function TourFormPage({
                   <div className="bg-white border border-[#CBD5E1] rounded-2xl p-3.5 flex flex-wrap gap-4 text-xs text-gray-700 shadow-2xs">
                     <div className="flex items-center gap-1.5">
                       <MapPin className="w-4 h-4 text-blue-500" />
-                      <span>{destination || "Điểm đến"}</span>
+                      <span>{departureLocation.trim() ? `${departureLocation.trim()} → ` : ""}{destination || "Điểm đến"}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-blue-500" />
@@ -4621,6 +4589,12 @@ export function TourFormPage({
                         <span>Điểm đến:</span>
                         <strong className="text-gray-900">{destination}</strong>
                       </div>
+                      {departureLocation.trim() && (
+                        <div className="flex justify-between">
+                          <span>Điểm khởi hành:</span>
+                          <strong className="text-gray-900">{departureLocation.trim()}</strong>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span>Quy mô đoàn:</span>
                         <strong className="text-gray-900">{minGuests}–{maxGuests} khách</strong>

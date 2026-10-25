@@ -233,6 +233,41 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
+    public async Task Manual_departure_location_and_manual_meals_persist_through_edit_and_publish()
+    {
+        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
+        using var publicClient = app.CreateClient();
+        var manual = Complete() with {
+            DepartureLocation = "  TP. Hồ Chí Minh  ",
+            Timelines = [new(1, "Arrival",
+                Meals: [new("breakfast", "Bánh mì Hòa Mã", null, "Bánh mì chảo"),
+                    new("lunch", "Nhà hàng Hương Rừng", null, "Gà đồi, cơm lam"),
+                    new("lunch", "Nhà hàng Trúc Lâm Viên", null, "Cơm niêu", IsDefault: false, PriceDifference: 50000),
+                    new("dinner", "Lẩu gà lá é", null)]),
+                new(2, "Departure")] };
+        var tour = await Create(agency, manual);
+        Assert.Equal("TP. Hồ Chí Minh", tour.Configuration.DepartureLocation);
+        var stored = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
+        var meals = stored.Configuration.Timelines![0].Meals!;
+        Assert.Equal(4, meals.Length);
+        Assert.All(meals, m => Assert.Null(m.ServiceId));
+        Assert.Contains(meals, m => m.RestaurantName == "Nhà hàng Trúc Lâm Viên" && !m.IsDefault && m.PriceDifference == 50000);
+
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, stored.Configuration with { DepartureLocation = "Hà Nội" }, "Edit departure")));
+        Assert.Equal("Hà Nội", tour.Configuration.DepartureLocation);
+        Assert.Equal(4, tour.Configuration.Timelines![0].Meals!.Length);
+        tour = await Command(agency, tour, "publish");
+        Assert.Equal("public", tour.Visibility);
+        var published = (await publicClient.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
+        Assert.Equal("Hà Nội", published.Configuration.DepartureLocation);
+
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, tour.Configuration with { DepartureLocation = "   " }, "Clear departure")));
+        Assert.Null(tour.Configuration.DepartureLocation);
+    }
+
+    [Fact]
     public async Task Service_and_provider_eligibility_are_rechecked_before_publish()
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
