@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Mail,
@@ -13,12 +13,6 @@ import {
 } from "lucide-react";
 import { User } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
-import {
-  allVietnamProvinces,
-  getWardsForProvince,
-  getCoordinatesForProvince,
-} from "@/app/data/vietnamAdministrative";
-import { GoogleMapLocationPicker } from "./GoogleMapLocationPicker";
 
 interface ProviderProfilePageProps {
   currentUser: User;
@@ -40,37 +34,18 @@ export function ProviderProfilePage({
     currentUser.businessPhone || currentUser.phone || "0263 3825 444"
   );
   const [taxCode, setTaxCode] = useState(currentUser.taxCode || "0123456789");
-  const [province, setProvince] = useState(
-    currentUser.province || "Lâm Đồng"
-  );
-  const [ward, setWard] = useState(currentUser.ward || "Phường 3");
   const [street, setStreet] = useState(
-    currentUser.street || currentUser.businessAddress || "02 Trần Phú"
+    currentUser.street || currentUser.businessAddress || "450 - 451 Đ. Lê Văn Việt, Tăng Nhơn Phú, Hồ Chí Minh"
   );
   const [description, setDescription] = useState(
     currentUser.businessDescription ||
       "Đơn vị chuyên cung cấp dịch vụ lưu trú cao cấp, ẩm thực bản địa và các tour trải nghiệm thiên nhiên uy tín tại Đà Lạt và khu vực Tây Nguyên."
   );
 
-  const [latitude, setLatitude] = useState(
-    currentUser.latitude || 11.9404
-  );
-  const [longitude, setLongitude] = useState(
-    currentUser.longitude || 108.4583
-  );
-
   const [isSaved, setIsSaved] = useState(false);
-
-  useEffect(() => {
-    const coords = getCoordinatesForProvince(province);
-    if (!currentUser.latitude) setLatitude(coords.lat);
-    if (!currentUser.longitude) setLongitude(coords.lng);
-  }, [province]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const fullAddress = [street, ward, province].filter(Boolean).join(", ");
 
     const updatedData: Partial<User> = {
       businessName,
@@ -80,12 +55,8 @@ export function ProviderProfilePage({
       businessPhone: phone,
       phone,
       taxCode,
-      province,
-      ward,
       street,
-      businessAddress: fullAddress,
-      latitude,
-      longitude,
+      businessAddress: street,
       businessDescription: description,
     };
 
@@ -107,7 +78,7 @@ export function ProviderProfilePage({
             Hồ sơ Doanh nghiệp & Nhà cung cấp
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Cập nhật thông tin pháp lý, mã số thuế, địa chỉ hành chính (2 cấp) và vị trí trụ sở
+            Cập nhật thông tin pháp lý, mã số thuế, địa chỉ trụ sở và giới thiệu doanh nghiệp
           </p>
         </div>
 
@@ -202,6 +173,20 @@ export function ProviderProfilePage({
 
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Số nhà, Tên đường / Tòa nhà (Địa chỉ trụ sở) *
+              </label>
+              <input
+                type="text"
+                required
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                placeholder="Ví dụ: 450 - 451 Đ. Lê Văn Việt, Tăng Nhơn Phú, Hồ Chí Minh, Việt Nam"
+                className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Giới thiệu năng lực doanh nghiệp & dịch vụ
               </label>
               <textarea
@@ -212,75 +197,6 @@ export function ProviderProfilePage({
               />
             </div>
           </div>
-        </div>
-
-        {/* 2. Administrative Address (2-Levels Only) & Location */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide text-emerald-700 flex items-center gap-2 border-b border-gray-100 pb-3">
-            <MapPin className="w-4 h-4 text-emerald-600" />
-            2. Địa chỉ trụ sở (Hành chính 2 cấp) & Tọa độ Google Maps
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Cấp 1: Tỉnh / Thành phố *
-              </label>
-              <select
-                value={province}
-                onChange={(e) => setProvince(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                required
-              >
-                {allVietnamProvinces.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Cấp 2: Phường / Xã *
-              </label>
-              <select
-                value={ward}
-                onChange={(e) => setWard(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                required
-              >
-                {getWardsForProvince(province).map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Số nhà, Tên đường / Tòa nhà
-              </label>
-              <input
-                type="text"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Map Location Picker */}
-          <GoogleMapLocationPicker
-            latitude={latitude}
-            longitude={longitude}
-            onChange={(lat, lng) => {
-              setLatitude(lat);
-              setLongitude(lng);
-            }}
-            addressLabel={[street, ward, province].filter(Boolean).join(", ")}
-          />
         </div>
 
         {/* Save button footer */}

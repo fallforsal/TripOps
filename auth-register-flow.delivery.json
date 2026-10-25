@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "3ae24e3b-fb19-4f79-a6af-5f5a840c1a3b",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "D:\\Test\\.archify\\auth-register-flow-20261025-005500\\candidate.json",
+  "output": "D:\\SEP\\TripOps\\auth-register-flow.html",
+  "specification": {
+    "sha256": "557b532bfecb78b4e6183c4dae68645bb61723ddee800f13fa4a46ec6d20f5ac",
+    "bytes": 6907
+  },
+  "artifact": {
+    "sha256": "4e0892bca312243a028dbd6aa2a7b2c6734e7123de0041e4f3a0f94fd9e2343e",
+    "bytes": 829805
+  }
+}

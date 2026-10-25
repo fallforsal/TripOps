@@ -412,7 +412,7 @@ function PricingTab({ tour }: { tour: Tour }) {
           <thead>
             <tr className="bg-gray-100">
               <th className="px-4 py-3 text-left font-semibold text-gray-700">Loại khách</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Độ tuổi</th>
+              
               <th className="px-4 py-3 text-right font-semibold text-gray-700">Giá tiền</th>
             </tr>
           </thead>
@@ -420,7 +420,7 @@ function PricingTab({ tour }: { tour: Tour }) {
             {tour.priceTable.map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-4 py-3 font-medium text-gray-900">{row.ageGroupLabel ?? row.ageGroup}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{row.ageRange || "—"}</td>
+                
                 <td className="px-4 py-3 text-right font-bold text-[#075985]">
                   {row.price === 0 ? "Miễn phí" : formatVND(row.price)}
                 </td>

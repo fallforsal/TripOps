@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { companyFromUser } from '@/app/services/authService';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { useEffect, useState } from "react";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { RegisterScreen } from "@/app/components/RegisterScreen";
 import { UnifiedHeader } from "@/app/components/UnifiedHeader";
@@ -11,7 +13,7 @@ import { ProviderDashboard } from "@/app/components/provider/ProviderDashboard";
 import { ServicePostManagement } from "@/app/components/provider/ServicePostManagement";
 import { CreatePostModal } from "@/app/components/provider/CreatePostModal";
 import { EditServiceModal } from "@/app/components/provider/EditServiceModal";
-import { CompanyDashboard } from "@/app/components/company/CompanyDashboard";
+import { AgencyDashboard } from "@/app/components/agency/AgencyDashboard";
 import { BookToursPage } from "@/app/components/BookToursPage";
 import { ContactPage } from "@/app/components/ContactPage";
 import { AboutPage } from "@/app/components/AboutPage";
@@ -58,16 +60,18 @@ import {
   mockServices,
   mockGuideSchedules,
   mockRoomBookings,
-  mockUsers,
-  mockTourCompanies,
   mockCustomTourRequests,
   defaultSystemBankAccount,
 } from "@/app/data/mockData";
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(
-    null,
-  );
+  const {user: currentUser, setUser: setCurrentUser, loading: sessionLoading, error: authError, signOut} = useAuth();
+  const [sessionError, setSessionError] = useState('');
+  useEffect(() => {
+    if (!currentUser) return;
+    setUsers(previous => [...previous.filter(item => item.id !== currentUser.id), currentUser]);
+    if (currentUser.role === 'agency') setCompanies(previous => [...previous.filter(item => item.id !== currentUser.id), companyFromUser(currentUser)]);
+  }, [currentUser]);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [currentPage, setCurrentPage] =
@@ -83,9 +87,9 @@ function App() {
   >(mockGuideSchedules);
   const [roomBookings, setRoomBookings] =
     useState<RoomBooking[]>(mockRoomBookings);
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] =
-    useState<TourCompany[]>(mockTourCompanies);
+    useState<TourCompany[]>([]);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [selectedUserBooking, setSelectedUserBooking] = useState<Booking | null>(null);
   const [bookingTour, setBookingTour] = useState<Tour | null>(null);
@@ -101,11 +105,15 @@ function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    setUsers(previous => [...previous.filter(item => item.id !== user.id), user]);
+    if (user.role === 'agency') setCompanies(previous => [...previous.filter(item => item.id !== user.id), companyFromUser(user)]);
     setShowLogin(false);
     setShowRegister(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await signOut(); } catch (e) { setSessionError(e instanceof Error ? e.message : 'Không thể đăng xuất'); return; }
+    setUsers([]); setCompanies([]);
     setCurrentUser(null);
     setShowLogin(false);
     setShowRegister(false);
@@ -402,7 +410,7 @@ function App() {
     guideId: string,
   ) => {
     const guide = users.find((u) => u.id === guideId && u.role === "guide") ||
-      mockUsers.find((u) => u.id === guideId && u.role === "guide");
+      users.find((u) => u.id === guideId && u.role === "guide");
     if (!guide) return;
 
     setBookings((prev) =>
@@ -657,34 +665,6 @@ function App() {
     );
   };
 
-  // Admin actions - Provider approval
-  const handleApproveProvider = (providerId: string) => {
-    setUsers(
-      users.map((user) =>
-        user.id === providerId
-          ? { ...user, accountStatus: "approved" as const }
-          : user,
-      ),
-    );
-  };
-
-  const handleRejectProvider = (
-    providerId: string,
-    reason?: string,
-  ) => {
-    setUsers(
-      users.map((user) =>
-        user.id === providerId
-          ? {
-              ...user,
-              accountStatus: "rejected" as const,
-              rejectionReason: reason,
-            }
-          : user,
-      ),
-    );
-  };
-
   // Admin actions - User status update
   const handleUpdateUserStatus = (
     userId: string,
@@ -692,34 +672,6 @@ function App() {
   ) => {
     console.log(
       `User ${userId} status updated: ${isLocked ? "locked" : "active"}`,
-    );
-  };
-
-  // Platform admin - Company management
-  const handleApproveCompany = (companyId: string) => {
-    setCompanies(
-      companies.map((c) =>
-        c.id === companyId
-          ? { ...c, status: "approved" as const }
-          : c,
-      ),
-    );
-  };
-
-  const handleRejectCompany = (
-    companyId: string,
-    reason: string,
-  ) => {
-    setCompanies(
-      companies.map((c) =>
-        c.id === companyId
-          ? {
-              ...c,
-              status: "rejected" as const,
-              rejectionReason: reason,
-            }
-          : c,
-      ),
     );
   };
 
@@ -1181,60 +1133,42 @@ function App() {
     alert(`Đã khôi phục thành công tour về phiên bản v${versionNumber}! Phiên bản hiện tại là v${nextVer}.`);
   };
 
+  if (sessionLoading) return <div className="p-10 text-center">Đang kiểm tra phiên đăng nhập...</div>;
+  if (sessionError || authError) return <div role="alert" className="p-10 text-center text-red-700">{sessionError || authError}<button className="block mx-auto mt-4 underline" onClick={() => window.location.reload()}>Thử lại</button></div>;
+
   // Show register screen
   if (showRegister) {
     return (
-      <>
-        <UnifiedHeader
-          currentUser={currentUser}
-          onShowLogin={() => setShowLogin(true)}
-          onLogout={handleLogout}
-          onNavigate={(page) => {
-            setShowRegister(false);
-            handleNavigate(page);
-          }}
-          currentPage={currentPage}
-        />
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-          <RegisterScreen
-            onRegisterSuccess={() => {
+      <div className="min-h-screen bg-[#F0F9FF]">
+        <RegisterScreen
+          onRegisterSuccess={(registeredUser?: User) => {
+            if (registeredUser) {
+              handleLogin(registeredUser);
+            } else {
               setShowRegister(false);
               setShowLogin(true);
-            }}
-            onBack={() => setShowRegister(false)}
-          />
-        </div>
-        <PublicFooter />
-      </>
+            }
+          }}
+          onShowLogin={() => { setShowRegister(false); setShowLogin(true); }}
+          onBack={() => setShowRegister(false)}
+        />
+      </div>
     );
   }
 
   // Show login screen
   if (showLogin) {
     return (
-      <>
-        <UnifiedHeader
-          currentUser={currentUser}
-          onShowLogin={() => setShowLogin(true)}
-          onLogout={handleLogout}
-          onNavigate={(page) => {
+      <div className="min-h-screen bg-[#F0F9FF]">
+        <LoginScreen
+          onLogin={handleLogin}
+          onBack={() => setShowLogin(false)}
+          onShowRegister={() => {
             setShowLogin(false);
-            handleNavigate(page);
+            setShowRegister(true);
           }}
-          currentPage={currentPage}
         />
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-          <LoginScreen
-            onLogin={handleLogin}
-            onBack={() => setShowLogin(false)}
-            onShowRegister={() => {
-              setShowLogin(false);
-              setShowRegister(true);
-            }}
-          />
-        </div>
-        <PublicFooter />
-      </>
+      </div>
     );
   }
 
@@ -1247,8 +1181,8 @@ function App() {
     const displayedGuideSchedules =
       userGuideSchedules.length > 0 ? userGuideSchedules : guideSchedules;
 
-    // Company admin view
-    if (currentUser.role === "company_admin") {
+    // Agency view
+    if (currentUser.role === "company_admin" || currentUser.role === "agency") {
       const company = companies.find(
         (c) => c.id === currentUser.companyId,
       );
@@ -1262,7 +1196,7 @@ function App() {
             b.coHosts?.some((ch) => ch.companyId === company.id),
         );
         return (
-          <CompanyDashboard
+          <AgencyDashboard
             currentUser={currentUser}
             company={company}
             tours={tours}
@@ -1301,14 +1235,14 @@ function App() {
 
     return (
       <div className="min-h-screen bg-gray-50">
-        {currentUser.role !== "admin" && (
+        {currentUser.role !== "admin" && currentUser.role !== "provider" && (
           <UnifiedHeader
             currentUser={currentUser}
             onShowLogin={() => setShowLogin(true)}
             onLogout={handleLogout}
             onNavigate={handleNavigate}
             currentPage={currentPage}
-            onOpenAIAdvisor={() => setShowAIAdvisor(true)}
+            
           />
         )}
 
@@ -1316,7 +1250,7 @@ function App() {
           className={
             currentUser.role === "admin" || currentUser.role === "provider"
               ? "min-h-screen"
-              : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24"
+              : "w-full px-4 sm:px-6 lg:px-8 py-8 pt-24"
           }
         >
           {currentUser.role === "guide" && (
@@ -1362,11 +1296,7 @@ function App() {
               onRejectService={handleRejectService}
               onToggleHideService={handleToggleHideService}
               onDeleteService={handleDeleteService}
-              onApproveProvider={handleApproveProvider}
-              onRejectProvider={handleRejectProvider}
               onUpdateUserStatus={handleUpdateUserStatus}
-              onApproveCompany={handleApproveCompany}
-              onRejectCompany={handleRejectCompany}
               systemBank={systemBankAccount}
               onUpdateSystemBank={handleUpdateSystemBank}
               onSettleBooking={handleSettleBooking}
@@ -1408,7 +1338,7 @@ function App() {
         onLogout={handleLogout}
         onNavigate={handleNavigate}
         currentPage={currentPage}
-        onOpenAIAdvisor={() => setShowAIAdvisor(true)}
+        
       />
       <div className="pt-16">
         {currentPage === "custom-tour" ? (
@@ -1461,7 +1391,7 @@ function App() {
         ) : currentPage === "home" && currentUser?.role === "user" ? (
           // Logged in user sees their dashboard on home page
           <div className="min-h-screen bg-gray-50">
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
               <UserDashboard
                 tours={tours}
                 userBookings={userBookings}
@@ -1479,13 +1409,13 @@ function App() {
           // Not logged in, show public home page
           <HomePage
             onShowLogin={() => setShowLogin(true)}
-            popularTours={tours.filter((t) => t.tourType !== "custom_request" && (t.status === "published" || !t.status))}
+            popularTours={tours.filter((t) => t.tourType !== "custom_request" && ((t.status === "completed" || t.status === "published" || !t.status) && (t.visibility === "public" || !t.visibility)))}
             onNavigate={handleNavigate}
             onViewTour={handleViewTour}
           />
         ) : currentPage === "book-tours" ? (
           <BookToursPage
-            tours={tours.filter((t) => t.tourType !== "custom_request" && (t.status === "published" || !t.status))}
+            tours={tours.filter((t) => t.tourType !== "custom_request" && ((t.status === "completed" || t.status === "published" || !t.status) && (t.visibility === "public" || !t.visibility)))}
             currentUser={currentUser}
             onShowLogin={() => setShowLogin(true)}
             onBookTour={(tourId) => {

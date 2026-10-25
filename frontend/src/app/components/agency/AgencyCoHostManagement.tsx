@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
-interface CompanyCoHostManagementProps {
+interface AgencyCoHostManagementProps {
   company: TourCompany;
   tours: Tour[];
   customTourRequests: CustomTourRequest[];
@@ -45,7 +45,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("vi-VN");
 }
 
-export function CompanyCoHostManagement({
+export function AgencyCoHostManagement({
   company,
   tours,
   customTourRequests,
@@ -56,7 +56,7 @@ export function CompanyCoHostManagement({
   onOpenInviteModal,
   onViewTour,
   onEditTourSegment,
-}: CompanyCoHostManagementProps) {
+}: AgencyCoHostManagementProps) {
   const [activeTab, setActiveTab] = useState<"incoming" | "active" | "outgoing">(
     "incoming"
   );

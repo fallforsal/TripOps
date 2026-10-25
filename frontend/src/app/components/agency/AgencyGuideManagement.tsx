@@ -35,7 +35,7 @@ import {
   DialogDescription,
 } from "@/app/components/ui/dialog";
 
-interface CompanyGuideManagementProps {
+interface AgencyGuideManagementProps {
   guides: User[];
   tours: Tour[];
   guideSchedules: GuideSchedule[];
@@ -46,7 +46,7 @@ interface CompanyGuideManagementProps {
   onRemoveGuide?: (guideId: string) => void;
 }
 
-export function CompanyGuideManagement({
+export function AgencyGuideManagement({
   guides,
   tours,
   guideSchedules,
@@ -55,7 +55,7 @@ export function CompanyGuideManagement({
   onAddGuide,
   onUpdateGuide,
   onRemoveGuide,
-}: CompanyGuideManagementProps) {
+}: AgencyGuideManagementProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "on_tour" | "inactive">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "domestic" | "international">("all");

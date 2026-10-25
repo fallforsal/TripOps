@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Tour,
   TourCompany,
@@ -11,7 +11,6 @@ import {
   Location,
   TourVersion,
   CustomTourRequest,
-  TourCoHost,
 } from "@/app/types";
 import {
   Plus,
@@ -44,27 +43,46 @@ import {
   ArrowDown,
   ArrowLeft,
   Sun,
-  History,
+  LayoutGrid,
+  List,
+  Search,
+  Download,
+  FileSpreadsheet,
+  ToggleLeft,
+  ToggleRight,
+  AlertTriangle,
+  EyeOff,
   Handshake,
-  Lock,
   UserPlus,
   Tag,
+  Lock,
 } from "lucide-react";
-import { mockTourCompanies } from "@/app/data/mockData";
+import { mockTourCompanies, mockServices } from "@/app/data/mockData";
 import { Button } from "@/app/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/app/components/ui/alert-dialog";
+import { TourDetailPage } from "@/app/components/user/TourDetailPage";
+import { Label } from "@/app/components/ui/label";
+import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
-import { Input } from "@/app/components/ui/input";
-import { Textarea } from "@/app/components/ui/textarea";
-import { Label } from "@/app/components/ui/label";
-import { TourVersionHistoryModal } from "@/app/components/company/TourVersionHistoryModal";
+import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
 import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 
-interface CompanyTourManagementProps {
+export interface AgencyTourManagementProps {
   tours: Tour[];
   company: TourCompany;
   onCreateTour: (tour: Omit<Tour, "id">) => void;
@@ -73,76 +91,154 @@ interface CompanyTourManagementProps {
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
 }
 
-export function CompanyTourManagement({
+// Kiểu hành động cần hiển thị hộp thoại xác nhận đẹp mắt
+type ConfirmActionType = "duplicate" | "hide" | "publish" | "delete";
+
+interface PendingAction {
+  type: ConfirmActionType;
+  tour: Tour;
+}
+
+export function AgencyTourManagement({
   tours,
   company,
   onCreateTour,
   onEditTour,
   onDeleteTour,
   onRestoreTourVersion,
-}: CompanyTourManagementProps) {
+}: AgencyTourManagementProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
-  const [versionHistoryTour, setVersionHistoryTour] = useState<Tour | null>(null);
-  const [viewRejectionTour, setViewRejectionTour] = useState<Tour | null>(null);
-  const [tourTypeFilter, setTourTypeFilter] = useState<"all" | "public" | "custom" | "pending" | "rejected">("all");
+
+  // Hộp thoại xác nhận UI cao cấp (AlertDialog) cho các hành động: Nhân bản, Ẩn/Hiện, Xóa
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
+  // Trang xem chi tiết tour riêng biệt (không mở popup)
+  const [viewingTour, setViewingTour] = useState<Tour | null>(null);
+
+  // Chế độ xem & Bộ lọc
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft" | "hidden">("all");
+  const [sortBy, setSortBy] = useState<"newest" | "price-asc" | "price-desc" | "rating" | "bookings">("newest");
+  const [selectedTourIds, setSelectedTourIds] = useState<string[]>([]);
 
   const isApproved = company.status === "approved";
 
-  const publicCount = tours.filter((t) => t.tourType !== "custom_request" && (t.status === "published" || !t.status)).length;
-  const customCount = tours.filter((t) => t.tourType === "custom_request").length;
-  const pendingCount = tours.filter((t) => t.status === "pending_approval").length;
-  const rejectedCount = tours.filter((t) => t.status === "rejected").length;
+  // LOẠI BỎ TOUR THIẾT KẾ RIÊNG VÀ TOUR ĐÃ XÓA (Soft-deleted theo Database Schema: is_request, status, visibility)
+  const publicTours = tours.filter((t) => !t.is_request && t.tourType !== "custom_request" && (t.status as any) !== "deleted");
 
-  const filteredTours = tours.filter((t) => {
-    if (tourTypeFilter === "public") return t.tourType !== "custom_request" && (t.status === "published" || !t.status);
-    if (tourTypeFilter === "custom") return t.tourType === "custom_request";
-    if (tourTypeFilter === "pending") return t.status === "pending_approval";
-    if (tourTypeFilter === "rejected") return t.status === "rejected";
-    return true;
-  });
+  const publishedCount = publicTours.filter((t) => (t.status === "completed" || t.status === "published" || !t.status) && (t.visibility === "public" || !t.visibility)).length;
+  const draftCount = publicTours.filter((t) => t.status === "draft").length;
+  const hiddenCount = publicTours.filter((t) => (t.status === "completed" || t.status === "published") && t.visibility === "hidden").length;
 
-  const handleSubmitForApproval = (tour: Tour) => {
-    onEditTour(tour.id, { status: "pending_approval", rejectionReason: undefined });
-    setCopiedNotice(`Đã gửi tour "${tour.name}" lên Sàn chờ Admin phê duyệt!`);
+  // Lọc và sắp xếp danh sách tour công khai
+  const filteredTours = publicTours
+    .filter((t) => {
+      // Bộ lọc trạng thái & hiển thị theo Database Schema (status: completed | draft, visibility: public | hidden)
+      if (statusFilter === "published" && ((t.status !== "completed" && t.status !== "published" && !!t.status) || t.visibility === "hidden")) return false;
+      if (statusFilter === "draft" && t.status !== "draft") return false;
+      if (statusFilter === "hidden" && (t.visibility !== "hidden" || t.status === "draft")) return false;
+
+      // Tìm kiếm theo Tên tour, Mã tour, Điểm đến
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = t.name.toLowerCase().includes(q);
+        const matchCode = (t.tourCode || "").toLowerCase().includes(q);
+        const matchDest = (t.destination || "").toLowerCase().includes(q);
+        if (!matchName && !matchCode && !matchDest) return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "price-asc") return a.price - b.price;
+      if (sortBy === "price-desc") return b.price - a.price;
+      if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
+      if (sortBy === "bookings") return (b.bookings || 0) - (a.bookings || 0);
+      return 0;
+    });
+
+  // Xử lý thực thi hành động sau khi người dùng xác nhận trên AlertDialog
+  const handleExecuteConfirmedAction = () => {
+    if (!pendingAction) return;
+    const { type, tour } = pendingAction;
+
+    if (type === "duplicate") {
+      const newTourCode = `T${Date.now().toString().slice(-4)}`;
+      const duplicatedTourData: Omit<Tour, "id"> = {
+        ...JSON.parse(JSON.stringify(tour)),
+        tourCode: newTourCode,
+        name: `${tour.name} (Bản sao)`,
+        status: "published",
+        bookings: 0,
+        createdAt: new Date().toLocaleDateString("vi-VN"),
+        companyId: company.id,
+        companyName: company.name,
+        companyLogo: company.logo,
+      };
+      onCreateTour(duplicatedTourData);
+      setCopiedNotice(`Đã nhân bản thành công "${tour.name}" thành bản sao mới!`);
+    } else if (type === "hide") {
+      onEditTour(tour.id, { visibility: "hidden" });
+      setCopiedNotice(`Đã tạm ẩn tour "${tour.name}". Khách hàng sẽ không tìm thấy tour trên sàn.`);
+    } else if (type === "publish") {
+      onEditTour(tour.id, { status: "completed", visibility: "public" });
+      setCopiedNotice(`Đã mở bán lại tour "${tour.name}" công khai trên nền tảng TripOps.`);
+    } else if (type === "delete") {
+      onDeleteTour(tour.id);
+      setCopiedNotice(`Đã xóa vĩnh viễn tour "${tour.name}" khỏi hệ thống.`);
+    }
+
+    setPendingAction(null);
     setTimeout(() => setCopiedNotice(null), 3500);
   };
 
-  const handleToggleVisibility = (tour: Tour) => {
-    const newStatus = tour.status === "hidden" ? "published" : "hidden";
-    onEditTour(tour.id, { status: newStatus });
-    setCopiedNotice(newStatus === "hidden" ? `Đã tạm ẩn tour "${tour.name}".` : `Đã mở bán lại tour "${tour.name}".`);
-    setTimeout(() => setCopiedNotice(null), 3500);
+  // Bulk actions
+  const handleSelectAll = () => {
+    if (selectedTourIds.length === filteredTours.length) {
+      setSelectedTourIds([]);
+    } else {
+      setSelectedTourIds(filteredTours.map((t) => t.id));
+    }
   };
 
-  // Duplicate Tour Action
-  const handleDuplicateTour = (sourceTour: Tour) => {
-    const newTourCode = `T${Date.now().toString().slice(-4)}`;
-    const duplicatedTourData: Omit<Tour, "id"> = {
-      ...JSON.parse(JSON.stringify(sourceTour)),
-      tourCode: newTourCode,
-      name: `${sourceTour.name} (Bản sao)`,
-      status: "draft",
-      bookings: 0,
-      createdAt: new Date().toLocaleDateString("vi-VN"),
-      companyId: company.id,
-      companyName: company.name,
-      companyLogo: company.logo,
-    };
-    onCreateTour(duplicatedTourData);
-    setCopiedNotice(`Đã nhân bản thành công "${sourceTour.name}"!`);
-    setTimeout(() => setCopiedNotice(null), 3500);
+  const handleBulkToggleVisibility = (toVisibility: "public" | "hidden") => {
+    selectedTourIds.forEach((id) => {
+      onEditTour(id, { visibility: toVisibility, status: "completed" });
+    });
+    setCopiedNotice(`Đã cập nhật khả năng hiển thị ${selectedTourIds.length} tour đã chọn!`);
+    setSelectedTourIds([]);
+    setTimeout(() => setCopiedNotice(null), 3000);
   };
 
-  // Chuyển sang màn hình trang riêng biệt TourFormPage khi tạo hoặc chỉnh sửa tour
+  // 1. Nếu đang mở xem chi tiết tour -> Render trang TourDetailPage RIÊNG BIỆT (Toàn màn hình)
+  if (viewingTour) {
+    return (
+      <div className="w-full bg-[#F0F9FF] min-h-screen">
+        <TourDetailPage
+          tour={viewingTour}
+          services={mockServices}
+          currentUser={company as any}
+          onBack={() => setViewingTour(null)}
+          onEditTour={onEditTour}
+          onDeleteTour={(id) => {
+            onDeleteTour(id);
+            setViewingTour(null);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 2. Nếu đang tạo mới hoặc chỉnh sửa tour -> Render trang TourFormPage RIÊNG BIỆT
   if (showCreateModal || !!editingTour) {
     return (
       <TourFormPage
         tour={editingTour}
         company={company}
-        isCustomTour={editingTour?.tourType === "custom_request"}
+        isCustomTour={false}
         onBack={() => {
           setShowCreateModal(false);
           setEditingTour(null);
@@ -160,86 +256,177 @@ export function CompanyTourManagement({
     );
   }
 
+  // 3. Màn hình Quản Lý Tour chính
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
+      {/* HEADER: TIÊU ĐỀ & NÚT TÁC VỤ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Quản lý Tour</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {tours.length} tour tổng cộng · {publicCount} tour công khai · {customCount} tour thiết kế riêng
+          <p className="text-xs text-gray-500 mt-1">
+            {publicTours.length} tour công khai · {publishedCount} đang mở bán · {draftCount} bản nháp · {hiddenCount} tạm dừng
           </p>
         </div>
-        <Button
-          disabled={!isApproved}
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#075985] hover:bg-[#F97316] text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Tạo Tour mới
-        </Button>
+
+        <div className="flex items-center gap-2.5">
+
+          {/* Nút Tạo Tour mới */}
+          <Button
+            disabled={!isApproved}
+            onClick={() => setShowCreateModal(true)}
+            className="bg-[#075985] hover:bg-[#F97316] text-white text-xs font-bold flex items-center gap-1.5 h-9 shadow-xs transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tạo Tour mới</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#CBD5E1] pb-3">
-        <button
-          onClick={() => setTourTypeFilter("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            tourTypeFilter === "all"
-              ? "bg-[#075985] text-white shadow-xs"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          Tất cả ({tours.length})
-        </button>
-        <button
-          onClick={() => setTourTypeFilter("public")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            tourTypeFilter === "public"
-              ? "bg-[#075985] text-white shadow-xs"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          Đang mở bán ({publicCount})
-        </button>
-        <button
-          onClick={() => setTourTypeFilter("pending")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-            tourTypeFilter === "pending"
-              ? "bg-amber-500 text-white shadow-xs"
-              : "bg-amber-50 text-amber-700 hover:bg-amber-100"
-          }`}
-        >
-          <Clock className="w-3 h-3" />
-          <span>Chờ duyệt ({pendingCount})</span>
-        </button>
-        <button
-          onClick={() => setTourTypeFilter("rejected")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-            tourTypeFilter === "rejected"
-              ? "bg-rose-600 text-white shadow-xs"
-              : "bg-rose-50 text-rose-700 hover:bg-rose-100"
-          }`}
-        >
-          <XCircle className="w-3 h-3" />
-          <span>Bị từ chối ({rejectedCount})</span>
-        </button>
-        <button
-          onClick={() => setTourTypeFilter("custom")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-            tourTypeFilter === "custom"
-              ? "bg-[#F97316] text-white shadow-xs"
-              : "bg-[#F0F9FF] text-[#EA580C] hover:bg-[#F97316]/15"
-          }`}
-        >
-          <span>✨ Tour thiết kế theo yêu cầu ({customCount})</span>
-        </button>
+      {/* TOOLBAR: TÌM KIẾM, SẮP XẾP, TABS TRẠNG THÁI & CHUYỂN VIEW LƯỚI / BẢNG */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Ô tìm kiếm */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên tour, mã tour (T001...), hoặc điểm đến..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-xs bg-white border border-[#CBD5E1] rounded-xl focus:outline-none focus:border-[#075985] transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+            {/* Sắp xếp */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 whitespace-nowrap">Sắp xếp:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="text-xs bg-white border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-gray-700 font-medium focus:outline-none focus:border-[#075985]"
+              >
+                <option value="newest">Mới cập nhật nhất</option>
+                <option value="price-asc">Giá: Thấp đến cao</option>
+                <option value="price-desc">Giá: Cao đến thấp</option>
+                <option value="rating">Đánh giá cao nhất</option>
+                <option value="bookings">Lượng khách đặt nhiều</option>
+              </select>
+            </div>
+
+            {/* Chuyển đổi Lưới / Bảng */}
+            <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                title="Chế độ Lưới (Grid View)"
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  viewMode === "grid" ? "bg-white text-[#075985] shadow-xs" : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Lưới</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                title="Chế độ Bảng (Table View)"
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  viewMode === "table" ? "bg-white text-[#075985] shadow-xs" : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span className="hidden sm:inline">Bảng</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs Phân Loại: Chỉ gồm các tour công khai (Tất cả, Đang mở bán, Tạm dừng) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#CBD5E1] pb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setStatusFilter("all")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === "all"
+                  ? "bg-[#075985] text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Tất cả ({publicTours.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter("published")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === "published"
+                  ? "bg-[#075985] text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Đang mở bán ({publishedCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("draft")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === "draft"
+                  ? "bg-[#075985] text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Bản nháp ({draftCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("hidden")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === "hidden"
+                  ? "bg-slate-700 text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Chưa đăng / Tạm ẩn ({hiddenCount})
+            </button>
+          </div>
+
+          {/* Thao tác chọn hàng loạt */}
+          {selectedTourIds.length > 0 && (
+            <div className="flex items-center gap-2 bg-[#E0F2FE] px-3 py-1 rounded-xl border border-[#075985]/30 animate-in fade-in">
+              <span className="text-xs font-bold text-[#075985]">Đã chọn {selectedTourIds.length} tour:</span>
+              <button
+                onClick={() => handleBulkToggleVisibility("published")}
+                className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded hover:bg-emerald-200"
+              >
+                Mở bán
+              </button>
+              <button
+                onClick={() => handleBulkToggleVisibility("hidden")}
+                className="text-[11px] font-semibold text-slate-800 bg-slate-200 px-2 py-0.5 rounded hover:bg-slate-300"
+              >
+                Tạm dừng
+              </button>
+              <button
+                onClick={() => setSelectedTourIds([])}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline ml-1"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {copiedNotice && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between text-sm text-emerald-800 animate-in fade-in">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>{copiedNotice}</span>
+            <span className="font-semibold">{copiedNotice}</span>
           </div>
           <button
             onClick={() => setCopiedNotice(null)}
@@ -251,141 +438,129 @@ export function CompanyTourManagement({
       )}
 
       {!isApproved && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-700">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-700">
           Công ty chưa được phê duyệt. Bạn cần được nền tảng phê duyệt để tạo và đăng tour.
         </div>
       )}
 
+      {/* DANH SÁCH TOUR: HIỂN THỊ DẠNG LƯỚI HOẶC BẢNG */}
       {filteredTours.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-[#CBD5E1] p-16 text-center">
+        <div className="bg-white rounded-2xl border border-[#CBD5E1] p-16 text-center shadow-xs">
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">
-            {tourTypeFilter === "custom"
-              ? "Chưa có tour thiết kế riêng nào"
-              : tourTypeFilter === "public"
-              ? "Chưa có tour công khai nào"
-              : "Chưa có tour nào"}
+          <p className="text-sm text-gray-500 font-medium">
+            {statusFilter === "active"
+              ? "Chưa có tour công khai nào đang mở bán"
+              : statusFilter === "hidden"
+              ? "Không có tour nào đang tạm dừng"
+              : "Không tìm thấy tour nào phù hợp"}
           </p>
-          {isApproved && tourTypeFilter !== "custom" && (
-            <Button className="mt-4" onClick={() => setShowCreateModal(true)}>
-              Tạo tour đầu tiên
+          {isApproved && (
+            <Button className="mt-4 bg-[#075985] text-white" onClick={() => setShowCreateModal(true)}>
+              Tạo tour mới ngay
             </Button>
           )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      ) : viewMode === "grid" ? (
+        /* CHẾ ĐỘ LƯỚI (GRID VIEW) */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredTours.map((tour) => {
-            const isCustom = tour.tourType === "custom_request";
+            const isSelected = selectedTourIds.includes(tour.id);
+
             return (
               <div
                 key={tour.id}
-                className={`bg-white rounded-2xl border overflow-hidden hover:shadow-md transition-shadow flex flex-col justify-between ${
-                  isCustom ? "border-purple-300 ring-1 ring-purple-100" : "border-[#CBD5E1]"
+                className={`bg-white rounded-2xl border overflow-hidden hover:shadow-md transition-shadow flex flex-col justify-between group ${
+                  isSelected ? "border-[#075985] ring-2 ring-[#075985]/20" : "border-[#CBD5E1]"
                 }`}
               >
                 <div>
-                  <div className="relative h-44">
+                  {/* Ảnh bìa & Thẻ Tag */}
+                  <div className="relative h-48 overflow-hidden bg-slate-100">
                     <img
                       src={tour.image || (tour.images && tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
                       alt={tour.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1 shadow-sm">
-                      <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                      <span className="text-xs font-semibold">{tour.rating}</span>
+
+                    {/* Checkbox chọn hàng loạt */}
+                    <div className="absolute top-2.5 left-2.5 z-10">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedTourIds((prev) =>
+                            isSelected ? prev.filter((id) => id !== tour.id) : [...prev, tour.id]
+                          );
+                        }}
+                        className="w-4 h-4 rounded text-[#075985] bg-white/90 border-slate-300 focus:ring-0 cursor-pointer shadow-sm"
+                      />
                     </div>
 
-                    <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
-                      {isCustom ? (
-                        <div className="bg-[#F97316] text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
-                          <span>🔒 Theo yêu cầu (v{tour.version || 1})</span>
-                        </div>
-                      ) : (
-                        <div className="bg-[#075985] text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
-                          {tour.tourCode}
-                        </div>
-                      )}
+                    <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs rounded-full px-2.5 py-1 flex items-center gap-1 shadow-sm">
+                      <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                      <span className="text-xs font-bold text-slate-800">{tour.rating || 5.0}</span>
+                    </div>
 
-                      {tour.status === "pending_approval" && (
-                        <div className="bg-amber-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          <span>Chờ duyệt</span>
+                    <div className="absolute top-2.5 left-9 flex items-center gap-1.5 flex-wrap">
+                      <div className="bg-[#075985] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+                        {tour.tourCode || "T-NEW"}
+                      </div>
+
+                      {tour.status === "draft" && (
+                        <div className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                          Bản nháp
                         </div>
                       )}
-                      {tour.status === "rejected" && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewRejectionTour(tour);
-                          }}
-                          className="bg-rose-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 hover:bg-rose-700 transition-colors"
-                        >
-                          <XCircle className="w-3 h-3" />
-                          <span>Bị từ chối</span>
-                        </button>
+                      {tour.visibility === "hidden" && tour.status !== "draft" && (
+                        <div className="bg-slate-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                          Chưa đăng / Tạm ẩn
+                        </div>
                       )}
-                      {tour.status === "hidden" && (
-                        <div className="bg-slate-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                          Tạm ẩn
+                      {(tour.status === "completed" || tour.status === "published" || !tour.status) && tour.visibility !== "hidden" && (
+                        <div className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                          Đang mở bán
                         </div>
                       )}
                     </div>
 
                     {tour.images && tour.images.length > 1 && (
-                      <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-xs text-white text-[11px] px-2 py-0.5 rounded font-medium">
+                      <div className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md font-semibold">
                         +{tour.images.length} ảnh
                       </div>
                     )}
                     {tour.operationPeriod && (
-                      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs text-white text-[11px] px-2 py-0.5 rounded">
+                      <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md font-medium">
                         {tour.operationPeriod}
                       </div>
                     )}
                   </div>
 
-                  <div className="p-4">
-                    {isCustom && tour.targetCustomerName && (
-                      <div className="mb-2 bg-[#F0F9FF] text-purple-800 text-[11px] font-semibold px-2 py-1 rounded-md flex items-center justify-between border border-[#F97316]/30">
-                        <span>Khách: {tour.targetCustomerName}</span>
-                        {tour.targetCustomerPhone && <span className="text-[#F97316]">{tour.targetCustomerPhone}</span>}
-                      </div>
-                    )}
-
-                    <h3 className="font-bold text-gray-900 text-sm leading-snug mb-2 line-clamp-2">
+                  {/* Nội dung thông tin Tour */}
+                  <div className="p-4 space-y-3">
+                    <h3
+                      onClick={() => setViewingTour(tour)}
+                      className="font-bold text-slate-900 text-sm leading-snug line-clamp-2 min-h-[38px] group-hover:text-[#075985] transition-colors cursor-pointer"
+                      title="Bấm để xem trang chi tiết tour"
+                    >
                       {tour.name}
                     </h3>
 
-                    {tour.status === "rejected" && tour.rejectionReason && (
-                      <div
-                        onClick={() => setViewRejectionTour(tour)}
-                        className="cursor-pointer mb-2 bg-rose-50 border border-rose-200 rounded p-2 text-[11px] text-rose-800 line-clamp-2"
-                      >
-                        <span className="font-bold">Lý do từ chối:</span> {tour.rejectionReason}
-                      </div>
-                    )}
-
-                    {isCustom && tour.changeNote && (
-                      <p className="text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-1 mb-2 line-clamp-2 border border-amber-200 italic">
-                        📝 v{tour.version || 1}: {tour.changeNote}
-                      </p>
-                    )}
-
-                    <div className="space-y-1.5 text-xs text-gray-500 mb-3">
+                    {/* Chi tiết tour */}
+                    <div className="space-y-1.5 text-xs text-slate-600">
                       <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                        <span>{tour.destination}</span>
+                        <MapPin className="w-3.5 h-3.5 text-[#075985]" />
+                        <span className="font-medium text-slate-800">{tour.destination}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-blue-500" />
+                        <Clock className="w-3.5 h-3.5 text-[#075985]" />
                         <span>{tour.duration} ({tour.itinerary?.length ?? tour.numberOfDays ?? 0} ngày lịch trình)</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-blue-500" />
-                        <span>{tour.minGuests} – {tour.maxGuests} khách</span>
+                        <Users className="w-3.5 h-3.5 text-[#075985]" />
+                        <span>Quy mô đoàn: {tour.minGuests} – {tour.maxGuests} khách (Nhận trọn đoàn)</span>
                       </div>
                       {tour.highlights && tour.highlights.length > 0 && (
-                        <p className="text-[11px] text-gray-400 line-clamp-1 italic">
+                        <p className="text-[11px] text-slate-500 line-clamp-1 italic pt-0.5">
                           ★ {tour.highlights.slice(0, 2).join(" • ")}
                         </p>
                       )}
@@ -393,72 +568,81 @@ export function CompanyTourManagement({
                   </div>
                 </div>
 
-                <div className="px-4 pb-4">
-                  <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                {/* Footer thẻ: Giá & Các nút thao tác quản lý */}
+                <div className="px-4 pb-4 pt-1">
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                     <div>
-                      <p className="text-[11px] text-gray-400">Giá cơ bản từ</p>
+                      <p className="text-[10px] uppercase font-semibold text-slate-400">Giá cơ bản từ</p>
                       <p className="text-base font-extrabold text-[#075985]">
                         {tour.price.toLocaleString("vi-VN")}đ
                       </p>
                     </div>
+
                     <div className="flex items-center gap-1">
-                      {/* Submit for approval if draft or rejected */}
-                      {(tour.status === "draft" || tour.status === "rejected") && (
+                      {/* Xem trang chi tiết tour riêng biệt */}
+                      <button
+                        type="button"
+                        title="Xem trang chi tiết tour"
+                        onClick={() => setViewingTour(tour)}
+                        className="p-1.5 text-slate-600 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+
+                      {/* Nút hành động Mở bán / Tạm dừng / Đăng bán bản nháp */}
+                      {tour.status === "draft" ? (
                         <button
                           type="button"
-                          title="Gửi lên Sàn chờ Admin duyệt"
-                          onClick={() => handleSubmitForApproval(tour)}
-                          className="p-2 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
+                          title="Đăng & Mở bán tour lên sàn TripOps"
+                          onClick={() => setPendingAction({ type: "publish", tour })}
+                          className="p-1.5 text-amber-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
                         >
                           <Upload className="w-4 h-4" />
                         </button>
-                      )}
-                      {/* Visibility toggle if published or hidden */}
-                      {(tour.status === "published" || tour.status === "hidden" || !tour.status) && (
+                      ) : (
                         <button
                           type="button"
-                          title={tour.status === "hidden" ? "Mở bán lại tour" : "Tạm ẩn tour khỏi sàn"}
-                          onClick={() => handleToggleVisibility(tour)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            tour.status === "hidden"
-                              ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
-                              : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                          title={tour.visibility === "hidden" ? "Mở bán lại tour trên sàn" : "Tạm ẩn tour khỏi sàn"}
+                          onClick={() => {
+                            const actionType = tour.visibility === "hidden" ? "publish" : "hide";
+                            setPendingAction({ type: actionType, tour });
+                          }}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            tour.visibility === "hidden"
+                              ? "text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+                              : "text-emerald-600 hover:text-slate-600 hover:bg-slate-100"
                           }`}
                         >
-                          <Eye className="w-4 h-4" />
+                          {tour.visibility === "hidden" ? <ToggleLeft className="w-4 h-4 text-slate-400" /> : <ToggleRight className="w-4 h-4 text-emerald-600" />}
                         </button>
                       )}
-                      {isCustom && (
-                        <button
-                          type="button"
-                          title="Lịch sử phiên bản & Phục hồi (Version Backup/Restore)"
-                          onClick={() => setVersionHistoryTour(tour)}
-                          className="p-2 text-[#F97316] hover:text-purple-800 hover:bg-[#F0F9FF] rounded-lg transition-colors"
-                        >
-                          <History className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        title="Nhân bản tour (Duplicate)"
-                        onClick={() => handleDuplicateTour(tour)}
-                        className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
+
+                      {/* Chỉnh sửa chi tiết tour */}
                       <button
                         type="button"
                         title="Chỉnh sửa chi tiết tour"
                         onClick={() => setEditingTour(tour)}
-                        className="p-2 text-gray-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg transition-colors"
+                        className="p-1.5 text-slate-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg transition-colors"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
+
+                      {/* Nhân bản tour (có hộp thoại xác nhận) */}
                       <button
                         type="button"
-                        title="Xóa tour"
-                        onClick={() => setConfirmDeleteId(tour.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Nhân bản tour (Duplicate)"
+                        onClick={() => setPendingAction({ type: "duplicate", tour })}
+                        className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+
+                      {/* Xóa tour (có hộp thoại xác nhận) */}
+                      <button
+                        type="button"
+                        title="Xóa tour vĩnh viễn"
+                        onClick={() => setPendingAction({ type: "delete", tour })}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -469,97 +653,297 @@ export function CompanyTourManagement({
             );
           })}
         </div>
-      )}
+      ) : (
+        /* CHẾ ĐỘ BẢNG (TABLE VIEW) */
+        <div className="bg-white rounded-2xl border border-[#CBD5E1] shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-[#CBD5E1] text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  <th className="p-3.5 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedTourIds.length === filteredTours.length && filteredTours.length > 0}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 rounded text-[#075985] border-slate-300 cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-3.5">Mã & Tên Tour</th>
+                  <th className="p-3.5">Điểm Đến</th>
+                  <th className="p-3.5">Thời Lượng</th>
+                  <th className="p-3.5">Quy Mô Nhận Đoàn</th>
+                  <th className="p-3.5">Giá Sàn (VNĐ)</th>
+                  <th className="p-3.5">Trạng Thái</th>
+                  <th className="p-3.5 text-right">Thao Tác Quản Lý</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTours.map((tour) => {
+                  const isSelected = selectedTourIds.includes(tour.id);
 
-      {/* Version History Modal */}
-      {versionHistoryTour && (
-        <TourVersionHistoryModal
-          isOpen={!!versionHistoryTour}
-          onClose={() => setVersionHistoryTour(null)}
-          tour={versionHistoryTour}
-          onRestoreVersion={(verNum) => {
-            if (onRestoreTourVersion) {
-              onRestoreTourVersion(versionHistoryTour.id, verNum);
-            }
-            setVersionHistoryTour(null);
-          }}
-        />
-      )}
+                  return (
+                    <tr
+                      key={tour.id}
+                      className={`hover:bg-slate-50/60 transition-colors ${isSelected ? "bg-[#F0F9FF]" : ""}`}
+                    >
+                      <td className="p-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedTourIds((prev) =>
+                              isSelected ? prev.filter((id) => id !== tour.id) : [...prev, tour.id]
+                            );
+                          }}
+                          className="w-4 h-4 rounded text-[#075985] border-slate-300 cursor-pointer"
+                        />
+                      </td>
 
-      {/* Rejection Reason Modal */}
-      <Dialog open={!!viewRejectionTour} onOpenChange={() => setViewRejectionTour(null)}>
-        <DialogContent className="max-w-md p-6 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-700 flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-rose-600" />
-              Lý do từ chối từ Ban Quản Trị Sàn
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-xs font-bold text-gray-800">
-              Tour: <span className="text-[#075985] font-semibold">{viewRejectionTour?.name}</span>
-            </p>
-            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-900 leading-relaxed">
-              <p className="font-bold mb-1">Ghi chú từ kiểm duyệt viên:</p>
-              <p>{viewRejectionTour?.rejectionReason || "Chưa có phản hồi chi tiết từ kiểm duyệt viên. Vui lòng kiểm tra lại thông tin tour."}</p>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <Button size="sm" variant="outline" onClick={() => setViewRejectionTour(null)} className="text-xs">
-                Đóng
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (viewRejectionTour) {
-                    const t = viewRejectionTour;
-                    setViewRejectionTour(null);
-                    setEditingTour(t);
-                  }
-                }}
-                className="bg-[#075985] hover:bg-[#F97316] text-white text-xs flex items-center gap-1.5"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                Chỉnh sửa tour ngay
-              </Button>
-            </div>
+                      <td className="p-3.5">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={tour.image || (tour.images && tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
+                            alt={tour.name}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-[#075985]">
+                                {tour.tourCode || "T-NEW"}
+                              </span>
+                              <span className="flex items-center text-[10px] text-amber-500 font-bold">
+                                ★ {tour.rating || 5.0}
+                              </span>
+                            </div>
+                            <p
+                              onClick={() => setViewingTour(tour)}
+                              className="font-bold text-slate-900 line-clamp-1 max-w-[280px] hover:text-[#075985] cursor-pointer"
+                              title="Bấm để xem trang chi tiết tour"
+                            >
+                              {tour.name}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3.5">
+                        <span className="text-slate-800 font-medium">{tour.destination}</span>
+                      </td>
+
+                      <td className="p-3.5">
+                        <span className="text-slate-600">{tour.duration}</span>
+                        <div className="text-[10px] text-slate-400">({tour.itinerary?.length ?? tour.numberOfDays ?? 0} ngày lịch trình)</div>
+                      </td>
+
+                      <td className="p-3.5">
+                        <span className="font-semibold text-slate-700">{tour.minGuests} – {tour.maxGuests} khách</span>
+                        <div className="text-[10px] text-slate-400">Nhận trọn đoàn</div>
+                      </td>
+
+                      <td className="p-3.5">
+                        <span className="font-extrabold text-[#075985] text-sm">
+                          {tour.price.toLocaleString("vi-VN")}đ
+                        </span>
+                      </td>
+
+                      <td className="p-3.5">
+                        {tour.status === "draft" ? (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
+                            Bản nháp
+                          </span>
+                        ) : tour.visibility === "hidden" ? (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
+                            Chưa đăng / Tạm ẩn
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                            Đang mở bán
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            title="Xem trang chi tiết tour"
+                            onClick={() => setViewingTour(tour)}
+                            className="p-1.5 text-slate-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {tour.status === "draft" ? (
+                            <button
+                              type="button"
+                              title="Đăng & Mở bán tour lên sàn TripOps"
+                              onClick={() => setPendingAction({ type: "publish", tour })}
+                              className="p-1.5 text-amber-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                            >
+                              <Upload className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title={tour.visibility === "hidden" ? "Mở bán lại tour trên sàn" : "Tạm ẩn tour khỏi sàn"}
+                              onClick={() => {
+                                const actionType = tour.visibility === "hidden" ? "publish" : "hide";
+                                setPendingAction({ type: actionType, tour });
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                            >
+                              {tour.visibility === "hidden" ? <ToggleLeft className="w-4 h-4 text-slate-400" /> : <ToggleRight className="w-4 h-4 text-emerald-600" />}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            title="Chỉnh sửa chi tiết"
+                            onClick={() => setEditingTour(tour)}
+                            className="p-1.5 text-slate-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Nhân bản tour (Duplicate)"
+                            onClick={() => setPendingAction({ type: "duplicate", tour })}
+                            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Xóa tour vĩnh viễn"
+                            onClick={() => setPendingAction({ type: "delete", tour })}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
-      {/* Delete confirmation */}
-      <Dialog
-        open={!!confirmDeleteId}
-        onOpenChange={() => setConfirmDeleteId(null)}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Xóa tour</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-gray-600">
-            Bạn có chắc muốn xóa tour này? Toàn bộ thông tin lịch trình, giá và quy định của tour sẽ bị xóa. Hành động này không thể hoàn tác.
-          </p>
-          <div className="flex gap-2 justify-end mt-4">
-            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
-              Hủy
-            </Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={() => {
-                if (confirmDeleteId) {
-                  onDeleteTour(confirmDeleteId);
-                  setConfirmDeleteId(null);
-                }
-              }}
+      {/* ========================================================================= */}
+      {/* HỘP THOẠI XÁC NHẬN HÀNH ĐỘNG (ALERT DIALOG UI CAO CẤP)                   */}
+      {/* ========================================================================= */}
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+        <AlertDialogContent className="max-w-md p-6 rounded-2xl bg-white shadow-xl border border-slate-200">
+          <AlertDialogHeader className="space-y-3">
+            {/* Header Icon & Title */}
+            <div className="flex items-center gap-3">
+              {pendingAction?.type === "delete" && (
+                <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+              )}
+              {pendingAction?.type === "hide" && (
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                  <EyeOff className="w-5 h-5" />
+                </div>
+              )}
+              {pendingAction?.type === "publish" && (
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Eye className="w-5 h-5" />
+                </div>
+              )}
+              {pendingAction?.type === "duplicate" && (
+                <div className="w-11 h-11 rounded-2xl bg-[#E0F2FE] text-[#075985] flex items-center justify-center shrink-0">
+                  <Copy className="w-5 h-5" />
+                </div>
+              )}
+
+              <div>
+                <AlertDialogTitle className="text-base font-bold text-slate-900 leading-snug">
+                  {pendingAction?.type === "delete" && "Xác nhận xóa vĩnh viễn tour"}
+                  {pendingAction?.type === "hide" && "Xác nhận tạm dừng mở bán tour"}
+                  {pendingAction?.type === "publish" && "Xác nhận mở bán lại tour"}
+                  {pendingAction?.type === "duplicate" && "Xác nhận nhân bản tour"}
+                </AlertDialogTitle>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mã tour: <span className="font-bold text-slate-700">{pendingAction?.tour.tourCode}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Tour Info Preview Box */}
+            {pendingAction?.tour && (
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3 text-left">
+                <img
+                  src={pendingAction.tour.image || (pendingAction.tour.images && pendingAction.tour.images[0]) || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"}
+                  alt={pendingAction.tour.name}
+                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">{pendingAction.tour.name}</p>
+                  <p className="text-[11px] text-slate-500">{pendingAction.tour.destination} · {pendingAction.tour.duration}</p>
+                  <p className="text-xs font-extrabold text-[#075985]">{pendingAction.tour.price.toLocaleString("vi-VN")}đ</p>
+                </div>
+              </div>
+            )}
+
+            <AlertDialogDescription className="text-xs text-slate-600 leading-relaxed text-left">
+              {pendingAction?.type === "delete" && (
+                <span className="text-rose-700 font-medium">
+                  Cảnh báo: Hành động này không thể hoàn tác! Toàn bộ thông tin lịch trình, bảng giá độ tuổi và hình ảnh của tour này sẽ bị xóa khỏi hệ thống.
+                </span>
+              )}
+              {pendingAction?.type === "hide" && (
+                <span>
+                  Tour này sẽ tạm thời bị ẩn khỏi sàn TripOps. Khách du lịch sẽ không tìm thấy hoặc gửi yêu cầu đặt tour này cho đến khi bạn mở bán trở lại.
+                </span>
+              )}
+              {pendingAction?.type === "publish" && (
+                <span>
+                  {pendingAction.tour.status === "draft"
+                    ? "Tour này sẽ được chuyển từ Bản nháp sang trạng thái Đang mở bán công khai trên sàn TripOps để khách hàng có thể tìm kiếm và đặt tour ngay."
+                    : "Tour này sẽ được mở bán công khai trở lại trên sàn TripOps để khách hàng có thể tìm kiếm và đặt tour."}
+                </span>
+              )}
+              {pendingAction?.type === "duplicate" && (
+                <span>
+                  Hệ thống sẽ sao chép toàn bộ thông tin lịch trình và bảng giá của tour này sang một bản ghi mới với mã tour mới để bạn chỉnh sửa nhanh.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <AlertDialogCancel
+              onClick={() => setPendingAction(null)}
+              className="border-slate-300 text-slate-700 hover:bg-slate-100 text-xs px-4 h-9"
             >
-              Xác nhận xóa
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              Hủy bỏ
+            </AlertDialogCancel>
+
+            <AlertDialogAction
+              onClick={handleExecuteConfirmedAction}
+              className={`text-xs font-bold text-white px-4 h-9 transition-colors ${
+                pendingAction?.type === "delete"
+                  ? "bg-rose-600 hover:bg-rose-700"
+                  : pendingAction?.type === "hide"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : pendingAction?.type === "publish"
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-[#075985] hover:bg-[#F97316]"
+              }`}
+            >
+              {pendingAction?.type === "delete" && "Xóa vĩnh viễn"}
+              {pendingAction?.type === "hide" && "Tạm dừng bán"}
+              {pendingAction?.type === "publish" && (pendingAction.tour.status === "draft" ? "Đăng bán ngay" : "Mở bán lại")}
+              {pendingAction?.type === "duplicate" && "Tạo bản sao"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
 // =========================================================================
 // COMPREHENSIVE TOUR FORM STANDALONE PAGE (CHUYỂN THÀNH TRANG RIÊNG BIỆT)
 // =========================================================================
@@ -612,6 +996,9 @@ export function TourFormPage({
   };
 
   // Tab 1: General Info
+  const [tourCode, setTourCode] = useState(
+    tour?.tourCode ?? (isCustom ? `TC-${Date.now().toString().slice(-4)}` : `T${Date.now().toString().slice(-4)}`)
+  );
   const [name, setName] = useState(
     tour?.name ?? (customRequest ? `Tour riêng: ${customRequest.destination} - Khách đoàn ${customRequest.customerName}` : "")
   );
@@ -1213,9 +1600,9 @@ export function TourFormPage({
     tour?.priceTable && tour.priceTable.length > 0
       ? JSON.parse(JSON.stringify(tour.priceTable))
       : [
-          { ageGroup: "adult", ageGroupLabel: "Người lớn", ageRange: "Từ 11 tuổi trở lên", price: 3500000 },
-          { ageGroup: "child_2_11", ageGroupLabel: "Trẻ em (2–11 tuổi)", ageRange: "Từ 2 đến dưới 11 tuổi", price: 2450000 },
-          { ageGroup: "child_under_2", ageGroupLabel: "Em bé (dưới 2 tuổi)", ageRange: "Dưới 2 tuổi", price: 0 },
+          { ageGroup: "adult", ageGroupLabel: "Người lớn", ageRange: "Từ 11 tuổi trở lên", minAge: 11, maxAge: 120, price: 3500000 },
+          { ageGroup: "child_2_11", ageGroupLabel: "Trẻ em (2–11 tuổi)", ageRange: "Từ 2 đến dưới 11 tuổi", minAge: 2, maxAge: 10, price: 2450000 },
+          { ageGroup: "child_under_2", ageGroupLabel: "Em bé (dưới 2 tuổi)", ageRange: "Dưới 2 tuổi", minAge: 0, maxAge: 1, price: 0 },
         ]
   );
 
@@ -1228,6 +1615,8 @@ export function TourFormPage({
       ageGroup: `custom_${Date.now()}`,
       ageGroupLabel: "Khung giá mới (VD: Người cao tuổi)",
       ageRange: "Từ 60 tuổi trở lên",
+      minAge: 60,
+      maxAge: 120,
       price: Math.round(price * 0.8) || 2000000,
     };
     setPriceTable([...priceTable, newRow]);
@@ -1438,8 +1827,13 @@ export function TourFormPage({
     }
   };
 
-  const handleSubmit = () => {
-    const tourCode = tour?.tourCode ?? (isCustom ? `TC-${Date.now().toString().slice(-4)}` : `T${Date.now().toString().slice(-4)}`);
+  const handleSubmit = (mode: "draft" | "complete_hidden" | "complete_public" = "complete_public") => {
+    const isDraft = mode === "draft";
+    if (!isDraft && !name.trim()) {
+      alert("Vui lòng nhập tên tour trước khi hoàn tất.");
+      return;
+    }
+    const finalTourCode = tourCode.trim() || tour?.tourCode || (isCustom ? `TC-${Date.now().toString().slice(-4)}` : `T${Date.now().toString().slice(-4)}`);
     const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
 
     let nextVersion = tour?.version || 1;
@@ -1497,7 +1891,7 @@ export function TourFormPage({
     const finalTourPrice = isCoHostedTour && calculatedFinalPrice > 0 ? calculatedFinalPrice : price;
 
     const tourData: Partial<Tour> = {
-      tourCode,
+      tourCode: finalTourCode,
       name,
       destination,
       departureLocation,
@@ -1528,6 +1922,9 @@ export function TourFormPage({
       coHosts: updatedCoHosts,
       platformFeeRate: 0,
       pricingStatus: updatedCoHosts?.every((ch) => ch.quoteStatus === "submitted") ? "quoted" : "pending_partner_quote",
+      status: isDraft ? "draft" : "completed",
+      visibility: isDraft || mode === "complete_hidden" ? "hidden" : "public",
+      is_request: isCustom,
       tourType: isCustom ? "custom_request" : (tour?.tourType || "public"),
       customRequestId: customRequest?.id || tour?.customRequestId,
       targetUserId: customRequest?.userId || tour?.targetUserId,
@@ -1573,7 +1970,7 @@ export function TourFormPage({
             <p className="text-xs text-gray-500">
               {isCustom
                 ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || tour?.targetCustomerName || "Khách đặt riêng"}`
-                : (tour ? `Mã tour: ${tour?.tourCode || "T-NEW"} · Cập nhật thông tin chi tiết` : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá")}
+                : (tour ? `Mã tour: ${tourCode || "T-NEW"} · Cập nhật thông tin chi tiết` : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá")}
             </p>
           </div>
         </div>
@@ -1597,18 +1994,39 @@ export function TourFormPage({
           </Button>
           <Button
             type="button"
+            variant="outline"
+            onClick={() => handleSubmit("draft")}
+            className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs font-semibold"
+            title="Lưu bản nháp để tiếp tục chỉnh sửa sau"
+          >
+            Lưu bản nháp
+          </Button>
+          {!isCustom && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!name.trim() || !destination.trim()}
+              onClick={() => handleSubmit("complete_hidden")}
+              className="border-slate-400 text-slate-700 hover:bg-slate-100 text-xs font-semibold"
+              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
+            >
+              Lưu hoàn tất (Chưa đăng)
+            </Button>
+          )}
+          <Button
+            type="button"
             disabled={!name.trim() || !destination.trim()}
-            onClick={handleSubmit}
+            onClick={() => handleSubmit("complete_public")}
             className={`${
               isCustom
                 ? "bg-[#F97316] hover:bg-[#EA580C] text-white"
-                : "bg-[#075985] hover:bg-[#F97316] text-white"
-            } font-semibold shadow-xs`}
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            } font-semibold shadow-xs text-xs`}
           >
             <Check className="w-4 h-4 mr-1.5" />
             {isCustom
               ? (tour ? `Lưu phiên bản mới (v${(tour.version || 1) + 1})` : "Hoàn tất & Lưu Tour Thiết Kế")
-              : (tour ? "Lưu thay đổi Tour" : "Hoàn tất & Đăng Tour")}
+              : (tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay")}
           </Button>
         </div>
       </div>
@@ -1820,14 +2238,28 @@ export function TourFormPage({
               </div>
 
               {/* Thông tin cơ bản */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
+                  <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-[#075985]" />
+                    Mã Tour (tour_code) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    value={tourCode}
+                    onChange={(e) => setTourCode(e.target.value)}
+                    placeholder="VD: ĐL3N2Đ-A hoặc T001"
+                    className="mt-1 font-bold text-[#075985] uppercase"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Mã định danh duy nhất (VD: ĐL3N2Đ-A, PQ4N3Đ...)</p>
+                </div>
+
                 <div className="sm:col-span-2">
                   <Label className="text-xs font-semibold text-gray-700">Tên tour <span className="text-red-500">*</span></Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="VD: Khám Phá Đà Lạt – Xứ Sở Ngàn Hoa 3N2Đ"
-                    className="mt-1"
+                    className="mt-1 font-semibold"
                   />
                 </div>
 
@@ -3469,17 +3901,7 @@ export function TourFormPage({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResetDefaultPriceRows}
-                        className="text-xs h-8 px-2.5 text-gray-600 border-gray-300 hover:bg-[#F0F9FF]"
-                        title="Khôi phục lại 3 khung giá mặc định (Người lớn, Trẻ em, Em bé)"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 mr-1 text-gray-500" />
-                        Mẫu chuẩn 3 nhóm
-                      </Button>
+                      
                       <Button
                         type="button"
                         size="sm"
@@ -3496,10 +3918,10 @@ export function TourFormPage({
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-gray-100 text-gray-700">
-                          <th className="p-3 text-left w-1/4">Phân loại khách</th>
-                          <th className="p-3 text-left w-1/3">Độ tuổi áp dụng</th>
-                          <th className="p-3 text-right">Đơn giá vé (VNĐ)</th>
-                          <th className="p-3 text-center w-16">Thao tác</th>
+                          <th className="p-3 text-left w-[42%] font-semibold">Tên phân loại khách</th>
+                          <th className="p-3 text-center w-[26%] font-semibold">Khoảng tuổi áp dụng</th>
+                          <th className="p-3 text-right w-[24%] font-semibold">Đơn giá vé (VNĐ)</th>
+                          <th className="p-3 text-center w-[8%] font-semibold">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white">
@@ -3517,17 +3939,42 @@ export function TourFormPage({
                                 className="text-xs h-8 font-semibold text-gray-900"
                               />
                             </td>
-                            <td className="p-3">
-                              <Input
-                                value={row.ageRange ?? ""}
-                                onChange={(e) => {
-                                  const updated = [...priceTable];
-                                  updated[idx].ageRange = e.target.value;
-                                  setPriceTable(updated);
-                                }}
-                                placeholder="VD: Từ 11 tuổi trở lên, Từ 2 đến 11 tuổi..."
-                                className="text-xs h-8"
-                              />
+                            
+                            <td className="p-3 text-center">
+                              <div className="inline-flex items-center justify-center gap-2 bg-[#F0F9FF] px-3 py-1 rounded-xl border border-[#CBD5E1] shadow-2xs">
+                                <span className="text-[11px] text-gray-500 font-medium">Từ</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={120}
+                                  value={row.minAge ?? ""}
+                                  onChange={(e) => {
+                                    const updated = [...priceTable];
+                                    const val = e.target.value === "" ? undefined : parseInt(e.target.value);
+                                    updated[idx].minAge = val !== undefined && !isNaN(val) ? Math.max(0, val) : undefined;
+                                    setPriceTable(updated);
+                                  }}
+                                  placeholder="0"
+                                  className="text-xs h-8 w-14 text-center font-bold text-[#075985] bg-white border-gray-300 focus:border-[#075985] px-1 shadow-2xs"
+                                />
+                                <span className="text-gray-400 font-semibold">-</span>
+                                <span className="text-[11px] text-gray-500 font-medium">Đến</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={120}
+                                  value={row.maxAge ?? ""}
+                                  onChange={(e) => {
+                                    const updated = [...priceTable];
+                                    const val = e.target.value === "" ? undefined : parseInt(e.target.value);
+                                    updated[idx].maxAge = val !== undefined && !isNaN(val) ? Math.max(0, val) : undefined;
+                                    setPriceTable(updated);
+                                  }}
+                                  placeholder="120"
+                                  className="text-xs h-8 w-14 text-center font-bold text-[#075985] bg-white border-gray-300 focus:border-[#075985] px-1 shadow-2xs"
+                                />
+                                <span className="text-[11px] text-gray-600 font-medium">tuổi</span>
+                              </div>
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
@@ -3773,7 +4220,7 @@ export function TourFormPage({
                       4.8
                     </div>
                     <div className="absolute bottom-4 left-4 right-4 text-white">
-                      <p className="text-[11px] text-white/70 font-medium mb-1">MÃ TOUR: {tour?.tourCode || "T-NEW"}</p>
+                      <p className="text-[11px] text-white/70 font-medium mb-1">MÃ TOUR: {tourCode || "T-NEW"}</p>
                       <h1 className="text-xl font-bold leading-tight drop-shadow-sm">{name || "Tên tour của bạn"}</h1>
                     </div>
                   </div>
@@ -4200,7 +4647,7 @@ export function TourFormPage({
                             <thead className="bg-gray-100">
                               <tr>
                                 <th className="p-2 text-left">Phân loại</th>
-                                <th className="p-2 text-left">Độ tuổi</th>
+                                <th className="p-2 text-center">Độ tuổi áp dụng</th>
                                 <th className="p-2 text-right">Giá vé</th>
                               </tr>
                             </thead>
@@ -4208,7 +4655,11 @@ export function TourFormPage({
                               {priceTable.map((p, idx) => (
                                 <tr key={idx}>
                                   <td className="p-2 font-medium">{p.ageGroupLabel}</td>
-                                  <td className="p-2 text-gray-600">{p.ageRange}</td>
+                                  <td className="p-2 text-center text-gray-600">
+                                    {p.minAge !== undefined && p.maxAge !== undefined
+                                      ? (p.maxAge >= 100 ? `Từ ${p.minAge} tuổi trở lên` : `Từ ${p.minAge} đến ${p.maxAge} tuổi`)
+                                      : (p.ageRange || "-")}
+                                  </td>
                                   <td className="p-2 text-right font-bold text-[#075985]">
                                     {p.price === 0 ? "Miễn phí" : formatVND(p.price)}
                                   </td>
@@ -4333,12 +4784,32 @@ export function TourFormPage({
             Hủy
           </Button>
           <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleSubmit("draft")}
+            className="border-amber-500 text-amber-700 hover:bg-amber-50 font-semibold"
+          >
+            Lưu bản nháp
+          </Button>
+          {!isCustom && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!name.trim() || !destination.trim()}
+              onClick={() => handleSubmit("complete_hidden")}
+              className="border-slate-400 text-slate-700 hover:bg-slate-100 font-semibold"
+              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
+            >
+              Lưu hoàn tất (Chưa đăng)
+            </Button>
+          )}
+          <Button
             disabled={!name.trim() || !destination.trim()}
-            onClick={handleSubmit}
-            className="bg-[#075985] hover:bg-[#F97316] text-white font-bold"
+            onClick={() => handleSubmit("complete_public")}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
           >
             <Check className="w-4 h-4 mr-1.5" />
-            {tour ? "Lưu thay đổi Tour" : "Hoàn tất & Đăng Tour"}
+            {tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay"}
           </Button>
         </div>
       </div>
@@ -4456,3 +4927,5 @@ export function TourFormPage({
     </div>
   );
 }
+
+export const CompanyTourManagement = AgencyTourManagement;

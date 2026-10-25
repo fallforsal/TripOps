@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
-interface CompanyOverviewProps {
+interface AgencyOverviewProps {
   company: TourCompany;
   tours: Tour[];
   bookings: Booking[];
@@ -30,13 +30,13 @@ interface CompanyOverviewProps {
   onNavigate?: (section: string) => void;
 }
 
-export function CompanyOverview({
+export function AgencyOverview({
   company,
   tours,
   bookings,
   guides,
   onNavigate,
-}: CompanyOverviewProps) {
+}: AgencyOverviewProps) {
   const pendingBookings = bookings.filter(
     (b) => b.status === "pending",
   ).length;

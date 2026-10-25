@@ -44,9 +44,6 @@ export function UnifiedHeader({
     { id: "home", label: "Trang chủ" },
     { id: "book-tours", label: "Đặt Tour" },
     { id: "custom-tour", label: "Thiết kế tour theo yêu cầu" },
-    { id: "contact", label: "Liên hệ" },
-    { id: "about", label: "Về chúng tôi" },
-    { id: "reviews", label: "Đánh giá của khách hàng" },
   ];
 
   const roleLabels = {
@@ -94,8 +91,8 @@ export function UnifiedHeader({
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-[#F0F9FF]/90 backdrop-blur-md border-b border-[#CBD5E1] z-50 transition-all duration-300">
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
+      <nav className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+        <div className="flex justify-between items-center h-18">
           {/* Logo Brand: TripOps */}
           <div
             className="flex items-center gap-3 cursor-pointer group"
@@ -116,14 +113,14 @@ export function UnifiedHeader({
 
           {/* Navigation Items */}
           {(!currentUser || currentUser.role === "user") && (
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden md:flex items-center gap-10">
               {menuItems.map((item) => {
                 const isActive = currentPage === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleNavigateClick(item.id)}
-                    className={`relative text-sm tracking-wide transition-colors py-1 ${
+                    className={`relative text-sm font-medium tracking-wide transition-colors py-1.5 ${
                       isActive
                         ? "text-[#075985] font-semibold"
                         : "text-[#475569] hover:text-[#075985]"

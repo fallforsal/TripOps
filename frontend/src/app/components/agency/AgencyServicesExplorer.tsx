@@ -30,7 +30,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 
-interface CompanyServicesExplorerProps {
+interface AgencyServicesExplorerProps {
   services: Service[];
   companyName?: string;
 }
@@ -566,10 +566,10 @@ function ExplorerOsmMap({
 // =========================================================================
 // MAIN COMPONENT: COMPANY SERVICES EXPLORER
 // =========================================================================
-export function CompanyServicesExplorer({
+export function AgencyServicesExplorer({
   services,
   companyName = "Công ty Lữ hành",
-}: CompanyServicesExplorerProps) {
+}: AgencyServicesExplorerProps) {
   // Only show approved services
   const approvedServices = services.filter(
     (s) => s.status === "approved" || !s.status
@@ -1187,6 +1187,19 @@ export function CompanyServicesExplorer({
   // =========================================================================
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#075985] flex items-center gap-2">
+            <Compass className="w-6 h-6 text-[#075985]" />
+            Dịch vụ đối tác
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+            Khám phá và liên kết mạng lưới nhà cung ứng du lịch (Khách sạn, Nhà hàng, Vận chuyển, Điểm tham quan)
+          </p>
+        </div>
+      </div>
+
       {/* Filter and Control Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">

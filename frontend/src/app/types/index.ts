@@ -1,4 +1,4 @@
-export type UserRole = "user" | "guide" | "admin" | "provider" | "company_admin";
+export type UserRole = "user" | "guide" | "admin" | "provider" | "agency" | "company_admin";
 
 export type ProviderType =
   | "accommodation" // Dịch vụ lưu trú
@@ -29,7 +29,24 @@ export interface TourCompany {
   totalBookings?: number;
 }
 
+
+export interface BusinessProfile {
+  id?: number | string;
+  userId: string;
+  businessName: string;
+  taxCode: string;
+  businessAddress: string;
+  businessLicenseUrl?: string;
+  description?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'suspended';
+  rejectionReason?: string;
+  approvedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface User {
+  businessProfile?: BusinessProfile;
   id: string;
   name: string;
   email: string;
@@ -53,7 +70,7 @@ export interface User {
   latitude?: number; // Vĩ độ
   longitude?: number; // Kinh độ
   businessDescription?: string;
-  accountStatus?: "pending" | "approved" | "rejected";
+  accountStatus?: "pending" | "approved" | "rejected" | "suspended";
   rejectionReason?: string;
   // Guide specific fields
   licenseNumber?: string;
@@ -161,6 +178,8 @@ export interface TourPriceRow {
   ageGroupLabel: string; // e.g. "Người lớn"
   ageRange?: string; // e.g. "Từ 12 tuổi"
   hotelType?: string;
+  minAge?: number; // min_age in tour_pricing_tiers
+  maxAge?: number; // max_age in tour_pricing_tiers
   price: number;
 }
 
@@ -388,8 +407,10 @@ export interface Tour {
   coHosts?: TourCoHost[];
   platformFeeRate?: number; // Tỷ lệ phí sàn ký quỹ Escrow (mặc định 8%)
   pricingStatus?: "draft" | "pending_partner_quote" | "quoted" | "approved_by_customer";
-  // Tour publication & moderation status
-  status?: "draft" | "pending_approval" | "published" | "rejected" | "hidden";
+  // Database schema alignment (tours table: status, visibility, is_request)
+  status?: "draft" | "completed" | "published" | "deleted" | "pending_approval" | "rejected" | "hidden";
+  visibility?: "public" | "hidden";
+  is_request?: boolean;
   rejectionReason?: string;
   hiddenReason?: string; // Lý do Admin tạm ẩn tour (thông tin sai lệch, nhảm nhí...)
 }

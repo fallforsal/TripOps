@@ -57,7 +57,7 @@ export function AITourRecommenderModal({
 
   // Available tours (only published ones, or tours without explicit draft status)
   const publishedTours = tours.filter(
-    (t) => (!t.status || t.status === "published") && t.tourType !== "custom_request"
+    (t) => (!t.status || t.status === "completed" || t.status === "published") && t.visibility !== "hidden" && t.tourType !== "custom_request"
   );
 
   const handleAnalyze = () => {

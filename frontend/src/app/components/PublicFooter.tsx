@@ -2,7 +2,7 @@
 
 export function PublicFooter() {
   return (
-    <footer className="bg-[#075985] text-[#F0F9FF] pt-16 pb-12 border-t border-[#FFFFFF]/10 font-sans">
+    <footer id="contact" className="bg-[#075985] text-[#F0F9FF] pt-16 pb-12 border-t border-[#FFFFFF]/10 font-sans scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 pb-12 border-b border-[#FFFFFF]/10">
           {/* Brand Info */}

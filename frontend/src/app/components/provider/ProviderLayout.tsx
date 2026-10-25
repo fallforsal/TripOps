@@ -58,7 +58,7 @@ export function ProviderLayout({
                   className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-[#CBD5E1] shadow-2xs"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-[#075985] text-white flex items-center justify-center flex-shrink-0 shadow-md">
                   <Building2 className="w-5 h-5" />
                 </div>
               )}
@@ -103,7 +103,7 @@ export function ProviderLayout({
               onCreateService();
               setMobileOpen(false);
             }}
-            className={`w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-xl transition-all ${
+            className={`w-full bg-[#075985] hover:bg-[#F97316] text-white shadow-md rounded-xl transition-all ${
               collapsed ? "px-0 justify-center h-10 w-10 mx-auto" : "h-10 justify-start px-3"
             }`}
           >
@@ -128,7 +128,7 @@ export function ProviderLayout({
               title={collapsed ? item.label : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 isActive
-                  ? "bg-[#F97316] text-white shadow-md shadow-blue-600/20 font-semibold"
+                  ? "bg-[#F97316] text-white shadow-md shadow-orange-500/20 font-semibold"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 font-medium"
               } ${collapsed ? "justify-center px-0" : ""}`}
             >
@@ -149,8 +149,8 @@ export function ProviderLayout({
 
       {/* Provider Info Card (expanded only) */}
       {!collapsed && (
-        <div className="p-3 mx-3 mb-2 bg-gradient-to-br from-blue-50 to-indigo-50/60 rounded-xl border border-blue-100 text-xs">
-          <div className="font-semibold text-blue-900 mb-1">
+        <div className="p-3 mx-3 mb-2 bg-[#F0F9FF] rounded-xl border border-[#CBD5E1] text-xs">
+          <div className="font-semibold text-[#075985] mb-1">
             Hỗ trợ Đối tác
           </div>
           <p className="text-gray-600 text-[11px] leading-relaxed mb-2">
@@ -185,10 +185,10 @@ export function ProviderLayout({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50/60 flex">
+    <div className="min-h-screen bg-[#F0F9FF] flex">
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden lg:block fixed top-16 bottom-0 left-0 z-30 transition-all duration-300 ${
+        className={`hidden lg:block fixed top-0 bottom-0 left-0 z-30 transition-all duration-300 ${
           collapsed ? "w-18" : "w-64"
         }`}
       >
@@ -212,12 +212,12 @@ export function ProviderLayout({
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 pt-16 transition-all duration-300 ${
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
           collapsed ? "lg:pl-18" : "lg:pl-64"
         }`}
       >
         {/* Mobile Top Sub-Header */}
-        <header className="lg:hidden sticky top-16 z-20 bg-white border-b border-[#CBD5E1] px-4 py-3 flex items-center justify-between">
+        <header className="lg:hidden sticky top-0 z-20 bg-white border-b border-[#CBD5E1] px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
@@ -242,7 +242,36 @@ export function ProviderLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full min-w-0 max-w-7xl mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full min-w-0">
+          {(!currentUser.taxCode || currentUser.accountStatus === "pending") && (
+            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/70 border-2 border-amber-300 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-2xs">
+                  ⚠️
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-amber-950 text-sm">
+                      Hồ sơ Nhà cung cấp chưa kích hoạt (Chưa nộp Business Profile)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-bold uppercase tracking-wider">
+                      Chờ xác minh
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                    Bạn đang ở chế độ <strong>Xem trước dịch vụ</strong>. Vui lòng cập nhật thông tin pháp nhân và tiện ích cơ sở tại mục <strong>Hồ sơ Doanh nghiệp</strong> để Admin phê duyệt đưa bài đăng dịch vụ lên sàn.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => onNavigate("profile")}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs shrink-0 cursor-pointer"
+              >
+                Đến trang Hồ sơ Doanh nghiệp →
+              </Button>
+            </div>
+          )}
           {children}
         </main>
       </div>

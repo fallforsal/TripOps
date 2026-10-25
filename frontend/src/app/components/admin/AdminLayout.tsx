@@ -43,9 +43,9 @@ export function AdminLayout({
       icon: LayoutDashboard,
     },
     {
-      id: "companies",
-      label: "Công ty Du lịch",
-      icon: Building2,
+      id: "partner-approvals",
+      label: "Phê duyệt Đối tác",
+      icon: UserCheck,
     },
     {
       id: "approve-tours",
@@ -53,23 +53,18 @@ export function AdminLayout({
       icon: Compass,
     },
     {
-      id: "finance",
-      label: "STK Sàn & Quyết toán",
-      icon: Landmark,
-    },
-    {
-      id: "approve-providers",
-      label: "Phê duyệt NCC",
-      icon: UserCheck,
-    },
-    {
       id: "approve-posts",
       label: "Quản lý Bài đăng",
       icon: FileText,
     },
     {
+      id: "finance",
+      label: "STK Sàn & Quyết toán",
+      icon: Landmark,
+    },
+    {
       id: "providers",
-      label: "Nhà cung cấp",
+      label: "Mạng lưới Dịch vụ",
       icon: Package,
     },
     {
@@ -215,7 +210,7 @@ export function AdminLayout({
         </div>
 
         {/* Content */}
-        <div className="p-6 lg:p-8">{children}</div>
+        <div className="p-6 lg:p-8 w-full">{children}</div>
       </main>
     </div>
   );

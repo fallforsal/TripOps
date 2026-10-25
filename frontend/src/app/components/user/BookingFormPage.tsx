@@ -171,8 +171,23 @@ export function determineAgeGroup(dateOfBirth: string, refDateStr?: string): Boo
  */
 export function getPassengerPrice(tour: Tour, ageGroup: BookingPassenger["ageGroup"], age?: number | null): number {
   if (tour.priceTable && tour.priceTable.length > 0) {
-    // 1. If age is known, check if custom priceTable row matches
-    if (typeof age === "number") {
+    // 1. ƯU TIÊN HÀNG ĐẦU: Khớp theo minAge & maxAge (tương ứng min_age & max_age từ bảng tour_pricing_tiers)
+    if (typeof age === "number" && !isNaN(age)) {
+      const matchByMinMaxAge = tour.priceTable.find((r) => {
+        if (r.minAge !== undefined && r.maxAge !== undefined) {
+          return age >= r.minAge && age <= r.maxAge;
+        }
+        if (r.minAge !== undefined && r.maxAge === undefined) {
+          return age >= r.minAge;
+        }
+        if (r.minAge === undefined && r.maxAge !== undefined) {
+          return age <= r.maxAge;
+        }
+        return false;
+      });
+      if (matchByMinMaxAge) return matchByMinMaxAge.price;
+
+      // 1.2 Fallback nếu minAge/maxAge chưa thiết lập thì đọc từ chuỗi ageRange hoặc ageGroupLabel
       const matchByAge = tour.priceTable.find((r) => {
         const range = (r.ageRange || "").toLowerCase();
         const label = (r.ageGroupLabel || "").toLowerCase();
@@ -184,11 +199,11 @@ export function getPassengerPrice(tour: Tour, ageGroup: BookingPassenger["ageGro
       if (matchByAge) return matchByAge.price;
     }
 
-    // 2. Match by ageGroup key
+    // 2. Khớp theo ageGroup key
     const matchByGroup = tour.priceTable.find((r) => r.ageGroup === ageGroup);
     if (matchByGroup) return matchByGroup.price;
 
-    // 3. Fallback matching by label keyword in priceTable
+    // 3. Fallback matching theo nhãn phân loại trong priceTable
     if (ageGroup === "child_under_2") {
       const row = tour.priceTable.find((r) => (r.ageGroupLabel || "").toLowerCase().includes("em bé") || (r.ageGroupLabel || "").toLowerCase().includes("sơ sinh"));
       if (row) return row.price;
@@ -203,7 +218,7 @@ export function getPassengerPrice(tour: Tour, ageGroup: BookingPassenger["ageGro
     if (adultRow) return adultRow.price;
   }
 
-  // Fallback if tour has no priceTable:
+  // Fallback nếu tour chưa cấu hình priceTable:
   if (ageGroup === "child_under_2") return 0;
   if (ageGroup === "child_2_11") return Math.round(tour.price * 0.7);
   return tour.price;
