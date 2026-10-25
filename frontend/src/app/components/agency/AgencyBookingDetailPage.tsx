@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Booking,
   User,
@@ -1474,7 +1474,7 @@ export function AgencyBookingDetailPage({
             </button>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">
-                Chi tiết Booking #{booking.id}
+                Chi tiết Booking {booking.bookingCode || `#${booking.id}`}
               </h1>
               <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                 {st.label}

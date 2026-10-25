@@ -2,7 +2,7 @@ import { companyFromUser } from '@/app/services/authService';
 import { agencyTours, archiveAgencyTour, createAgencyTour, duplicateAgencyTour, fromApiTour, fromConfiguration, getPublicTour,
   hideAgencyTour, hideModeratedTour, moderationTours, publicTours, publishAgencyTour,
   restoreAgencyTour, updateAgencyTour } from '@/app/services/wf02Tours';
-import { cancelBooking, createBooking, depositBooking, fromApiBooking, getBookingDetail, getCustomerBookings, BookingDto } from '@/app/services/wf05Bookings';
+import { cancelBooking, createBooking, decideBooking, depositBooking, fromApiBooking, getAgencyBookingDetail, getAgencyBookings, getBookingDetail, getCustomerBookings, BookingDto } from '@/app/services/wf05Bookings';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -142,8 +142,37 @@ function App() {
     }
   }
 
+  async function refreshAgencyBookings() {
+    if (!currentUser || (currentUser.role !== "agency" && currentUser.role !== "company_admin")) return;
+    try {
+      const pageData = await getAgencyBookings();
+      if (!pageData?.items) return;
+      const details = await Promise.all(
+        pageData.items.map(async (item) => {
+          try {
+            return await getAgencyBookingDetail(item.id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const apiBookings = details
+        .filter((d): d is BookingDto => d !== null)
+        .map((dto) => fromApiBooking(dto, tours, currentUser));
+
+      setBookings((prev) => {
+        const apiIds = new Set(apiBookings.map((b) => b.id));
+        const nonApiBookings = prev.filter((b) => !apiIds.has(b.id));
+        return [...apiBookings, ...nonApiBookings];
+      });
+    } catch (err) {
+      console.error("Failed to load agency bookings", err);
+    }
+  }
+
   useEffect(() => {
     refreshCustomerBookings();
+    refreshAgencyBookings();
   }, [currentUser?.id, currentUser?.role, tours]);
   const [services, setServices] =
     useState<Service[]>(mockServices);
@@ -395,10 +424,26 @@ function App() {
     }
   };
 
-  const handleRejectBooking = (
+  const handleRejectBooking = async (
     bookingId: string,
     reason?: string,
   ) => {
+    const numericId = Number(bookingId);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const updatedDto = await decideBooking(numericId, "reject", reason);
+        toast.success(`Đã từ chối đơn đặt tour #${updatedDto.bookingCode || updatedDto.id}`);
+        const converted = fromApiBooking(updatedDto, tours, currentUser);
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? converted : b)));
+        if (selectedUserBooking?.id === bookingId) {
+          setSelectedUserBooking(converted);
+        }
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể từ chối đơn đặt tour trên máy chủ");
+      }
+    }
+
     setBookings(
       bookings.map((booking) =>
         booking.id === bookingId
@@ -471,7 +516,23 @@ function App() {
   };
 
   // Admin / Company actions
-  const handleApproveBooking = (bookingId: string) => {
+  const handleApproveBooking = async (bookingId: string) => {
+    const numericId = Number(bookingId);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      try {
+        const updatedDto = await decideBooking(numericId, "approve");
+        toast.success(`Đã phê duyệt đơn đặt tour #${updatedDto.bookingCode || updatedDto.id}!`);
+        const converted = fromApiBooking(updatedDto, tours, currentUser);
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? converted : b)));
+        if (selectedUserBooking?.id === bookingId) {
+          setSelectedUserBooking(converted);
+        }
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "Không thể phê duyệt đơn đặt tour trên máy chủ");
+      }
+    }
+
     setBookings((prev) =>
       prev.map((booking) => {
         if (booking.id !== bookingId) return booking;

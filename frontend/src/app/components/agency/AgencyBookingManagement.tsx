@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Booking, User, PaymentRequest } from "@/app/types";
 import {
   Calendar,
@@ -179,6 +179,7 @@ export function AgencyBookingManagement({
         (b.contactName ?? b.userName).toLowerCase().includes(search.toLowerCase()) ||
         b.tour.name.toLowerCase().includes(search.toLowerCase()) ||
         b.id.toLowerCase().includes(search.toLowerCase()) ||
+        (b.bookingCode ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (b.contactPhone ?? "").includes(search)
     );
 
@@ -284,7 +285,7 @@ export function AgencyBookingManagement({
                       {/* Mã đơn */}
                       <td className="px-4 py-4 align-top whitespace-nowrap">
                         <span className="font-mono text-xs font-bold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded border border-[#CBD5E1]">
-                          {booking.id.toUpperCase()}
+                          {booking.bookingCode || booking.id.toUpperCase()}
                         </span>
                         <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
