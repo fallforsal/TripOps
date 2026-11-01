@@ -37,14 +37,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/app/components/ui/dialog";
-import { ImageUploadManager } from "../ImageUploadManager";
+import { toast } from "sonner";
+import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
 
 interface ServicePostManagementProps {
   services: Service[];
   providerId: string;
   onCreateService: () => void;
   onEditService: (service: Service) => void;
-  onDeleteService: (serviceId: string) => void;
+  onDeleteService: (serviceId: string) => void | Promise<void>;
+  onSetAvailability?: (serviceId: string, isPaused: boolean) => Promise<void>;
   onViewDetail?: (service: Service) => void;
 }
 
@@ -54,13 +56,21 @@ export function ServicePostManagement({
   onCreateService,
   onEditService,
   onDeleteService,
+  onSetAvailability,
   onViewDetail,
 }: ServicePostManagementProps) {
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [filter, setFilter] = useState<"all" | Service["status"] | "paused">("all");
+  const [changingAvailability, setChangingAvailability] = useState<string | null>(null);
+  const changeAvailability = async (service: Service) => {
+    if (!onSetAvailability || changingAvailability) return;
+    setChangingAvailability(service.id);
+    try { await onSetAvailability(service.id, !service.isPaused); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể thay đổi trạng thái cung cấp."); }
+    finally { setChangingAvailability(null); }
+  };
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [imageManagementService, setImageManagementService] = useState<Service | null>(null);
 
   // Filter services by current provider
   const providerServices = useMemo(() => {
@@ -77,6 +87,8 @@ export function ServicePostManagement({
       pending,
       approved,
       rejected,
+      hidden: providerServices.filter((s) => s.status === "hidden").length,
+      paused: providerServices.filter((s) => s.isPaused).length,
     };
   }, [providerServices]);
 
@@ -84,7 +96,7 @@ export function ServicePostManagement({
   const filteredServices = useMemo(() => {
     return providerServices.filter((service) => {
       // Status filter
-      if (filter !== "all" && service.status !== filter) return false;
+      if (filter === "paused" ? !service.isPaused : filter !== "all" && service.status !== filter) return false;
 
       // Category filter
       if (categoryFilter !== "all") {
@@ -126,6 +138,8 @@ export function ServicePostManagement({
             Bị từ chối
           </span>
         );
+      case "hidden":
+        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">Admin đã ẩn</span>;
       case "pending":
       default:
         return (
@@ -242,29 +256,6 @@ export function ServicePostManagement({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-              Quản lý Dịch vụ & Bài đăng
-            </h1>
-            <Badge variant="outline" className="bg-[#F0F9FF] text-[#075985] border-[#CBD5E1]">
-              Provider Portal
-            </Badge>
-          </div>
-          <p className="text-gray-600 text-sm mt-1">
-            Đăng ký và quản lý tất cả các loại dịch vụ (Lưu trú, Ẩm thực, Tham quan, Trải nghiệm, Vận chuyển)
-          </p>
-        </div>
-        <Button
-          onClick={onCreateService}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
-        >
-          <Plus className="w-5 h-5 mr-1.5" />
-          Đăng dịch vụ mới
-        </Button>
-      </div>
 
       {/* Main Table Card */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -333,6 +324,8 @@ export function ServicePostManagement({
               >
                 Từ chối ({stats.rejected})
               </button>
+              <button onClick={() => setFilter("paused")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "paused" ? "bg-amber-600 text-white" : "text-gray-600 hover:text-amber-700"}`}>Tạm ngừng ({stats.paused})</button>
+              <button onClick={() => setFilter("hidden")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "hidden" ? "bg-rose-600 text-white" : "text-gray-600 hover:text-rose-700"}`}>Admin đã ẩn ({stats.hidden})</button>
             </div>
           </div>
 
@@ -371,7 +364,11 @@ export function ServicePostManagement({
 
         {/* TABLE VIEW */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[1400px] table-fixed text-left border-collapse [&_td]:align-middle">
+            <colgroup>
+              <col className="w-[3%]" /><col className="w-[30%]" /><col className="w-[8%]" /><col className="w-[11%]" />
+              <col className="w-[14%]" /><col className="w-[15%]" /><col className="w-[19%]" />
+            </colgroup>
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                 <th className="py-3.5 px-4 text-center w-12">#</th>
@@ -443,15 +440,12 @@ export function ServicePostManagement({
                               </div>
                             )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-gray-900 group-hover/item:text-[#075985] transition-colors line-clamp-1">
+                          <div className="min-w-0 max-w-[400px] flex-1">
+                            <div title={service.name} className="truncate font-semibold text-gray-900 group-hover/item:text-[#075985] transition-colors">
                               {service.name}
                             </div>
-                            <div className="text-xs text-gray-500 line-clamp-1 mt-0.5">
+                            <div title={service.description} className="mt-0.5 truncate text-xs text-gray-500">
                               {service.description}
-                            </div>
-                            <div className="text-[11px] text-gray-400 mt-0.5 font-mono">
-                              Mã: {service.id}
                             </div>
                           </div>
                         </div>
@@ -462,11 +456,11 @@ export function ServicePostManagement({
                         {getCategoryBadge(service.category)}
                       </td>
 
-                      {/* Area - Only Ward & Province */}
+                      {/* Area - Province only */}
                       <td className="py-3.5 px-4 text-xs text-gray-700">
                         <div className="flex items-center gap-1.5 font-medium">
                           <MapPin className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                          <span>{formatAddress(service)}</span>
+                          <span className="truncate leading-5" title={service.province}>{service.province || "Chưa cập nhật"}</span>
                         </div>
                       </td>
 
@@ -477,63 +471,54 @@ export function ServicePostManagement({
 
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex min-h-14 flex-col items-center justify-center gap-1.5 [&>span]:whitespace-nowrap">
                           {getStatusBadge(service.status)}
-                          {service.status === "rejected" && service.rejectionReason && (
-                            <span
-                              className="text-[10px] text-rose-600 max-w-[140px] truncate underline cursor-help"
-                              title={`Lý do từ chối: ${service.rejectionReason}`}
-                            >
-                              Lý do: {service.rejectionReason}
-                            </span>
-                          )}
+                          <ServiceModerationReason service={service} providerView />
+                          {service.isPaused && <Badge variant="outline" className="text-amber-800 border-amber-300">Tạm ngừng cung cấp</Badge>}
                         </div>
                       </td>
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center gap-1 justify-center">
+                        <div className="grid grid-cols-[116px_32px_32px_32px] items-center justify-end gap-1">
+                          {service.status !== "hidden" && onSetAvailability && <Button variant="outline" size="sm"
+                            disabled={!!changingAvailability} onClick={() => changeAvailability(service)}
+                            title={service.isPaused ? "Mở cung cấp lại dịch vụ" : "Tạm ngừng cung cấp dịch vụ"}
+                            className="col-start-1 h-8 w-[116px] px-2 text-[11px] text-amber-800 border-amber-300">
+                            {service.isPaused ? "Mở cung cấp lại" : "Tạm ngừng"}
+                          </Button>}
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-gray-600 hover:text-[#075985] hover:bg-[#F0F9FF]"
+                            className="col-start-2 h-8 w-8 p-0 text-gray-600 hover:text-[#075985] hover:bg-[#F0F9FF]"
                             onClick={() => onViewDetail ? onViewDetail(service) : setSelectedService(service)}
                             title="Xem chi tiết"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
 
-                          <Button
+                          {service.status !== "hidden" && <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-gray-600 hover:text-amber-600 hover:bg-amber-50"
+                            className="col-start-3 h-8 w-8 p-0 text-gray-600 hover:text-amber-600 hover:bg-amber-50"
                             onClick={() => onEditService(service)}
                             title="Chỉnh sửa dịch vụ"
                           >
                             <Edit className="w-4 h-4" />
-                          </Button>
+                          </Button>}
+
 
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-gray-600 hover:text-[#F97316] hover:bg-[#F0F9FF]"
-                            onClick={() => setImageManagementService(service)}
-                            title="Quản lý thư viện ảnh"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-gray-600 hover:text-rose-600 hover:bg-rose-50"
+                            className="col-start-4 h-8 w-8 p-0 text-gray-600 hover:text-rose-600 hover:bg-rose-50"
                             onClick={() => {
                               if (
                                 confirm(
                                   `Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này không thể hoàn tác.`
                                 )
                               ) {
-                                onDeleteService(service.id);
+                                Promise.resolve(onDeleteService(service.id)).catch(error => toast.error(error instanceof Error ? error.message : "Không thể xóa bài đăng."));
                               }
                             }}
                             title="Xóa bài đăng"
@@ -622,6 +607,10 @@ export function ServicePostManagement({
               </div>
 
               {/* Rejected reason banner if any */}
+              {selectedService.status === "hidden" && <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-sm whitespace-pre-wrap break-words">
+                <strong>Lý do Admin ẩn:</strong> {selectedService.hiddenReason || "Admin chưa cung cấp lý do."}
+                <p className="mt-2">Bài đăng đã bị khóa chỉnh sửa. Muốn cung cấp lại dịch vụ, vui lòng tạo bài đăng mới để Admin kiểm duyệt.</p>
+              </div>}
               {selectedService.status === "rejected" && selectedService.rejectionReason && (
                 <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
@@ -863,19 +852,7 @@ export function ServicePostManagement({
                 >
                   Đóng
                 </Button>
-                <Button
-                  variant="outline"
-                  className="text-[#F97316] border-[#F97316]/30 hover:bg-[#F0F9FF]"
-                  onClick={() => {
-                    const svc = selectedService;
-                    setSelectedService(null);
-                    setImageManagementService(svc);
-                  }}
-                >
-                  <ImageIcon className="w-4 h-4 mr-1.5" />
-                  Quản lý ảnh
-                </Button>
-                <Button
+                {selectedService.status !== "hidden" && <Button
                   className="bg-[#075985] hover:bg-[#F97316] text-white"
                   onClick={() => {
                     const svc = selectedService;
@@ -885,32 +862,13 @@ export function ServicePostManagement({
                 >
                   <Edit className="w-4 h-4 mr-1.5" />
                   Chỉnh sửa
-                </Button>
+                </Button>}
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Image Upload Manager */}
-      {imageManagementService && (
-        <ImageUploadManager
-          isOpen={!!imageManagementService}
-          onClose={() => setImageManagementService(null)}
-          onSave={(images, thumbnailIndex) => {
-            const updatedService = {
-              ...imageManagementService,
-              images: images,
-              image: images[thumbnailIndex] || images[0],
-            };
-            onEditService(updatedService);
-            setImageManagementService(null);
-          }}
-          initialImages={imageManagementService.images || [imageManagementService.image]}
-          initialThumbnailIndex={0}
-          title={`Quản lý ảnh - ${imageManagementService.name}`}
-        />
-      )}
     </div>
   );
 }

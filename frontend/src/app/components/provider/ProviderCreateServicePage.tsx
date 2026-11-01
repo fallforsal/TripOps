@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { User, Service } from "@/app/types";
 import {
   ArrowLeft,
@@ -15,25 +15,38 @@ import {
   Eye,
   Edit3,
   Image as ImageIcon,
-  Info,
-  RotateCcw,
+  UploadCloud,
   Sparkles,
+  ChevronRight,
+  ChevronLeft,
   X,
+  RotateCcw,
+  ShieldCheck,
+  Building2,
+  DollarSign,
+  FileText,
+  BadgeCheck,
+  Layers,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { GoogleMapLocationPicker } from "./GoogleMapLocationPicker";
+import { ProviderServiceDetailPage } from "./ProviderServiceDetailPage";
 import {
   allVietnamProvinces,
   getWardsForProvince,
   getCoordinatesForProvince,
 } from "@/app/data/vietnamAdministrative";
 
+import { uploadServiceImage } from "@/app/services/servicePosts";
+import { DeferredImageUploads } from "@/app/lib/deferredImageUploads";
+
 interface ProviderCreateServicePageProps {
   currentUser: User;
-  onSaveService: (serviceData: Omit<Service, "id">) => void;
+  onSaveService: (serviceData: Omit<Service, "id">) => void | Promise<void>;
   onBack: () => void;
-  initialService?: Service; // If editing
+  initialService?: Service;
 }
 
 export type ServiceCategory = "hotel" | "fnb" | "transportation" | "attraction";
@@ -45,6 +58,8 @@ interface CategoryMeta {
   description: string;
   icon: any;
   color: string;
+  bgLight: string;
+  borderColor: string;
   defaultName: string;
   subCategories: string[];
   capacityLabel: string;
@@ -52,18 +67,22 @@ interface CategoryMeta {
   capacityPlaceholder: string;
   defaultCapacity: string;
   defaultPolicies: string[];
+  policySuggestions: string[];
   policyPlaceholder: string;
   amenities: string[];
+  sampleImages: string[];
 }
 
 export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
   hotel: {
     value: "hotel",
     label: "Lưu trú & Khách sạn",
-    shortLabel: "Lưu trú",
-    description: "Khách sạn, Resort, Homestay, Villa nghỉ dưỡng, Glamping",
+    shortLabel: "Khách sạn",
+    description: "Khách sạn, Resort nghỉ dưỡng, Homestay, Biệt thự villa, Glamping",
     icon: Hotel,
     color: "from-blue-600 to-indigo-600",
+    bgLight: "bg-blue-50 text-blue-700",
+    borderColor: "border-blue-500",
     defaultName: "Khách Sạn Heritage Đà Lạt",
     subCategories: [
       "Khách sạn (Hotel)",
@@ -78,14 +97,27 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityPlaceholder: "VD: 45",
     defaultCapacity: "45",
     defaultPolicies: [
-      "Nhận phòng từ 14:00 - Trả phòng trước 12:00",
-      "Đã bao gồm buffet sáng hàng ngày tại nhà hàng tầng 1",
+      "Nhận phòng (Check-in) từ 14:00 - Trả phòng (Check-out) trước 12:00",
+      "Miễn phí phòng ngủ & buffet sáng FOC cho HDV/Trưởng đoàn (tỷ lệ 15 khách trả phí/1 suất)",
       "Miễn phí cho tối đa 01 trẻ em dưới 6 tuổi ngủ chung giường với bố mẹ",
-      "Hỗ trợ phụ thu thêm người: 250.000đ/đêm",
-      "Miễn phí hủy phòng trước 48 giờ so với ngày nhận phòng",
+      "Hỗ trợ nhận phòng sớm nếu phòng đã sẵn sàng và hỗ trợ gửi hành lý miễn phí",
+      "Phụ thu thêm người (Extra bed): 250.000đ/đêm bao gồm bữa sáng",
+      "Miễn phí hủy hoặc giảm số lượng phòng trước 7 ngày",
+    ],
+    policySuggestions: [
+      "Nhận phòng (Check-in) từ 14:00 - Trả phòng (Check-out) trước 12:00",
+      "Miễn phí phòng ngủ & buffet sáng FOC cho HDV/Trưởng đoàn (tỷ lệ 15 khách trả phí/1 suất)",
+      "Miễn phí cho tối đa 01 trẻ em dưới 6 tuổi ngủ chung giường với bố mẹ",
+      "Hỗ trợ nhận phòng sớm nếu phòng đã sẵn sàng và hỗ trợ gửi hành lý miễn phí",
+      "Phụ thu thêm người (Extra bed): 250.000đ/đêm bao gồm bữa sáng",
+      "Phụ thu phòng đơn (Single Supplement) cho khách lẻ nam/nữ trong đoàn",
+      "Miễn phí hủy hoặc giảm số lượng phòng trước 7 ngày so với ngày check-in",
+      "Chính sách công nợ thanh toán sau tour cho đối tác lữ hành ký hợp đồng nguyên tắc",
+      "Xuất hóa đơn GTGT (VAT) điện tử đầy đủ theo booking tour của công ty",
+      "Yêu cầu xuất trình CCCD/Hộ chiếu bản gốc đối với tất cả thành viên khi nhận phòng",
     ],
     policyPlaceholder:
-      "Nhập điều kiện nhận/trả phòng, bữa sáng, phụ thu thêm người, hoàn hủy...",
+      "Nhập điều kiện nhận/trả phòng, FOC hướng dẫn viên, chính sách trẻ em, phụ thu, hoàn hủy...",
     amenities: [
       "Wifi tốc độ cao miễn phí",
       "Điều hòa 2 chiều",
@@ -96,18 +128,24 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
       "Bãi đỗ xe 45 chỗ",
       "Bể bơi vô cực",
       "Minibar & Nước suối",
-      "Máy sấy tóc & Đồ vệ sinh",
-      "Quầy Bar / Cafe tầng thượng",
       "Dọn phòng hàng ngày",
+    ],
+    sampleImages: [
+      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
+      "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800",
+      "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800",
     ],
   },
   fnb: {
     value: "fnb",
     label: "Ẩm thực & Nhà hàng",
     shortLabel: "Ẩm thực",
-    description: "Nhà hàng, Quán ăn đặc sản, Cà phê, Buffet, Tiệc đoàn tour",
+    description: "Nhà hàng, Quán ăn đặc sản, Cà phê, Buffet tiệc đoàn lữ hành",
     icon: Utensils,
     color: "from-amber-500 to-orange-600",
+    bgLight: "bg-orange-50 text-orange-700",
+    borderColor: "border-orange-500",
     defaultName: "Nhà hàng Hải Sản Biển Xanh Phú Quốc",
     subCategories: [
       "Nhà hàng phục vụ đoàn tour lữ hành",
@@ -122,14 +160,28 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityPlaceholder: "VD: 150",
     defaultCapacity: "150",
     defaultPolicies: [
-      "Khung giờ đón khách: 10:00 - 22:30 hàng ngày",
-      "Set menu đoàn 6 - 8 món tiêu chuẩn, hỗ trợ đổi món chay khi báo trước 24h",
-      "Có 3 phòng VIP máy lạnh riêng cho đoàn từ 15 - 50 khách",
-      "Xuất hóa đơn VAT đầy đủ cho công ty du lịch",
-      "Chính sách hủy bàn: Miễn phí trước 3 tiếng",
+      "Khung giờ đón khách đoàn: 10:00 - 22:00 hàng ngày",
+      "Set menu đoàn 6 - 8 món tiêu chuẩn, định lượng đầy đủ cho 6-8 khách/bàn",
+      "Miễn phí 01 suất ăn tương đương cho Hướng dẫn viên và Lái xe (đoàn từ 15 khách)",
+      "Hỗ trợ đổi món chay hoặc chuẩn bị thực đơn dị ứng/ăn kiêng khi báo trước 12h",
+      "Có phòng VIP máy lạnh riêng cho đoàn từ 15 - 50 khách không tính phí phụ thu",
+      "Chính sách hủy bàn: Miễn phí trước 4 tiếng giờ khách đến",
+      "Xuất hóa đơn VAT đầy đủ ngay sau bữa ăn cho công ty du lịch",
+    ],
+    policySuggestions: [
+      "Khung giờ đón khách đoàn: 10:00 - 22:00 hàng ngày",
+      "Set menu đoàn 6 - 8 món tiêu chuẩn, định lượng đầy đủ cho 6-8 khách/bàn",
+      "Miễn phí 01 suất ăn tương đương cho Hướng dẫn viên và Lái xe (đoàn từ 15 khách)",
+      "Hỗ trợ đổi món chay hoặc chuẩn bị thực đơn dị ứng/ăn kiêng khi báo trước 12h",
+      "Có phòng VIP máy lạnh riêng cho đoàn từ 15 - 50 khách không tính phí phụ thu",
+      "Linh hoạt giữ bàn tối đa 45 phút khi đoàn gặp sự cố giao thông trên đường di chuyển",
+      "Chính sách hủy bàn: Miễn phí trước 4 tiếng giờ khách đến",
+      "Cho phép điều chỉnh số lượng suất ăn (+/- 5%) trước 3 tiếng",
+      "Miễn phí mang đồ uống vào nhà hàng hoặc tính phí mở chai ưu đãi đoàn",
+      "Xuất hóa đơn VAT đầy đủ ngay sau bữa ăn cho công ty du lịch",
     ],
     policyPlaceholder:
-      "Nhập khung giờ đón khách, quy cách set menu, phòng VIP, hóa đơn VAT, hủy bàn...",
+      "Nhập khung giờ đón khách, quy cách set menu, suất FOC cho HDV/lái xe, phòng VIP, hóa đơn VAT, hủy bàn...",
     amenities: [
       "Bãi đỗ xe 45 chỗ rộng rãi",
       "Có phòng VIP máy lạnh riêng cho đoàn",
@@ -140,14 +192,22 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
       "Wifi miễn phí",
       "Không gian mở thoáng mát",
     ],
+    sampleImages: [
+      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800",
+      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800",
+      "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
+      "https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?w=800",
+    ],
   },
   transportation: {
     value: "transportation",
     label: "Phương tiện & Vận chuyển",
     shortLabel: "Vận chuyển",
-    description: "Xe du lịch 4-45 chỗ, Limousine, Tàu cano cao tốc",
+    description: "Xe du lịch 4-45 chỗ, Xe Limousine VIP, Tàu cano cao tốc",
     icon: Car,
     color: "from-cyan-500 to-blue-600",
+    bgLight: "bg-cyan-50 text-cyan-700",
+    borderColor: "border-cyan-500",
     defaultName: "Nhà Xe Limousine Heritage VIP",
     subCategories: [
       "Xe 16 chỗ Limousine VIP",
@@ -163,14 +223,26 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityPlaceholder: "VD: 16",
     defaultCapacity: "16",
     defaultPolicies: [
-      "Dòng xe đời mới 2023 - 2024 chất lượng cao, tài xế lịch sự, nhiều năm kinh nghiệm",
-      "Giá đã bao gồm chi phí xăng dầu, phí cầu đường cao tốc và lương tài xế",
-      "Miễn phí nước suối đóng chai và khăn lạnh suốt hành trình",
-      "Phụ thu vượt thời gian: 150.000đ/giờ",
-      "Hủy hợp đồng trước 24 giờ hoàn 100% tiền cọc",
+      "Cam kết đời xe mới 2022 - 2024, điều hòa mát sâu, nội thất sạch sẽ",
+      "Giá đã bao gồm toàn bộ xăng dầu, phí cầu đường cao tốc và lương tài xế",
+      "Tài xế nhiều năm kinh nghiệm lái tour, nhiệt tình, lịch sự, đúng giờ",
+      "Miễn phí nước suối đóng chai (01 chai/khách/ngày) và khăn lạnh suốt hành trình",
+      "Bao gồm bảo hiểm trách nhiệm dân sự hành khách tối đa theo luật định",
+      "Hủy xe trước 24 giờ hoàn 100% tiền cọc; hỗ trợ đổi lịch xe linh hoạt",
+    ],
+    policySuggestions: [
+      "Cam kết đời xe mới 2022 - 2024, điều hòa mát sâu, nội thất sạch sẽ",
+      "Giá đã bao gồm toàn bộ xăng dầu, phí cầu đường cao tốc và lương tài xế",
+      "Tài xế nhiều năm kinh nghiệm lái tour, nhiệt tình, lịch sự, đúng giờ",
+      "Miễn phí nước suối đóng chai (01 chai/khách/ngày) và khăn lạnh suốt hành trình",
+      "Bao gồm bảo hiểm trách nhiệm dân sự hành khách tối đa theo luật định",
+      "Phụ thu vượt thời gian: 150.000đ/giờ; phụ thu vượt km: 12.000đ/km",
+      "Miễn phí ăn ngủ cho tài xế hoặc phụ thu theo thỏa thuận hợp đồng",
+      "Hủy xe trước 24 giờ hoàn 100% tiền cọc; hỗ trợ đổi lịch xe linh hoạt",
+      "Hỗ trợ đón/trả khách tại nhiều điểm hẹn trong lộ trình đã thỏa thuận",
     ],
     policyPlaceholder:
-      "Nhập đời xe, tài xế, chi phí xăng dầu cầu đường, nước suối, phụ thu, hoàn cọc...",
+      "Nhập đời xe, chi phí xăng dầu cầu đường, nước suối, bảo hiểm hành khách, phụ thu, hoàn cọc...",
     amenities: [
       "Ghế da cao cấp có ngả lưng",
       "Wifi 4G tốc độ cao miễn phí",
@@ -181,6 +253,12 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
       "Bảo hiểm hành khách đầy đủ",
       "Ghế massage thư giãn",
     ],
+    sampleImages: [
+      "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=800",
+      "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800",
+      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800",
+    ],
   },
   attraction: {
     value: "attraction",
@@ -189,6 +267,8 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     description: "Danh lam thắng cảnh, Di tích lịch sử, Khu du lịch sinh thái",
     icon: Compass,
     color: "from-teal-500 to-emerald-600",
+    bgLight: "bg-teal-50 text-teal-700",
+    borderColor: "border-teal-500",
     defaultName: "Khu Du Lịch Thung Lũng Tình Yêu Đà Lạt",
     subCategories: [
       "Khu du lịch sinh thái & Danh lam thắng cảnh",
@@ -203,13 +283,25 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityPlaceholder: "VD: 500",
     defaultCapacity: "300",
     defaultPolicies: [
-      "Giờ đón khách / mở cửa: 07:30 - 17:30 (Ngừng bán vé lúc 17:00)",
-      "Quyền lợi vé: Vào cổng toàn khu, xe điện di chuyển không giới hạn, xem show nghệ thuật",
+      "Giờ mở cửa đón khách: 07:30 - 17:30 (Ngừng bán vé lúc 17:00)",
+      "Quyền lợi vé bao gồm vào cổng toàn khu và các điểm check-in nội khu",
       "Chính sách trẻ em: Dưới 1m miễn phí; từ 1m - 1m4 tính 50% vé người lớn",
-      "Vé đoàn được đổi ngày trước 24h không mất phí phát sinh",
+      "Miễn phí vé vào cổng (FOC) cho Hướng dẫn viên có thẻ HDV quốc tế/nội địa",
+      "Hỗ trợ công ty du lịch đổi ngày tham quan trước 24 giờ không mất phí",
+      "Có lối đi ưu tiên check-in nhanh (Fast-track) cho đoàn tour đông khách",
+    ],
+    policySuggestions: [
+      "Giờ mở cửa đón khách: 07:30 - 17:30 (Ngừng bán vé lúc 17:00)",
+      "Quyền lợi vé bao gồm vào cổng toàn khu và các điểm check-in nội khu",
+      "Chính sách trẻ em: Dưới 1m miễn phí; từ 1m - 1m4 tính 50% vé người lớn",
+      "Miễn phí vé vào cổng (FOC) cho Hướng dẫn viên có thẻ HDV quốc tế/nội địa",
+      "Hỗ trợ công ty du lịch đổi ngày tham quan trước 24 giờ không mất phí",
+      "Có lối đi ưu tiên check-in nhanh (Fast-track) cho đoàn tour đông khách",
+      "Hỗ trợ xe điện trung chuyển và thuyết minh viên tại điểm cho đoàn",
+      "Có bãi đỗ xe rộng rãi miễn phí cho xe du lịch 16 - 45 chỗ",
     ],
     policyPlaceholder:
-      "Nhập giờ mở cửa, quyền lợi vé bao gồm, chính sách trẻ em, đổi ngày, lưu ý...",
+      "Nhập giờ mở cửa, quyền lợi vé, chính sách trẻ em, vé FOC cho hướng dẫn viên, đổi ngày...",
     amenities: [
       "Bãi đỗ xe du lịch lớn",
       "Nhà hàng & Trạm dừng nghỉ nội khu",
@@ -220,7 +312,27 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
       "Hỗ trợ xe lăn người khuyết tật",
       "Tủ gửi đồ tư trang an toàn",
     ],
+    sampleImages: [
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800",
+      "https://images.unsplash.com/photo-1528127269322-539801943592?w=800",
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800",
+      "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800",
+    ],
   },
+};
+
+// Helper to format money numbers with dot separator (e.g. 500000 -> "500.000")
+const formatMoneyDisplay = (val: string | number | undefined): string => {
+  if (val === undefined || val === null || val === "") return "";
+  const clean = val.toString().replace(/\D/g, "");
+  if (!clean) return "";
+  return parseInt(clean, 10).toLocaleString("vi-VN");
+};
+
+// Helper to parse formatted money string to number (e.g. "500.000" -> 500000)
+const parseMoneyNumber = (formatted: string): number => {
+  const clean = formatted.replace(/\D/g, "");
+  return clean ? parseInt(clean, 10) : 0;
 };
 
 export function ProviderCreateServicePage({
@@ -234,6 +346,12 @@ export function ProviderCreateServicePage({
   // View mode: 'form' or 'preview'
   const [viewMode, setViewMode] = useState<"form" | "preview">("form");
 
+  // Step state: 1: Loại hình & Ảnh | 2: Thông tin & Giá | 3: Vị trí & Bản đồ
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   // Category
   const [category, setCategory] = useState<ServiceCategory>(
     ((initialService?.category as ServiceCategory) &&
@@ -244,8 +362,8 @@ export function ProviderCreateServicePage({
 
   const currentConfig = CATEGORY_CONFIGS[category];
 
-  // Common Unified Fields (Saved in 1 single table)
-  const [name, setName] = useState(initialService?.name || currentConfig.defaultName);
+  // Common Form Fields - Dùng placeholder, không tự điền trước theo yêu cầu
+  const [name, setName] = useState(initialService?.name || "");
   const [subCategory, setSubCategory] = useState(
     initialService?.subCategory || currentConfig.subCategories[0]
   );
@@ -253,16 +371,18 @@ export function ProviderCreateServicePage({
     initialService?.capacity?.toString() ||
       initialService?.totalRooms?.toString() ||
       initialService?.seats?.toString() ||
-      currentConfig.defaultCapacity
+      ""
   );
   const [stars, setStars] = useState(initialService?.stars?.toString() || "4");
-  const [description, setDescription] = useState(
-    initialService?.description || ""
+  const [description, setDescription] = useState(initialService?.description || "");
+  const [operatingHours, setOperatingHours] = useState(
+    initialService?.operatingHours || ""
   );
 
-  // Helper to normalize policies into string[]
+  // Policies (stored as string[])
   const normalizePolicies = (raw: any): string[] => {
-    if (Array.isArray(raw)) return raw.filter((item) => typeof item === "string" && item.trim().length > 0);
+    if (Array.isArray(raw))
+      return raw.filter((item) => typeof item === "string" && item.trim().length > 0);
     if (typeof raw === "string" && raw.trim()) {
       const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
       return lines.length > 0 ? lines : [raw.trim()];
@@ -270,37 +390,29 @@ export function ProviderCreateServicePage({
     return [];
   };
 
-  // Unified Policies & Specialized Specs (Stored as string[])
   const [policies, setPolicies] = useState<string[]>(() => {
-    const norm = normalizePolicies(initialService?.policies);
-    return norm.length > 0 ? norm : currentConfig.defaultPolicies;
+    return initialService ? normalizePolicies(initialService.policies) : [];
   });
   const [customPolicyInput, setCustomPolicyInput] = useState("");
 
-  // Amenities tags (Stored as string[])
+  // Amenities tags (stored as string[])
   const [amenities, setAmenities] = useState<string[]>(() => {
-    if (initialService?.amenities && initialService.amenities.length > 0) {
-      return initialService.amenities;
-    }
-    return currentConfig.amenities.slice(0, 7);
+    return initialService?.amenities || [];
   });
   const [customAmenityInput, setCustomAmenityInput] = useState("");
 
-  // Price range
-  const [priceFrom, setPriceFrom] = useState(
-    initialService?.priceFrom?.toString() ||
-      initialService?.price?.toString() ||
-      (category === "hotel" ? "600000" : "250000")
+  // Price range with dot formatting (e.g. "500.000") - Dùng placeholder
+  const [priceFromDisplay, setPriceFromDisplay] = useState(
+    initialService ? formatMoneyDisplay(initialService.priceFrom || initialService.price) : ""
   );
-  const [priceTo, setPriceTo] = useState(
-    initialService?.priceTo?.toString() ||
-      (category === "hotel" ? "950000" : "450000")
+  const [priceToDisplay, setPriceToDisplay] = useState(
+    initialService?.priceTo ? formatMoneyDisplay(initialService.priceTo) : ""
   );
 
-  // 2-level administrative address (Province & Ward)
+  // Address: Province & Ward (strictly 2 levels)
   const [province, setProvince] = useState(initialService?.province || "Lâm Đồng");
   const [ward, setWard] = useState(initialService?.ward || "Phường 3");
-  const [street, setStreet] = useState(initialService?.street || "02 Trần Phú");
+  const [street, setStreet] = useState(initialService?.street || "");
 
   // GPS Map Coordinates
   const [latitude, setLatitude] = useState<number>(
@@ -310,27 +422,22 @@ export function ProviderCreateServicePage({
     initialService?.longitude || 108.4583
   );
 
-  // Photo Gallery & Thumbnail Selector
-  const defaultImages = [
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-    "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
-    "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800",
-  ];
-
-  const [images, setImages] = useState<string[]>(
-    initialService?.images && initialService.images.length > 0
-      ? initialService.images
-      : initialService?.image
-      ? [initialService.image]
-      : defaultImages
-  );
+  // Photo Gallery & Thumbnail Selector (File only - URL input removed completely)
+  const [images, setImages] = useState<string[]>(() => initialService
+    ? [...new Set([initialService.thumbnailUrl || initialService.image, ...(initialService.images || [])].filter(Boolean))]
+    : []);
+  const [imageDrafts] = useState(() => new DeferredImageUploads());
+  useEffect(() => () => imageDrafts.dispose(), [imageDrafts]);
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(
     initialService?.thumbnailIndex || 0
   );
-  const [newImageUrl, setNewImageUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previousProvince = useRef(initialService ? province : null);
 
   // Auto-sync wards and map coordinates when province changes
   useEffect(() => {
+    if (previousProvince.current === province) return;
+    previousProvince.current = province;
     const coords = getCoordinatesForProvince(province);
     setLatitude(coords.lat);
     setLongitude(coords.lng);
@@ -340,30 +447,53 @@ export function ProviderCreateServicePage({
     }
   }, [province]);
 
-  // Handle category switch: load defaults if not editing
+  // Handle category switch - Giữ nguyên các trường người dùng nhập, chỉ cập nhật placeholder
   const handleSelectCategory = (newCat: ServiceCategory) => {
     setCategory(newCat);
     const cfg = CATEGORY_CONFIGS[newCat];
     if (!isEditing) {
-      setName(cfg.defaultName);
       setSubCategory(cfg.subCategories[0]);
-      setCapacity(cfg.defaultCapacity);
-      setPolicies([...cfg.defaultPolicies]);
-      setAmenities(cfg.amenities.slice(0, 7));
-      if (newCat === "hotel") {
-        setPriceFrom("600000");
-        setPriceTo("950000");
-      } else {
-        setPriceFrom("200000");
-        setPriceTo("350000");
-      }
+      // Tuyệt đối không tự động ghi đè hoặc tự nhập trước tên, giá, số phòng, tiện ích, chính sách
     }
   };
 
-  const handleApplyTemplatePolicies = () => {
-    setPolicies([...currentConfig.defaultPolicies]);
+  // Selecting files only creates browser previews. Upload happens on Save / Submit for review.
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (saving || uploading) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setSaveError("");
+    try {
+      if (images.length + files.length > 21) throw new Error("Tối đa 21 ảnh gồm ảnh đại diện.");
+      const previews = imageDrafts.stage(Array.from(files));
+      setImages((previous) => [...previous, ...previews]);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Không thể đọc ảnh đã chọn.");
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
+  const handleRemoveImage = (index: number) => {
+    if (saving || uploading) return;
+    if (images.length <= 1) {
+      alert("Cần giữ lại ít nhất 1 hình ảnh cho bài đăng dịch vụ.");
+      return;
+    }
+    const filtered = images.filter((_, i) => i !== index);
+    imageDrafts.retain(filtered);
+    setImages(filtered);
+    if (thumbnailIndex === index) {
+      setThumbnailIndex(0);
+    } else if (thumbnailIndex > index) {
+      setThumbnailIndex(thumbnailIndex - 1);
+    }
+  };
+
+  // Policy actions (NO numbering, card row)
   const handleAddPolicy = (textToAdd?: string) => {
     const text = (textToAdd !== undefined ? textToAdd : customPolicyInput).trim();
     if (text && !policies.includes(text)) {
@@ -378,6 +508,7 @@ export function ProviderCreateServicePage({
     setPolicies(policies.filter((_, i) => i !== index));
   };
 
+  // Amenity actions (NO numbering, card row with Emerald theme)
   const handleAddAmenity = (textToAdd?: string) => {
     const text = (textToAdd !== undefined ? textToAdd : customAmenityInput).trim();
     if (text && !amenities.includes(text)) {
@@ -392,47 +523,37 @@ export function ProviderCreateServicePage({
     setAmenities(amenities.filter((x) => x !== item));
   };
 
-  const toggleAmenity = (item: string) => {
-    if (amenities.includes(item)) {
-      setAmenities(amenities.filter((x) => x !== item));
-    } else {
-      setAmenities([...amenities, item]);
-    }
-  };
-
-  const handleAddImage = () => {
-    const trimmed = newImageUrl.trim();
-    if (!trimmed) return;
-    if (!images.includes(trimmed)) {
-      setImages([...images, trimmed]);
-      setNewImageUrl("");
-    }
-  };
-
-  const handleRemoveImage = (index: number) => {
-    if (images.length <= 1) {
-      alert("Cần giữ lại ít nhất 1 hình ảnh cho bài đăng dịch vụ.");
+  // Form submission
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (saving || uploading) return;
+    if (initialService?.status === "hidden") {
+      setSaveError("Bài đăng đã bị Admin ẩn, không thể chỉnh sửa. Vui lòng tạo bài đăng mới để gửi duyệt.");
       return;
     }
-    const filtered = images.filter((_, i) => i !== index);
-    setImages(filtered);
-    if (thumbnailIndex >= filtered.length) {
-      setThumbnailIndex(0);
+    setSaveError("");
+
+    if (!name.trim()) {
+      alert("Vui lòng nhập tên dịch vụ / cơ sở.");
+      setCurrentStep(2);
+      return;
     }
-  };
 
-  // Submit unified single table payload
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+    if (images.length === 0) {
+      alert("Vui lòng tải lên ít nhất 1 hình ảnh.");
+      setCurrentStep(1);
+      return;
+    }
 
-    const fromVal = parseFloat(priceFrom) || 0;
-    const toVal = priceTo ? parseFloat(priceTo) : fromVal;
+    const fromVal = parseMoneyNumber(priceFromDisplay);
+    const toVal = parseMoneyNumber(priceToDisplay) || fromVal;
     const locationParts = [street, ward, province].filter(Boolean);
     const fullLocation = locationParts.join(", ");
-    const thumbnailPhoto = images[thumbnailIndex] || images[0];
+    const thumbnailPhoto = images[thumbnailIndex] || images[0] || "";
+    // Theo yêu cầu: ảnh thumbnail lưu ở thumbnail_url, các ảnh còn lại lưu trong cột images
+    const remainingImages = images.filter((_, idx) => idx !== thumbnailIndex);
     const capacityVal = parseInt(capacity) || 0;
 
-    // Single unified payload saved to 1 table
     const fullPayload: Omit<Service, "id"> = {
       providerId: currentUser.id,
       providerName: currentUser.businessName || currentUser.name,
@@ -445,37 +566,47 @@ export function ProviderCreateServicePage({
       priceTo: toVal,
       pricePerPerson: fromVal,
       capacity: capacityVal,
-      // Compatibility helpers for legacy fields
-      totalRooms: category === "hotel" ? capacityVal : undefined,
-      seats: category === "transportation" ? capacityVal : undefined,
-      stars: category === "hotel" ? parseInt(stars) || 3 : undefined,
+      stars: category === "hotel" ? parseInt(stars) || 4 : undefined,
       policies,
       amenities,
       location: fullLocation,
+      fullAddress: fullLocation,
       province,
       ward,
       street,
       latitude,
       longitude,
       image: thumbnailPhoto,
-      images,
-      thumbnailIndex,
-      rating: initialService?.rating ?? 0,
+      thumbnailUrl: thumbnailPhoto,
+      images: remainingImages,
+      operatingHours: operatingHours.trim(),
+      rating: initialService?.rating ?? 5.0,
       status: "pending",
       createdAt: initialService?.createdAt || new Date().toISOString().split("T")[0],
     };
 
-    onSaveService(fullPayload);
+    setSaving(true);
+    try {
+      setUploading(true);
+      const uploadedImages = await imageDrafts.resolve(images, uploadServiceImage);
+      setUploading(false);
+      const primaryIndex = Math.min(thumbnailIndex, uploadedImages.length - 1);
+      const thumbnailUrl = uploadedImages[primaryIndex];
+      await onSaveService({ ...fullPayload, image: thumbnailUrl, thumbnailUrl,
+        images: uploadedImages.filter((_, index) => index !== primaryIndex) });
+    }
+    catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể lưu bài đăng."); }
+    finally { setUploading(false); setSaving(false); }
   };
 
   const formatPriceRangeDisplay = () => {
-    const fromVal = parseFloat(priceFrom);
-    const toVal = parseFloat(priceTo);
+    const fromVal = parseMoneyNumber(priceFromDisplay);
+    const toVal = parseMoneyNumber(priceToDisplay);
     const unit = category === "hotel" ? "phòng" : "người";
-    if (!isNaN(fromVal) && !isNaN(toVal) && toVal > fromVal) {
+    if (fromVal > 0 && toVal > fromVal) {
       return `${fromVal.toLocaleString("vi-VN")}đ - ${toVal.toLocaleString("vi-VN")}đ / ${unit}`;
     }
-    if (!isNaN(fromVal)) {
+    if (fromVal > 0) {
       return `Từ ${fromVal.toLocaleString("vi-VN")}đ / ${unit}`;
     }
     return "Liên hệ báo giá";
@@ -483,9 +614,45 @@ export function ProviderCreateServicePage({
 
   const ActiveIcon = currentConfig.icon;
 
+  // Build full preview object matching Service type for ProviderServiceDetailPage
+  const previewThumbnail = images[thumbnailIndex] || images[0] || "";
+  const previewServiceObj: Service = {
+    id: initialService?.id || "preview-service-id",
+    providerId: currentUser.id,
+    providerName: currentUser.businessName || currentUser.name,
+    name: name || currentConfig.defaultName,
+    category,
+    subCategory,
+    description: description || "Chưa có mô tả chi tiết cho dịch vụ này.",
+    price: parseMoneyNumber(priceFromDisplay),
+    priceFrom: parseMoneyNumber(priceFromDisplay),
+    priceTo: parseMoneyNumber(priceToDisplay) || parseMoneyNumber(priceFromDisplay),
+    pricePerPerson: parseMoneyNumber(priceFromDisplay),
+    capacity: parseInt(capacity) || 0,
+    stars: category === "hotel" ? parseInt(stars) || 4 : undefined,
+    policies,
+    amenities,
+    location: [street, ward, province].filter(Boolean).join(", "),
+    fullAddress: [street, ward, province].filter(Boolean).join(", "),
+    province,
+    ward,
+    street,
+    latitude,
+    longitude,
+    image: previewThumbnail,
+    thumbnailUrl: previewThumbnail,
+    images: images,
+    operatingHours: operatingHours.trim(),
+    rating: initialService?.rating ?? 5.0,
+    status: "pending",
+    createdAt: initialService?.createdAt || new Date().toISOString().split("T")[0],
+  };
+
   return (
-    <div className="space-y-6 pb-16 animate-in fade-in duration-200">
-      {/* Top Header & View Mode Switcher */}
+    <div className="space-y-6 pb-20 animate-in fade-in duration-200 max-w-6xl mx-auto">
+      {saveError && <div role="alert" className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">{saveError}</div>}
+      {(saving || uploading) && <p role="status" className="text-sm text-sky-800">{uploading ? "Đang tải ảnh lên Cloudinary…" : "Đang lưu bài đăng…"}</p>}
+      {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
         <div className="flex items-center gap-3">
           <Button
@@ -498,17 +665,17 @@ export function ProviderCreateServicePage({
             Quay lại danh sách
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900">
               {isEditing ? "Chỉnh sửa bài đăng dịch vụ" : "Đăng Dịch Vụ Mới"}
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">
-              Hệ thống lưu trữ đồng nhất một bảng, tối ưu cho các đơn vị lữ hành liên kết tour
+              Cung cấp dịch vụ lên sàn TripOps để các công ty lữ hành dễ dàng tìm kiếm và tích hợp tour
             </p>
           </div>
         </div>
 
         {/* Form vs Preview Switcher Tabs */}
-        <div className="flex items-center gap-1.5 bg-gray-100/90 p-1 rounded-xl">
+        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={() => setViewMode("form")}
@@ -519,7 +686,7 @@ export function ProviderCreateServicePage({
             }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            Nhập liệu thông tin
+            Nhập liệu biểu mẫu
           </button>
           <button
             type="button"
@@ -537,182 +704,656 @@ export function ProviderCreateServicePage({
       </div>
 
       {/* ========================================================= */}
-      {/* MODE 1: FORM INPUT MODE (UNIFIED SINGLE TABLE FORM)       */}
+      {/* VIEW MODE 1: FORM WITH STREAMLINED 3-STEP WIZARD         */}
       {/* ========================================================= */}
       {viewMode === "form" && (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Step 1: Category Picker */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                  1
-                </span>
-                Chọn loại hình dịch vụ
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Lựa chọn 1 trong 4 loại hình dịch vụ du lịch cốt lõi
-              </p>
-            </div>
+        <div className="space-y-6">
+          {/* Stepper Navigation Indicator - NO NUMERIC 1,2,3 LABELS IN HEADINGS */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              {/* Step 1 */}
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                  currentStep === 1
+                    ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
+                    : currentStep > 1
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "text-gray-400 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                    currentStep === 1
+                      ? "bg-[#075985] text-white"
+                      : currentStep > 1
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {currentStep > 1 ? <Check className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                </div>
+                <div className="hidden sm:block">
+                  <div className="text-xs font-bold leading-none">
+                    Loại hình & Hình ảnh
+                  </div>
+                  <div className="text-[11px] opacity-75 mt-0.5">
+                    Chọn dịch vụ & Chọn Thumbnail
+                  </div>
+                </div>
+                <div className="sm:hidden text-xs font-bold truncate">Dịch vụ & Ảnh</div>
+              </button>
 
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-              {(Object.keys(CATEGORY_CONFIGS) as ServiceCategory[]).map((catKey) => {
-                const opt = CATEGORY_CONFIGS[catKey];
-                const Icon = opt.icon;
-                const isSelected = category === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleSelectCategory(opt.value)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between h-32 ${
-                      isSelected
-                        ? "border-[#075985] bg-[#F0F9FF]/70 shadow-sm ring-2 ring-blue-600/20"
-                        : "border-gray-200 bg-gray-50/50 hover:bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center text-white bg-gradient-to-br ${opt.color}`}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-gray-900 leading-snug">
-                        {opt.label}
-                      </div>
-                      <div className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">
-                        {opt.description}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+              {/* Step 2 */}
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                  currentStep === 2
+                    ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
+                    : currentStep > 2
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "text-gray-400 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                    currentStep === 2
+                      ? "bg-[#075985] text-white"
+                      : currentStep > 2
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {currentStep > 2 ? <Check className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
+                </div>
+                <div className="hidden sm:block">
+                  <div className="text-xs font-bold leading-none">
+                    Thông tin & Bảng giá
+                  </div>
+                  <div className="text-[11px] opacity-75 mt-0.5">
+                    Tên, phân loại, giá, tiện ích & quy định
+                  </div>
+                </div>
+                <div className="sm:hidden text-xs font-bold truncate">Thông tin & Giá</div>
+              </button>
+
+              {/* Step 3 */}
+              <button
+                type="button"
+                onClick={() => setCurrentStep(3)}
+                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                  currentStep === 3
+                    ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
+                    : "text-gray-400 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                    currentStep === 3
+                      ? "bg-[#075985] text-white"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div className="hidden sm:block">
+                  <div className="text-xs font-bold leading-none">
+                    Vị trí & Bản đồ
+                  </div>
+                  <div className="text-[11px] opacity-75 mt-0.5">
+                    Click ghim trên bản đồ GPS
+                  </div>
+                </div>
+                <div className="sm:hidden text-xs font-bold truncate">Bản đồ GPS</div>
+              </button>
             </div>
           </div>
 
-          {/* Step 2: UNIFIED SERVICE DETAILS & MERGED POLICIES */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-5">
-            <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                    2
-                  </span>
-                  Thông tin dịch vụ & Quy định đặc thù
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Các thông số vận hành và điều kiện phục vụ được lưu gộp trực tiếp vào mục Chính sách
-                </p>
-              </div>
-              <Badge className="bg-[#F0F9FF] text-[#075985] border-[#CBD5E1] font-semibold text-xs">
-                <ActiveIcon className="w-3.5 h-3.5 mr-1" />
-                {currentConfig.label}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Tên cơ sở / Dịch vụ */}
-              <div className="md:col-span-2 lg:col-span-3">
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Tên cơ sở / Dịch vụ đăng tải *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={`Ví dụ: ${currentConfig.defaultName}`}
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                  required
-                />
-              </div>
-
-              {/* Loại hình chi tiết (subCategory) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Phân loại chi tiết *
-                </label>
-                <select
-                  value={subCategory}
-                  onChange={(e) => setSubCategory(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                >
-                  {currentConfig.subCategories.map((sub) => (
-                    <option key={sub} value={sub}>
-                      {sub}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Quy mô / Sức chứa (Dùng chung trường capacity) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  {currentConfig.capacityLabel} *
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="1"
-                    value={capacity}
-                    onChange={(e) => setCapacity(e.target.value)}
-                    placeholder={currentConfig.capacityPlaceholder}
-                    className="w-full pl-3.5 pr-14 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
-                    {currentConfig.capacityUnit}
-                  </span>
-                </div>
-              </div>
-
-              {/* Hạng sao (nếu là Hotel) */}
-              {category === "hotel" && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Hạng sao cơ sở
-                  </label>
-                  <select
-                    value={stars}
-                    onChange={(e) => setStars(e.target.value)}
-                    className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                  >
-                    <option value="5">5 Sao ⭐⭐⭐⭐⭐ (Sang trọng)</option>
-                    <option value="4">4 Sao ⭐⭐⭐⭐ (Cao cấp)</option>
-                    <option value="3">3 Sao ⭐⭐⭐ (Tiêu chuẩn)</option>
-                    <option value="2">2 Sao ⭐⭐ (Kinh tế)</option>
-                    <option value="1">1 Sao ⭐</option>
-                    <option value="0">Tiêu chuẩn du lịch (Chưa gắn sao)</option>
-                  </select>
-                </div>
-              )}
-
-              {/* CHÍNH SÁCH, ĐIỀU KIỆN & THÔNG SỐ ĐẶC THÙ (Lưu dạng mảng string[]) */}
-              <div className="md:col-span-2 lg:col-span-3 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-blue-900">
-                      Chính sách, điều kiện & Thông số phục vụ đặc thù *
-                    </label>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E0F2FE] text-blue-800">
-                      {policies.length} điều khoản
-                    </span>
+          {/* ========================================================= */}
+          {/* STEP 1: CHỌN DỊCH VỤ & QUẢN LÝ ẢNH (CHỌN THUMBNAIL)       */}
+          {/* ========================================================= */}
+          {currentStep === 1 && (
+            <div className="space-y-6 animate-in fade-in duration-150">
+              {/* Section: 4 Loại hình dịch vụ (NO 1234 numbering in title) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-[#075985]" />
+                      Chọn loại hình dịch vụ du lịch
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Chọn đúng danh mục giúp hệ thống phân phối tới đúng các công ty lữ hành phù hợp
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleApplyTemplatePolicies}
-                    className="inline-flex items-center gap-1.5 text-xs text-[#075985] hover:text-blue-800 font-semibold bg-[#F0F9FF] hover:bg-[#E0F2FE]/70 px-2.5 py-1 rounded-lg border border-[#CBD5E1] transition-colors"
-                    title="Nạp mẫu gợi ý chuẩn mực cho loại hình này"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Áp dụng mẫu gợi ý chuẩn
-                  </button>
+                  <Badge className={`${currentConfig.bgLight} border-0 text-xs font-semibold`}>
+                    <ActiveIcon className="w-3.5 h-3.5 mr-1" />
+                    {currentConfig.shortLabel}
+                  </Badge>
                 </div>
 
-                <p className="text-[11px] text-gray-500">
-                  Nhập tự do các điều kiện vận hành chuyên biệt: giờ nhận/trả phòng, khung giờ đón khách, set menu, loại xe, quyền lợi vé, phụ thu trẻ em và điều kiện hoàn hủy...
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {(Object.keys(CATEGORY_CONFIGS) as ServiceCategory[]).map((catKey) => {
+                    const opt = CATEGORY_CONFIGS[catKey];
+                    const Icon = opt.icon;
+                    const isSelected = category === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSelectCategory(opt.value)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between h-32 relative overflow-hidden group ${
+                          isSelected
+                            ? "border-[#075985] bg-[#F0F9FF]/80 shadow-xs ring-2 ring-[#075985]/20"
+                            : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
+                        }`}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#075985] text-white flex items-center justify-center text-xs">
+                            <Check className="w-3 h-3" />
+                          </div>
+                        )}
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br ${opt.color} shadow-xs`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs sm:text-sm text-gray-900">
+                            {opt.label}
+                          </div>
+                          <div className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                            {opt.description}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                {/* Input to type custom policy */}
+              {/* Section: Quản lý ảnh & Chọn Thumbnail (NO 1234, URL removed) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-[#075985]" />
+                      Bộ sưu tập hình ảnh & Chọn ảnh đại diện (Thumbnail)
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Tải lên hình ảnh từ máy tính. Bấm vào nút <strong>"Đặt làm Thumbnail"</strong> hoặc click trực tiếp vào ảnh để chọn làm ảnh bìa chính trên sàn.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-[#075985] border border-blue-100">
+                      {images.length} hình ảnh • Ảnh bìa số {thumbnailIndex + 1}
+                    </span>
+
+                  </div>
+                </div>
+
+                {/* File Upload Box (URL box removed completely) */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    disabled={saving || uploading}
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="service-image-file-input"
+                  />
+                  <label
+                    htmlFor="service-image-file-input"
+                    className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#CBD5E1] hover:border-[#075985] rounded-2xl cursor-pointer bg-gradient-to-b from-[#F0F9FF]/30 to-gray-50/50 hover:bg-[#F0F9FF]/60 transition-all text-center h-28 group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-white shadow-2xs flex items-center justify-center text-[#075985] group-hover:scale-110 transition-transform mb-1.5 border border-blue-100">
+                      <UploadCloud className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-800">
+                      Nhấp để chọn ảnh từ máy tính của bạn
+                    </span>
+                    <span className="text-[11px] text-gray-500 mt-0.5">
+                      Hỗ trợ PNG, JPG, JPEG, tối đa 5 MB/ảnh (Có thể chọn cùng lúc nhiều ảnh)
+                    </span>
+                  </label>
+                </div>
+
+                {/* Images Grid with Thumbnail Selection */}
+                <div className="pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                    {images.length === 0 ? (
+                      <div className="col-span-full py-10 px-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/60 text-center flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-blue-50 text-[#075985] flex items-center justify-center mb-2">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                        <p className="text-xs font-bold text-gray-700">Chưa có hình ảnh nào được tải lên</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Vui lòng bấm vào khung phía trên để tải lên ít nhất 1 hình ảnh từ thiết bị của bạn
+                        </p>
+                      </div>
+                    ) : (
+                      images.map((img, idx) => {
+                      const isThumbnail = thumbnailIndex === idx;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => setThumbnailIndex(idx)}
+                          className={`relative rounded-xl overflow-hidden border-2 transition-all cursor-pointer group h-44 bg-gray-100 ${
+                            isThumbnail
+                              ? "border-[#075985] ring-4 ring-[#075985]/20 shadow-md"
+                              : "border-gray-200 hover:border-gray-400 hover:shadow-xs"
+                          }`}
+                        >
+                          <img
+                            src={img}
+                            alt={`Ảnh ${idx + 1}`}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+
+                          {/* Gradient shade */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+
+                          {/* Thumbnail Badge (Always visible on thumbnail) */}
+                          {isThumbnail ? (
+                            <div className="absolute top-2.5 left-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md">
+                              <Star className="w-3.5 h-3.5 fill-white" />
+                              Ảnh đại diện chính (Thumbnail)
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setThumbnailIndex(idx);
+                              }}
+                              className="absolute top-2.5 left-2.5 bg-black/60 hover:bg-[#075985] text-white text-[10px] font-semibold px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+                            >
+                              <Star className="w-3 h-3" />
+                              Đặt làm Thumbnail
+                            </button>
+                          )}
+
+                          {/* Image index indicator */}
+                          <div className="absolute bottom-2.5 left-2.5 text-white/90 text-[11px] font-semibold bg-black/50 px-2 py-0.5 rounded-md backdrop-blur-xs">
+                            Ảnh {idx + 1}
+                          </div>
+
+                          {/* Delete button */}
+                          {images.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveImage(idx);
+                              }}
+                              className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-black/60 hover:bg-rose-600 text-white flex items-center justify-center transition-colors shadow-sm"
+                              title="Xóa hình ảnh này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Next Step Bar */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onBack}
+                  className="rounded-xl border-gray-300 text-xs"
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold px-6 shadow-xs"
+                >
+                  Tiếp tục: Thông tin & Bảng giá
+                  <ChevronRight className="w-4 h-4 ml-1.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* STEP 2: THÔNG TIN DỊCH VỤ, BẢNG GIÁ, TIỆN ÍCH & CHÍNH SÁCH */}
+          {/* ========================================================= */}
+          {currentStep === 2 && (
+            <div className="space-y-6 animate-in fade-in duration-150">
+              {/* Card 1: Thông tin cơ bản & Quy mô (NO 1234 in title) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-[#075985]" />
+                      Thông tin nhận diện & Quy mô cơ sở
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Các trường thông tin sẽ lưu trực tiếp xuống bảng <strong>service</strong> trong cơ sở dữ liệu
+                    </p>
+                  </div>
+                  <Badge className={`${currentConfig.bgLight} border-0 text-xs font-semibold`}>
+                    <ActiveIcon className="w-3.5 h-3.5 mr-1" />
+                    {currentConfig.label}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Tên cơ sở / Dịch vụ */}
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Tên dịch vụ / Cơ sở đăng tải *
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={`Ví dụ: ${currentConfig.defaultName}`}
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  {/* Phân loại chi tiết (subCategory) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Phân loại chi tiết *
+                    </label>
+                    <select
+                      value={subCategory}
+                      onChange={(e) => setSubCategory(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
+                    >
+                      {currentConfig.subCategories.map((sub) => (
+                        <option key={sub} value={sub}>
+                          {sub}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Sức chứa / Quy mô (capacity) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      {currentConfig.capacityLabel} *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        value={capacity}
+                        onChange={(e) => setCapacity(e.target.value)}
+                        placeholder={currentConfig.capacityPlaceholder}
+                        className="w-full pl-3.5 pr-14 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
+                        required
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
+                        {currentConfig.capacityUnit}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Hạng sao (nếu là khách sạn) */}
+                  {category === "hotel" && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                        Xếp hạng sao
+                      </label>
+                      <select
+                        value={stars}
+                        onChange={(e) => setStars(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
+                      >
+                        <option value="5">5 Sao ⭐⭐⭐⭐⭐ (Sang trọng quốc tế)</option>
+                        <option value="4">4 Sao ⭐⭐⭐⭐ (Cao cấp)</option>
+                        <option value="3">3 Sao ⭐⭐⭐ (Tiêu chuẩn)</option>
+                        <option value="2">2 Sao ⭐⭐ (Kinh tế)</option>
+                        <option value="1">1 Sao ⭐</option>
+                        <option value="0">Tiêu chuẩn du lịch (Chưa xếp sao)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Khung giờ hoạt động / đón khách (operating_hours) */}
+                  <div className={category === "hotel" ? "md:col-span-2 lg:col-span-3" : ""}>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      {category === "hotel" ? "Khung giờ nhận / trả phòng" : "Khung giờ hoạt động & đón khách"}
+                    </label>
+                    <input
+                      type="text"
+                      value={operatingHours}
+                      onChange={(e) => setOperatingHours(e.target.value)}
+                      placeholder={
+                        category === "hotel"
+                          ? "VD: Nhận phòng: 14:00 - Trả phòng: 12:00"
+                          : "VD: 07:30 - 22:00 hàng ngày"
+                      }
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
+                    />
+                  </div>
+
+                  {/* Mô tả giới thiệu */}
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Mô tả giới thiệu dịch vụ
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Giới thiệu đôi nét nổi bật về không gian, thực đơn, tiện nghi phòng, phong cách phục vụ..."
+                      className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Bảng giá niêm yết (Formatted with dot separator: 500.000, NO 1234 in title) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-[#075985]" />
+                      Khoảng giá tham khảo niêm yết
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Mức giá giúp các công ty lữ hành ước tính chi phí khi lên chương trình tour
+                    </p>
+                  </div>
+                  <div className="text-xs font-bold text-[#075985] bg-[#F0F9FF] px-3 py-1 rounded-xl border border-blue-100">
+                    {formatPriceRangeDisplay()}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Mức giá từ */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Mức giá từ (Tối thiểu / {category === "hotel" ? "phòng" : "người"}) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={priceFromDisplay}
+                        onChange={(e) => {
+                          const formatted = formatMoneyDisplay(e.target.value);
+                          setPriceFromDisplay(formatted);
+                        }}
+                        placeholder={category === "hotel" ? "VD: 600.000" : "VD: 200.000"}
+                        className="w-full pl-3.5 pr-20 py-2.5 text-base font-bold border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none font-mono"
+                        required
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-semibold">
+                        VNĐ / {category === "hotel" ? "phòng" : "người"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Mức giá đến */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Mức giá đến (Tối đa / {category === "hotel" ? "phòng" : "người"})
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={priceToDisplay}
+                        onChange={(e) => {
+                          const formatted = formatMoneyDisplay(e.target.value);
+                          setPriceToDisplay(formatted);
+                        }}
+                        placeholder="VD: 950.000"
+                        className="w-full pl-3.5 pr-20 py-2.5 text-base font-bold border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none font-mono"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-semibold">
+                        VNĐ / {category === "hotel" ? "phòng" : "người"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Tiện ích & Tiện nghi cơ sở (NO 1234, INDIVIDUAL CARDS, EMERALD COLOR THEME) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      Tiện ích & Tiện nghi cơ sở
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Các tiện nghi phòng, trang thiết bị, dịch vụ gia tăng phục vụ khách đoàn
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Đã thêm {amenities.length} tiện ích
+                  </span>
+                </div>
+
+                {/* Input new amenity */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customAmenityInput}
+                    onChange={(e) => setCustomAmenityInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddAmenity();
+                      }
+                    }}
+                    placeholder="Nhập tiện ích/tiện nghi mới (VD: Trạm sạc xe điện, Ghế massage, Bể bơi vô cực, Menu ăn kiêng...)"
+                    className="flex-1 px-3.5 py-2.5 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleAddAmenity()}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold px-4 flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Thêm tiện ích
+                  </Button>
+                </div>
+
+                {/* Amenities List - Rendered as individual cards, Emerald color theme, NO numbering */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {amenities.length > 0 ? (
+                    amenities.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start justify-between gap-3 p-2.5 bg-emerald-50/70 hover:bg-emerald-100/70 rounded-xl border border-emerald-200 text-xs text-emerald-950 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 flex-1">
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
+                            <Check className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="leading-relaxed font-semibold text-emerald-900">
+                            {item}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAmenity(item)}
+                          className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors flex-shrink-0"
+                          title={`Xóa tiện ích "${item}"`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-xs text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                      Chưa có tiện ích nào. Hãy nhập tiện ích ở trên hoặc chọn nhanh từ danh mục gợi ý bên dưới.
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Add Preset Amenities Chips */}
+                <div className="pt-2 border-t border-gray-100">
+                  <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
+                    Gợi ý tiện ích theo ngành (Bấm để thêm nhanh):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentConfig.amenities.map((sug) => {
+                      const isAdded = amenities.includes(sug);
+                      return (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => {
+                            if (isAdded) {
+                              handleRemoveAmenity(sug);
+                            } else {
+                              handleAddAmenity(sug);
+                            }
+                          }}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all flex items-center gap-1 ${
+                            isAdded
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold"
+                              : "bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 border-gray-200"
+                          }`}
+                        >
+                          <span>{isAdded ? "✓" : "+"}</span>
+                          <span>{sug}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Chính sách, điều kiện & Quy định phục vụ (NO 1234 numbering in title or cards, "Áp dụng mẫu chuẩn" removed) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-[#075985]" />
+                      Chính sách, điều kiện & Quy định phục vụ
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Khung giờ phục vụ, chính sách FOC cho HDV/lái xe, điều kiện hủy đổi, trẻ em và xuất hóa đơn VAT
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-[#075985] border border-blue-100">
+                    Đã thêm {policies.length} điều khoản
+                  </span>
+                </div>
+
+                {/* Input new policy */}
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -725,60 +1366,55 @@ export function ProviderCreateServicePage({
                       }
                     }}
                     placeholder={currentConfig.policyPlaceholder}
-                    className="flex-1 px-3.5 py-2.5 text-sm border border-[#CBD5E1] rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-[#F0F9FF]/20 text-gray-800"
+                    className="flex-1 px-3.5 py-2.5 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
                   />
                   <Button
                     type="button"
+                    size="sm"
                     onClick={() => handleAddPolicy()}
-                    className="bg-[#075985] hover:bg-[#F97316] text-white rounded-xl px-4 flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold"
+                    className="bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold px-4 flex-shrink-0"
                   >
-                    <Plus className="w-4 h-4" />
-                    Thêm chính sách
+                    <Plus className="w-4 h-4 mr-1" />
+                    Thêm điều khoản
                   </Button>
                 </div>
 
-                {/* List of currently added policies */}
-                {policies.length > 0 ? (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {policies.map((pol, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start justify-between gap-3 p-3 bg-[#F0F9FF]/40 hover:bg-[#F0F9FF]/70 rounded-xl border border-[#CBD5E1]/60 transition-colors text-xs text-gray-800 group"
-                      >
-                        <div className="flex items-start gap-2.5 flex-1">
-                          <span className="w-5 h-5 rounded-full bg-[#075985] text-white font-bold text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                          <span className="leading-relaxed font-medium">{pol}</span>
+                {/* Policies List - NO NUMBERS (1, 2, 3, 4 replaced with bullet icon) */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {policies.map((pol, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start justify-between gap-3 p-2.5 bg-gray-50/90 hover:bg-gray-100/90 rounded-xl border border-gray-200 text-xs text-gray-800 transition-colors"
+                    >
+                      <div className="flex items-start gap-2.5 flex-1">
+                        <div className="w-4 h-4 rounded-full bg-[#E0F2FE] text-[#075985] flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#075985]" />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePolicy(idx)}
-                          className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors flex-shrink-0"
-                          title="Xóa điều khoản này"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <span className="leading-relaxed font-medium text-gray-800">{pol}</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
-                    Chưa có chính sách nào. Hãy nhập nội dung ở trên và nhấn <strong>Thêm chính sách</strong> hoặc bấm <strong>"Áp dụng mẫu gợi ý chuẩn"</strong>.
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePolicy(idx)}
+                        className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors flex-shrink-0"
+                        title="Xóa điều khoản này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
 
-                {/* Quick Add Suggestions Chips */}
-                <div className="pt-2 border-t border-blue-100">
+                {/* Rich industry suggestions from research (Google/Hospitality standard) */}
+                <div className="pt-2 border-t border-gray-100">
                   <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
-                    Mẫu gợi ý theo ngành (Bấm để thêm / gỡ nhanh):
+                    Gợi ý chính sách thực tế theo ngành du lịch (Bấm để thêm nhanh vào danh sách):
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {currentConfig.defaultPolicies.map((sug, i) => {
+                    {currentConfig.policySuggestions.map((sug) => {
                       const isAdded = policies.includes(sug);
                       return (
                         <button
-                          key={i}
+                          key={sug}
                           type="button"
                           onClick={() => {
                             if (isAdded) {
@@ -789,12 +1425,12 @@ export function ProviderCreateServicePage({
                           }}
                           className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all flex items-center gap-1 ${
                             isAdded
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-medium"
-                              : "bg-gray-50 hover:bg-[#F0F9FF] text-gray-600 hover:text-[#075985] border-gray-200"
+                              ? "bg-blue-100 text-[#075985] border-blue-300 font-semibold"
+                              : "bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-[#075985] border-gray-200"
                           }`}
                         >
                           <span>{isAdded ? "✓" : "+"}</span>
-                          <span className="line-clamp-1 max-w-[280px]">{sug}</span>
+                          <span>{sug}</span>
                         </button>
                       );
                     })}
@@ -802,592 +1438,211 @@ export function ProviderCreateServicePage({
                 </div>
               </div>
 
-              {/* Giới thiệu tổng quan */}
-              <div className="md:col-span-2 lg:col-span-3">
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Mô tả giới thiệu dịch vụ (Tùy chọn)
-                </label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Giới thiệu đôi nét nổi bật về không gian, phong cảnh, chất lượng dịch vụ..."
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Step 3: AMENITIES & FACILITIES (Lưu dạng mảng string[], cho phép tự nhập) */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                    3
-                  </span>
-                  Tiện ích & Dịch vụ đi kèm
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Nhập thêm tiện ích mới hoặc chọn nhanh từ danh sách gợi ý sẵn có
-                </p>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-[#E0F2FE] text-blue-800">
-                Đã chọn {amenities.length} tiện ích
-              </span>
-            </div>
-
-            {/* Custom Amenity Input */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={customAmenityInput}
-                onChange={(e) => setCustomAmenityInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddAmenity();
-                  }
-                }}
-                placeholder="Nhập tiện ích/tiện nghi mới (VD: Ghế massage, Trạm sạc xe điện, Menu ăn kiêng...) rồi nhấn Thêm"
-                className="flex-1 px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-              />
-              <Button
-                type="button"
-                onClick={() => handleAddAmenity()}
-                className="bg-[#075985] hover:bg-[#F97316] text-white rounded-xl px-4 flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold"
-              >
-                <Plus className="w-4 h-4" />
-                Thêm tiện ích
-              </Button>
-            </div>
-
-            {/* Currently Selected Amenities as Removable Tags */}
-            {amenities.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <span className="text-xs font-semibold text-gray-700 block">
-                  Tiện ích đã gắn vào bài đăng ({amenities.length}):
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {amenities.map((item, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F0F9FF] text-blue-800 text-xs font-medium rounded-xl border border-[#CBD5E1]"
-                    >
-                      <span>✓ {item}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAmenity(item)}
-                        className="text-blue-400 hover:text-rose-600 ml-1 rounded-full hover:bg-[#E0F2FE] p-0.5 transition-colors"
-                        title={`Xóa ${item}`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Suggested Amenities Grid */}
-            <div className="pt-3 border-t border-gray-100 space-y-2">
-              <span className="text-xs font-semibold text-gray-500 block">
-                Gợi ý tiện ích phổ biến (Bấm để thêm / gỡ nhanh):
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {currentConfig.amenities.map((item) => {
-                  const checked = amenities.includes(item);
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => toggleAmenity(item)}
-                      className={`px-3 py-2 rounded-xl text-xs font-medium text-left border flex items-center justify-between transition-all ${
-                        checked
-                          ? "bg-[#075985] text-white border-[#075985] shadow-xs"
-                          : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
-                      }`}
-                    >
-                      <span className="truncate">{item}</span>
-                      {checked && <Check className="w-3.5 h-3.5 flex-shrink-0 ml-1" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Step 4: PRICE RANGE */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                  4
-                </span>
-                {category === "hotel"
-                  ? "Khoảng giá dự kiến tính theo phòng (VNĐ / Phòng)"
-                  : "Khoảng giá dự kiến tính trên đầu người (VNĐ / Người)"}
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Thông tin giá giúp các đơn vị lữ hành ước lượng chi phí khi thiết kế tour
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-[#F0F9FF]/70 border border-blue-100 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-blue-900 mb-1">
-                    Giá từ (Mức tối thiểu / {category === "hotel" ? "phòng" : "người"}) *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1000"
-                      value={priceFrom}
-                      onChange={(e) => setPriceFrom(e.target.value)}
-                      placeholder={category === "hotel" ? "VD: 600000" : "VD: 200000"}
-                      className="w-full pl-3 pr-20 py-2.5 text-base font-bold border border-[#CBD5E1] rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white text-blue-900"
-                      required
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#075985] font-bold">
-                      VNĐ / {category === "hotel" ? "phòng" : "người"}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-blue-900 mb-1">
-                    Giá đến (Mức tối đa / {category === "hotel" ? "phòng" : "người"})
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1000"
-                      value={priceTo}
-                      onChange={(e) => setPriceTo(e.target.value)}
-                      placeholder={category === "hotel" ? "VD: 950000" : "VD: 350000"}
-                      className="w-full pl-3 pr-20 py-2.5 text-base font-bold border border-[#CBD5E1] rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white text-blue-900"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#075985] font-bold">
-                      VNĐ / {category === "hotel" ? "phòng" : "người"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-3 rounded-xl border border-[#CBD5E1] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                <span className="text-xs text-gray-600">
-                  Hiển thị niêm yết cho các công ty lữ hành:
-                </span>
-                <span className="text-base font-extrabold text-[#075985] bg-[#F0F9FF] px-3 py-1 rounded-lg border border-blue-100">
-                  {formatPriceRangeDisplay()}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 5: PHOTO GALLERY & SET THUMBNAIL */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                    5
-                  </span>
-                  Bộ sưu tập hình ảnh & Chọn ảnh đại diện (Thumbnail)
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Đăng tải nhiều góc chụp thực tế và bấm nút ngôi sao để chọn ảnh làm bìa đại diện
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-gray-600">
-                {images.length} hình ảnh
-              </span>
-            </div>
-
-            {/* Add Image Input */}
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddImage())}
-                placeholder="Dán đường dẫn ảnh (URL) và bấm Thêm ảnh..."
-                className="flex-1 px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-              />
-              <Button
-                type="button"
-                onClick={handleAddImage}
-                className="bg-[#075985] hover:bg-[#F97316] text-white rounded-xl text-xs font-semibold"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Thêm ảnh
-              </Button>
-            </div>
-
-            {/* Images Grid with Thumbnail Selector */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-2">
-              {images.map((img, idx) => {
-                const isThumbnail = thumbnailIndex === idx;
-                return (
-                  <div
-                    key={idx}
-                    className={`relative rounded-xl overflow-hidden border-2 transition-all group h-40 bg-gray-100 ${
-                      isThumbnail
-                        ? "border-[#075985] ring-2 ring-blue-600/30 shadow-md"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <img
-                      src={img}
-                      alt={`Ảnh ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-
-                    {/* Actions Overlay */}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setThumbnailIndex(idx)}
-                        className={`p-2 rounded-lg text-xs font-medium flex items-center gap-1 shadow-md transition-all ${
-                          isThumbnail
-                            ? "bg-amber-500 text-white"
-                            : "bg-white/90 text-gray-800 hover:bg-white"
-                        }`}
-                        title="Đặt làm ảnh bìa bài đăng"
-                      >
-                        <Star className={`w-3.5 h-3.5 ${isThumbnail ? "fill-white" : ""}`} />
-                        {isThumbnail ? "Ảnh bìa" : "Làm bìa"}
-                      </button>
-
-                      {images.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(idx)}
-                          className="p-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 shadow-md"
-                          title="Xóa ảnh"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Badge if thumbnail */}
-                    {isThumbnail && (
-                      <div className="absolute top-2 left-2 bg-[#075985] text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
-                        <Star className="w-3 h-3 fill-white" />
-                        Ảnh bìa
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Step 6: ADDRESS & GOOGLE MAPS GPS */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#075985] text-white text-xs flex items-center justify-center font-bold">
-                  6
-                </span>
-                Địa chỉ
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Cung cấp địa chỉ chính xác và vị trí bản đồ để các đối tác và du khách dễ dàng tìm đến
-              </p>
-            </div>
-
-            {/* 2-level address: Province & Ward */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Tỉnh / Thành phố *
-                </label>
-                <select
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                  required
+              {/* Navigation buttons */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep(1)}
+                  className="rounded-xl border-gray-300 text-xs gap-1.5"
                 >
-                  {allVietnamProvinces.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Phường / Xã *
-                </label>
-                <select
-                  value={ward}
-                  onChange={(e) => setWard(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                  required
+                  <ChevronLeft className="w-4 h-4" />
+                  Quay lại: Ảnh & Dịch vụ
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  className="bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold px-6 shadow-xs"
                 >
-                  {getWardsForProvince(province).map((w) => (
-                    <option key={w} value={w}>
-                      {w}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Số nhà, Tên đường / Khu vực cụ thể
-                </label>
-                <input
-                  type="text"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  placeholder="Ví dụ: 02 Trần Phú, Đèo Prenn, Bãi Dài..."
-                  className="w-full px-3.5 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
-                />
+                  Tiếp tục: Vị trí & Bản đồ
+                  <ChevronRight className="w-4 h-4 ml-1.5" />
+                </Button>
               </div>
             </div>
+          )}
 
-            {/* Google Map Location Picker */}
-            <GoogleMapLocationPicker
-              latitude={latitude}
-              longitude={longitude}
-              onChange={(lat, lng) => {
-                setLatitude(lat);
-                setLongitude(lng);
-              }}
-              addressLabel={[street, ward, province].filter(Boolean).join(", ")}
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onBack}
-              className="rounded-xl border-gray-300"
-            >
-              Hủy bỏ
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setViewMode("preview")}
-              className="rounded-xl border-[#CBD5E1] text-[#075985] hover:bg-[#F0F9FF]"
-            >
-              <Eye className="w-4 h-4 mr-1.5" />
-              Mô phỏng bài đăng
-            </Button>
-            <Button
-              type="submit"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md font-semibold px-6"
-            >
-              <CheckCircle2 className="w-4 h-4 mr-1.5" />
-              {isEditing ? "Cập nhật bài đăng" : "Gửi duyệt bài đăng"}
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {/* ========================================================= */}
-      {/* MODE 2: LIVE PREVIEW MODE                                 */}
-      {/* ========================================================= */}
-      {viewMode === "preview" && (
-        <div className="space-y-6">
-          <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
-            <div>
-              <div className="flex items-center gap-2">
-                <Eye className="w-5 h-5 text-blue-200" />
-                <h3 className="font-bold text-sm">
-                  Chế độ mô phỏng trực tiếp (Live Preview)
-                </h3>
-              </div>
-              <p className="text-xs text-blue-100 mt-0.5">
-                Giao diện hiển thị trực quan thông tin dịch vụ theo chuẩn một bảng dữ liệu thống nhất
-              </p>
-            </div>
-            <Button
-              onClick={() => setViewMode("form")}
-              size="sm"
-              className="bg-white text-[#075985] hover:bg-[#F0F9FF] font-bold rounded-xl"
-            >
-              <Edit3 className="w-4 h-4 mr-1" />
-              Quay lại chỉnh sửa
-            </Button>
-          </div>
-
-          {/* Preview Detail View */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Photo Showcase */}
-              <div className="lg:col-span-7 space-y-2">
-                <div className="h-80 w-full rounded-2xl overflow-hidden bg-gray-100 relative border border-gray-200">
-                  <img
-                    src={images[thumbnailIndex] || images[0]}
-                    alt={name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-4 left-4 bg-[#075985]/95 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                    <ActiveIcon className="w-4 h-4" />
-                    {currentConfig.label}
-                  </div>
-                  <div className="absolute bottom-4 right-4 bg-black/75 backdrop-blur-xs text-white px-3 py-1 rounded-lg text-xs flex items-center gap-1">
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    Ảnh bìa (Thumbnail chính)
-                  </div>
-                </div>
-
-                {images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {images.map((img, idx) => (
-                      <div
-                        key={idx}
-                        className={`w-20 h-16 rounded-xl overflow-hidden border-2 flex-shrink-0 relative ${
-                          thumbnailIndex === idx ? "border-[#075985] ring-2 ring-blue-600/20" : "border-gray-200"
-                        }`}
-                      >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
-                        {thumbnailIndex === idx && (
-                          <div className="absolute top-1 left-1 bg-[#075985] text-white p-0.5 rounded-full">
-                            <Star className="w-2.5 h-2.5 fill-white" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Info Box */}
-              <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      Sẵn sàng liên kết tour
-                    </span>
-                  </div>
-
-                  <h2 className="text-2xl font-bold text-gray-900 leading-snug">
-                    {name || "Tên dịch vụ chưa đặt"}
-                  </h2>
+          {/* ========================================================= */}
+          {/* STEP 3: VỊ TRÍ, ĐỊA CHỈ & BẢN ĐỒ LEAFLET CLICK-TO-PIN     */}
+          {/* ========================================================= */}
+          {currentStep === 3 && (
+            <div className="space-y-6 animate-in fade-in duration-150">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-5">
+                <div className="border-b border-gray-100 pb-3">
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#075985]" />
+                    Địa chỉ hành chính & Định vị bản đồ GPS
+                  </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Cung cấp bởi: <strong>{currentUser.businessName || currentUser.name}</strong>
+                    Chọn Tỉnh/Thành, Phường/Xã và nhấp chuột trực tiếp lên bản đồ để lấy tọa độ chính xác cho cơ sở
                   </p>
+                </div>
 
-                  <div className="flex items-start gap-1.5 mt-3 text-xs text-gray-600">
-                    <MapPin className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span>{[street, ward, province].filter(Boolean).join(", ")}</span>
+                {/* 2-level address: Province & Ward */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Tỉnh / Thành phố *
+                    </label>
+                    <select
+                      value={province}
+                      onChange={(e) => setProvince(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white font-medium"
+                      required
+                    >
+                      {allVietnamProvinces.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* Price Banner */}
-                  <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-blue-50/70 to-indigo-50/70 border border-blue-100 space-y-1">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {category === "hotel"
-                        ? "Khoảng giá ước lượng tính theo phòng"
-                        : "Khoảng giá ước lượng trên đầu người"}
-                    </span>
-                    <div className="text-2xl font-extrabold text-[#075985]">
-                      {formatPriceRangeDisplay()}
-                    </div>
-                    <p className="text-[11px] text-gray-500">
-                      Mức giá giúp các đơn vị lữ hành thiết kế giá tour trọn gói chuẩn xác.
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Phường / Xã *
+                    </label>
+                    <select
+                      value={ward}
+                      onChange={(e) => setWard(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white font-medium"
+                      required
+                    >
+                      {getWardsForProvince(province).map((w) => (
+                        <option key={w} value={w}>
+                          {w}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Số nhà, Tên đường / Khu vực cụ thể
+                    </label>
+                    <input
+                      type="text"
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      placeholder="Ví dụ: 02 Trần Phú, Đèo Prenn, Khu vực Bãi Dài..."
+                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Interactive Leaflet Map with Click-to-pin */}
+                <GoogleMapLocationPicker
+                  latitude={latitude}
+                  longitude={longitude}
+                  onChange={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                  }}
+                  addressLabel={[street, ward, province].filter(Boolean).join(", ")}
+                />
+              </div>
+
+              {/* Summary review before submit */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-5 rounded-2xl border border-blue-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-blue-950">
+                      Sẵn sàng đăng tải dịch vụ "{name}"
+                    </h4>
+                    <p className="text-xs text-blue-800 mt-0.5">
+                      {currentConfig.label} • {images.length} hình ảnh (Ảnh bìa đã chọn) • {formatPriceRangeDisplay()}
                     </p>
                   </div>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs space-y-1 text-gray-600">
-                  <div className="flex justify-between">
-                    <span>Tọa độ Google Maps:</span>
-                    <strong className="font-mono text-gray-900">{latitude.toFixed(4)}, {longitude.toFixed(4)}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Khu vực:</span>
-                    <strong className="text-gray-900">{ward}, {province}</strong>
-                  </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setViewMode("preview")}
+                    className="rounded-xl border-blue-300 text-blue-900 hover:bg-blue-100/70 text-xs font-semibold"
+                  >
+                    <Eye className="w-4 h-4 mr-1.5" />
+                    Xem trước bài đăng
+                  </Button>
                 </div>
               </div>
-            </div>
 
-            {/* Description & Category Details Preview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100 text-xs">
-              <div className="p-4 bg-gray-50 rounded-xl space-y-2">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-[#075985]" />
-                  Mô tả dịch vụ
-                </h4>
-                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                  {description || "Chưa có mô tả giới thiệu."}
+              {/* Navigation buttons */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep(2)}
+                  className="rounded-xl border-gray-300 text-xs gap-1.5"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Quay lại: Thông tin & Giá
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  disabled={saving || uploading}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-6 shadow-xs gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {isEditing ? "Cập nhật bài đăng" : "Hoàn tất & Gửi duyệt"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* VIEW MODE 2: EXACT MATCH WITH ProviderServiceDetailPage  */}
+      {/* ========================================================= */}
+      {viewMode === "preview" && (
+        <div className="space-y-4">
+          {/* Top Banner Alert for Live Preview */}
+          <div className="p-4 bg-gradient-to-r from-[#075985] to-[#0369a1] text-white rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                <Eye className="w-5 h-5 text-blue-200" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm">
+                  Chế độ mô phỏng trực tiếp (Live Preview)
+                </h3>
+                <p className="text-xs text-blue-100">
+                  Giao diện hiển thị giống 100% trang chi tiết bài đăng trong mục Quản lý dịch vụ
                 </p>
               </div>
-
-              <div className="p-4 bg-[#F0F9FF]/40 rounded-xl border border-blue-100 space-y-2.5">
-                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-1.5">
-                  <ActiveIcon className="w-4 h-4 text-[#075985]" />
-                  Thông số chi tiết [{currentConfig.label}]
-                </h4>
-                <div className="space-y-1.5 text-gray-700">
-                  <div>• Phân loại: <strong>{subCategory}</strong></div>
-                  <div>• {currentConfig.capacityLabel}: <strong>{capacity} {currentConfig.capacityUnit}</strong></div>
-                  {category === "hotel" && (
-                    <div>• Hạng sao: <strong>{stars === "0" ? "Tiêu chuẩn du lịch" : `${stars} Sao ⭐`}</strong></div>
-                  )}
-                  <div className="pt-1">
-                    <span className="font-semibold text-blue-950 block mb-1">
-                      Chính sách & Quy định đặc thù ({policies.length}):
-                    </span>
-                    <div className="bg-white/80 p-2.5 rounded-lg border border-blue-100 space-y-1">
-                      {policies.map((pol, i) => (
-                        <div key={i} className="flex items-start gap-1.5 text-gray-800 text-[11px] leading-relaxed">
-                          <span className="text-[#075985] font-bold">•</span>
-                          <span>{pol}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {amenities.length > 0 && (
-                    <div className="pt-1">
-                      <span className="font-semibold text-blue-950 block mb-1">Tiện ích đi kèm:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {amenities.map((a, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-[#E0F2FE]/70 text-blue-800 rounded text-[11px]">
-                            ✓ {a}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
-
-            {/* Preview Submit Button */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex items-center gap-2">
               <Button
-                type="button"
-                variant="outline"
                 onClick={() => setViewMode("form")}
-                className="rounded-xl"
+                size="sm"
+                className="bg-white text-[#075985] hover:bg-blue-50 font-bold rounded-xl text-xs"
               >
                 <Edit3 className="w-4 h-4 mr-1.5" />
-                Quay lại sửa thông tin
+                Quay lại chỉnh sửa
               </Button>
               <Button
-                type="button"
-                onClick={handleSubmit}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md font-semibold"
+                onClick={() => handleSubmit()}
+                disabled={saving || uploading}
+                size="sm"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs"
               >
                 <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                Xác nhận & Gửi duyệt bài đăng
+                {isEditing ? "Cập nhật bài đăng" : "Gửi duyệt ngay"}
               </Button>
             </div>
           </div>
+
+          {/* Render the EXACT ProviderServiceDetailPage from Service Management (Quản lý ảnh already removed) */}
+          <ProviderServiceDetailPage
+            service={previewServiceObj}
+            onBack={() => setViewMode("form")}
+            backTitle="Quay lại biểu mẫu đăng bài"
+          />
         </div>
       )}
     </div>

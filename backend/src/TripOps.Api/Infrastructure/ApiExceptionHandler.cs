@@ -9,6 +9,16 @@ public sealed class ApiExceptionHandler(
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
+        if (exception is TripOps.Service.Services.ServiceModerationException expectedService)
+        {
+            context.Response.StatusCode = expectedService.Status;
+            await problems.WriteAsync(new ProblemDetailsContext
+            {
+                HttpContext = context,
+                ProblemDetails = new ProblemDetails { Status = expectedService.Status, Title = expectedService.Message }
+            });
+            return true;
+        }
         if (exception is TripOps.Service.Tours.TourException expectedTour)
         {
             context.Response.StatusCode = expectedTour.Status;

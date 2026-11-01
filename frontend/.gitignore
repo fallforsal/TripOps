@@ -93,3 +93,8 @@ $RECYCLE.BIN/
 ~$*.xls
 ~$*.docx
 ~$*.pptx
+
+# Local AI Agents / Skills
+.agents/
+.agents
+
