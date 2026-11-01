@@ -16,7 +16,7 @@ using TripOps.Service.Bookings;
 
 namespace TripOps.Tests;
 
-public sealed class BookingFlowTests
+public sealed partial class BookingFlowTests
 {
     private sealed class App : WebApplicationFactory<Program>
     {
@@ -52,7 +52,7 @@ public sealed class BookingFlowTests
             customer.PasswordHash = hasher.HashPassword(customer, "Password123!");
             db.Users.Add(customer);
 
-            var guide = new User { Id = "guide1", Name = "Tour Guide One", Email = "guide1@example.test", Role = UserRole.TourGuide, Status = UserStatus.Active };
+            var guide = new User { Id = "guide1", AgencyId = "agency1", Name = "Tour Guide One", Email = "guide1@example.test", Role = UserRole.TourGuide, Status = UserStatus.Active };
             guide.PasswordHash = hasher.HashPassword(guide, "Password123!");
             db.Users.Add(guide);
 
@@ -143,6 +143,17 @@ public sealed class BookingFlowTests
         Assert.Single(myListRes.Items);
         Assert.Equal(bookingId, myListRes.Items[0].Id);
 
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var snapshots = await db.BookingParticipants.AsNoTracking().Where(p => p.BookingId == bookingId)
+                .OrderBy(p => p.ParticipantIndex).ToListAsync();
+            Assert.Equal(new[] { 1, 2 }, snapshots.Select(p => p.ParticipantIndex));
+            Assert.All(snapshots, p => { Assert.Equal("agency1", p.AgencyId); Assert.True(p.IsPrimary); });
+            Assert.Equal(new[] { 3000000m, 2000000m }, snapshots.Select(p => p.Price));
+            Assert.Equal(new[] { "Người lớn", "Trẻ em" }, snapshots.Select(p => p.TierName));
+        }
+
         // 3. Customer đặt cọc
         var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(1500000, "VQR001", null));
         Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
@@ -193,11 +204,81 @@ public sealed class BookingFlowTests
         var reloaded = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal("CheckedIn", reloaded!.Participants.Single(p => p.Id == participantId).AttendanceStatus);
         Assert.Contains(reloaded.Incidents!, i => i.Id == incident.Id);
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var attendance = await db.BookingParticipants.AsNoTracking().SingleAsync(p => p.Id == participantId);
+            Assert.Equal("guide1", attendance.CheckedBy);
+            Assert.NotNull(attendance.CheckedAt);
+            var assignment = await db.BookingAssignedGuides.AsNoTracking().SingleAsync(a => a.BookingId == bookingId);
+            Assert.Equal("agency1", assignment.AgencyId);
+            Assert.NotNull(assignment.AssignedAt);
+            var incidentSnapshot = await db.BookingIncidents.AsNoTracking().SingleAsync(i => i.Id == incident.Id);
+            Assert.Equal("agency1", incidentSnapshot.AgencyId);
+            Assert.Equal("Thời tiết", incidentSnapshot.IncidentType);
+        }
     }
 
     private static CreateBookingRequest Sample(params ParticipantInput[] participants) => new(
         1, DateTime.UtcNow.Date.AddDays(10), "Customer One", "0901234567", "customer1@example.test", null,
         participants.Length > 0 ? participants : [new ParticipantInput("Adult", null, new DateTime(1990, 1, 1), "Nam", null, null)]);
+
+    [Fact]
+    public async Task Explicit_false_primary_flag_is_not_replaced_by_database_default_true()
+    {
+        using var app = new App();
+        await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var response = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
+        response.EnsureSuccessStatusCode();
+        var booking = (await response.Content.ReadFromJsonAsync<BookingDto>())!;
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+        var secondary = new BookingParticipant
+        {
+            BookingId = booking.Id, AgencyId = "agency1", ParticipantIndex = 2,
+            FullName = "Secondary segment", IsPrimary = false
+        };
+        db.BookingParticipants.Add(secondary);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        Assert.False((await db.BookingParticipants.SingleAsync(p => p.Id == secondary.Id)).IsPrimary);
+    }
+
+    [Fact]
+    public async Task Payment_ledger_survives_reload_and_a_replayed_reference_is_not_counted_twice()
+    {
+        using var app = new App();
+        await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var created = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
+        created.EnsureSuccessStatusCode();
+        var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
+        var payment = new BookingDepositRequest(100000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var response = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", payment);
+            response.EnsureSuccessStatusCode();
+            Assert.Equal(100000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.PaidAmount);
+        }
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var transaction = await db.PaymentTransactions.AsNoTracking().SingleAsync(t => t.BookingId == booking.Id);
+            Assert.Equal(100000, transaction.Amount);
+            Assert.Equal(payment.PaymentProofUrl, transaction.ProofImageUrl);
+            Assert.Equal("DEMO", transaction.PaymentMethod);
+            Assert.Null(db.Model.FindEntityType(typeof(Booking))!.FindProperty("PaidAmount"));
+            // Trip length is the booking snapshot, independent of later tour edits.
+            (await db.Tours.SingleAsync(t => t.Id == 1)).DurationDays = 9;
+            await db.SaveChangesAsync();
+        }
+        var reloaded = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal(100000, reloaded.PaidAmount);
+        Assert.Equal(booking.EndDate, reloaded.EndDate);
+        Assert.Equal(1, reloaded.TotalGuests);
+    }
 
     [Fact]
     public async Task DepositRequiresAgencyDecision_AndPartialDepositIsAccumulated()
@@ -248,7 +329,8 @@ public sealed class BookingFlowTests
         await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/decision", new BookingDecisionRequest("approve", null));
         Assert.Equal(HttpStatusCode.NotFound, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/guide-assignments", new GuideAssignmentRequest("customer1", "Lead", null))).StatusCode);
         var directory = await agency.GetFromJsonAsync<List<AvailableGuideDto>>("/api/v1/agency/bookings/available-guides");
-        Assert.Equal(2, directory!.Count);
-        Assert.DoesNotContain(directory, g => g.Id == "customer1");
+        Assert.Single(directory!);
+        Assert.DoesNotContain(directory!, g => g.Id == "guide2");
+        Assert.DoesNotContain(directory!, g => g.Id == "customer1");
     }
 }

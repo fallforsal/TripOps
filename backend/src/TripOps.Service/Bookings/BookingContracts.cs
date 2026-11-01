@@ -9,7 +9,11 @@ public sealed record CreateBookingRequest(
     [Required, Phone, StringLength(30)] string ContactPhone,
     [Required, EmailAddress, StringLength(191)] string ContactEmail,
     [StringLength(1000)] string? SpecialRequests,
-    [Required, MinLength(1)] ParticipantInput[] Participants);
+    [Required, MinLength(1)] ParticipantInput[] Participants,
+    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null);
+
+public sealed record HotelChoiceInput(string Destination, string Name, int? ServiceId = null);
+public sealed record MealChoiceInput(int DayNumber, string MealType, string Name, int? ServiceId = null);
 
 public sealed record ParticipantInput(
     [Required, StringLength(150)] string FullName,
@@ -17,7 +21,9 @@ public sealed record ParticipantInput(
     DateTime? DateOfBirth,
     [StringLength(20)] string? Gender,
     [StringLength(50)] string? IdentityNumber,
-    [Range(1, int.MaxValue)] int? PricingTierId);
+    [Range(1, int.MaxValue)] int? PricingTierId,
+    [StringLength(2000)] string? Note = null,
+    [StringLength(2000)] string? RoommateNote = null, [StringLength(2000)] string? RestaurantNote = null);
 
 public sealed record BookingDecisionRequest(
     [Required, AllowedValues("approve", "reject")] string Decision,
@@ -71,7 +77,14 @@ public sealed record BookingDto(
     IReadOnlyList<AssignedGuideDto> AssignedGuides,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    IReadOnlyList<IncidentDto>? Incidents = null);
+    IReadOnlyList<IncidentDto>? Incidents = null,
+    IReadOnlyList<BookingDayDto>? SnapshotDays = null,
+    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null);
+
+public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus);
+public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference);
+public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);
+public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference);
 
 public sealed record AvailableGuideDto(string Id, string Name, string? Phone);
 
@@ -98,7 +111,14 @@ public sealed record ParticipantDto(
     string? IdentityNumber,
     string AttendanceStatus,
     string Status,
-    string? AssignedGuideName);
+    string? AssignedGuideName,
+    decimal? Price = null,
+    string? TierName = null,
+    string? AgencyId = null,
+    int? ParticipantIndex = null,
+    bool? IsPrimary = null,
+    string? Note = null, string? RoommateNote = null, string? RestaurantNote = null,
+    string? CheckedBy = null, DateTime? CheckedAt = null, string? AssignedGuideId = null);
 
 public sealed record AssignedGuideDto(
     int Id,
@@ -107,7 +127,9 @@ public sealed record AssignedGuideDto(
     string? GuidePhone,
     string? Role,
     string Status,
-    string? Notes);
+    string? Notes,
+    DateTime? AssignedAt = null,
+    string? AgencyId = null);
 
 public sealed record IncidentDto(
     int Id,

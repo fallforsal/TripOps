@@ -12,7 +12,9 @@ import {
   BookingAssignedGuide,
   BookingAttractionCheckin,
   BookingIncident,
+  ProviderGroupReservationRequest,
 } from "@/app/types";
+import { mockTourCompanies } from "@/app/data/mockData";
 import { AgencyLayout } from "./AgencyLayout";
 import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement, TourFormPage } from "./AgencyTourManagement";
@@ -25,6 +27,7 @@ import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface AgencyDashboardProps {
+  providerGroupRequests?: ProviderGroupReservationRequest[];
   currentUser: User;
   company: TourCompany;
   tours: Tour[];
@@ -37,7 +40,7 @@ interface AgencyDashboardProps {
   onCreateTour: (tour: Omit<Tour, "id">) => void;
   onEditTour: (tourId: string, tour: Partial<Tour>) => void;
   onDeleteTour: (tourId: string) => void;
-  onDuplicateTour?: (tourId: string, name: string) => Promise<void>;
+  onDuplicateTour?: (tourId:string,name:string)=>Promise<void>;
   onApproveBooking: (bookingId: string) => void;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
@@ -111,8 +114,9 @@ export function AgencyDashboard({
       b.coHosts?.some((ch) => ch.companyId === company.id) ||
       b.tour?.coHosts?.some((ch) => ch.companyId === company.id)
   );
-  // The assignment directory comes from BE; guides need not have a mock companyId.
-  const companyGuides = guides;
+  const companyGuides = guides.filter(
+    (g) => g.companyId === company.id,
+  );
   const companyCustomRequests = customTourRequests.filter(
     (r) =>
       r.targetCompanyId === company.id ||
@@ -265,8 +269,7 @@ export function AgencyDashboard({
             company={company}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
-            onDeleteTour={onDeleteTour}
-            onDuplicateTour={onDuplicateTour}
+            onDeleteTour={onDeleteTour} onDuplicateTour={onDuplicateTour}
             onRestoreTourVersion={onRestoreTourVersion}
           />
         );
@@ -336,7 +339,7 @@ export function AgencyDashboard({
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}
-            allCompanies={allCompanies || []}
+            allCompanies={allCompanies || mockTourCompanies}
             onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
@@ -404,7 +407,7 @@ export function AgencyDashboard({
             tours={tours}
             customTourRequests={customTourRequests}
             bookings={bookings}
-            allCompanies={allCompanies || []}
+            allCompanies={allCompanies || mockTourCompanies}
             onAcceptInvitation={handleAcceptCoHostInvitation}
             onRejectInvitation={handleRejectCoHostInvitation}
             onViewTour={onViewTour}

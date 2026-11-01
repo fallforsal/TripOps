@@ -114,7 +114,7 @@ public sealed partial class TourFlowTests
         await app.Inspect(async db => {
             if (state == "providerPending") (await db.BusinessProfiles.SingleAsync(p => p.UserId == "provider")).Status = Data.Enums.BusinessProfileStatus.Pending;
             if (state == "providerBanned") (await db.Users.SingleAsync(u => u.Id == "provider")).Status = Data.Enums.UserStatus.Banned;
-            if (state == "deletedService") (await db.Services.SingleAsync(s => s.Id == 101)).IsDeleted = true;
+            if (state == "deletedService") (await db.Services.SingleAsync(s => s.Id == 101)).Status = Data.Enums.ServiceStatus.Hidden;
             await db.SaveChangesAsync();
         });
         Assert.Equal(HttpStatusCode.Created, (await agency.PostAsJsonAsync(Root, Complete())).StatusCode);
@@ -151,7 +151,7 @@ public sealed partial class TourFlowTests
         await app.Inspect(async db => {
             // Two rows are mutually exclusive options for one two-night stay, not four booked nights.
             Assert.Equal(2, await db.TourAccommodations.CountAsync());
-            Assert.Equal(2, await db.TourAccommodations.Where(h => h.IsDefault).SumAsync(h => h.NightsCount));
+            Assert.Equal(2, await db.TourAccommodations.Where(h => h.IsDefault == true).SumAsync(h => h.NightsCount));
             Assert.Equal(0, await db.BookingAccommodations.CountAsync());
             Assert.Equal(0, await db.Bookings.CountAsync());
         });

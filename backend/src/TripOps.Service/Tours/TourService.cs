@@ -6,13 +6,16 @@ using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
 using TripOps.Service.Accounts;
+using Microsoft.Extensions.Configuration;
 
 namespace TripOps.Service.Tours;
 
-public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator)
+public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, IConfiguration configuration)
 {
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static string State<T>(T value) where T : Enum => value.ToString().ToLowerInvariant();
+    private static string State<T>(T? value) where T : struct, Enum => value?.ToString().ToLowerInvariant() ?? "";
     private static TourException Conflict() => new(409, "The tour state or version has changed. Reload the tour.");
     private static void Require(bool condition, string message) { if (!condition) throw new TourException(422, message); }
 
@@ -65,7 +68,15 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         ValidateObject(config!);
         Require(config!.MinGuests == null || config.MaxGuests == null || config.MinGuests <= config.MaxGuests, "Invalid guest range.");
         Require(config.DurationNights <= config.DurationDays, "Nights cannot exceed duration days.");
-        foreach (var url in config.Images ?? []) Require(Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https" && url.Length <= 2048, "Images must be HTTPS URLs.");
+        foreach (var url in config.Images ?? []) Require(
+            Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https" && url.Length <= 2048 ||
+            configuration.GetValue<bool>("Storage:UseLocal") && System.Text.RegularExpressions.Regex.IsMatch(url,@"^/api/v1/files/tours/[a-zA-Z0-9-]{1,36}/[a-f0-9]{32}\.(png|jpg)$"),
+            "Images must be uploaded files or HTTPS URLs.");
+        var linked = (config.Timelines ?? []).SelectMany(d =>
+            (d.Meals ?? []).Where(m => m.ServiceId.HasValue).Select(m => (Id: m.ServiceId!.Value, Category: ServiceCategory.Fnb))
+            .Concat((d.Accommodations ?? []).Where(a => a.ServiceId.HasValue).Select(a => (Id: a.ServiceId!.Value, Category: ServiceCategory.Hotel)))).ToArray();
+        var eligible = await repository.EligibleServices(linked.Select(x => x.Id).Distinct().ToArray(), ct);
+        foreach (var link in linked) Require(eligible.Any(x => x.Id == link.Id && x.Category == link.Category), "Selected Provider service is unavailable or has the wrong category.");
         var tiers = config.PricingTiers ?? [];
         foreach (var tier in tiers) Require(tier.MaxAge == null || tier.MinAge <= tier.MaxAge, "Invalid age range.");
         var ages = tiers.OrderBy(t => t.MinAge).ToArray();
@@ -118,63 +129,106 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         }
     }
 
-    private static TourConfiguration Configuration(Tour t) => new(t.Name, t.Description, t.Destination,
-        t.DurationDays, t.DurationNights, t.BasePrice, t.MinGuests, t.MaxGuests, t.OperationPeriod,
-        t.Highlights, t.Inclusions, t.Exclusions, t.CancellationPolicy, t.Message,
-        t.Images == null ? [] : JsonSerializer.Deserialize<string[]>(t.Images, Json),
-        t.PricingTiers.OrderBy(p => p.DisplayOrder).ThenBy(p => p.Id).Select(p => new PricingTierInput(p.Name, p.MinAge, p.MaxAge, p.PricePerGuest, p.DisplayOrder)).ToArray(),
-        t.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description,
-            d.Attractions.OrderBy(a => a.OrderIndex).Select(a => new ActivityInput(a.Name, a.Description, a.EstimatedTime, a.OrderIndex)).ToArray(),
-            d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName ?? "", m.Description, m.IsDefault, m.PriceDifference)).ToArray(),
-            d.Accommodations.OrderBy(a => a.Id).Select(a => new AccommodationInput(a.HotelName ?? "", a.DestinationName ?? "", a.RoomType, a.NightsCount, a.StarRating, a.IsDefault, a.PriceDifference, a.AddressNotes)).ToArray())).ToArray(),
-        t.DepartureLocation);
+    private TourConfiguration Configuration(Tour tour)
+    {
+        if (pending.TryGetValue(tour, out var configuration)) return configuration;
+        var version = tour.Versions.SingleOrDefault(v => v.VersionNumber == tour.Version);
+        if (version is not null)
+        {
+            try
+            {
+                var snapshot = JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData, Json);
+                if (snapshot?.SchemaVersion == 1) return snapshot.Configuration;
+            }
+            catch (JsonException) { /* Legacy rows fall back to their normalized relational data. */ }
+        }
+        var stays = new Dictionary<int, List<TourAccommodation>>();
+        var nextNight = 1;
+        var stayStart = 1;
+        foreach (var stay in tour.Accommodations.OrderBy(a => a.Id))
+        {
+            if (stay.IsDefault == true) { stayStart = nextNight; nextNight += stay.NightsCount ?? 0; }
+            if (!stays.TryGetValue(stayStart, out var group)) stays[stayStart] = group = [];
+            group.Add(stay);
+        }
+        return new(tour.Name ?? "", null, tour.Destination,
+            tour.DurationDays ?? 1, tour.DurationNights ?? 0, tour.BasePrice ?? 0,
+            tour.MinGuests, tour.MaxGuests, tour.OperationPeriod, tour.Highlights,
+            tour.Inclusions, tour.Exclusions, tour.CancellationPolicy, tour.Message,
+            tour.Images is null ? [] : JsonSerializer.Deserialize<string[]>(tour.Images, Json),
+            tour.PricingTiers.OrderBy(p => p.DisplayOrder).ThenBy(p => p.Id)
+                .Select(p => new PricingTierInput(p.Name ?? "", p.MinAge, p.MaxAge, p.PricePerGuest ?? 0, p.DisplayOrder ?? 0)).ToArray(),
+            tour.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description,
+                d.Attractions.OrderBy(a => a.Id).Select((a, index) => new ActivityInput(a.Name ?? "", null, a.Time.HasValue ? a.Time.Value.TimeOfDay : null, index)).ToArray(),
+                d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName, m.Description, m.IsDefault == true, m.PriceDifference, m.ServiceId, m.Time.HasValue ? m.Time.Value.TimeOfDay : null)).ToArray(),
+                stays.GetValueOrDefault(d.DayNumber, []).Select(a => new AccommodationInput(a.HotelName, a.DestinationName,
+                    null, a.NightsCount ?? 0, a.StarRating ?? 3, a.IsDefault == true, a.PriceDifference ?? 0, a.AddressNotes, a.ServiceId)).ToArray())).ToArray(),
+            tour.DepartureLocation, tour.Code);
+    }
 
-    private static TourDto Dto(Tour t) => new(t.Id, t.AgencyId, t.Code, State(t.Status), State(t.Visibility), t.IsRequest, t.IsAiGenerated,
-        t.Version, Configuration(t), t.CreatedAt, t.UpdatedAt);
+    private TourDto Dto(Tour t) => new(t.Id, t.AgencyId ?? "", t.Code, State(t.Status), State(t.Visibility),
+        t.IsRequest == true, t.IsAiGenerated == true, t.Version ?? 1, Configuration(t),
+        t.CreatedAt ?? DateTime.UnixEpoch, t.UpdatedAt ?? t.CreatedAt ?? DateTime.UnixEpoch);
 
     private void Apply(Tour tour, TourConfiguration c)
     {
+        // Snapshot is authoritative for configuration that database.md stores
+        // only in tour_versions (descriptions, activity timing/order, room type).
+        c = c with {
+            Name = c.Name.Trim(), BasePrice = Money(c.BasePrice),
+            DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim(),
+            PricingTiers = (c.PricingTiers ?? []).Select(p => p with { PricePerGuest = Money(p.PricePerGuest) }).ToArray(),
+            Timelines = (c.Timelines ?? []).Select(d => d with {
+                Meals = (d.Meals ?? []).Select(m => m with { PriceDifference = Money(m.PriceDifference) }).ToArray(),
+                Accommodations = (d.Accommodations ?? []).Select(a => a with { PriceDifference = Money(a.PriceDifference) }).ToArray()
+            }).ToArray()
+        };
+        if(!string.IsNullOrWhiteSpace(c.Code))tour.Code=c.Code.Trim().ToUpperInvariant();
+        c=c with {Code=tour.Code};
+        pending.Remove(tour);
+        pending.Add(tour, c);
         repository.RemoveConfiguration(tour);
-        tour.Name = c.Name.Trim(); tour.Description = c.Description; tour.Destination = c.Destination;
+        tour.Name = c.Name.Trim(); tour.Destination = c.Destination;
         tour.DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim();
         tour.DurationDays = c.DurationDays; tour.DurationNights = c.DurationNights; tour.BasePrice = Money(c.BasePrice);
+        tour.DurationTour = $"{c.DurationDays} ngày {c.DurationNights} đêm";
+        tour.ThumbnailUrls = JsonSerializer.Serialize((c.Images ?? []).Take(1), Json);
         tour.MinGuests = c.MinGuests; tour.MaxGuests = c.MaxGuests; tour.OperationPeriod = c.OperationPeriod;
         tour.Highlights = c.Highlights; tour.Inclusions = c.Inclusions; tour.Exclusions = c.Exclusions;
         tour.CancellationPolicy = c.CancellationPolicy; tour.Message = c.Message;
         tour.Images = JsonSerializer.Serialize(c.Images ?? [], Json);
-        tour.PricingTiers = (c.PricingTiers ?? []).Select(p => new TourPricingTier { Name = p.Name,
+        tour.PricingTiers = (c.PricingTiers ?? []).Select(p => new TourPricingTier { Name = p.Name, AgencyId = tour.AgencyId ?? "",
             MinAge = p.MinAge, MaxAge = p.MaxAge, DisplayOrder = p.DisplayOrder, PricePerGuest = Money(p.PricePerGuest) }).ToList();
         tour.Timelines = (c.Timelines ?? []).Select(d => new TourTimeline {
             DayNumber = d.DayNumber, Title = d.Title, Description = d.Description,
-            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name,
-                Description = a.Description, EstimatedTime = a.EstimatedTime, OrderIndex = a.OrderIndex }).ToList(),
-            Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName,
-                Description = m.Description, IsDefault = m.IsDefault, PriceDifference = Money(m.PriceDifference) }).ToList(),
-            Accommodations = (d.Accommodations ?? []).Select(a => new TourAccommodation { HotelName = a.HotelName,
-                DestinationName = a.DestinationName, RoomType = a.RoomType, NightsCount = a.NightsCount,
-                StarRating = a.StarRating, IsDefault = a.IsDefault, PriceDifference = Money(a.PriceDifference), AddressNotes = a.AddressNotes }).ToList()
+            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name, AgencyId = tour.AgencyId ?? "", Time = a.EstimatedTime.HasValue ? new DateTime(2000,1,1).Add(a.EstimatedTime.Value) : null
+                 }).ToList(),
+            Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName, AgencyId = tour.AgencyId ?? "",
+                ServiceId = m.ServiceId, Time = m.Time.HasValue ? new DateTime(2000,1,1).Add(m.Time.Value) : null, Description = m.Description, IsDefault = m.IsDefault, PriceDifference = Money(m.PriceDifference) }).ToList(),
         }).ToList();
+        tour.Accommodations = (c.Timelines ?? []).SelectMany(d => d.Accommodations ?? []).Select(a => new TourAccommodation {
+            Tour = tour, AgencyId = tour.AgencyId, ServiceId = a.ServiceId, HotelName = a.HotelName, DestinationName = a.DestinationName,
+            NightsCount = a.NightsCount, StarRating = a.StarRating, IsDefault = a.IsDefault,
+            PriceDifference = Money(a.PriceDifference), AddressNotes = a.AddressNotes }).ToList();
     }
     private static void ResetApproval(Tour tour)
     {
         tour.Status = TourStatus.Draft; tour.Visibility = TourVisibility.Hidden;
-        // Legacy columns remain mapped until a separately reviewed schema cleanup.
-        tour.ApprovalStatus = TourApprovalStatus.NotSubmitted; tour.SubmittedVersion = null; tour.ApprovedVersion = null;
-        tour.ReviewedBy = null; tour.ReviewedAt = null; tour.RejectionReason = null;
     }
     private void Snapshot(Tour tour, string actor, string note)
     {
-        repository.AddVersion(tour, new TourVersion { VersionNumber = tour.Version, CreatedBy = actor,
+        repository.AddVersion(tour, new TourVersion { VersionNumber = tour.Version ?? 1, CreatedBy = actor,
             Price = tour.BasePrice, ChangeLog = note, SnapshotData = JsonSerializer.Serialize(new TourSnapshot(1,
-                tour.Version, tour.IsRequest, tour.IsAiGenerated, State(tour.Status), State(tour.Visibility), Configuration(tour)), Json) });
+                tour.Version ?? 1, tour.IsRequest == true, tour.IsAiGenerated == true, State(tour.Status), State(tour.Visibility), Configuration(tour)), Json) });
     }
     private async Task Baseline(Tour tour, string actor, CancellationToken ct)
     {
-        if (!await repository.HasVersion(tour.Id, tour.Version, ct))
+        if (!await repository.HasVersion(tour.Id, tour.Version ?? 1, ct))
             Snapshot(tour, actor, "Baseline of existing tour before WF02 modification");
     }
     private async Task<TourDto> Save(Tour tour, string actor, string note, CancellationToken ct)
     {
+        tour.ChangeNote = note;
         Snapshot(tour, actor, note);
         try { await repository.Save(ct); }
         catch (DbUpdateConcurrencyException) { throw Conflict(); }
@@ -188,6 +242,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
         await Agency(actor, ct); await Validate(config, false, ct);
+        if(!string.IsNullOrWhiteSpace(config.Code) && await repository.CodeExists(config.Code.Trim().ToUpperInvariant(),0,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
         var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}", IsAiGenerated = aiGenerated };
         Apply(tour, config); repository.Add(tour);
         return await Save(tour, actor, "Created draft", ct);
@@ -195,8 +250,10 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     public async Task<TourDto> Update(string actor, int id, UpdateTourRequest request, CancellationToken ct)
     {
         ValidateObject(request); var tour = await Owned(actor, id, ct); Expected(tour, request.Version);
-        await Validate(request.Configuration, false, ct); await Baseline(tour, actor, ct);
-        Apply(tour, request.Configuration); ResetApproval(tour); tour.Version++;
+        await Validate(request.Configuration, false, ct);
+        if(!string.IsNullOrWhiteSpace(request.Configuration.Code) && await repository.CodeExists(request.Configuration.Code.Trim().ToUpperInvariant(),id,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
+        await Baseline(tour, actor, ct);
+        Apply(tour, request.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
         return await Save(tour, actor, request.ChangeNote, ct);
     }
     public async Task<TourDto> Get(string actor, int id, bool admin, CancellationToken ct)
@@ -208,7 +265,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version, Configuration(tour));
+        return new(tour.Id, tour.Code, tour.Version ?? 1, Configuration(tour));
     }
     public async Task<TourPage<TourListItem>> List(string? actor, bool admin, string? status,
         string? search, string? destination, decimal? maxPrice, int? headcount, int page, int pageSize, CancellationToken ct)
@@ -219,7 +276,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         if (maxPrice < 0 || headcount <= 0) throw new TourException(400, "Invalid price or headcount filter.");
         page = Math.Clamp(page, 1, 1000000); pageSize = Math.Clamp(pageSize, 1, 100);
         var result = await repository.List(admin ? null : actor, actor == null, state, search, destination, maxPrice, headcount, page, pageSize, ct);
-        return new(result.Rows.Select(t => new TourListItem(t.Id, t.Name, t.Destination, t.BasePrice, State(t.Status), State(t.Visibility), t.Version)).ToList(), result.Total, page, pageSize);
+        return new(result.Rows.Select(t => new TourListItem(t.Id, t.Name ?? "", t.Destination, t.BasePrice ?? 0, State(t.Status), State(t.Visibility), t.Version ?? 1)).ToList(), result.Total, page, pageSize);
     }
     public async Task<TourValidationResult> ValidateDraft(string actor, int id, CancellationToken ct)
     {
@@ -236,8 +293,11 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         Expected(tour, request.Version);
         switch (action)
         {
+            case "complete":
+                if (tour.Status is not (TourStatus.Draft or TourStatus.Completed)) throw Conflict();
+                await Validate(Configuration(tour), true, ct); break;
             case "publish":
-                if (tour.IsRequest || tour.Status is not (TourStatus.Draft or TourStatus.Completed) || tour.Visibility != TourVisibility.Hidden) throw Conflict();
+                if (tour.IsRequest == true || tour.Status is not (TourStatus.Draft or TourStatus.Completed) || tour.Visibility != TourVisibility.Hidden) throw Conflict();
                 await Validate(Configuration(tour), true, ct); break;
             case "hide":
                 if (tour.Status != TourStatus.Completed || tour.Visibility != TourVisibility.Public) throw Conflict();
@@ -248,13 +308,17 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             default: throw new TourException(400, "Unknown tour action.");
         }
         await Baseline(tour, actor, ct);
-        tour.Version++;
+        var configuration = Configuration(tour);
+        pending.Remove(tour);
+        pending.Add(tour, configuration);
+        tour.Version = (tour.Version ?? 1) + 1;
         switch (action)
         {
+            case "complete": tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Hidden; break;
             case "publish": ResetApproval(tour); tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Public; break;
             case "hide": tour.Visibility = TourVisibility.Hidden; break;
             case "delete": tour.Status = TourStatus.Deleted; tour.Visibility = TourVisibility.Hidden;
-                tour.IsDeleted = true; tour.DeletedAt = DateTime.UtcNow; break;
+                break;
         }
         return await Save(tour, actor, $"{action}: {request.Reason}".TrimEnd(' ', ':'), ct);
     }
@@ -265,7 +329,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         var versions = await repository.VersionPage(id, page, pageSize, ct);
         return new(versions.Rows.Select(v => VersionDto(v, false)).ToList(), versions.Total, page, pageSize);
     }
-    private static TourVersionDto VersionDto(TourVersion v, bool snapshot) => new(v.VersionNumber, v.ChangeLog, v.CreatedBy, v.Price, v.CreatedAt, snapshot ? v.SnapshotData : null);
+    private static TourVersionDto VersionDto(TourVersion v, bool snapshot) => new(v.VersionNumber, v.ChangeLog, v.CreatedBy, v.Price, v.CreatedAt ?? DateTime.UnixEpoch, snapshot ? v.SnapshotData : null);
     public async Task<TourVersionDto> Version(string actor, int id, int number, CancellationToken ct)
     {
         await Owned(actor, id, ct, true);
@@ -281,13 +345,13 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         catch (JsonException) { throw new TourException(409, "Legacy snapshot format cannot be restored automatically."); }
         if (snapshot?.SchemaVersion != 1) throw new TourException(409, "Unsupported snapshot schema.");
         await Validate(snapshot.Configuration, false, ct); await Baseline(tour, actor, ct);
-        Apply(tour, snapshot.Configuration); ResetApproval(tour); tour.Version++;
+        Apply(tour, snapshot.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
         return await Save(tour, actor, $"Restored v{number}: {request.Reason}", ct);
     }
     public async Task<TourDto> Duplicate(string actor, int id, DuplicateTourRequest request, CancellationToken ct)
     {
         ValidateObject(request); var tour = await Owned(actor, id, ct);
-        return await Create(actor, Configuration(tour) with { Name = request.Name }, ct);
+        return await Create(actor, Configuration(tour) with { Name = request.Name, Code = null }, ct);
     }
     public async Task<TourDto> AiCreate(string actor, AiDraftRequest request, CancellationToken ct)
     {

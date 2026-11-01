@@ -46,10 +46,10 @@ public sealed partial class TourFlowTests
         {
             builder.UseEnvironment("Development");
             if (withCloudinary) builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
+                ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
             }));
             else builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
+                ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
             }));
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
@@ -281,7 +281,7 @@ public sealed partial class TourFlowTests
             Assert.Equal(2, await db.TourTimelines.CountAsync(d => d.TourId == tour.Id));
             Assert.Equal(2, await db.TourPricingTiers.CountAsync(p => p.TourId == tour.Id));
             Assert.Equal(2, await db.TourMeals.CountAsync(m => m.TourTimeline.TourId == tour.Id));
-            Assert.Equal(2, await db.TourAccommodations.CountAsync(a => a.TourTimeline.TourId == tour.Id));
+            Assert.Equal(2, await db.TourAccommodations.CountAsync(a => a.TourId == tour.Id));
             var snapshot = await db.TourVersions.SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == 2);
             using var json = JsonDocument.Parse(snapshot.SnapshotData);
             Assert.Equal("public", json.RootElement.GetProperty("visibility").GetString());
@@ -377,7 +377,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(2, (await agency.GetFromJsonAsync<TourPage<TourVersionDto>>($"{Root}/{tour.Id}/versions"))!.Total);
         await app.Inspect(async db => {
             var deleted = await db.Tours.IgnoreQueryFilters().SingleAsync(t => t.Id == tour.Id);
-            Assert.True(deleted.IsDeleted); Assert.Equal(TourStatus.Deleted, deleted.Status);
+            Assert.Equal(TourStatus.Deleted, deleted.Status); Assert.Equal(TourVisibility.Hidden, deleted.Visibility);
             Assert.Equal(2, await db.TourVersions.CountAsync(v => v.TourId == tour.Id));
             Assert.Equal(2, await db.TourTimelines.CountAsync(d => d.TourId == tour.Id));
         });
@@ -426,7 +426,7 @@ public sealed partial class TourFlowTests
         Assert.Equal("provider", item!.ProviderId);
         Assert.Equal(HttpStatusCode.NotFound, (await agency.GetAsync("/api/v1/services/105")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await agency.GetAsync("/api/v1/services?category=unknown")).StatusCode);
-        await app.Inspect(async db => { (await db.Users.SingleAsync(u => u.Id == "provider")).IsDeleted = true; await db.SaveChangesAsync(); });
+        await app.Inspect(async db => { (await db.Users.SingleAsync(u => u.Id == "provider")).Status = UserStatus.Inactive; await db.SaveChangesAsync(); });
         Assert.Equal(0, (await agency.GetFromJsonAsync<TourPage<TourServiceReference>>("/api/v1/services"))!.Total);
     }
 

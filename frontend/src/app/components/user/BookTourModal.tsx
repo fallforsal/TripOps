@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Tour, User } from "@/app/types";
 import {
   X,
@@ -44,7 +44,7 @@ export function BookTourModal({
   onConfirmBooking,
 }: BookTourModalProps) {
   const [currentStep, setCurrentStep] = useState<BookingStep>("info");
-  
+
   // Form data
   const [numberOfGuests, setNumberOfGuests] = useState(tour.minGuests);
   const [startDate, setStartDate] = useState("");
@@ -52,10 +52,10 @@ export function BookTourModal({
   const [email, setEmail] = useState(currentUser?.email || "");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
-  
+
   // Payment method (mock)
   const [paymentMethod, setPaymentMethod] = useState<"credit" | "bank" | "cash">("credit");
-  
+
   const [errors, setErrors] = useState<{[key: string]: string}>({});
 
   const formatPrice = (price: number) => {
@@ -75,35 +75,35 @@ export function BookTourModal({
 
   const validateStep1 = () => {
     const newErrors: {[key: string]: string} = {};
-    
+
     if (!startDate) {
       newErrors.startDate = "Vui lòng chọn ngày khởi hành";
     }
-    
+
     if (numberOfGuests < tour.minGuests) {
       newErrors.numberOfGuests = `Số khách tối thiểu là ${tour.minGuests} người`;
     }
-    
+
     if (numberOfGuests > tour.maxGuests) {
       newErrors.numberOfGuests = `Số khách tối đa là ${tour.maxGuests} người`;
     }
-    
+
     if (!fullName.trim()) {
       newErrors.fullName = "Vui lòng nhập họ tên";
     }
-    
+
     if (!email.trim()) {
       newErrors.email = "Vui lòng nhập email";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = "Email không hợp lệ";
     }
-    
+
     if (!phone.trim()) {
       newErrors.phone = "Vui lòng nhập số điện thoại";
     } else if (!/^[0-9]{10,11}$/.test(phone.replace(/\s/g, ""))) {
       newErrors.phone = "Số điện thoại không hợp lệ";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -278,7 +278,7 @@ export function BookTourModal({
       {/* Contact Information */}
       <div className="border-t pt-6">
         <h4 className="font-bold text-lg text-gray-900 mb-4">Thông tin liên hệ</h4>
-        
+
         <div className="space-y-4">
           {/* Full Name */}
           <div>
@@ -505,11 +505,11 @@ export function BookTourModal({
       <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
         <CheckCircle className="w-12 h-12 text-teal-600" />
       </div>
-      
+
       <h3 className="text-3xl font-bold text-gray-900 mb-3">
         Gửi yêu cầu đặt tour thành công!
       </h3>
-      
+
       <p className="text-base text-gray-600 mb-6 max-w-md mx-auto">
         Yêu cầu của bạn đã được chuyển tới công ty du lịch. Chúng tôi đã gửi email xác nhận đến <strong>{email}</strong>
       </p>
@@ -597,7 +597,7 @@ export function BookTourModal({
             >
               {currentStep === "info" ? "Hủy" : "Quay lại"}
             </button>
-            
+
             <button
               onClick={currentStep === "info" ? handleNext : handleConfirm}
               className="px-8 py-3 bg-[#075985] text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold flex items-center gap-2"

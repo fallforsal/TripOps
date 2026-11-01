@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Service,
   Tour,
@@ -36,6 +36,7 @@ export function EditTourForm({
   const [formData, setFormData] = useState({
     name: tour.name,
     destination: tour.destination,
+    region: tour.region || "Miền Trung",
     numberOfDays: (tour.numberOfDays || 1).toString(),
     numberOfNights: (tour.numberOfNights || 0).toString(),
     price: tour.price.toString(),
@@ -175,6 +176,7 @@ export function EditTourForm({
       ...tour,
       name: formData.name,
       destination: formData.destination,
+      region: formData.region || "Miền Trung",
       numberOfDays: parseInt(formData.numberOfDays),
       numberOfNights: parseInt(formData.numberOfNights),
       price: parseFloat(formData.price),
@@ -365,21 +367,26 @@ export function EditTourForm({
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Mô tả <span className="text-red-500">*</span>
+                Khu vực tour <span className="text-red-500">*</span>
               </label>
-              <textarea
+              <select
                 required
-                value={formData.description}
+                value={formData.region}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    description: e.target.value,
+                    region: e.target.value,
                   })
                 }
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Mô tả chi tiết về tour..."
-              />
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#075985] focus:border-transparent bg-white text-sm"
+              >
+                <option value="">-- Chọn khu vực tour --</option>
+                <option value="Miền Bắc">Miền Bắc</option>
+                <option value="Miền Trung">Miền Trung</option>
+                <option value="Miền Nam">Miền Nam</option>
+                <option value="Tây Nguyên">Tây Nguyên</option>
+                <option value="Miền Tây">Miền Tây</option>
+              </select>
             </div>
           </div>
 

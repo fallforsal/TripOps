@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { User, Service } from "@/app/types";
 import {
   X,
@@ -75,7 +75,7 @@ export function ProviderProfileModal({
             <span class="badge">ĐỐI TÁC CUNG CẤP DỊCH VỤ NỀN TẢNG</span>
             <h1>${provider.businessName || "Tổ hợp Dịch vụ Du lịch Heritage"}</h1>
             <p style="color: #64748b; margin-top: -10px;">${provider.businessDescription || ""}</p>
-            
+
             <div class="section">
               <div class="label">Người đại diện liên hệ:</div>
               <div class="value">${provider.name}</div>

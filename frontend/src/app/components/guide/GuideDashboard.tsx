@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   CalendarDays,
   MapPin,
@@ -44,25 +44,25 @@ interface GuideDashboardProps {
     scheduleId: string,
     locationId: string,
     image?: string,
-    note?: string
-  ) => void | Promise<void>;
+    note?: string,
+  ) => void;
   onDepartureRollCall?: (
     scheduleId: string,
-    passengers: BookingPassenger[]
-  ) => void | Promise<void>;
+    passengers: BookingPassenger[],
+  ) => void;
   onReportIncident?: (
     scheduleId: string,
-    incident: Omit<IncidentReport, "id" | "reportedAt">
-  ) => void | Promise<void>;
+    incident: Omit<IncidentReport, "id" | "reportedAt">,
+  ) => void;
   onWrapUpTour?: (
     scheduleId: string,
-    wrapUpReport: { rating?: number; notes: string }
-  ) => void | Promise<void>;
+    wrapUpReport: { rating?: number; notes: string },
+  ) => void;
   onUpdateNotes?: (
     scheduleId: string,
     personalNotes: string,
-    guideNotesList?: GuideSchedule["guideNotesList"]
-  ) => void | Promise<void>;
+    guideNotesList?: GuideSchedule["guideNotesList"],
+  ) => void;
 }
 
 export function GuideDashboard({
@@ -77,7 +77,9 @@ export function GuideDashboard({
   const [isMobileFrame, setIsMobileFrame] = useState(true);
 
   // Primary Bottom Tabs: "calendar" (Lịch tour) | "operation" (Điều hành tour)
-  const [activeTab, setActiveTab] = useState<"calendar" | "operation">("calendar");
+  const [activeTab, setActiveTab] = useState<"calendar" | "operation">(
+    "calendar",
+  );
 
   // Sub-tabs inside "operation" (Điều hành tour):
   // "itinerary" (Lộ trình) | "rollcall" (Điểm danh) | "notes" (Ghi chú) | "incidents" (Sự cố)
@@ -87,7 +89,7 @@ export function GuideDashboard({
 
   // Selected schedule
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>(
-    schedules[0]?.id || ""
+    schedules[0]?.id || "",
   );
 
   const currentSchedule =
@@ -99,12 +101,11 @@ export function GuideDashboard({
       const parsed = new Date(currentSchedule.booking.tourStartDate);
       if (!isNaN(parsed.getTime())) return parsed;
     }
-    return new Date();
+    return new Date(2026, 9, 15); // Month is 0-indexed: 9 = October
   });
 
-  const [selectedCalendarDateStr, setSelectedCalendarDateStr] = useState<string>(
-    () => calendarDate.toLocaleDateString("sv-SE")
-  );
+  const [selectedCalendarDateStr, setSelectedCalendarDateStr] =
+    useState<string>("2026-10-15");
 
   // Local state for passengers of current schedule
   const [passengers, setPassengers] = useState<BookingPassenger[]>(() => {
@@ -122,10 +123,8 @@ export function GuideDashboard({
 
   // Roll call search & notice
   const [passengerSearch, setPassengerSearch] = useState("");
-  const [operationSaving, setOperationSaving] = useState(false);
-  const [operationError, setOperationError] = useState("");
   const [rollCallSavedNotice, setRollCallSavedNotice] = useState<string | null>(
-    null
+    null,
   );
 
   // Check-in modal (optional image & note)
@@ -139,7 +138,7 @@ export function GuideDashboard({
   // Guide Personal Notes (Sổ Tay Ghi Chép Nhanh duy nhất)
   const [freeformNotes, setFreeformNotes] = useState<string>(
     currentSchedule?.personalNotes ||
-      "- Bác tài Nam: 0918.234.567 (Xe 29 chỗ Hyundai Universe 51B-987.65)\n- Khách Lê Thị Thu Thảo say xe, ưu tiên ngồi ghế đầu\n- Bàn ăn trưa Lam Viên Quán: Bàn 2 có 1 khách ăn chay trường\n- Khách sạn Heritage check-in 14:00, nhận 2 phòng đôi + 1 phòng đơn"
+      "- Bác tài Nam: 0918.234.567 (Xe 29 chỗ Hyundai Universe 51B-987.65)\n- Khách Lê Thị Thu Thảo say xe, ưu tiên ngồi ghế đầu\n- Bàn ăn trưa Lam Viên Quán: Bàn 2 có 1 khách ăn chay trường\n- Khách sạn Heritage check-in 14:00, nhận 2 phòng đôi + 1 phòng đơn",
   );
   const [noteSavedNotice, setNoteSavedNotice] = useState<string | null>(null);
 
@@ -152,7 +151,7 @@ export function GuideDashboard({
   // Incident reporting modal
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [incidentCategory, setIncidentCategory] = useState<
-    "medical" | "transport" | "weather" | "service_provider" | "other"
+    "medical" | "vehicle" | "weather" | "service" | "other"
   >("medical");
   const [incidentSeverity, setIncidentSeverity] = useState<
     "low" | "medium" | "high" | "critical"
@@ -161,8 +160,27 @@ export function GuideDashboard({
   const [incidentLocation, setIncidentLocation] = useState("");
 
   // Local state for incidents
-  const [localIncidents, setLocalIncidents] = useState<IncidentReport[]>(currentSchedule?.incidents || []);
-  useEffect(() => { setLocalIncidents(currentSchedule?.incidents || []); }, [currentSchedule]);
+  const [localIncidents, setLocalIncidents] = useState<IncidentReport[]>(
+    currentSchedule?.incidents || [
+      {
+        id: "inc-demo-1",
+        bookingId: currentSchedule?.booking.id ?? "",
+        tourId: currentSchedule?.booking.tourId ?? "",
+        tourName: currentSchedule?.booking.tour.name ?? "",
+        guideId: currentSchedule?.booking.guideId ?? "",
+        guideName: currentSchedule?.booking.guideName ?? "",
+        title: "Chậm phương tiện",
+        category: "vehicle",
+        severity: "medium",
+        description:
+          "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
+        reportedAt: "09:30",
+        status: "resolved",
+        location: "Bến phà Rạch Miễu",
+      },
+    ],
+  );
+
   // Quick SOS Hotline Modal
   const [showHotlineModal, setShowHotlineModal] = useState(false);
 
@@ -175,16 +193,15 @@ export function GuideDashboard({
   const tour = currentSchedule?.booking?.tour;
   const itinerary = tour?.itinerary || [];
   const currentDayNumber = currentSchedule?.currentDay || 1;
-  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(
-    currentDayNumber
-  );
+  const [selectedDayNumber, setSelectedDayNumber] =
+    useState<number>(currentDayNumber);
 
   const currentDayPlan =
     itinerary.find((d) => d.day === selectedDayNumber) || itinerary[0];
 
   const totalLocations = itinerary.reduce(
     (sum, d) => sum + (d.locations?.length || 0),
-    0
+    0,
   );
   const completedLocationsCount =
     currentSchedule?.completedLocations?.length || 0;
@@ -200,18 +217,17 @@ export function GuideDashboard({
 
   // Roll call calculations
   const presentCount = passengers.filter(
-    (p) => p.departureAttendance === "present"
+    (p) => p.departureAttendance === "present",
   ).length;
   const unmarkedCount = passengers.filter(
-    (p) => p.departureAttendance !== "present"
+    (p) => p.departureAttendance !== "present",
   ).length;
 
   const filteredPassengers = passengers.filter((p) => {
     if (!passengerSearch.trim()) return true;
     const q = passengerSearch.toLowerCase();
     return (
-      p.fullName.toLowerCase().includes(q) ||
-      (p.phone && p.phone.includes(q))
+      p.fullName.toLowerCase().includes(q) || (p.phone && p.phone.includes(q))
     );
   });
 
@@ -302,7 +318,7 @@ export function GuideDashboard({
       currentSchedule.id,
       locId,
       undefined,
-      "Đã check-in điểm đến đúng lịch trình."
+      "Đã check-in điểm đến đúng lịch trình.",
     );
   };
 
@@ -313,7 +329,7 @@ export function GuideDashboard({
       currentSchedule.id,
       checkingInLocation.id,
       checkInImage.trim() || undefined,
-      checkInNote.trim() || undefined
+      checkInNote.trim() || undefined,
     );
     setCheckingInLocation(null);
     setCheckInImage("");
@@ -331,7 +347,7 @@ export function GuideDashboard({
   // Passenger Roll Call Checkbox toggle
   const handleTogglePassengerPresent = (
     passengerId: string,
-    isPresent: boolean
+    isPresent: boolean,
   ) => {
     const updated = passengers.map((p) =>
       p.id === passengerId
@@ -347,7 +363,7 @@ export function GuideDashboard({
                 })
               : undefined,
           }
-        : p
+        : p,
     );
     setPassengers(updated);
   };
@@ -355,7 +371,7 @@ export function GuideDashboard({
   // Update passenger note
   const handleUpdatePassengerNote = (passengerId: string, noteVal: string) => {
     const updated = passengers.map((p) =>
-      p.id === passengerId ? { ...p, notes: noteVal } : p
+      p.id === passengerId ? { ...p, notes: noteVal } : p,
     );
     setPassengers(updated);
   };
@@ -385,14 +401,14 @@ export function GuideDashboard({
 
   // Save departure roll call
   const handleSaveDepartureRollCall = async () => {
-    if (!currentSchedule || operationSaving) return;
-    setOperationSaving(true); setOperationError("");
-    try {
-      await onDepartureRollCall?.(currentSchedule.id, passengers);
-      setRollCallSavedNotice(`Đã lưu điểm danh: ${presentCount} có mặt / ${passengers.length} khách.`);
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "Không lưu được điểm danh.");
-    } finally { setOperationSaving(false); }
+    if (!currentSchedule) return;
+    if (onDepartureRollCall) {
+      await onDepartureRollCall(currentSchedule.id, passengers);
+    }
+    setRollCallSavedNotice(
+      `✓ Đã chốt điểm danh khởi hành: ${presentCount} có mặt / ${passengers.length} khách.`,
+    );
+    setTimeout(() => setRollCallSavedNotice(null), 3500);
   };
 
   // Save Sổ tay ghi chép nhanh
@@ -407,28 +423,53 @@ export function GuideDashboard({
 
   // Create Incident
   const handleCreateIncident = async () => {
-    if (!incidentDescription.trim() || !currentSchedule || operationSaving) return;
-    setOperationSaving(true); setOperationError("");
-    try {
-      await onReportIncident?.(currentSchedule.id, {
-        bookingId: currentSchedule.booking.id, tourId: currentSchedule.booking.tourId,
-        tourName: tour?.name || "", guideId: currentSchedule.booking.guideId || "",
-        guideName: currentSchedule.booking.guideName || "", title: `Sự cố ${incidentCategory}`,
-        category: incidentCategory, severity: incidentSeverity,
-        description: incidentDescription.trim(), location: incidentLocation.trim(), status: "reported",
+    if (!incidentDescription.trim() || !currentSchedule) return;
+    const newInc: IncidentReport = {
+      id: `inc-${Date.now()}`,
+      bookingId: currentSchedule.booking.id,
+      tourId: currentSchedule.booking.tourId,
+      tourName: currentSchedule.booking.tour.name,
+      guideId: currentSchedule.booking.guideId ?? "",
+      guideName: currentSchedule.booking.guideName ?? "",
+      title: incidentDescription.trim().slice(0, 100),
+      category: incidentCategory,
+      severity: incidentSeverity,
+      description: incidentDescription.trim(),
+      location: incidentLocation.trim() || "Tại điểm tham quan",
+      reportedAt: new Date().toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: "reported",
+    };
+    if (onReportIncident) {
+      await onReportIncident(currentSchedule.id, {
+        bookingId: newInc.bookingId,
+        tourId: newInc.tourId,
+        tourName: newInc.tourName,
+        guideId: newInc.guideId,
+        guideName: newInc.guideName,
+        title: newInc.title,
+        category: incidentCategory,
+        severity: incidentSeverity,
+        description: incidentDescription.trim(),
+        location: incidentLocation.trim(),
+        status: "reported",
       });
-      setShowIncidentModal(false); setIncidentDescription(""); setIncidentLocation("");
-      setOperationSubTab("incidents");
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "Không lưu được báo cáo sự cố.");
-    } finally { setOperationSaving(false); }
+    }
+    setLocalIncidents([newInc, ...localIncidents]);
+    setShowIncidentModal(false);
+    setIncidentDescription("");
+    setIncidentLocation("");
+    // Switch to incidents tab so user sees it right away
+    setOperationSubTab("incidents");
   };
 
   // Wrap-up Tour submit
-  const handleConfirmWrapUp = () => {
+  const handleConfirmWrapUp = async () => {
     if (!currentSchedule) return;
     if (onWrapUpTour) {
-      onWrapUpTour(currentSchedule.id, {
+      await onWrapUpTour(currentSchedule.id, {
         notes: wrapUpNotes.trim(),
       });
     }
@@ -443,7 +484,9 @@ export function GuideDashboard({
     return (
       <div className="bg-white rounded-2xl p-12 text-center max-w-md mx-auto shadow-sm border border-slate-200">
         <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-        <h3 className="font-bold text-slate-800 text-sm">Chưa có lịch tour nào được gán</h3>
+        <h3 className="font-bold text-slate-800 text-sm">
+          Chưa có lịch tour nào được gán
+        </h3>
         <p className="text-xs text-slate-500 mt-1">
           Vui lòng liên hệ điều hành công ty lữ hành để nhận phân công dẫn tour.
         </p>
@@ -567,14 +610,17 @@ export function GuideDashboard({
                   {/* Tour Switcher Dropdown */}
                   {schedules.length > 1 && (
                     <select
-                      aria-label="Chọn đoàn được phân công"
-                      value={selectedScheduleId || currentSchedule?.id}
+                      value={selectedScheduleId}
                       onChange={(e) => setSelectedScheduleId(e.target.value)}
                       className="bg-white/20 text-white text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/30 focus:outline-hidden max-w-[110px] truncate"
                     >
                       {schedules.map((s, idx) => (
-                        <option key={s.id} value={s.id} className="text-slate-900">
-                          {s.booking.bookingCode || `Đoàn ${idx + 1}`} · {s.booking.contactName || s.booking.userName}
+                        <option
+                          key={s.id}
+                          value={s.id}
+                          className="text-slate-900"
+                        >
+                          Đoàn {idx + 1}: {s.booking.tour.name.slice(0, 12)}...
                         </option>
                       ))}
                     </select>
@@ -668,7 +714,7 @@ export function GuideDashboard({
                       type="button"
                       onClick={() =>
                         setCalendarDate(
-                          new Date(currentYear, currentMonth - 1, 1)
+                          new Date(currentYear, currentMonth - 1, 1),
                         )
                       }
                       className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
@@ -688,7 +734,7 @@ export function GuideDashboard({
                       type="button"
                       onClick={() =>
                         setCalendarDate(
-                          new Date(currentYear, currentMonth + 1, 1)
+                          new Date(currentYear, currentMonth + 1, 1),
                         )
                       }
                       className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
@@ -700,16 +746,18 @@ export function GuideDashboard({
 
                   {/* Day of week header */}
                   <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
-                    {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((dayName, idx) => (
-                      <span
-                        key={dayName}
-                        className={`text-[10px] font-bold py-1 ${
-                          idx >= 5 ? "text-amber-600" : "text-slate-500"
-                        }`}
-                      >
-                        {dayName}
-                      </span>
-                    ))}
+                    {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(
+                      (dayName, idx) => (
+                        <span
+                          key={dayName}
+                          className={`text-[10px] font-bold py-1 ${
+                            idx >= 5 ? "text-amber-600" : "text-slate-500"
+                          }`}
+                        >
+                          {dayName}
+                        </span>
+                      ),
+                    )}
                   </div>
 
                   {/* Month Grid with Highlighted Tour Dates */}
@@ -725,11 +773,11 @@ export function GuideDashboard({
                       }
 
                       const hasTour = item.schedules.length > 0;
-                      const isSelected = selectedCalendarDateStr === item.dateKey;
+                      const isSelected =
+                        selectedCalendarDateStr === item.dateKey;
                       const isToday =
                         item.dateKey === "2026-10-15" ||
-                        item.dateKey ===
-                          new Date().toISOString().split("T")[0];
+                        item.dateKey === new Date().toISOString().split("T")[0];
 
                       return (
                         <button
@@ -749,8 +797,8 @@ export function GuideDashboard({
                             hasTour
                               ? "bg-gradient-to-br from-indigo-600 to-blue-600 text-white font-extrabold shadow-xs"
                               : isToday
-                              ? "bg-amber-100 text-amber-900 font-bold border border-amber-300"
-                              : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                                ? "bg-amber-100 text-amber-900 font-bold border border-amber-300"
+                                : "bg-slate-50 text-slate-700 hover:bg-slate-100"
                           }`}
                         >
                           <span className="text-xs">{item.dayNumber}</span>
@@ -827,7 +875,8 @@ export function GuideDashboard({
                               <span>{sch.booking.numberOfGuests} khách</span>
                             </p>
                             <p className="text-[10px] text-indigo-700 font-medium mt-1">
-                              Trưởng đoàn: {sch.booking.contactName} ({sch.booking.contactPhone})
+                              Trưởng đoàn: {sch.booking.contactName} (
+                              {sch.booking.contactPhone})
                             </p>
                           </div>
 
@@ -874,8 +923,6 @@ export function GuideDashboard({
                       return (
                         <div
                           key={sch.id}
-                          role="button" tabIndex={0} aria-label={`Chọn đoàn ${sch.booking.bookingCode || sch.booking.id}`}
-                          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedScheduleId(sch.id); } }}
                           onClick={() => {
                             setSelectedScheduleId(sch.id);
                           }}
@@ -888,9 +935,10 @@ export function GuideDashboard({
                           <div className="min-w-0 pr-2">
                             <span className="font-bold text-slate-900 block truncate">
                               {sch.booking.tour.name}
-                            </span><span className="block text-xs text-slate-600">{sch.booking.bookingCode} · {sch.booking.contactName || sch.booking.userName}</span>
+                            </span>
                             <span className="text-[10px] text-slate-500">
-                              Khởi hành: {sch.booking.tourStartDate} · {sch.booking.tour.destination}
+                              Khởi hành: {sch.booking.tourStartDate} ·{" "}
+                              {sch.booking.tour.destination}
                             </span>
                           </div>
                           <span
@@ -938,7 +986,7 @@ export function GuideDashboard({
                               totalLocations > 0
                                 ? Math.round(
                                     (completedLocationsCount / totalLocations) *
-                                      100
+                                      100,
                                   )
                                 : 0
                             }%`,
@@ -997,7 +1045,11 @@ export function GuideDashboard({
                                       : "bg-slate-100 text-slate-700"
                                   }`}
                                 >
-                                  {isCheckedIn ? <Check className="w-4 h-4" /> : idx + 1}
+                                  {isCheckedIn ? (
+                                    <Check className="w-4 h-4" />
+                                  ) : (
+                                    idx + 1
+                                  )}
                                 </span>
                                 <div className="min-w-0">
                                   <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
@@ -1025,14 +1077,18 @@ export function GuideDashboard({
                                     className="text-[11px] text-slate-500 hover:text-indigo-600 font-semibold p-1"
                                     title="Xem lại hoặc bổ sung ảnh/ghi chú"
                                   >
-                                    {loc.checkInImage ? "📸 Có ảnh" : "+ Ảnh/Ghi chú"}
+                                    {loc.checkInImage
+                                      ? "📸 Có ảnh"
+                                      : "+ Ảnh/Ghi chú"}
                                   </button>
                                 ) : (
                                   <>
                                     {/* 1-Tap Check-in Button */}
                                     <Button
                                       size="sm"
-                                      onClick={() => handleDirectCheckIn(loc.id)}
+                                      onClick={() =>
+                                        handleDirectCheckIn(loc.id)
+                                      }
                                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl h-8 px-3 shadow-xs flex items-center gap-1"
                                     >
                                       <Check className="w-3.5 h-3.5" />
@@ -1062,18 +1118,22 @@ export function GuideDashboard({
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
                               <button
                                 type="button"
-                                onClick={() => handleOpenIncidentForLocation(loc.name)}
+                                onClick={() =>
+                                  handleOpenIncidentForLocation(loc.name)
+                                }
                                 className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 hover:underline transition-colors"
                               >
                                 <AlertTriangle className="w-3.5 h-3.5" />
                                 <span>Báo sự cố tại địa điểm này</span>
                               </button>
 
-                              {isCheckedIn && (loc.checkInImage || loc.checkInNote) && (
-                                <span className="text-[10px] text-slate-400 italic">
-                                  {loc.checkInNote || "Đã lưu thông tin thực địa"}
-                                </span>
-                              )}
+                              {isCheckedIn &&
+                                (loc.checkInImage || loc.checkInNote) && (
+                                  <span className="text-[10px] text-slate-400 italic">
+                                    {loc.checkInNote ||
+                                      "Đã lưu thông tin thực địa"}
+                                  </span>
+                                )}
                             </div>
                           </div>
                         );
@@ -1104,7 +1164,10 @@ export function GuideDashboard({
                               ✓ Tour đã được nghiệm thu kết thúc!
                             </span>
                             <p className="text-[11px] text-white/90 italic mt-0.5">
-                              "{currentSchedule.wrapUpReport.notes || "Tour kết thúc thành công."}"
+                              "
+                              {currentSchedule.wrapUpReport.notes ||
+                                "Tour kết thúc thành công."}
+                              "
                             </p>
                           </div>
                         ) : (
@@ -1133,12 +1196,12 @@ export function GuideDashboard({
                         <span>Điểm danh khởi hành đoàn tour</span>
                       </div>
                       <p className="text-[11px] text-amber-800">
-                        Tích checkbox để đánh dấu khách có mặt và điền ghi chú (nếu đi trễ, hẹn điểm đón khác...).
+                        Tích checkbox để đánh dấu khách có mặt và điền ghi chú
+                        (nếu đi trễ, hẹn điểm đón khác...).
                       </p>
                     </div>
 
-                    {operationError && <p role="alert" className="p-3 text-sm text-red-700">{operationError}</p>}
-                {rollCallSavedNotice && (
+                    {rollCallSavedNotice && (
                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>{rollCallSavedNotice}</span>
@@ -1243,7 +1306,7 @@ export function GuideDashboard({
                                   onChange={(e) =>
                                     handleTogglePassengerPresent(
                                       p.id,
-                                      e.target.checked
+                                      e.target.checked,
                                     )
                                   }
                                   className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
@@ -1266,7 +1329,10 @@ export function GuideDashboard({
                                 type="text"
                                 value={p.notes || ""}
                                 onChange={(e) =>
-                                  handleUpdatePassengerNote(p.id, e.target.value)
+                                  handleUpdatePassengerNote(
+                                    p.id,
+                                    e.target.value,
+                                  )
                                 }
                                 placeholder="Ghi chú (VD: đi trễ 10p, đón tại Cổng 2...)"
                                 className="w-full text-xs px-2.5 py-1.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-400 rounded-lg focus:outline-hidden transition-colors"
@@ -1280,7 +1346,7 @@ export function GuideDashboard({
                     {/* Save Button */}
                     <div className="pt-2">
                       <Button
-                        onClick={handleSaveDepartureRollCall} disabled={operationSaving}
+                        onClick={handleSaveDepartureRollCall}
                         className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -1395,24 +1461,24 @@ export function GuideDashboard({
                                     inc.severity === "critical"
                                       ? "bg-rose-600 text-white animate-pulse"
                                       : inc.severity === "high"
-                                      ? "bg-rose-100 text-rose-800"
-                                      : "bg-amber-100 text-amber-800"
+                                        ? "bg-rose-100 text-rose-800"
+                                        : "bg-amber-100 text-amber-800"
                                   }`}
                                 >
                                   {inc.severity === "critical"
                                     ? "🚨 Khẩn cấp"
                                     : inc.severity === "high"
-                                    ? "Mức cao"
-                                    : "Trung bình"}
+                                      ? "Mức cao"
+                                      : "Trung bình"}
                                 </span>
                                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
                                   {inc.category === "medical"
                                     ? "Y tế"
-                                    : inc.category === "transport"
-                                    ? "Giao thông"
-                                    : inc.category === "weather"
-                                    ? "Thời tiết"
-                                    : "Khác"}
+                                    : inc.category === "vehicle"
+                                      ? "Giao thông"
+                                      : inc.category === "weather"
+                                        ? "Thời tiết"
+                                        : "Khác"}
                                 </span>
                               </div>
                               <span className="font-mono text-[10px] text-slate-400">
@@ -1550,7 +1616,7 @@ export function GuideDashboard({
                 type="button"
                 onClick={() =>
                   setCheckInImage(
-                    "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?w=600"
+                    "https://images.unsplash.com/photo-1542044896530-05d85be9b11a?w=600",
                   )
                 }
                 className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded"
@@ -1561,7 +1627,7 @@ export function GuideDashboard({
                 type="button"
                 onClick={() =>
                   setCheckInImage(
-                    "https://images.unsplash.com/photo-1520454125516-134a66d9bf78?w=600"
+                    "https://images.unsplash.com/photo-1520454125516-134a66d9bf78?w=600",
                   )
                 }
                 className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded"
@@ -1627,7 +1693,7 @@ export function GuideDashboard({
             <DialogDescription className="text-[11px] text-slate-500">
               Gửi thông tin về trung tâm điều hành lữ hành
             </DialogDescription>
-          </DialogHeader>{operationError && <p role="alert" className="text-sm text-red-700">{operationError}</p>}
+          </DialogHeader>
 
           <div className="space-y-3 pt-2">
             <div>
@@ -1640,9 +1706,11 @@ export function GuideDashboard({
                 className="w-full text-xs rounded-lg border border-slate-300 px-2.5 py-2 bg-white"
               >
                 <option value="medical">🚑 Y tế & Sức khỏe thành viên</option>
-                <option value="transport">🚌 Xe cộ & Giao thông di chuyển</option>
-                <option value="weather">⛈️ Thời tiết cực đoan & Thiên tai</option>
-                <option value="service_provider">🏨 Đối tác khách sạn / nhà hàng</option>
+                <option value="vehicle">🚌 Xe cộ & Giao thông di chuyển</option>
+                <option value="weather">
+                  ⛈️ Thời tiết cực đoan & Thiên tai
+                </option>
+                <option value="service">🏨 Đối tác khách sạn / nhà hàng</option>
                 <option value="other">📌 Tình huống khác</option>
               </select>
             </div>
@@ -1683,7 +1751,7 @@ export function GuideDashboard({
               </Button>
               <Button
                 size="sm"
-                disabled={operationSaving || !incidentDescription.trim()}
+                disabled={!incidentDescription.trim()}
                 onClick={handleCreateIncident}
                 className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
               >
@@ -1716,8 +1784,12 @@ export function GuideDashboard({
                 <Phone className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-blue-900 block">Điều hành Tour</span>
-                <span className="text-[11px] text-[#F97316] font-mono">0909 123 456</span>
+                <span className="font-bold text-blue-900 block">
+                  Điều hành Tour
+                </span>
+                <span className="text-[11px] text-[#F97316] font-mono">
+                  0909 123 456
+                </span>
               </div>
             </a>
 
@@ -1729,8 +1801,12 @@ export function GuideDashboard({
                 <Phone className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-rose-900 block">Cấp cứu 115</span>
-                <span className="text-[11px] text-rose-600 font-mono">Y tế khẩn</span>
+                <span className="font-bold text-rose-900 block">
+                  Cấp cứu 115
+                </span>
+                <span className="text-[11px] text-rose-600 font-mono">
+                  Y tế khẩn
+                </span>
               </div>
             </a>
 
@@ -1742,8 +1818,12 @@ export function GuideDashboard({
                 <Phone className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-amber-900 block">Cảnh sát 113</span>
-                <span className="text-[11px] text-amber-600 font-mono">An ninh</span>
+                <span className="font-bold text-amber-900 block">
+                  Cảnh sát 113
+                </span>
+                <span className="text-[11px] text-amber-600 font-mono">
+                  An ninh
+                </span>
               </div>
             </a>
 
@@ -1755,8 +1835,12 @@ export function GuideDashboard({
                 <Phone className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-orange-900 block">Cứu nạn 114</span>
-                <span className="text-[11px] text-orange-600 font-mono">Cứu hộ</span>
+                <span className="font-bold text-orange-900 block">
+                  Cứu nạn 114
+                </span>
+                <span className="text-[11px] text-orange-600 font-mono">
+                  Cứu hộ
+                </span>
               </div>
             </a>
           </div>

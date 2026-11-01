@@ -1,7 +1,17 @@
-import type { Booking, Tour, PaymentRequest, User, IncidentReport } from "../types/index.ts";
+import type {
+  Booking,
+  Tour,
+  PaymentRequest,
+  User,
+  IncidentReport,
+} from "../types/index.ts";
 import type { BookingDto } from "./wf05Bookings.ts";
 
-export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?: User): Booking {
+export function fromApiBooking(
+  dto: BookingDto,
+  tours: Tour[] = [],
+  currentUser?: User | null,
+): Booking {
   const matchedTour = tours.find((t) => String(t.id) === String(dto.tourId));
   const fallbackTour: Tour = {
     id: String(dto.tourId || "0"),
@@ -39,7 +49,8 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
   };
   const normalizedStatus = statusMap[dto.status.toLowerCase()] || "pending";
 
-  const isDepositPaid = dto.paidAmount >= dto.depositAmount && dto.depositAmount > 0;
+  const isDepositPaid =
+    dto.paidAmount >= dto.depositAmount && dto.depositAmount > 0;
   const isFullyPaid = dto.paidAmount >= dto.totalAmount && dto.totalAmount > 0;
   const remainingAmount = Math.max(0, dto.totalAmount - dto.paidAmount);
 
@@ -48,11 +59,17 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
     paymentRequests.push({
       id: `pr-deposit-${dto.id}`,
       bookingId: String(dto.id),
-      amount: isDepositPaid ? dto.depositAmount : Math.max(0, dto.depositAmount - dto.paidAmount),
+      amount: isDepositPaid
+        ? dto.depositAmount
+        : Math.max(0, dto.depositAmount - dto.paidAmount),
       description: `Đặt cọc 30% chuyến đi (${dto.bookingCode})`,
-      dueDate: dto.startDate ? dto.startDate.split("T")[0] : new Date().toISOString().split("T")[0],
+      dueDate: dto.startDate
+        ? dto.startDate.split("T")[0]
+        : new Date().toISOString().split("T")[0],
       status: isDepositPaid ? "paid" : "pending",
-      paidAt: isDepositPaid ? (dto.updatedAt || dto.createdAt).split("T")[0] : undefined,
+      paidAt: isDepositPaid
+        ? (dto.updatedAt || dto.createdAt).split("T")[0]
+        : undefined,
       createdAt: dto.createdAt.split("T")[0],
     });
   }
@@ -64,7 +81,9 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
       description: `Thanh toán số tiền còn lại (${dto.bookingCode})`,
       dueDate: dto.endDate.split("T")[0],
       status: isFullyPaid ? "paid" : "pending",
-      paidAt: isFullyPaid ? (dto.updatedAt || dto.createdAt).split("T")[0] : undefined,
+      paidAt: isFullyPaid
+        ? (dto.updatedAt || dto.createdAt).split("T")[0]
+        : undefined,
       createdAt: dto.createdAt.split("T")[0],
     });
   }
@@ -75,7 +94,46 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
     id: String(dto.id),
     bookingCode: dto.bookingCode,
     tourId: String(dto.tourId || "0"),
-    tour: matchedTour || fallbackTour,
+    tour: dto.snapshotDays?.length
+      ? {
+          ...(matchedTour || fallbackTour),
+          numberOfDays: dto.snapshotDays.length,
+          itinerary: dto.snapshotDays.map((d) => ({
+            id: String(d.id),
+            day: d.dayNumber,
+            date: new Date(
+              Date.parse(dto.startDate) + (d.dayNumber - 1) * 86400000,
+            )
+              .toISOString()
+              .slice(0, 10),
+            title: d.title,
+            description: d.description || "",
+            locations: d.locations.map((l) => ({
+              id: String(l.id),
+              name: l.name,
+              address: "",
+              time: l.time?.slice(11, 16),
+              checkedIn: l.attendanceStatus === "CheckedIn",
+            })),
+            meals: d.meals.map((m) => ({
+              id: String(m.id),
+              type: m.mealType,
+              serviceName: m.name,
+              serviceId: m.serviceId ? String(m.serviceId) : undefined,
+              time: m.time?.slice(11, 16),
+            })),
+          })),
+          hotels: (dto.snapshotHotels || []).map((h) => ({
+            id: String(h.id),
+            name: h.name,
+            destination: h.destination,
+            stars: h.stars || 3,
+            nights: h.nights,
+            pricePerNight: 0,
+            serviceId: h.serviceId ? String(h.serviceId) : undefined,
+          })),
+        }
+      : matchedTour || fallbackTour,
     userId: dto.customerId || currentUser?.id || "",
     userName: dto.customerName || currentUser?.name || "",
     userEmail: dto.contactEmail || currentUser?.email || "",
@@ -86,8 +144,12 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
     numberOfGuests: dto.totalGuests,
     totalPrice: dto.totalAmount,
     status: normalizedStatus,
-    bookingDate: dto.createdAt ? dto.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
-    tourStartDate: dto.startDate ? dto.startDate.split("T")[0] : new Date().toISOString().split("T")[0],
+    bookingDate: dto.createdAt
+      ? dto.createdAt.split("T")[0]
+      : new Date().toISOString().split("T")[0],
+    tourStartDate: dto.startDate
+      ? dto.startDate.split("T")[0]
+      : new Date().toISOString().split("T")[0],
     companyId: dto.agencyId,
     companyName: dto.agencyName,
     guideId: assignedLeadGuide?.guideId,
@@ -98,10 +160,10 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
       guideId: ag.guideId,
       guideName: ag.guideName,
       guidePhone: ag.guidePhone,
-      companyId: dto.agencyId || "",
+      companyId: ag.agencyId || dto.agencyId || "",
       companyName: dto.agencyName || "",
       role: ag.role === "Lead" ? "lead_guide" : "support_guide",
-      assignedAt: dto.updatedAt || dto.createdAt,
+      assignedAt: ag.assignedAt || dto.updatedAt || dto.createdAt,
       notes: ag.notes,
     })),
     depositAmount: dto.depositAmount,
@@ -109,17 +171,46 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
     remainingAmount: remainingAmount,
     paidAmount: dto.paidAmount,
     tourEndDate: dto.endDate.split("T")[0],
-    paymentStatus: dto.paymentStatus === "Refunded" ? "refunded" : isFullyPaid ? "paid" : dto.paidAmount > 0 ? "partially_paid" : "unpaid",
+    paymentStatus:
+      dto.paymentStatus === "Refunded"
+        ? "refunded"
+        : isFullyPaid
+          ? "paid"
+          : dto.paidAmount > 0
+            ? "partially_paid"
+            : "unpaid",
     paymentRequests: paymentRequests,
-    guideIncidents: (dto.incidents || []).map(i => ({
-      id: String(i.id), bookingId: String(dto.id), tourId: String(dto.tourId || ""),
-      tourName: dto.tourName || "", guideId: currentUser?.role === "guide" ? currentUser.id : "",
+    guideIncidents: (dto.incidents || []).map((i) => ({
+      id: String(i.id),
+      bookingId: String(dto.id),
+      tourId: String(dto.tourId || ""),
+      tourName: dto.tourName || "",
+      guideId: currentUser?.role === "guide" ? currentUser.id : "",
       guideName: currentUser?.role === "guide" ? currentUser.name : "",
-      title: i.title, description: i.description,
-      category: (["vehicle", "weather", "medical", "schedule", "service", "other", "transport", "service_provider"].find(c => i.title.startsWith(`[${c}]`)) || "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(i.resolutionNotes?.toLowerCase() || "")
-        ? i.resolutionNotes!.toLowerCase() as IncidentReport["severity"] : "medium",
-      status: i.status === "Resolved" ? "resolved" : i.status === "Acknowledged" ? "acknowledged" : "reported",
+      title: i.title,
+      description: i.description,
+      category: ([
+        "vehicle",
+        "weather",
+        "medical",
+        "schedule",
+        "service",
+        "other",
+        "transport",
+        "service_provider",
+      ].find((c) => i.title.startsWith(`[${c}]`)) ||
+        "other") as IncidentReport["category"],
+      severity: ["low", "medium", "high", "critical"].includes(
+        i.resolutionNotes?.toLowerCase() || "",
+      )
+        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
+        : "medium",
+      status:
+        i.status === "Resolved"
+          ? "resolved"
+          : i.status === "Acknowledged"
+            ? "acknowledged"
+            : "reported",
       reportedAt: i.createdAt,
     })),
     passengers: (dto.participants || []).map((p, index) => ({
@@ -128,13 +219,36 @@ export function fromApiBooking(dto: BookingDto, tours: Tour[] = [], currentUser?
       phone: p.phoneNumber,
       dateOfBirth: p.dateOfBirth ? p.dateOfBirth.split("T")[0] : "",
       gender: (p.gender === "Nữ" ? "female" : "male") as "male" | "female",
-      ageGroup: "adult" as const,
-      price: dto.totalAmount / (dto.totalGuests || 1),
+      ageGroup: (/em b[eé]|infant/i.test(p.tierName || "")
+        ? "child_under_2"
+        : /tr[eẻ]|child/i.test(p.tierName || "")
+          ? "child_2_11"
+          : "adult") as "adult" | "child_2_11" | "child_under_2",
+      price: p.price ?? dto.totalAmount / (dto.totalGuests || 1),
       idNumber: p.identityNumber,
-      attendanceStatus: p.attendanceStatus === "CheckedIn" ? "CHECKED_IN" : p.attendanceStatus === "Absent" ? "ABSENT" : "PENDING",
-      departureAttendance: p.attendanceStatus === "CheckedIn" ? "present" : p.attendanceStatus === "Absent" ? "absent" : undefined,
+      roommateNote: p.roommateNote,
+      dietaryNote: p.restaurantNote,
+      notes: p.note,
+      participantIndex: p.participantIndex,
+      agencyId: p.agencyId,
+      isPrimary: p.isPrimary,
+      tierName: p.tierName,
+      checkedBy: p.checkedBy,
+      checkedAt: p.checkedAt,
+      assignedGuideId: p.assignedGuideId,
+      attendanceStatus:
+        p.attendanceStatus === "CheckedIn"
+          ? "CHECKED_IN"
+          : p.attendanceStatus === "Absent"
+            ? "ABSENT"
+            : "PENDING",
+      departureAttendance:
+        p.attendanceStatus === "CheckedIn"
+          ? "present"
+          : p.attendanceStatus === "Absent"
+            ? "absent"
+            : undefined,
       status: p.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     })),
   };
 }
-

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Service } from "@/app/types";
@@ -214,9 +214,9 @@ function ServiceDetailOsmMap({
     const pinHtml = `
       <div class="osm-price-pin-wrapper group select-none" style="transform: translate(-50%, -100%); cursor: pointer;">
         <div class="relative flex flex-col items-center">
-          <div style="border-color: ${meta.pinBorder};" 
+          <div style="border-color: ${meta.pinBorder};"
                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-gray-900 shadow-md border-2 ring-2 ring-black/5">
-            <div style="background-color: ${meta.pinBg};" 
+            <div style="background-color: ${meta.pinBg};"
                  class="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-2xs">
               ${getCategoryIconSvg(category, 12)}
             </div>
@@ -395,13 +395,13 @@ function ExplorerOsmMap({
       const mapPrice = formatMapPrice(service);
 
       const customPinHtml = `
-        <div class="osm-price-pin-wrapper group select-none" 
+        <div class="osm-price-pin-wrapper group select-none"
              title="${service.name} (${formatPriceSummary(service)})"
              style="transform: translate(-50%, -100%); cursor: pointer;">
           <div class="relative flex flex-col items-center">
-            <div style="border-color: ${meta.pinBorder};" 
+            <div style="border-color: ${meta.pinBorder};"
                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-gray-900 shadow-md border-2 group-hover:border-[#075985] group-hover:shadow-xl transition-all duration-150 ring-2 ring-black/5">
-              <div style="background-color: ${meta.pinBg};" 
+              <div style="background-color: ${meta.pinBg};"
                    class="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-2xs">
                 ${iconSvg}
               </div>
@@ -409,7 +409,7 @@ function ExplorerOsmMap({
                 ${mapPrice}
               </span>
             </div>
-            <div style="border-color: ${meta.pinBorder};" 
+            <div style="border-color: ${meta.pinBorder};"
                  class="w-2.5 h-2.5 bg-white border-r-2 border-b-2 rotate-45 -mt-1 shadow-xs group-hover:border-[#075985] transition-colors"></div>
           </div>
         </div>
@@ -445,7 +445,7 @@ function ExplorerOsmMap({
             <span class="font-bold text-[#075985] text-xs">${formatPriceSummary(service)} ${meta.unit}</span>
           </div>
           <div class="pt-2 flex gap-1.5">
-            <button id="view-detail-btn-${service.id}" 
+            <button id="view-detail-btn-${service.id}"
               class="w-full py-1.5 px-2 bg-[#075985] hover:bg-[#F97316] text-white rounded-lg font-semibold text-center text-xs transition-colors flex items-center justify-center gap-1 shadow-xs">
               Xem bài đăng chi tiết →
             </button>

@@ -56,6 +56,12 @@ if (builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+if (builder.Configuration.GetValue<bool>("SeedDemo"))
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo seed is only available in Development.");
+    await DemoSeed.Run(app.Services);
+    return;
+}
 if (builder.Configuration.GetValue<bool>("CreateAdmin"))
 {
     await AdminBootstrap.Run(app.Services, builder.Configuration);

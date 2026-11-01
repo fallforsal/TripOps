@@ -28,8 +28,8 @@ public sealed class OpenApiTests
         var descriptions = app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items.SelectMany(g => g.Items).ToArray();
         var expected = descriptions.Select(d => $"{d.HttpMethod!.ToLowerInvariant()} /{d.RelativePath}").Order().ToArray();
         Assert.Equal(expected, operations.Select(o => $"{o.Method} {o.Path}").Order().ToArray());
-        Assert.Equal(45, operations.Length);
-        Assert.Equal(35, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
+        Assert.Equal(54, operations.Length);
+        Assert.Equal(44, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
             !o.Path.StartsWith("/api/v1/admin/partner-applications") && o.Path != "/api/v1/health"));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/images" && o.Method == "post");
@@ -71,7 +71,7 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(39, protectedCount);
+        Assert.Equal(46, protectedCount);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class OpenApiTests
         foreach (var item in operations) {
             Assert.False(string.IsNullOrWhiteSpace(item.Operation.GetProperty("summary").GetString()));
             var responses = item.Operation.GetProperty("responses");
-            foreach (var response in responses.EnumerateObject().Where(r => r.Name.StartsWith('2') && r.Name != "204"))
+            foreach (var response in responses.EnumerateObject().Where(r => r.Name.StartsWith('2') && r.Name != "204" && !item.Path.StartsWith("/api/v1/files/")))
                 Assert.True(response.Value.GetProperty("content").GetProperty("application/json").TryGetProperty("schema", out _), $"Missing response schema for {item.Method} {item.Path}");
         }
         var paths = root.GetProperty("paths");
@@ -138,11 +138,12 @@ public sealed class OpenApiTests
     {
         await using var app = Factory(); using var json = await Document(app);
         var schemas = json.RootElement.GetProperty("components").GetProperty("schemas");
-        foreach (var (type, field) in new[] { ("ActivityInput", "serviceId"), ("MealInput", "serviceId"),
-            ("AccommodationInput", "serviceId"), ("TimelineInput", "transportationServiceId") })
+        foreach (var (type, field) in new[] { ("ActivityInput", "serviceId"), ("TimelineInput", "transportationServiceId") })
         {
             Assert.False(schemas.GetProperty(type).GetProperty("properties").TryGetProperty(field, out _));
         }
+        Assert.True(schemas.GetProperty("MealInput").GetProperty("properties").TryGetProperty("serviceId", out _));
+        Assert.True(schemas.GetProperty("AccommodationInput").GetProperty("properties").TryGetProperty("serviceId", out _));
         var activity = schemas.GetProperty("ActivityInput").GetProperty("properties");
         Assert.Equal("08:30:00", activity.GetProperty("estimatedTime").GetProperty("examples")[0].GetString());
         Assert.Contains("less than 24 hours", activity.GetProperty("estimatedTime").GetProperty("description").GetString());

@@ -51,6 +51,11 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     [EndpointSummary("Check whether the draft is ready for direct publication")]
     [ProducesResponseType<TourValidationResult>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Validate(int id, CancellationToken ct) => Ok(await tours.ValidateDraft(Actor, id, ct));
+    [HttpPost("{id:int}/complete")]
+    [EndpointSummary("Complete a validated tour and keep it hidden")]
+    [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Complete(int id, TourCommand request, CancellationToken ct) => Ok(await tours.Command(Actor, id, "complete", request, ct));
+
     [HttpPost("{id:int}/publish")]
     [Tags("Tour Publishing"), EndpointSummary("Publish a complete Agency tour directly")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]

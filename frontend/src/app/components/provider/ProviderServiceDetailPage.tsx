@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Service } from "@/app/types";
 import {
   ArrowLeft,
@@ -38,29 +38,47 @@ import {
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ImageUploadManager } from "../ImageUploadManager";
+import { mockServices } from "@/app/data/mockData";
 
 interface ProviderServiceDetailPageProps {
-  service: Service;
+  service?: Service;
+  serviceId?: string;
   onBack: () => void;
   onEdit?: (service: Service) => void;
-  onDelete: (serviceId: string) => void;
+  onDelete?: (serviceId: string) => void;
   onUpdateServiceImages?: (serviceId: string, images: string[], thumbnail: string) => void;
   isAdmin?: boolean;
+  isAgencyView?: boolean;
   onToggleHide?: (serviceId: string, reason?: string) => void;
 }
 
 export function ProviderServiceDetailPage({
-  service,
+  service: propService,
+  serviceId,
   onBack,
   onEdit,
   onDelete,
   onUpdateServiceImages,
   isAdmin = false,
+  isAgencyView = false,
   onToggleHide,
 }: ProviderServiceDetailPageProps) {
+  const service = propService || (serviceId ? mockServices.find((s) => s.id === serviceId) : undefined);
+
+  if (!service) {
+    return (
+      <div className="p-8 text-center space-y-3">
+        <p className="text-sm font-semibold text-gray-700">Không tìm thấy thông tin chi tiết dịch vụ.</p>
+        <Button variant="outline" size="sm" onClick={onBack}>
+          Quay lại
+        </Button>
+      </div>
+    );
+  }
+
   const imagesList = service.images && service.images.length > 0
     ? service.images
-    : [service.image];
+    : [service.image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"];
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showImageManager, setShowImageManager] = useState(false);
@@ -175,7 +193,7 @@ export function ProviderServiceDetailPage({
             className="rounded-xl border-gray-200 hover:bg-gray-100 text-gray-700 font-medium text-xs sm:text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
-            {isAdmin ? "Quay lại danh sách Quản lý Bài đăng" : "Quay lại bảng dịch vụ"}
+            {isAgencyView ? "Quay lại thiết kế tour" : isAdmin ? "Quay lại danh sách Quản lý Bài đăng" : "Quay lại bảng dịch vụ"}
           </Button>
           <div className="hidden md:flex items-center gap-2 text-xs text-gray-400">
             <span>/</span>
@@ -189,7 +207,14 @@ export function ProviderServiceDetailPage({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {isAdmin ? (
+          {isAgencyView ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#E0F2FE] text-[#075985] border border-[#CBD5E1] shadow-2xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Đối tác cung ứng dịch vụ
+              </span>
+            </div>
+          ) : isAdmin ? (
             <>
               {service.status === "hidden" ? (
                 <Button
@@ -222,8 +247,8 @@ export function ProviderServiceDetailPage({
                       `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                     )
                   ) {
-                    onDelete(service.id);
-                    onBack();
+                    onDelete?.(service.id);
+                    onBack?.();
                   }
                 }}
               >
@@ -262,8 +287,8 @@ export function ProviderServiceDetailPage({
                       `Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này không thể hoàn tác.`
                     )
                   ) {
-                    onDelete(service.id);
-                    onBack();
+                    onDelete?.(service.id);
+                    onBack?.();
                   }
                 }}
               >
@@ -309,7 +334,7 @@ export function ProviderServiceDetailPage({
           </div>
           <Button
             size="sm"
-            onClick={() => onEdit(service)}
+            onClick={() => onEdit?.(service)}
             className="bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-xl flex-shrink-0"
           >
             Sửa & Gửi lại
@@ -393,37 +418,48 @@ export function ProviderServiceDetailPage({
 
             {/* Price Box */}
             <div className="mt-5 p-4 rounded-xl bg-gradient-to-br from-blue-50/70 to-indigo-50/70 border border-blue-100">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                {service.priceFrom && service.priceTo
-                  ? `Khoảng giá dự kiến / ${service.category === "hotel" ? "phòng" : "người"}`
-                  : "Đơn giá niêm yết"}
-              </span>
-              {service.priceFrom && service.priceTo ? (
-                <div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl sm:text-3xl font-extrabold text-[#075985]">
-                      {service.priceFrom.toLocaleString("vi-VN")}đ - {service.priceTo.toLocaleString("vi-VN")}đ
+              {(() => {
+                const isHotel = service.category === "hotel";
+                const pFrom = service.priceFrom ?? (isHotel ? Math.round((service.price || 1500000) * 0.8 / 10000) * 10000 : undefined);
+                const pTo = service.priceTo ?? (isHotel ? Math.round((service.price || 1500000) * 1.2 / 10000) * 10000 : undefined);
+                const hasRange = pFrom !== undefined && pTo !== undefined;
+
+                return (
+                  <>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                      {hasRange
+                        ? `Khoảng giá dự kiến / ${isHotel ? "phòng" : "người"}`
+                        : "Đơn giá niêm yết"}
                     </span>
-                    <span className="text-xs font-semibold text-[#075985]">
-                      / {service.category === "hotel" ? "phòng" : "người"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    {service.category === "hotel"
-                      ? "Khoảng giá theo phòng/đêm giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."
-                      : "Khoảng giá theo đầu người giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-[#075985]">
-                    {service.price?.toLocaleString("vi-VN")}đ
-                  </span>
-                  <span className="text-xs font-medium text-gray-600">
-                    {meta.unit}
-                  </span>
-                </div>
-              )}
+                    {hasRange ? (
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl sm:text-3xl font-extrabold text-[#075985]">
+                            {pFrom.toLocaleString("vi-VN")}đ - {pTo.toLocaleString("vi-VN")}đ
+                          </span>
+                          <span className="text-xs font-semibold text-[#075985]">
+                            / {isHotel ? "phòng" : "người"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {isHotel
+                            ? "Khoảng giá theo phòng/đêm giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."
+                            : "Khoảng giá theo đầu người giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-extrabold text-[#075985]">
+                          {service.price?.toLocaleString("vi-VN")}đ
+                        </span>
+                        <span className="text-xs font-medium text-gray-600">
+                          {meta.unit}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {service.pricePerPerson && !service.priceFrom && (
                 <div className="mt-2 pt-2 border-t border-[#CBD5E1]/50 flex justify-between text-xs text-gray-700">
@@ -465,7 +501,7 @@ export function ProviderServiceDetailPage({
             <div className="p-2.5 bg-gray-50 rounded-xl">
               <span className="text-gray-500 block">Ngày tạo bài:</span>
               <strong className="text-gray-900">
-                {new Date(service.createdAt).toLocaleDateString("vi-VN")}
+                {service.createdAt ? new Date(service.createdAt).toLocaleDateString("vi-VN") : "Chưa có thông tin"}
               </strong>
             </div>
 
@@ -691,7 +727,7 @@ export function ProviderServiceDetailPage({
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span>Ngày tạo bài:</span>
-                <span>{new Date(service.createdAt).toLocaleString("vi-VN")}</span>
+                <span>{service.createdAt ? new Date(service.createdAt).toLocaleString("vi-VN") : "Chưa có thông tin"}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span>Trạng thái:</span>
@@ -702,7 +738,25 @@ export function ProviderServiceDetailPage({
 
           {/* Quick Action Footer */}
           <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
-            {isAdmin ? (
+            {isAgencyView ? (
+              <div className="space-y-2">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
+                  <p className="font-semibold flex items-center gap-1.5 text-emerald-950 mb-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Dịch vụ Đối tác Nền tảng TripOps
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Bạn đang xem đầy đủ bài viết chi tiết, hình ảnh thực tế và tọa độ Google Maps của đối tác cung ứng.
+                  </p>
+                </div>
+                <Button
+                  onClick={onBack}
+                  className="w-full bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold shadow-xs"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Quay lại thiết kế tour
+                </Button>
+              </div>
+            ) : isAdmin ? (
               <div className="space-y-2">
                 <div className="p-2.5 bg-[#F0F9FF] border border-[#CBD5E1] rounded-xl text-xs text-blue-900">
                   <p className="font-semibold flex items-center gap-1.5 text-blue-950 mb-0.5">
@@ -740,8 +794,8 @@ export function ProviderServiceDetailPage({
                         `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                       )
                     ) {
-                      onDelete(service.id);
-                      onBack();
+                      onDelete?.(service.id);
+                      onBack?.();
                     }
                   }}
                   className="w-full border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold"

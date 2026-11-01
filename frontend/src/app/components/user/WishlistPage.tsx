@@ -1,4 +1,4 @@
-﻿import {
+import {
   Heart,
   MapPin,
   Star,
@@ -9,15 +9,13 @@
 import { useState } from "react";
 import { Tour } from "@/app/types";
 
-interface WishlistTour extends Tour {
+interface WishlistTour extends Pick<Tour, "id" | "name" | "destination" | "duration" | "price" | "description" | "image" | "rating" | "maxGuests" | "highlights" | "itinerary"> {
   addedDate: string;
 }
 
 const mockWishlist: WishlistTour[] = [
   {
     id: "tour-1",
-    tourCode: "tour-1",
-    minGuests: 1,
     name: "Đà Lạt Romantic 3N2Đ",
     destination: "Đà Lạt",
     duration: "3 ngày 2 đêm",
@@ -34,8 +32,6 @@ const mockWishlist: WishlistTour[] = [
   },
   {
     id: "tour-2",
-    tourCode: "tour-2",
-    minGuests: 1,
     name: "Phú Quốc Tropical 4N3Đ",
     destination: "Phú Quốc",
     duration: "4 ngày 3 đêm",

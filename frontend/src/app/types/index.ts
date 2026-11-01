@@ -11,7 +11,7 @@ export type ProviderType =
 export interface TourCompany {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   logo?: string;
   coverImage?: string;
   address: string;
@@ -38,7 +38,7 @@ export interface BusinessProfile {
   businessAddress: string;
   businessLicenseUrl?: string;
   description?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'suspended';
+  status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
   approvedAt?: string;
   createdAt?: string;
@@ -70,8 +70,7 @@ export interface User {
   latitude?: number; // Vĩ độ
   longitude?: number; // Kinh độ
   businessDescription?: string;
-  bio?: string;
-  accountStatus?: "pending" | "approved" | "rejected" | "suspended";
+  accountStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   // Guide specific fields
   licenseNumber?: string;
@@ -81,18 +80,19 @@ export interface User {
   specialties?: string[];
   experienceYears?: number;
   guideStatus?: "active" | "inactive" | "on_tour";
+  bio?: string;
 }
 
 export interface Location {
-  description?: string;
   id: string;
   name: string;
   address: string;
   latitude?: number;
   longitude?: number;
   image?: string;
-  notes?: string;
   category?: string;
+  notes?: string;
+  description?: string;
   time?: string;
   checkedIn?: boolean;
   checkInTime?: string;
@@ -108,15 +108,26 @@ export interface TourAlternativeMeal {
   priceDifference: number; // e.g. +50000, +180000, -30000
   description?: string;
   address?: string;
+  image?: string;
+  serviceId?: string;
+  providerName?: string;
+  price?: number;
+  priceFrom?: number;
+  priceTo?: number;
+  isCustom?: boolean;
 }
 
 export interface TourMeal {
   id?: string;
   type: "breakfast" | "lunch" | "dinner";
+  time?: string; // Giờ diễn ra bữa ăn (VD: "07:30", "11:30", "12:00", "18:30")
   serviceId?: string;
   serviceName?: string;
   description?: string;
   pricePerPerson?: number;
+  image?: string;
+  providerName?: string;
+  isCustom?: boolean;
   allowCustomMealRequest?: boolean; // Cho phép khách tự đề xuất nhà hàng ngoài danh sách
   alternativeMeals?: TourAlternativeMeal[]; // Danh sách nhà hàng đổi món/nâng cấp cho khách chọn
   createdByCompanyId?: string; // ID công ty thiết lập bữa ăn này
@@ -125,25 +136,41 @@ export interface TourMeal {
 
 export interface TourAlternativeHotel {
   id: string;
+  serviceId?: string; // ID dịch vụ tương ứng trên hệ thống nếu là đối tác
   name: string;
-  priceDifference: number; // e.g. +400000 or -350000
+  priceDifference: number; // e.g. +400000 or -350000 (chênh lệch tự động so với mặc định)
   stars?: number;
   description?: string;
   address?: string;
+  image?: string;
+  providerName?: string;
+  price?: number; // Giá tham khảo gốc của phương án (VD: 1.450.000đ/đêm)
+  pricePerNight?: number;
+  priceFrom?: number;
+  priceTo?: number;
+  isCustom?: boolean; // Khách sạn tự nhập ngoài sàn
+  mapUrl?: string; // Link trực tiếp Google Maps nếu Agency đã nhập
+  googleMapsUrl?: string;
 }
 
 export interface TourHotel {
-  roomType?: string;
   id?: string;
   serviceId?: string;
+  providerName?: string;
+  roomType?: string;
   name: string;
   destination?: string; // e.g. "Đà Lạt", "Nha Trang"
   nights?: number; // e.g. 2
   stars?: number;
   pricePerNight: number;
+  priceFrom?: number;
+  priceTo?: number;
   description?: string;
   address?: string;
   image?: string;
+  isCustom?: boolean; // Khách sạn tự nhập ngoài sàn
+  mapUrl?: string; // Link trực tiếp Google Maps nếu Agency đã nhập
+  googleMapsUrl?: string;
   allowCustomHotelRequest?: boolean; // Cho phép khách tự đề xuất khách sạn ngoài danh sách
   alternativeHotels?: TourAlternativeHotel[]; // Danh sách khách sạn nâng cấp/đổi hạng cho khách hàng chọn kèm giá chênh lệch
   createdByCompanyId?: string; // ID công ty thiết lập khách sạn này
@@ -153,9 +180,9 @@ export interface TourHotel {
 export interface DailyItinerary {
   id: string;
   day: number;
-  date?: string;
+  date?: string; // Tour templates use day numbers before a departure is selected.
   title: string;
-  description: string;
+  description?: string;
   locations: Location[];
   destinationCity?: string; // e.g. "Đà Lạt", "Nha Trang" — for multi-destination tours
   // Hotel & meals for this day (set by company)
@@ -192,14 +219,17 @@ export interface TourPriceRow {
 export interface BookingPassenger {
   id: string;
   fullName: string;
-  dateOfBirth: string;
-  gender: "male" | "female";
+  dateOfBirth?: string; // Historical passenger records may be incomplete; booking forms validate new entries.
+  gender?: "male" | "female";
   ageGroup: "adult" | "child_2_11" | "child_under_2";
   price: number;
   phone?: string;
   email?: string;
   idNumber?: string; // CCCD / Passport
-  notes?: string;
+  roommateNote?: string; // roommate_note: Nguyện vọng xếp phòng / Muốn ở cùng ai
+  dietaryNote?: string; // dietary_note: Yêu cầu ăn uống / Dị ứng thực phẩm
+  roomingPreference?: string; // Alias tương đương cho roommateNote
+  notes?: string; // Ghi chú cá nhân
   // Alliance / Co-Host stage & multi-agency mapping (booking_participants schema)
   participantIndex?: number;
   agencyId?: string; // ID của công ty du lịch phụ trách chặng của khách này
@@ -232,14 +262,52 @@ export interface CustomLocationChange {
   note?: string;
 }
 
-export interface CustomHotelChange {
+export interface BookingProviderConfirmation {
+  id: string;
+  type: "hotel" | "meal";
+  title: string;
+  dayNumber?: number;
+  time?: string;
+  mealType?: "breakfast" | "lunch" | "dinner";
+  destination?: string;
+  originalName?: string;
+  selectedName: string;
+  isCustom: boolean; // Khách hàng tự điền thay vì chọn service sàn
+  serviceId?: string;
+  providerId?: string;
+  providerName?: string;
+  providerPhone?: string;
+  providerAddress?: string;
+  status: "pending" | "confirmed" | "rejected" | "quoted" | "cancelled";
+  bookingId?: string;
+  serviceType?: "hotel" | "restaurant";
+  servingDate?: string;
+  serviceTime?: string;
+  menuName?: string;
+  dietaryNotes?: string;
+  cancelledBy?: string;
+  cancelledByName?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  responseType?: "quote" | "confirm";
+  confirmedAt?: string;
+  rejectionReason?: string;
   priceDifference?: number;
+  pricePerUnit?: number;
+  address?: string;
+  image?: string;
+  stars?: number;
+  notes?: string;
+}
+
+export interface CustomHotelChange {
   destination: string;
   originalHotelName?: string;
   originalPricePerNight?: number;
   newHotelName: string;
   mode: "system" | "custom" | "provider";
   newPricePerNight?: number;
+  priceDifference?: number;
   stars?: number;
   address?: string;
   note?: string;
@@ -255,17 +323,24 @@ export interface CustomHotelChange {
   serviceImage?: string;
   latitude?: number;
   longitude?: number;
+  // Provider Approval
+  isCustom?: boolean;
+  providerStatus?: "pending" | "confirmed" | "rejected";
+  providerConfirmedAt?: string;
+  providerRejectionReason?: string;
 }
 
 export interface CustomMealChange {
   dayNumber: number;
   mealType: "breakfast" | "lunch" | "dinner";
+  time?: string; // Giờ diễn ra bữa ăn để nhà hàng chuẩn bị (VD: "11:30")
   originalMealName?: string;
   newMealName: string;
   mode: "system" | "custom" | "provider";
   pricePerPerson?: number;
   priceDifference?: number;
   note?: string;
+  address?: string;
   // Platform provider service metadata
   isProviderService?: boolean;
   serviceId?: string;
@@ -278,13 +353,18 @@ export interface CustomMealChange {
   serviceImage?: string;
   latitude?: number;
   longitude?: number;
+  // Provider Approval
+  isCustom?: boolean;
+  providerStatus?: "pending" | "confirmed" | "rejected";
+  providerConfirmedAt?: string;
+  providerRejectionReason?: string;
 }
 
 export interface PaymentRequest {
   id: string;
   bookingId: string;
   amount: number;
-  description: string;
+  description?: string;
   dueDate: string;
   status: "pending" | "paid" | "overdue" | "cancelled";
   createdAt: string;
@@ -307,13 +387,13 @@ export interface BookingPriceAdjustment {
 
 // Bảng booking_agencies: Quản lý phân chia chặng, doanh thu và giải ngân cho từng công ty
 export interface BookingAgencyShare {
-  quoteConfirmed?: boolean;
-  role?: string;
   id?: string;
   bookingId: string;
   agencyId: string;
   agencyName: string;
   isHost: boolean;
+  role?: "lead" | "partner";
+  quoteConfirmed?: boolean;
   originalAmount: number;
   finalAmount: number;
   // Đã bỏ khỏi DB schema (lưu vết chi tiết nằm trong booking_price_adjustments)
@@ -359,15 +439,17 @@ export interface TourReview {
 }
 
 export interface Tour {
+  updatedAt?: string;
   id: string;
   tourCode: string;
   name: string;
   destination: string;
+  region?: string; // Khu vực: Miền Bắc | Miền Trung | Miền Nam | Tây Nguyên | Miền Tây
   duration: string;
   numberOfDays?: number;
   numberOfNights?: number;
   price: number;
-  description: string;
+  description?: string;
   image: string;
   images?: string[];
   rating: number;
@@ -390,6 +472,7 @@ export interface Tour {
   // Reviews
   reviews?: TourReview[];
   reviewsCount?: number;
+  availableDates?: string[]; // Legacy tour listings.
   // Company info
   companyId?: string;
   companyName?: string;
@@ -401,7 +484,6 @@ export interface Tour {
   createdByName?: string;
   createdByEmail?: string;
   createdAt?: string;
-  updatedAt?: string;
   bookings?: number;
   // Custom tour design fields (Thiết kế tour riêng theo yêu cầu)
   tourType?: "public" | "custom_request";
@@ -478,9 +560,11 @@ export interface BookingAssignedGuide {
 }
 
 export interface Booking {
-  createdAt?: string;
-  id: string;
+  paidAmount?: number;
+  tourEndDate?: string;
   bookingCode?: string;
+  guideIncidents?: IncidentReport[];
+  id: string;
   tourId: string;
   tour: Tour;
   userId: string;
@@ -491,9 +575,6 @@ export interface Booking {
   status: "pending" | "deposited" | "confirmed" | "paid" | "in_progress" | "completed" | "cancelled" | "rejected";
   bookingDate: string;
   tourStartDate: string;
-  tourEndDate?: string;
-  paidAmount?: number;
-  guideIncidents?: IncidentReport[];
   companyId?: string;
   companyName?: string;
   guideId?: string;
@@ -548,6 +629,9 @@ export interface Booking {
   // Guide Attraction Check-ins & Incidents
   attractionCheckins?: BookingAttractionCheckin[];
   incidents?: BookingIncident[];
+  // Provider Confirmation & Approval status
+  providerApprovalStatus?: "all_approved" | "pending_provider" | "has_rejection" | "not_required";
+  providerConfirmations?: BookingProviderConfirmation[];
 }
 
 export interface IncidentReport {
@@ -558,9 +642,9 @@ export interface IncidentReport {
   guideId: string;
   guideName: string;
   title: string;
-  category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other" | "transport" | "service_provider";
+  category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other";
   severity: "low" | "medium" | "high" | "critical";
-  description: string;
+  description?: string;
   images?: string[];
   reportedAt: string;
   location?: string;
@@ -626,7 +710,7 @@ export interface BookingIncident {
   reportedByName: string;
   incidentType: IncidentCategory;
   title: string;
-  description: string;
+  description?: string;
   evidenceUrls?: string[];
   status: IncidentStatus;
   reportedAt: string;
@@ -635,10 +719,6 @@ export interface BookingIncident {
 }
 
 export interface Service {
-  cuisine?: string;
-  priceRange?: string;
-  difficulty?: string;
-  updatedAt?: string;
   id: string;
   providerId: string;
   providerName: string;
@@ -647,12 +727,11 @@ export interface Service {
     | "hotel"
     | "fnb"
     | "restaurant"
-    | "eatery"
     | "attraction"
     | "activity"
     | "transportation";
   subCategory?: string; // Sub-category cho FnB: "restaurant", "cafe", "streetfood"
-  description: string;
+  description?: string;
   price: number;
   priceFrom?: number; // Khoảng giá từ (VNĐ/người)
   priceTo?: number; // Khoảng giá đến (VNĐ/người)
@@ -673,7 +752,7 @@ export interface Service {
   status: "pending" | "approved" | "rejected" | "hidden";
   rejectionReason?: string; // Lý do từ chối bài đăng
   hiddenReason?: string; // Lý do Admin tạm ẩn bài đăng
-  createdAt: string;
+  createdAt?: string; // Service previews and legacy records may not include creation metadata.
   // Hotel specific fields
   stars?: number;
   totalRooms?: number; // Tổng số lượng phòng ở cơ sở lưu trú
@@ -685,7 +764,10 @@ export interface Service {
   // FnB specific fields (Restaurant/Cafe)
   openingHours?: string;
   cuisineType?: string;
+  cuisine?: string; // Legacy service forms.
+  priceRange?: string;
   dietaryOptions?: string[];
+  mealType?: "breakfast" | "lunch" | "dinner";
   // Attraction specific fields
   childPrice?: number;
   ticketIncludes?: string;
@@ -696,12 +778,13 @@ export interface Service {
   duration?: string;
   ageRestriction?: string;
   difficultyLevel?: string;
+  difficulty?: string; // Legacy service forms.
   safetyGear?: string;
+  updatedAt?: string;
 }
 
 // Room booking for accommodation providers
 export interface RoomBooking {
-  paymentStatus?: "unpaid" | "paid" | "refunded";
   id: string;
   serviceId: string;
   serviceName: string;
@@ -715,10 +798,69 @@ export interface RoomBooking {
   numberOfRooms: number;
   totalPrice: number;
   status: "pending" | "confirmed" | "cancelled" | "completed" | "rejected";
+  paymentStatus?: "unpaid" | "paid" | "refunded";
   bookingDate: string;
   specialRequests?: string;
   rejectionReason?: string;
 }
+// Thành viên trong đoàn khách - Khớp chuẩn với bảng booking_participants trong DATABASE_SCHEMA
+export interface GroupGuestMember {
+  id: number | string;
+  participantIndex: number; // participant_index: STT khách trong đoàn (1, 2, 3...)
+  fullName: string; // full_name: Họ và tên
+  gender?: "MALE" | "FEMALE" | "OTHER" | "male" | "female"; // gender: Giới tính
+  dateOfBirth?: string; // date_of_birth: Ngày sinh (YYYY-MM-DD)
+  identityCardNumber?: string; // identity_card_number: CCCD / CMND / Hộ chiếu
+  tierName?: string; // tier_name: Snapshot phân khúc đối tượng (Người lớn, Trẻ em 5-11 tuổi...)
+  roommateNote?: string; // roommate_note: Ghi chú muốn ở cùng với ai (VD: Ở chung phòng với STT 2, muốn ở phòng đơn riêng...)
+  dietaryNote?: string; // dietary_note: Yêu cầu ăn uống / Dị ứng thực phẩm
+  note?: string; // note: Ghi chú cá nhân (Ăn chay, dị ứng, say xe...)
+}
+
+// Group accommodation reservation & quotation request from Tour Agency to Service Provider
+export interface ProviderGroupReservationRequest {
+  id: string;
+  bookingCode: string; // e.g. "BK-8821", "TC-9901"
+  tourName: string; // e.g. "Tour Đà Lạt Romantic 3N2Đ - Đoàn FPT Telecom"
+  serviceId: string; // ID của dịch vụ khách sạn
+  serviceName: string; // Tên khách sạn/resort
+  providerId: string; // ID nhà cung cấp: "provider-1"
+  agencyId: string;
+  agencyName: string; // e.g. "Công ty Cổ phần Lữ hành Fiditour"
+  agencyLogo?: string;
+  agencyContactName: string; // e.g. "Phạm Trung Hiếu"
+  agencyPhone: string; // e.g. "0938 101 234"
+  agencyEmail: string; // e.g. "booking@fiditour.com"
+  checkInDate: string; // e.g. "2026-11-20"
+  checkOutDate: string; // e.g. "2026-11-22"
+  numberOfNights: number; // e.g. 2 đêm
+  numberOfGuests: number; // e.g. 16 khách
+  adultGuests: number; // e.g. 16
+  childGuests: number; // e.g. 0
+  numberOfRooms?: number; // Không bắt buộc - Provider xem danh sách khách để tự tính toán
+  roomTypeRequested?: string; // Hạng phòng gợi ý: "Phòng Deluxe / Superior"
+  passengers?: GroupGuestMember[]; // Danh sách toàn bộ đoàn khách & mong muốn xếp phòng
+  specialRequests?: string; // Ghi chú chung của Agency cho đoàn
+  status: "pending" | "confirmed" | "rejected" | "quoted" | "cancelled";
+  bookingId?: string;
+  serviceType?: "hotel" | "restaurant";
+  mealType?: "breakfast" | "lunch" | "dinner";
+  servingDate?: string;
+  serviceTime?: string;
+  menuName?: string;
+  dietaryNotes?: string;
+  cancelledBy?: string;
+  cancelledByName?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  responseType?: "quote" | "confirm";
+  quotedTotalPrice?: number; // Giá tổng cho toàn bộ đoàn khách do provider báo
+  providerNote?: string; // Ghi chú báo giá từ provider
+  rejectionReason?: string; // Lý do từ chối nếu không nhận
+  createdAt: string;
+  respondedAt?: string;
+}
+
 export interface CustomTourRequest {
   id: string;
   userId?: string;
@@ -752,4 +894,97 @@ export interface CustomTourRequest {
   // Multi-company co-hosting / B2B partnership
   isCoHosted?: boolean;
   coHosts?: TourCoHost[];
+}
+
+// ============================================================================
+// REFUND REQUESTS (Theo DATABASE_SCHEMA - Copy.md: Table refund_requests)
+// ============================================================================
+export type RefundReasonType =
+  | "CUSTOMER_REQUEST"
+  | "TOUR_CANCELLED"
+  | "SERVICE_QUALITY"
+  | "WEATHER_FORCE_MAJEURE"
+  | "DUPLICATE_PAYMENT"
+  | "OTHER";
+
+export type RefundStatus =
+  | "PENDING"
+  | "REVIEWING"
+  | "APPROVED"
+  | "REJECTED"
+  | "COMPLETED";
+
+export interface RefundRequest {
+  id: string;
+  bookingId: string;
+  bookingCode?: string;
+  tourId?: string;
+  tourName: string;
+  tourStartDate?: string;
+  requestedBy: string; // user id
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+
+  reason: RefundReasonType;
+  reasonDetail: string;
+  evidenceUrls?: string[];
+
+  // Tiền tệ theo quy định & chính sách hoàn hủy
+  originalPaidAmount: number;
+  approvedRefundAmount: number;
+  refundFee: number;
+  refundPercentage: number; // 100, 50, 0...
+
+  // Tài khoản ngân hàng nhận tiền hoàn
+  refundBankName: string;
+  refundAccountNumber: string;
+  refundAccountHolder: string;
+
+  // Trạng thái xử lý
+  status: RefundStatus;
+
+  reviewedBy?: string;
+  reviewerName?: string;
+  reviewNote?: string;
+  rejectionReason?: string;
+  bankTransactionCode?: string; // Mã tham chiếu ủy nhiệm chi / giao dịch ngân hàng
+
+  createdAt: string;
+  reviewedAt?: string;
+  completedAt?: string;
+}
+
+// ============================================================================
+// CUSTOMER COMPLAINTS (Khiếu nại của khách hàng gắn với Booking)
+// ============================================================================
+export type ComplaintStatus = "pending" | "processing" | "resolved" | "rejected";
+
+export interface ComplaintMessage {
+  id: string;
+  senderName: string;
+  senderRole: "customer" | "agency" | "admin";
+  content: string;
+  timestamp: string;
+}
+
+export interface CustomerComplaint {
+  id: string;
+  bookingId: string;
+  bookingCode: string;
+  tourName: string;
+  departureDate: string;
+  agencyName: string;
+  userId: string;
+  customerName: string;
+  customerPhone?: string;
+  title: string;
+  category: "service_quality" | "schedule_change" | "guide_attitude" | "accommodation_food" | "pricing_billing" | "other";
+  description?: string;
+  evidenceUrls?: string[];
+  status: ComplaintStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  resolutionNote?: string;
+  messages?: ComplaintMessage[];
 }

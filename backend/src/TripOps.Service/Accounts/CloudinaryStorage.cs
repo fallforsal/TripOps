@@ -4,8 +4,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 namespace TripOps.Service.Accounts;
-public sealed class CloudinaryStorage(HttpClient http, IConfiguration config)
+public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IHostEnvironment environment)
 {
     private string Setting(string key) => config[$"Cloudinary:{key}"] is { Length: > 0 } value ? value
         : throw new AccountException(503, "Chưa cấu hình Cloudinary trên server.");
@@ -21,6 +22,15 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config)
         var jpg = bytes.Length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
         if (bytes.Length > 5 * 1024 * 1024 || !(png && mime == "image/png" || jpg && mime == "image/jpeg"))
             throw new AccountException(400, "Chỉ nhận ảnh PNG/JPEG tối đa 5 MB.");
+        if (environment.IsDevelopment() && config.GetValue<bool>("Storage:UseLocal"))
+        {
+            if (!Regex.IsMatch(userId, @"^[a-zA-Z0-9-]{1,36}$")) throw new AccountException(400,"Invalid owner.");
+            var name = Guid.NewGuid().ToString("N") + (png ? ".png" : ".jpg");
+            var directory = Path.Combine(environment.ContentRootPath,"App_Data","uploads",folder,userId);
+            Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(Path.Combine(directory,name),bytes,ct);
+            return $"/api/v1/files/{folder}/{userId}/{name}";
+        }
         var cloud = Setting("CloudName"); var key = Setting("ApiKey"); var secret = Setting("ApiSecret");
         using var body = new MultipartFormDataContent();
         var file = new ByteArrayContent(bytes); file.Headers.ContentType = new MediaTypeHeaderValue(mime);
@@ -47,7 +57,7 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config)
     public string? DeliveryUrl(string? url)
     {
         if (url is null || !url.Contains("/image/authenticated/")) return url;
-        
+
         // Nếu URL đã có sẵn chữ ký hợp lệ (vd /image/authenticated/s--...--/) thì trả về luôn, không ký đè
         if (Regex.IsMatch(url, @"/image/authenticated/s--[^/]+--/"))
             return url;
