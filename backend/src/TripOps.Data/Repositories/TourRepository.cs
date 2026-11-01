@@ -47,7 +47,7 @@ public sealed class TourRepository(TripOpsDbContext db)
     }
 
     public Task<List<Entities.Service>> EligibleServices(int[] ids, CancellationToken ct) => db.Services.AsNoTracking()
-        .Where(s => ids.Contains(s.Id) && s.Status == ServiceStatus.Approved &&
+        .Where(s => ids.Contains(s.Id) && s.Status == ServiceStatus.Approved && !s.IsPaused &&
             s.Provider.Status == UserStatus.Active && s.Provider.Role == UserRole.Provider &&
             s.Provider.BusinessProfile != null && s.Provider.BusinessProfile.Status == BusinessProfileStatus.Approved)
         .ToListAsync(ct);
@@ -55,7 +55,7 @@ public sealed class TourRepository(TripOpsDbContext db)
     public async Task<(List<Entities.Service> Rows, int Total)> Catalogue(ServiceCategory? category,
         string? search, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Services.AsNoTracking().Where(s => s.Status == ServiceStatus.Approved &&
+        var query = db.Services.AsNoTracking().Where(s => s.Status == ServiceStatus.Approved && !s.IsPaused &&
             s.Provider.Status == UserStatus.Active && s.Provider.Role == UserRole.Provider &&
             s.Provider.BusinessProfile != null && s.Provider.BusinessProfile.Status == BusinessProfileStatus.Approved);
         if (category != null) query = query.Where(s => s.Category == category);

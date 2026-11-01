@@ -1,5 +1,6 @@
 import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
 import { uploadTourImage } from "@/app/services/wf02Tours";
+import { DeferredImageUploads } from "@/app/lib/deferredImageUploads";
 import { useState, useRef, useEffect } from "react";
 import {
   Tour,
@@ -1249,6 +1250,8 @@ export function TourFormPage(props: TourFormPageProps) {
             "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
           ];
   const [images, setImages] = useState<string[]>(initialImages);
+  const [imageDrafts] = useState(() => new DeferredImageUploads());
+  useEffect(() => () => imageDrafts.dispose(), [imageDrafts]);
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(0);
 
   // Operation period & Departure location
@@ -2876,26 +2879,29 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   // Handle local image file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (saving) return;
     const files = Array.from(e.target.files || []);
-    setSaving(true);
     setSaveError("");
     try {
-      const urls = await Promise.all(files.map(uploadTourImage));
+      const urls = imageDrafts.stage(files);
       setImages((prev) => [...prev, ...urls]);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Không thể tải ảnh");
-    } finally {
-      setSaving(false);
     }
+    e.target.value = "";
   };
 
   const removeImage = (idx: number) => {
+    if (saving) return;
     if (images.length <= 1) return;
     const updated = images.filter((_, i) => i !== idx);
+    imageDrafts.retain(updated);
     setImages(updated);
-    if (thumbnailIndex >= updated.length) {
+    if (thumbnailIndex === idx) {
       setThumbnailIndex(0);
+    } else if (thumbnailIndex > idx) {
+      setThumbnailIndex(thumbnailIndex - 1);
     }
   };
 
@@ -3186,6 +3192,7 @@ export function TourFormPage(props: TourFormPageProps) {
   const handleSubmit = async (
     mode: "draft" | "complete_hidden" | "complete_public" = "complete_public",
   ) => {
+    if (saving) return;
     const isDraft = mode === "draft";
     if (!isDraft && !name.trim()) {
       alert("Vui lòng nhập tên tour trước khi hoàn tất.");
@@ -3359,7 +3366,8 @@ export function TourFormPage(props: TourFormPageProps) {
     setSaving(true);
     setSaveError("");
     try {
-      await onSubmit(tourData);
+      const uploadedImages = await imageDrafts.resolve(images, uploadTourImage);
+      await onSubmit({ ...tourData, images: uploadedImages, image: uploadedImages[thumbnailIndex] || uploadedImages[0] || "" });
       onBack();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Không thể lưu tour");

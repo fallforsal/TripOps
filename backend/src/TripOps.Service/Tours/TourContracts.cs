@@ -54,7 +54,9 @@ public sealed record TourDto(int Id, string AgencyId, string? Code, string Statu
     DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration);
 public sealed record TourImageUploadResponse(string Url);
-public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price);
+public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
+    string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,
+    string? HiddenReason = null, string? ThumbnailUrl = null, string[]? Images = null, int? Capacity = null, bool IsPaused = false);
 public sealed record TourListItem(int Id, string Name, string? Destination, decimal BasePrice,
     string Status, string Visibility, int Version);
 public sealed record TourPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

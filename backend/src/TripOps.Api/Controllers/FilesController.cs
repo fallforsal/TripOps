@@ -23,6 +23,12 @@ public sealed class FilesController(IWebHostEnvironment environment) : Controlle
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Tour(string owner, string name) => Read("tours", owner, name);
 
+    [HttpGet("services/{owner}/{name}")]
+    [EndpointSummary("Read an uploaded public service image")]
+    [Produces("image/png", "image/jpeg")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult Service(string owner, string name) => Read("services", owner, name);
+
     [HttpGet("licenses/{owner}/{name}"), Authorize]
     [EndpointSummary("Read a business license as its owner or an Admin")]
     [Produces("image/png", "image/jpeg")]

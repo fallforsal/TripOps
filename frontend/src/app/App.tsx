@@ -1,7 +1,8 @@
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { toast } from "sonner";
-import { fetchCatalogue } from "@/app/services/catalogue";
+import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
+  approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
 import { ServiceCatalogueProvider } from "@/app/contexts/ServiceCatalogue";
 import { companyFromUser } from "@/app/services/authService";
 import {
@@ -265,10 +266,18 @@ function Application() {
   }, [apiError, authError, sessionError]);
 
   useEffect(() => {
-    fetchCatalogue()
-      .then(setServices)
-      .catch((e) => setApiError(e.message));
-  }, []);
+    let active = true;
+    setServices([]);
+    const load = () => {
+      if (currentUser?.role === "provider" && currentUser.businessProfile?.status !== "approved") return;
+      fetchServicePosts(currentUser?.role)
+        .then((items) => { if (active) setServices(items); })
+        .catch((e) => { if (active) setApiError(e.message); });
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => { active = false; window.removeEventListener("focus", load); };
+  }, [currentUser?.id, currentUser?.role, currentUser?.businessProfile?.status]);
   useEffect(() => {
     const error = (event: PromiseRejectionEvent) => {
       toast.error(
@@ -706,20 +715,33 @@ function Application() {
     setShowCreateServiceForm(true);
   };
 
-  const handleSubmitService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleSubmitService = async (data: Omit<Service, "id" | "status" | "createdAt">) => {
+    const created = await createServicePost({ ...data, status: "pending" });
+    setServices((previous) => [created, ...previous]);
+    toast.success("Đã gửi bài đăng lên máy chủ, đang chờ Admin duyệt.");
   };
 
   const handleEditService = (service: Service) => {
     setEditingService(service);
   };
 
-  const handleUpdateService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateService = async (id: string, data: Omit<Service, "id">) => {
+    const updated = await updateServicePost(id, data);
+    setServices((previous) => previous.map((item) => item.id === id ? updated : item));
+    toast.success(updated.status === "hidden" ? "Đã lưu. Bài đăng vẫn đang bị Admin tạm ẩn." : "Đã cập nhật và gửi bài đăng chờ duyệt lại.");
   };
 
-  const handleDeleteService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleServiceAvailability = async (id: string, isPaused: boolean) => {
+    const updated = await setServiceAvailability(id, isPaused);
+    setServices((previous) => previous.map((item) => item.id === id ? updated : item));
+    toast.success(isPaused ? "Đã tạm ngừng cung cấp dịch vụ." : updated.status === "approved"
+      ? "Đã mở cung cấp lại dịch vụ." : "Đã mở cung cấp lại. Bài đăng vẫn giữ trạng thái kiểm duyệt của Admin.");
+  };
+
+  const handleDeleteService = async (id: string) => {
+    await deleteServicePost(id);
+    setServices((previous) => previous.filter((item) => item.id !== id));
+    toast.success("Đã xóa bài đăng dịch vụ.");
   };
 
   const handleUpdateProviderProfile = (..._args: any[]) => {
@@ -727,16 +749,24 @@ function Application() {
   };
 
   // Service moderation actions (for Admin)
-  const handleApproveService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleApproveService = async (id: string) => {
+    const result = await approveServicePost(id);
+    setServices((previous) => previous.map((item) => item.id === id ? result.service : item));
+    toast.success(result.message);
   };
 
-  const handleToggleHideService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleToggleHideService = async (id: string, reason?: string) => {
+    const current = services.find((item) => item.id === id);
+    if (!current) throw new Error("Không tìm thấy bài đăng.");
+    const result = await toggleServicePost(id, current.status === "hidden" ? "unhide" : "hide", reason);
+    setServices((previous) => previous.map((item) => item.id === id ? result.service : item));
+    toast.success(result.message);
   };
 
-  const handleRejectService = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleRejectService = async (id: string, reason: string) => {
+    const result = await rejectServicePost(id, reason);
+    setServices((previous) => previous.map((item) => item.id === id ? result.service : item));
+    toast.success(result.message);
   };
 
   // Provider actions - Room bookings
@@ -1246,7 +1276,7 @@ function Application() {
               onApproveService={handleApproveService}
               onRejectService={handleRejectService}
               onToggleHideService={handleToggleHideService}
-              onDeleteService={handleDeleteService}
+              onDeleteService={undefined}
               onApproveProvider={handleApproveProvider}
               onRejectProvider={handleRejectProvider}
               onUpdateUserStatus={handleUpdateUserStatus}
@@ -1271,6 +1301,7 @@ function Application() {
               onDeleteService={handleDeleteService}
               onSubmitService={handleSubmitService}
               onUpdateService={handleUpdateService}
+              onSetAvailability={handleServiceAvailability}
               onUpdateProfile={handleUpdateProviderProfile}
               onLogout={handleLogout}
             />

@@ -451,3 +451,8 @@ FodyWeavers.xsd
 
 # Local development media
 backend/src/TripOps.Api/App_Data/
+
+# Local AI Agents / Skills
+.agents/
+.agents
+
