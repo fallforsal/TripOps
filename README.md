@@ -31,17 +31,16 @@ npm run dev
 
 ## Tài khoản test
 
-Mật khẩu chung: **TripOps@123**.
+Mật khẩu chung: **12345678**.
 
 | Vai trò | Email |
 |---|---|
 | Admin | admin@tripops.test |
 | Agency | agency@tripops.test |
 | Provider | provider@tripops.test |
-| Hướng dẫn viên | guide@tripops.test |
 | Khách hàng | customer@tripops.test |
 
-Agency và Provider mẫu đã duyệt; HDV mẫu thuộc Agency mẫu. Có 3 dịch vụ Provider và tour Đà Lạt 3 ngày 2 đêm. Kiểm tra API có thể tạo thêm booking/hồ sơ thử nghiệm.
+Chỉ giữ 4 tài khoản trên; Agency và Provider đã duyệt. Có 1 dịch vụ khách sạn và 1 tour Đà Lạt 3 ngày 2 đêm. Không có tài khoản HDV, booking hay giao dịch test. Tour mẫu chỉ cấu hình dịch vụ lưu trú vì dữ liệu hiện chỉ có 1 service khách sạn.
 
 ## Các luồng có API thật
 
@@ -76,7 +75,7 @@ Trên database trống:
 dotnet run --project backend/src/TripOps.Api --launch-profile http -- --SeedDemo true
 ```
 
-Lệnh tạo schema qua migration khởi tạo mới rồi nạp demo; yêu cầu database chưa có người dùng. Không chạy lại seed trên database đang sử dụng và không dùng migration cũ để nâng cấp schema trước.
+Lệnh tạo schema qua migration khởi tạo mới rồi nạp demo; yêu cầu database chưa có người dùng. Không chạy lại seed trên database đang sử dụng và không dùng migration cũ để nâng cấp schema trước. Cờ `--ClearDemoData true` sẽ xóa dữ liệu nghiệp vụ và nạp lại bộ mẫu tối giản; chỉ dùng khi chủ động muốn dọn toàn bộ dữ liệu.
 
 ## Kiểm tra
 
