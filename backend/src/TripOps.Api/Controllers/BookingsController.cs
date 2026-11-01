@@ -84,6 +84,12 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AssignGuide(int id, GuideAssignmentRequest request, CancellationToken ct) =>
         Ok(await bookings.AssignGuide(Actor, id, request, ct));
+
+    [HttpPost("{id:int}/proposals")]
+    [EndpointSummary("Agency sends a new proposal for the booking")]
+    [ProducesResponseType<BookingSnapshotDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CreateProposal(int id, CreateProposalRequest request, CancellationToken ct) =>
+        Ok(await bookings.CreateProposal(Actor, id, request, ct));
 }
 
 [ApiController, Authorize(Roles = "guide"), Route("api/v1/guide/bookings")]

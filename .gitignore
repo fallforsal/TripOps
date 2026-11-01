@@ -291,6 +291,7 @@ ServiceFabricBackup/
 *.mdf
 *.ldf
 *.ndf
+*.bak
 
 # Business Intelligence projects
 *.rdl.data
@@ -455,4 +456,3 @@ backend/src/TripOps.Api/App_Data/
 # Local AI Agents / Skills
 .agents/
 .agents
-

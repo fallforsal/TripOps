@@ -30,4 +30,3 @@ public class AgencySupplier : BaseEntity<int>
     public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual User Agency { get; set; } = null!;
 }
-

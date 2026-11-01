@@ -7,32 +7,70 @@ import type {
 } from "../types/index.ts";
 import type { BookingDto } from "./wf05Bookings.ts";
 
+function toList(val: unknown): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  if (typeof val === "string") {
+    return val
+      .split(/\r?\n|•|-|\*/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function toText(val: unknown): string | undefined {
+  if (!val) return undefined;
+  if (typeof val === "string") return val.trim() || undefined;
+  if (Array.isArray(val)) return val.join("\n").trim() || undefined;
+  return String(val);
+}
+
 export function fromApiBooking(
   dto: BookingDto,
   tours: Tour[] = [],
   currentUser?: User | null,
 ): Booking {
   const matchedTour = tours.find((t) => String(t.id) === String(dto.tourId));
+
+  // Determine active snapshot: agreed -> proposal -> initial_request
+  const activeSnapshot =
+    dto.agreedSnapshot || dto.latestProposal || dto.initialRequestSnapshot;
+  const snap = activeSnapshot?.snapshotData;
+
+  const tourName =
+    snap?.tourName || dto.tourName || matchedTour?.name || "Tour Du Lịch";
+  const tourCode =
+    snap?.tourCode || matchedTour?.tourCode || `TRIP-${dto.tourId || "0"}`;
+
+  const numDays =
+    dto.snapshotDays?.length ||
+    snap?.itinerary?.length ||
+    Math.max(
+      1,
+      Math.round((Date.parse(dto.endDate) - Date.parse(dto.startDate)) / 86400000) + 1,
+    );
+
   const fallbackTour: Tour = {
     id: String(dto.tourId || "0"),
-    tourCode: `TRIP-${dto.tourId || "0"}`,
-    name: dto.tourName || "Tour Du Lịch",
-    description: "",
-    destination: "",
-    duration: `${Math.max(1, Math.round((Date.parse(dto.endDate) - Date.parse(dto.startDate)) / 86400000) + 1)} ngày`,
-    image: "",
-    rating: 0,
-    minGuests: 1,
-    price: dto.totalAmount,
-    maxGuests: dto.totalGuests || 10,
-    images: [],
+    tourCode: tourCode,
+    name: tourName,
+    description: matchedTour?.description || "",
+    destination: snap?.destination || matchedTour?.destination || "",
+    duration: `${numDays} ngày`,
+    image: matchedTour?.image || "",
+    rating: matchedTour?.rating || 0,
+    minGuests: snap?.minGuests ?? 1,
+    price: snap?.basePrice ?? dto.totalAmount,
+    maxGuests: snap?.maxGuests ?? dto.totalGuests,
+    images: matchedTour?.images || [],
     status: "completed",
-    companyId: dto.agencyId || "",
-    companyName: dto.agencyName || "TripOps Partner",
+    companyId: dto.agencyId || matchedTour?.companyId || "",
+    companyName: dto.agencyName || matchedTour?.companyName || "TripOps Partner",
     itinerary: [],
-    inclusions: [],
-    exclusions: [],
-    highlights: [],
+    inclusions: snap ? toList(snap.inclusions) : (matchedTour?.inclusions ?? []),
+    exclusions: snap ? toList(snap.exclusions) : (matchedTour?.exclusions ?? []),
+    highlights: matchedTour?.highlights || [],
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt || dto.createdAt,
   };
@@ -94,11 +132,23 @@ export function fromApiBooking(
     id: String(dto.id),
     bookingCode: dto.bookingCode,
     tourId: String(dto.tourId || "0"),
-    tour: dto.snapshotDays?.length
-      ? {
-          ...(matchedTour || fallbackTour),
-          numberOfDays: dto.snapshotDays.length,
-          itinerary: dto.snapshotDays.map((d) => ({
+    agreedSnapshot: dto.agreedSnapshot,
+    latestProposal: dto.latestProposal,
+    initialRequestSnapshot: dto.initialRequestSnapshot,
+    snapshotStatus: dto.snapshotStatus,
+    effectiveSnapshotVersion: dto.effectiveSnapshotVersion,
+    cancellationPolicy: snap?.cancellationPolicy,
+    inclusions: toText(snap?.inclusions),
+    exclusions: toText(snap?.exclusions),
+    tour: {
+      ...fallbackTour,
+      // Strictly visual extras from catalog tour
+      image: matchedTour?.image || "",
+      images: matchedTour?.images || [],
+      rating: matchedTour?.rating || 0,
+      numberOfDays: numDays,
+      itinerary: dto.snapshotDays?.length
+        ? dto.snapshotDays.map((d) => ({
             id: String(d.id),
             day: d.dayNumber,
             date: new Date(
@@ -122,8 +172,36 @@ export function fromApiBooking(
               serviceId: m.serviceId ? String(m.serviceId) : undefined,
               time: m.time?.slice(11, 16),
             })),
-          })),
-          hotels: (dto.snapshotHotels || []).map((h) => ({
+          }))
+        : snap?.itinerary?.length
+          ? snap.itinerary.map((d, index) => ({
+              id: `snap-day-${index + 1}`,
+              day: d.dayNumber || index + 1,
+              date: new Date(
+                Date.parse(dto.startDate) + index * 86400000,
+              )
+                .toISOString()
+                .slice(0, 10),
+              title: d.title,
+              description: d.description || "",
+              locations: (d.locations || []).map((l, lIdx) => ({
+                id: `snap-loc-${index + 1}-${lIdx}`,
+                name: l.name,
+                address: "",
+                time: l.time,
+                checkedIn: false,
+              })),
+              meals: (d.meals || []).map((m, mIdx) => ({
+                id: `snap-meal-${index + 1}-${mIdx}`,
+                type: m.mealType,
+                serviceName: m.name,
+                serviceId: m.serviceId ? String(m.serviceId) : undefined,
+                time: m.time,
+              })),
+            }))
+          : matchedTour?.itinerary || [],
+      hotels: dto.snapshotHotels?.length
+        ? (dto.snapshotHotels || []).map((h) => ({
             id: String(h.id),
             name: h.name,
             destination: h.destination,
@@ -131,9 +209,19 @@ export function fromApiBooking(
             nights: h.nights,
             pricePerNight: 0,
             serviceId: h.serviceId ? String(h.serviceId) : undefined,
-          })),
-        }
-      : matchedTour || fallbackTour,
+          }))
+        : snap?.hotels?.length
+          ? snap.hotels.map((h, hIdx) => ({
+              id: `snap-hotel-${hIdx}`,
+              name: h.name,
+              destination: h.destination,
+              stars: h.stars || 3,
+              nights: h.nights,
+              pricePerNight: 0,
+              serviceId: h.serviceId ? String(h.serviceId) : undefined,
+            }))
+          : matchedTour?.hotels || [],
+    },
     userId: dto.customerId || currentUser?.id || "",
     userName: dto.customerName || currentUser?.name || "",
     userEmail: dto.contactEmail || currentUser?.email || "",

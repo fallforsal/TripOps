@@ -52,4 +52,3 @@ namespace TripOps.Data.Migrations
         }
     }
 }
-

@@ -17,4 +17,3 @@ public static class SupplierSources
     public static string Resolve(string? source, int? serviceId) =>
         Normalize(source) ?? (serviceId.HasValue ? PlatformPartner : AgencySupplier);
 }
-

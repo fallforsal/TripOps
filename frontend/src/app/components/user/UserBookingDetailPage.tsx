@@ -51,8 +51,11 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
+import type { BookingDto } from "@/app/services/wf05Bookings";
 
 interface UserBookingDetailPageProps {
+  onSnapshotUpdated?: (updated: BookingDto) => void;
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
   booking: Booking;
   systemBank?: SystemBankAccount;
@@ -133,6 +136,7 @@ export function UserBookingDetailPage({
   onNavigateToComplaint,
   onNavigateToReview,
   onSubmitRefundRequest,
+  onSnapshotUpdated,
 }: UserBookingDetailPageProps) {
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -460,6 +464,13 @@ export function UserBookingDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Booking Snapshot & Versioning Panel */}
+        <BookingSnapshotPanel
+          booking={booking}
+          currentUserRole="customer"
+          onSnapshotUpdated={onSnapshotUpdated}
+        />
 
         {/* 2-Columns Main Layout (Similar to Company Booking Detail Page) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
