@@ -61,6 +61,7 @@ export interface GuideAssignedTourItem {
  */
 export interface AgencyGuideProfile extends User {
   guideType: "domestic" | "international";
+  password?: string;
   licenseNumber: string;
   licenseExpiryDate: string; // YYYY-MM-DD
   issuingAuthority?: string;
@@ -427,8 +428,6 @@ export function deriveGuideWorkInfo(
     .filter((a) => a.status === "completed")
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
-  const licenseCheck = evaluateLicenseExpiry(guide.licenseExpiryDate);
-
   if (activeAssignment) {
     return {
       workStatus: "on_tour",
@@ -443,39 +442,11 @@ export function deriveGuideWorkInfo(
     };
   }
 
-  if (guide.mobileAccountStatus === "suspended") {
+  if (guide.mobileAccountStatus === "suspended" || guide.guideStatus === "inactive") {
     return {
       workStatus: "unavailable",
       workLabel: "Ngừng phân công",
       workSubLabel: "Do tài khoản đang tạm khóa",
-      activeAssignment: null,
-      upcomingAssignments,
-      completedAssignments,
-    };
-  }
-
-  if (licenseCheck.status === "expired") {
-    return {
-      workStatus: "unavailable",
-      workLabel: "Ngừng phân công",
-      workSubLabel: "Do thẻ HDV đã hết hạn",
-      activeAssignment: null,
-      upcomingAssignments,
-      completedAssignments,
-    };
-  }
-
-  if (
-    guide.mobileAccountStatus === "not_invited" ||
-    guide.mobileAccountStatus === "pending_activation"
-  ) {
-    return {
-      workStatus: "unavailable",
-      workLabel: "Chờ kích hoạt App",
-      workSubLabel:
-        guide.mobileAccountStatus === "not_invited"
-          ? "Chưa gửi email kích hoạt"
-          : "Chờ HDV đặt mật khẩu",
       activeAssignment: null,
       upcomingAssignments,
       completedAssignments,
@@ -487,8 +458,8 @@ export function deriveGuideWorkInfo(
     workLabel: "Sẵn sàng",
     workSubLabel:
       upcomingAssignments.length > 0
-        ? `Có ${upcomingAssignments.length} lịch sắp khởi hành`
-        : "Đủ điều kiện nhận đoàn ngay",
+        ? `Có ${upcomingAssignments.length} lịch sắp tới`
+        : "Sẵn sàng nhận đoàn ngay",
     activeAssignment: null,
     upcomingAssignments,
     completedAssignments,
@@ -619,7 +590,7 @@ export function createSeedAgencyGuides(
       ],
       experienceYears: 5,
       guideStatus: "active",
-      mobileAccountStatus: "pending_activation",
+      mobileAccountStatus: "active",
       invitationSentAt: formatRelativeDateTimeISO(-5),
       invitationExpiresAt: formatRelativeDateTimeISO(43),
       invitationCount: 1,
@@ -644,7 +615,7 @@ export function createSeedAgencyGuides(
       specialties: ["Tour gia đình & Người cao tuổi", "Ẩm thực & Nghỉ dưỡng cao cấp"],
       experienceYears: 2,
       guideStatus: "active",
-      mobileAccountStatus: "not_invited",
+      mobileAccountStatus: "active",
       invitationCount: 0,
       bio: "Nhân sự mới hoàn tất hồ sơ tại phòng điều hành, chờ cấp quyền đăng nhập ứng dụng Tour Guide.",
       avatar:
