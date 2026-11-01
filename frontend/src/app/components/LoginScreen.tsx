@@ -56,27 +56,21 @@ export function LoginScreen({
   const demoAccounts = [
     {
       role: "Khách hàng cá nhân / Đoàn B2B",
-      name: "Tập đoàn FPT",
+      name: "TripOps Customer",
       email: "customer@tripops.test",
       badge: "Customer",
     },
     {
       role: "Doanh nghiệp lữ hành (Agency)",
-      name: "Viettravel",
+      name: "TripOps Travel",
       email: "agency@tripops.test",
       badge: "Agency",
     },
     {
       role: "Nhà cung cấp (Provider)",
-      name: "Heritage Resorts Đà Lạt",
+      name: "TripOps Hospitality",
       email: "provider@tripops.test",
       badge: "Provider",
-    },
-    {
-      role: "Hướng dẫn viên (Guide)",
-      name: "Trần Thị Bích",
-      email: "guide@tripops.test",
-      badge: "Guide",
     },
     {
       role: "Quản trị viên sàn (Admin)",
@@ -259,7 +253,7 @@ export function LoginScreen({
           <div className="pt-4 border-t border-[#F1F5F9] space-y-2">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#475569]">
               <Info className="w-3.5 h-3.5 text-[#075985]" />
-              <span>Tài khoản kiểm thử — mật khẩu: <code className="text-[#075985] font-mono font-bold">TripOps@123</code></span>
+              <span>Tài khoản kiểm thử — mật khẩu: <code className="text-[#075985] font-mono font-bold">12345678</code></span>
             </div>
 
             <div className="space-y-1.5">
@@ -269,7 +263,7 @@ export function LoginScreen({
                   type="button"
                   onClick={() => {
                     setEmail(acc.email);
-                    setPassword("TripOps@123");
+                    setPassword("12345678");
                   }}
                   className="w-full text-left px-2.5 py-1.5 bg-[#F8FAFC] hover:bg-[#F0F9FF] border border-[#CBD5E1] rounded-[4px] transition-colors flex items-center justify-between text-xs"
                 >
