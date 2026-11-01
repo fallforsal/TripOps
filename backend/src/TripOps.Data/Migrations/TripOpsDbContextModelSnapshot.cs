@@ -112,6 +112,103 @@ namespace TripOps.Data.Migrations
                     b.ToTable("agency_subscriptions", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.AgencySupplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("AgencyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
+                    b.Property<string>("Area")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("area");
+
+                    b.Property<string>("Conditions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("conditions");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(191)
+                        .HasColumnType("nvarchar(191)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("notes");
+
+                    b.Property<decimal?>("ReferencePrice")
+                        .HasColumnType("decimal(12, 2)")
+                        .HasColumnName("reference_price");
+
+                    b.Property<int?>("StarRating")
+                        .HasColumnType("int")
+                        .HasColumnName("star_rating");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SupplierType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_type");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId", "SupplierType", "Name");
+
+                    b.HasIndex("AgencyId", "SupplierType", "Status");
+
+                    b.ToTable("agency_suppliers", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.Booking", b =>
                 {
                     b.Property<int>("Id")
@@ -1827,9 +1924,24 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
+                    b.Property<string>("FullAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("full_address");
+
+                    b.Property<string>("HiddenReason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("hidden_reason");
+
                     b.Property<string>("Images")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("images");
+
+                    b.Property<bool>("IsPaused")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_paused");
 
                     b.Property<decimal?>("Latitude")
                         .HasColumnType("decimal(10, 8)")
@@ -1844,6 +1956,11 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("name");
+
+                    b.Property<string>("OperatingHours")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("operating_hours");
 
                     b.Property<string>("Policies")
                         .HasColumnType("nvarchar(max)")
@@ -1900,6 +2017,11 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("street");
+
+                    b.Property<string>("SubCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("sub_category");
 
                     b.Property<string>("ThumbnailUrl")
                         .IsRequired()
@@ -2381,6 +2503,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<int?>("AgencySupplierId")
+                        .HasColumnType("int")
+                        .HasColumnName("agency_supplier_id");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -2427,6 +2553,15 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValue(3)
                         .HasColumnName("star_rating");
 
+                    b.Property<string>("SupplierSnapshot")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("supplier_snapshot");
+
+                    b.Property<string>("SupplierSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_source");
+
                     b.Property<int>("TourId")
                         .HasColumnType("int")
                         .HasColumnName("tour_id");
@@ -2440,6 +2575,8 @@ namespace TripOps.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
+
+                    b.HasIndex("AgencySupplierId");
 
                     b.HasIndex("ServiceId");
 
@@ -2627,6 +2764,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<int?>("AgencySupplierId")
+                        .HasColumnType("int")
+                        .HasColumnName("agency_supplier_id");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -2665,6 +2806,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("service_id");
 
+                    b.Property<string>("SupplierSnapshot")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("supplier_snapshot");
+
+                    b.Property<string>("SupplierSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_source");
+
                     b.Property<DateTime?>("Time")
                         .HasColumnType("datetime2")
                         .HasColumnName("time");
@@ -2682,6 +2832,8 @@ namespace TripOps.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
+
+                    b.HasIndex("AgencySupplierId");
 
                     b.HasIndex("ServiceId");
 
@@ -2739,6 +2891,41 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("TourId");
 
                     b.ToTable("tour_pricing_tiers", (string)null);
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.TourProvince", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("ProvinceCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("province_code");
+
+                    b.Property<int>("TourId")
+                        .HasColumnType("int")
+                        .HasColumnName("tour_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProvinceCode", "TourId");
+
+                    b.HasIndex("TourId", "ProvinceCode")
+                        .IsUnique();
+
+                    b.ToTable("tour_provinces", (string)null);
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.TourTimeline", b =>
@@ -2963,6 +3150,17 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Agency");
 
                     b.Navigation("SubscriptionPlan");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.AgencySupplier", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.Booking", b =>
@@ -3528,6 +3726,11 @@ namespace TripOps.Data.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TripOps.Data.Entities.AgencySupplier", null)
+                        .WithMany()
+                        .HasForeignKey("AgencySupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TripOps.Data.Entities.Service", null)
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -3583,6 +3786,11 @@ namespace TripOps.Data.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TripOps.Data.Entities.AgencySupplier", null)
+                        .WithMany()
+                        .HasForeignKey("AgencySupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TripOps.Data.Entities.Service", null)
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -3607,6 +3815,17 @@ namespace TripOps.Data.Migrations
 
                     b.HasOne("TripOps.Data.Entities.Tour", "Tour")
                         .WithMany("PricingTiers")
+                        .HasForeignKey("TourId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tour");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.TourProvince", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.Tour", "Tour")
+                        .WithMany("Provinces")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -3720,6 +3939,8 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Accommodations");
 
                     b.Navigation("PricingTiers");
+
+                    b.Navigation("Provinces");
 
                     b.Navigation("Timelines");
 

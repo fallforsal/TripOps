@@ -16,6 +16,7 @@ import { PageHeader } from "@/app/components/customer/PageHeader";
 import { EmptyState } from "@/app/components/customer/EmptyState";
 import { Button } from "@/app/components/ui/button";
 import { matchesTourSearch, normalizeDestination, type TourSearchCriteria } from "@/app/components/customer/tour-search";
+import { VIETNAM_PROVINCES, getProvinceName } from "@/app/data/vietnamProvinces";
 
 interface BookToursPageProps {
   initialSearch?: TourSearchCriteria;
@@ -171,11 +172,20 @@ export function BookToursPage({
         const matchName = normalizeDestination(tour.name).includes(term);
         const matchDest = normalizeDestination(tour.destination).includes(term);
         const matchCompany = normalizeDestination(tour.companyName || "").includes(term);
-        if (!matchName && !matchDest && !matchCompany) return false;
+        const matchProvince = (tour.provinceCodes || []).some(
+          (code) =>
+            code.toLowerCase().includes(term) ||
+            normalizeDestination(getProvinceName(code)).includes(term),
+        );
+        if (!matchName && !matchDest && !matchCompany && !matchProvince) return false;
       }
 
       // Destination filter
-      if (selectedDestination !== "all" && tour.destination !== selectedDestination) {
+      if (
+        selectedDestination !== "all" &&
+        !(tour.provinceCodes || []).includes(selectedDestination) &&
+        tour.destination !== selectedDestination
+      ) {
         return false;
       }
 
@@ -317,7 +327,7 @@ export function BookToursPage({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[#F1F5F9]">
           {/* Destination */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#475569]">Điểm đến</label>
+            <label className="text-xs font-semibold text-[#475569]">Tỉnh/thành &amp; Điểm đến</label>
             <select
               value={selectedDestination}
               onChange={(e) => {
@@ -326,7 +336,12 @@ export function BookToursPage({
               }}
               className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
             >
-              <option value="all">Tất cả điểm đến</option>
+              <option value="all">Tất cả tỉnh/thành</option>
+              {VIETNAM_PROVINCES.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.name}
+                </option>
+              ))}
               {destinations.map((d) => (
                 <option key={d} value={d}>
                   {d}
@@ -402,7 +417,7 @@ export function BookToursPage({
 
               {selectedDestination !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F0F9FF] border border-[#BAE6FD] text-[#075985] text-xs rounded-[4px]">
-                  Điểm đến: {selectedDestination}
+                  Địa bàn: {getProvinceName(selectedDestination)}
                   <button onClick={() => setSelectedDestination("all")}>
                     <X className="w-3 h-3 text-[#075985] hover:text-[#0C4A6E]" />
                   </button>

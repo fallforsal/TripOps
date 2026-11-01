@@ -18,6 +18,7 @@ import {
   Compass,
   FileText,
   RotateCcw,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -27,6 +28,7 @@ interface AdminLayoutProps {
   onLogout?: () => void;
   pendingToursCount?: number;
   pendingRefundsCount?: number;
+  pendingServicesCount?: number;
 }
 
 export function AdminLayout({
@@ -36,6 +38,7 @@ export function AdminLayout({
   onLogout,
   pendingToursCount = 0,
   pendingRefundsCount = 0,
+  pendingServicesCount = 0,
 }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,9 +55,16 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
+      id: "service-approvals",
+      label: "Phê duyệt Bài đăng",
+      icon: ClipboardCheck,
+      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
+    },
+    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
+      badge: pendingToursCount > 0 ? pendingToursCount : undefined,
     },
     {
       id: "approve-posts",

@@ -2,7 +2,7 @@
 
 Nền tảng tour đoàn dùng React/TypeScript/Vite, ASP.NET Core .NET 10, EF Core và SQL Server.
 
-Bản dựng lại ngày 01/11/2026 sử dụng UI từ `D:/SEP/TripOps_FE_new`. Schema chuẩn là [backend/database.dbml](backend/database.dbml): **36 bảng, 453 cột**. Database cũ đã được reset theo yêu cầu; chỉ còn migration khởi tạo `InitialSchema`, không nâng cấp dữ liệu từ schema trước.
+Bản dựng lại ngày 01/11/2026 sử dụng UI từ `D:/SEP/TripOps_FE_new`. Schema chuẩn là [backend/database.dbml](backend/database.dbml): **36 bảng, 458 cột**. Database cũ đã được reset theo yêu cầu với migration khởi tạo `InitialSchema`; `AddServiceMetadata` bổ sung 4 cột nullable và `AddServiceAvailability` thêm cờ Provider tạm ngừng cung cấp, giữ nguyên dữ liệu hiện có.
 
 ## Chạy dự án
 
@@ -55,15 +55,25 @@ Chỉ giữ 4 tài khoản trên; Agency và Provider đã duyệt. Có 1 dịch
 
 ## Upload và thanh toán Development
 
-`Storage:UseLocal` được bật trong `appsettings.Development.json`. Ảnh lưu ở `backend/src/TripOps.Api/App_Data/uploads`, đã Git ignore. Ảnh tour công khai; giấy phép chỉ chủ hồ sơ và Admin đọc được qua API.
+`Storage:UseLocal=false` trong `appsettings.Development.json`: ảnh mới được lưu trên Cloudinary. Khi chọn file ở form dịch vụ/tour, FE tạo preview local trong trình duyệt; chỉ khi bấm Lưu/Gửi duyệt mới upload qua BE rồi ghi URL Cloudinary vào SQL. Nếu lưu lỗi, form giữ nguyên nội dung và tái sử dụng các ảnh đã upload thành công khi thử lại.
 
-Khi dùng Cloudinary, tắt `Storage:UseLocal` và đặt `Cloudinary:CloudName`, `Cloudinary:ApiKey`, `Cloudinary:ApiSecret` bằng user secrets/biến môi trường. Không đưa khóa vào Git. Chế độ lưu cục bộ chỉ hoạt động trong Development.
+Đặt `Cloudinary:CloudName`, `Cloudinary:ApiKey`, `Cloudinary:ApiSecret` bằng user secrets/biến môi trường rồi khởi động lại BE. Không đưa khóa vào Git hoặc FE. Từ thư mục gốc:
+
+```powershell
+dotnet user-secrets set "Cloudinary:CloudName" "<cloud-name>" --project backend/src/TripOps.Api
+dotnet user-secrets set "Cloudinary:ApiKey" "<api-key>" --project backend/src/TripOps.Api
+dotnet user-secrets set "Cloudinary:ApiSecret" "<api-secret>" --project backend/src/TripOps.Api
+```
+
+Ảnh cũ trong `backend/src/TripOps.Api/App_Data/uploads` vẫn đọc được qua đường dẫn đã lưu; giữ thư mục này cho đến khi chuyển ảnh cũ sang Cloudinary. Việc đổi cấu hình không tự chuyển hay xóa các ảnh cũ. Giấy phép mới dùng chế độ authenticated của Cloudinary. API upload trả `503` nếu thiếu cấu hình Cloudinary.
 
 Thanh toán là **mô phỏng Development**: ghi transaction `DEMO`, cập nhật tiền cọc/trạng thái; không thực hiện hoặc xác minh chuyển khoản ngân hàng. Endpoint mô phỏng bị chặn trong Production.
 
 ## Phạm vi còn lại
 
-UI mới được giữ, nhưng thao tác chưa có API trong đợt này báo chưa hỗ trợ thay vì ghi giả bằng setState: Provider tự quản lý/báo giá đoàn, thiết kế tour riêng, đồng tổ chức đầy đủ, hoàn tiền/quyết toán, chat/khiếu nại/đánh giá và AI.
+Provider đã có API tạo/sửa/xóa, tải ảnh và xem bài của mình tại `/api/v1/provider/services`; Admin có 5 API danh sách, chi tiết, duyệt, từ chối và ẩn/mở lại tại `/api/v1/admin/services`. FE đã nối các API này; xem [hướng dẫn Service Moderation](backend/docs/service-moderation.md).
+
+UI mới được giữ, nhưng thao tác chưa có API trong đợt này báo chưa hỗ trợ thay vì ghi giả bằng setState: Provider báo giá đoàn, thiết kế tour riêng, đồng tổ chức đầy đủ, hoàn tiền/quyết toán, chat/khiếu nại/đánh giá và AI.
 
 Sửa hành khách sau đặt hỗ trợ hồ sơ/ghi chú của danh sách đã chốt. Thêm/bớt khách hoặc đổi ngày sinh cần luồng chốt lại giá riêng. Chưa có API quản lý đầy đủ nghề nghiệp HDV; gán HDV dùng tài khoản HDV thuộc Agency trong database.
 

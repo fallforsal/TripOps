@@ -49,10 +49,18 @@ public sealed class DatabaseDesignSchemaTests
             Assert.True(actual.IsNullable == !required, $"NULL contract differs: {tableName}.{name}");
             columnCount++;
         }
-        Assert.Equal(37, tableCount);
-        Assert.Equal(463, columnCount);
+        Assert.Equal(39, tableCount);
+        Assert.Equal(494, columnCount);
         Assert.Equal(tableCount, tables.Count);
         Assert.Equal(columnCount, tables.Values.Sum(t => t.Columns.Count()));
+    }
+
+    [Fact]
+    public void Merged_migration_snapshot_matches_current_model()
+    {
+        using var db = new TripOpsDbContext(new DbContextOptionsBuilder<TripOpsDbContext>()
+            .UseSqlServer("Server=.;Database=SchemaContract;Integrated Security=True").Options);
+        Assert.False(db.Database.HasPendingModelChanges(), "Merged migration snapshot is missing model changes.");
     }
 
     [Fact]

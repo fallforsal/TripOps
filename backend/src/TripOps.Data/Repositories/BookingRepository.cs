@@ -115,7 +115,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
-    public Task<int> EligibleServiceCount(int[] ids,CancellationToken ct)=>db.Services.CountAsync(s=>ids.Contains(s.Id)&&s.Status==ServiceStatus.Approved&&s.Provider.Status==UserStatus.Active&&s.Provider.BusinessProfile!=null&&s.Provider.BusinessProfile.Status==BusinessProfileStatus.Approved,ct);
+    public Task<int> EligibleServiceCount(int[] ids,CancellationToken ct)=>db.Services.CountAsync(s=>ids.Contains(s.Id)&&s.Status==ServiceStatus.Approved&&!s.IsPaused&&s.Provider.Status==UserStatus.Active&&s.Provider.BusinessProfile!=null&&s.Provider.BusinessProfile.Status==BusinessProfileStatus.Approved,ct);
 
     public Task<User?> FindUser(string userId, CancellationToken ct) =>
         db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);

@@ -12,6 +12,7 @@ import { AdminLayout } from "./AdminLayout";
 import { AdminDashboardOverview } from "./AdminDashboardOverview";
 import { AdminFinancialManagement } from "./AdminFinancialManagement";
 import { ServicePostApproval } from "./ServicePostApproval";
+import { AdminServiceApprovalPage } from "./AdminServiceApprovalPage";
 import { ProviderManagement } from "./ProviderManagement";
 import { UserManagement } from "./UserManagement";
 import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
@@ -162,6 +163,15 @@ export function AdminDashboard({
           />
         );
 
+      case "service-approvals":
+        return (
+          <AdminServiceApprovalPage
+            services={services}
+            onApproveService={onApproveService || (() => {})}
+            onRejectService={onRejectService || (() => {})}
+          />
+        );
+
       case "services":
       case "approve-posts":
         return (
@@ -169,8 +179,6 @@ export function AdminDashboard({
             services={services}
             onToggleHideService={onToggleHideService}
             onDeleteService={onDeleteService}
-            onApproveService={onApproveService || (() => {})}
-            onRejectService={onRejectService || (() => {})}
           />
         );
       case "providers":
@@ -201,6 +209,7 @@ export function AdminDashboard({
       onLogout={onLogout}
       pendingToursCount={pendingToursCount}
       pendingRefundsCount={refundRequests.filter((r) => r.status === "PENDING").length}
+      pendingServicesCount={services.filter((s) => s.status === "pending").length}
     >
       {renderContent()}
     </AdminLayout>

@@ -42,6 +42,9 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<TourDesignRequest>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<TourDesignRequest>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<TourVersion>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
+        modelBuilder.Entity<TourProvince>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
+        modelBuilder.Entity<AgencySupplier>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
+        modelBuilder.Entity<AgencySupplier>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.IsHost).HasDefaultValue(false);
         modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.Status).HasDefaultValue("PENDING");
         modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.AssignedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");

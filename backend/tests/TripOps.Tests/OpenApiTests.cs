@@ -28,8 +28,8 @@ public sealed class OpenApiTests
         var descriptions = app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items.SelectMany(g => g.Items).ToArray();
         var expected = descriptions.Select(d => $"{d.HttpMethod!.ToLowerInvariant()} /{d.RelativePath}").Order().ToArray();
         Assert.Equal(expected, operations.Select(o => $"{o.Method} {o.Path}").Order().ToArray());
-        Assert.Equal(58, operations.Length);
-        Assert.Equal(48, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
+        Assert.Equal(75, operations.Length);
+        Assert.Equal(65, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
             !o.Path.StartsWith("/api/v1/admin/partner-applications") && o.Path != "/api/v1/health"));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/images" && o.Method == "post");
@@ -39,7 +39,11 @@ public sealed class OpenApiTests
         foreach (var action in new[] { "submit", "approve", "reject" }) Assert.DoesNotContain(operations, o =>
             (o.Path.StartsWith("/api/v1/agency/tours/") || o.Path.StartsWith("/api/v1/admin/tours/")) && o.Path.EndsWith($"/{{id}}/{action}"));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/{id}/versions/{number}/restore");
-        Assert.DoesNotContain(operations, o => o.Path.Contains("provider/services") || o.Path.Contains("WeatherForecast"));
+        Assert.Contains(operations, o => o.Path == "/api/v1/provider/services" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/admin/services/{id}/approve" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers" && o.Method == "get");
+        Assert.Contains(operations, o => o.Path == "/api/v1/bookings/{id}/snapshots/{snapshotId}/accept" && o.Method == "post");
+        Assert.DoesNotContain(operations, o => o.Path.Contains("WeatherForecast"));
         Assert.Equal(operations.Length, operations.Select(o => o.Operation.GetProperty("operationId").GetString()).Distinct().Count());
     }
 
@@ -71,7 +75,7 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(50, protectedCount);
+        Assert.Equal(66, protectedCount);
     }
 
     [Fact]
@@ -162,5 +166,30 @@ public sealed class OpenApiTests
         Assert.Equal(3, tour.GetProperty("durationDays").GetInt32());
         Assert.Equal(2, tour.GetProperty("durationNights").GetInt32());
         Assert.Equal(JsonValueKind.Null, tour.GetProperty("pricingTiers")[2].GetProperty("maxAge").ValueKind);
+    }
+
+    [Fact]
+    public async Task Province_codes_contract_is_exposed_on_schemas_filters_and_candidate_agency_endpoint()
+    {
+        await using var app = Factory(); using var json = await Document(app);
+        var root = json.RootElement; var schemas = root.GetProperty("components").GetProperty("schemas");
+        foreach (var schema in new[] { "TourConfiguration", "TourListItem" })
+        {
+            var codes = schemas.GetProperty(schema).GetProperty("properties").GetProperty("provinceCodes").GetRawText();
+            Assert.Contains("array", codes); Assert.Contains("string", codes);
+        }
+        var paths = root.GetProperty("paths");
+        foreach (var path in new[] { "/api/v1/tours", "/api/v1/agency/tours", "/api/v1/admin/tours", "/api/v1/agency/tours/candidate-agencies" })
+        {
+            var parameters = paths.GetProperty(path).GetProperty("get").GetProperty("parameters").EnumerateArray();
+            Assert.Contains(parameters, p => p.GetProperty("name").GetString() == "provinceCode" && p.GetProperty("in").GetString() == "query");
+        }
+        var candidate = paths.GetProperty("/api/v1/agency/tours/candidate-agencies").GetProperty("get");
+        Assert.True(candidate.GetProperty("responses").TryGetProperty("200", out _));
+        Assert.True(candidate.GetProperty("security")[0].TryGetProperty("Cookies", out _));
+        var example = paths.GetProperty("/api/v1/agency/tours").GetProperty("post").GetProperty("requestBody").GetProperty("content")
+            .GetProperty("application/json").GetProperty("examples").GetProperty("completeManualTour").GetProperty("value");
+        Assert.Equal(new[] { "DA_NANG", "QUANG_NAM" }, example.GetProperty("provinceCodes").EnumerateArray().Select(v => v.GetString()!).ToArray());
+
     }
 }
