@@ -46,6 +46,11 @@ internal static class DatabaseDesignConfiguration
         });
         modelBuilder.Entity<Service>(entity =>
         {
+            entity.Property(e => e.IsPaused).HasColumnName("is_paused").HasColumnType("bit").HasDefaultValue(false).IsRequired();
+            entity.Property(e => e.SubCategory).HasColumnName("sub_category").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.HiddenReason).HasColumnName("hidden_reason").HasColumnType("nvarchar(max)");
+            entity.Property(e => e.FullAddress).HasColumnName("full_address").HasColumnType("nvarchar(500)").HasMaxLength(500);
+            entity.Property(e => e.OperatingHours).HasColumnName("operating_hours").HasColumnType("nvarchar(100)").HasMaxLength(100);
             entity.ToTable("services");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.ProviderId).HasColumnName("provider_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();

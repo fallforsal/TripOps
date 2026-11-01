@@ -43,7 +43,7 @@ export function ProviderOverview({
 
   const stats = {
     total: providerServices.length,
-    approved: providerServices.filter((s) => s.status === "approved").length,
+    approved: providerServices.filter((s) => s.status === "approved" && !s.isPaused).length,
     pending: providerServices.filter((s) => s.status === "pending").length,
     rejected: providerServices.filter((s) => s.status === "rejected").length,
     avgRating:
@@ -348,9 +348,6 @@ export function ProviderOverview({
                     <div className="font-bold text-sm text-gray-900">
                       {service.price?.toLocaleString("vi-VN")}đ
                     </div>
-                    <span className="text-[11px] text-gray-400 font-mono">
-                      Mã: {service.id}
-                    </span>
                   </div>
 
                   <div>
@@ -358,6 +355,8 @@ export function ProviderOverview({
                       <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
                         Đã duyệt
                       </Badge>
+                    ) : service.status === "hidden" ? (
+                      <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-xs">Admin đã ẩn</Badge>
                     ) : service.status === "rejected" ? (
                       <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-xs">
                         Từ chối

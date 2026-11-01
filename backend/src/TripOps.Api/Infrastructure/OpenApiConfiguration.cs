@@ -39,7 +39,7 @@ internal sealed class AuthenticationDocumentTransformer(
             "Use logout before switching Agency/Admin accounts. The current backend does not issue or accept JWT access tokens. " +
             "The Authorize dialog describes the cookie scheme; browsers cannot set an HttpOnly cookie from that dialog.";
         document.Tags ??= new HashSet<OpenApiTag>();
-        foreach (var name in new[] { "Authentication", "Partner Management", "Service Management", "Tour Management", "Tour Moderation", "Tour Publishing", "Booking Management", "Tour Operations", "Health" })
+        foreach (var name in new[] { "Authentication", "Partner Management", "Service Management", "Service Moderation", "Tour Management", "Tour Moderation", "Tour Publishing", "Booking Management", "Tour Operations", "Health" })
             if (!document.Tags.Any(tag => tag.Name == name)) document.Tags.Add(new OpenApiTag { Name = name });
         document.Components ??= new();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -96,6 +96,11 @@ internal sealed class EndpointDocumentationTransformer : IOpenApiOperationTransf
             AddError(422, "Tour configuration, service eligibility or workflow business validation failed.", problem);
         }
         if (action.ControllerName == "ItineraryDrafts") AddError(503, "AI generation is not configured; manual creation remains available.", problem);
+        if (action.ControllerName == "ProviderServices") {
+            AddError(404, "Service does not exist or belongs to another Provider.", problem);
+            AddError(409, "Service changed concurrently or is referenced by a tour or booking.", problem);
+            if (action.ActionName == "UploadImage") AddError(503, "Image storage is not configured.", problem);
+        }
         if (action.ControllerName == "Accounts") {
             if (action.ActionName is "Register" or "Login") AddError(429, "Too many authentication requests.", problem);
             if (action.ActionName == "Register") AddError(409, "Email is already registered.", problem);

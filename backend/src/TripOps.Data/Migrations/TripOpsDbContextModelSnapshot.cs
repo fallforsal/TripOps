@@ -1848,9 +1848,24 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
+                    b.Property<string>("FullAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("full_address");
+
+                    b.Property<string>("HiddenReason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("hidden_reason");
+
                     b.Property<string>("Images")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("images");
+
+                    b.Property<bool>("IsPaused")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_paused");
 
                     b.Property<decimal?>("Latitude")
                         .HasColumnType("decimal(10, 8)")
@@ -1865,6 +1880,11 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("name");
+
+                    b.Property<string>("OperatingHours")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("operating_hours");
 
                     b.Property<string>("Policies")
                         .HasColumnType("nvarchar(max)")
@@ -1921,6 +1941,11 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("street");
+
+                    b.Property<string>("SubCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("sub_category");
 
                     b.Property<string>("ThumbnailUrl")
                         .IsRequired()

@@ -6,11 +6,10 @@ using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
 using TripOps.Service.Accounts;
-using Microsoft.Extensions.Configuration;
 
 namespace TripOps.Service.Tours;
 
-public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, IConfiguration configuration)
+public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -114,7 +113,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         }
         foreach (var url in config.Images ?? []) Require(
             Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https" && url.Length <= 2048 ||
-            configuration.GetValue<bool>("Storage:UseLocal") && System.Text.RegularExpressions.Regex.IsMatch(url,@"^/api/v1/files/tours/[a-zA-Z0-9-]{1,36}/[a-f0-9]{32}\.(png|jpg)$"),
+            System.Text.RegularExpressions.Regex.IsMatch(url,@"^/api/v1/files/tours/[a-zA-Z0-9-]{1,36}/[a-f0-9]{32}\.(png|jpg)$"),
             "Images must be uploaded files or HTTPS URLs.");
         await ValidateSuppliers(config, actor, complete, ct);
         var linked = (config.Timelines ?? []).SelectMany(d =>
@@ -521,7 +520,9 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     }
 
     private static TourServiceReference Reference(Data.Entities.Service service) => new(service.Id, service.ProviderId,
-        State(service.Category), service.Name, service.Price);
+        State(service.Category), service.Name, service.Price,
+        service.SubCategory, service.FullAddress, service.OperatingHours, service.HiddenReason,
+        service.ThumbnailUrl, TripOps.Service.Common.ServiceMedia.AdditionalImages(service.Images, service.ThumbnailUrl), service.Capacity, service.IsPaused);
     public async Task<TourPage<TourServiceReference>> Catalogue(string actor, string? category, string? search,
         int page, int pageSize, CancellationToken ct)
     {

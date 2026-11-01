@@ -51,6 +51,8 @@ Table services {
   // 1. PHÂN LOẠI DỊCH VỤ
   category varchar(50) [not null, note: 'hotel (Lưu trú), fnb (Ẩm thực), transportation (Vận chuyển), attraction (Tham quan)']
 
+  sub_category varchar(100) [note: 'Phân loại chi tiết; SQL Server nvarchar(100), NULL']
+
   // 2. THÔNG TIN BÀI ĐĂNG
   name varchar(255) [not null, note: 'Tên cơ sở / bài đăng dịch vụ (VD: Khách Sạn Heritage Đà Lạt, Xe Limousine VIP...)']
   description text [note: 'Mô tả chi tiết bài đăng dịch vụ']
@@ -70,16 +72,20 @@ Table services {
   province varchar(100) [not null, note: 'Tỉnh / Thành phố']
   ward varchar(100) [note: 'Phường / Xã']
   street varchar(255) [note: 'Số nhà, tên đường']
+  full_address varchar(500) [note: 'Địa chỉ đầy đủ; SQL Server nvarchar(500), NULL']
+  operating_hours varchar(100) [note: 'Giờ mở cửa hoặc nhận/trả phòng; SQL Server nvarchar(100), NULL']
   latitude decimal(10, 8) [note: 'Tọa độ GPS vĩ độ để ghim bản đồ']
   longitude decimal(11, 8) [note: 'Tọa độ GPS kinh độ để ghim bản đồ']
 
   // 6. HÌNH ẢNH DỊCH VỤ
   thumbnail_url text [not null, note: 'Ảnh đại diện chính của bài đăng']
-  images json [note: 'Danh sách các ảnh chi tiết dạng mảng JSON']
+  images json [note: 'Các ảnh bổ sung dạng JSON; không chứa lại thumbnail_url']
 
   // 7. ĐÁNH GIÁ & KIỂM DUYỆT (ADMIN DANG XÉT DUYỆT)
   rating decimal(3, 2) [default: 5.0, note: 'Điểm đánh giá trung bình']
   status varchar(30) [default: 'PENDING', note: 'PENDING (Chờ duyệt), APPROVED (Đã duyệt mở bán), REJECTED (Bị từ chối), HIDDEN (Tạm ẩn)']
+  hidden_reason text [note: 'Lý do Admin tạm ẩn bài; SQL Server nvarchar(max), NULL']
+  is_paused boolean [not null, default: false, note: 'Provider tạm ngừng cung cấp, độc lập với trạng thái kiểm duyệt Admin']
   rejection_reason text [note: 'Lý do Admin từ chối phê duyệt bài đăng']
 
   created_at timestamp [default: `now()`]

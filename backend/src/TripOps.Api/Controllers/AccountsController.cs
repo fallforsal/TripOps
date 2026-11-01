@@ -62,8 +62,8 @@ public sealed class PartnerApplicationsController(AccountService accounts) : Con
     [HttpGet]
     [EndpointSummary("List Agency and Provider business approval applications")]
     [ProducesResponseType<PartnerPageDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(CancellationToken ct, string? status = null, string? role = null, string? search = null, int page = 1, int pageSize = 20)
-        => Ok(await accounts.Partners(status, role, search, page, pageSize, ct));
+    public async Task<IActionResult> List(CancellationToken ct, string? status = null, string? role = null, string? search = null, int page = 1, int pageSize = 20, string? userId = null)
+        => Ok(await accounts.Partners(status, role, search, page, pageSize, ct, userId));
     [HttpPost("{id:int}/approve")]
     [EndpointSummary("Approve a pending Agency or Provider business profile")]
     [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]

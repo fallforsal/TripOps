@@ -16,6 +16,9 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IH
     public async Task<string> UploadTourImage(string agencyId, byte[] bytes, string mime, CancellationToken ct)
         => await UploadImage(agencyId, bytes, mime, "tours", authenticated: false, ct);
 
+    public async Task<string> UploadServiceImage(string providerId, byte[] bytes, string mime, CancellationToken ct)
+        => await UploadImage(providerId, bytes, mime, "services", authenticated: false, ct);
+
     private async Task<string> UploadImage(string userId, byte[] bytes, string mime, string folder, bool authenticated, CancellationToken ct)
     {
         var png = bytes.Length >= 8 && bytes.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10});

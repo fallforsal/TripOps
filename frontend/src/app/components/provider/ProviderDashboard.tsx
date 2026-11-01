@@ -1,5 +1,6 @@
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
 import { ServicePostManagement } from "./ServicePostManagement";
@@ -23,14 +24,15 @@ interface ProviderDashboardProps {
   services: Service[];
   onCreateService?: () => void;
   onEditService?: (service: Service) => void;
-  onDeleteService: (serviceId: string) => void;
+  onDeleteService: (serviceId: string) => void | Promise<void>;
+  onSetAvailability?: (serviceId: string, isPaused: boolean) => Promise<void>;
   onSubmitService?: (
     serviceData: Omit<Service, "id" | "status" | "createdAt">
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateService?: (
     serviceId: string,
     serviceData: Omit<Service, "id">
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateProfile?: (updatedUser: Partial<User>) => void;
   onLogout?: () => void;
 }
@@ -44,6 +46,7 @@ export function ProviderDashboard({
   onCreateService,
   onEditService,
   onDeleteService,
+  onSetAvailability,
   onSubmitService,
   onUpdateService,
   onUpdateProfile,
@@ -133,6 +136,10 @@ export function ProviderDashboard({
   };
 
   const handleStartEditService = (service: Service) => {
+    if (service.status === "hidden") {
+      toast.error("Bài đăng đã bị Admin ẩn. Vui lòng tạo bài đăng mới để gửi duyệt.");
+      return;
+    }
     setEditingService(service);
     setSelectedServiceId(null);
     setActiveSection("create");
@@ -144,18 +151,18 @@ export function ProviderDashboard({
     setActiveSection("detail");
   };
 
-  const handleSaveServiceFromPage = (serviceData: Omit<Service, "id">) => {
+  const handleSaveServiceFromPage = async (serviceData: Omit<Service, "id">) => {
     if (editingService) {
       // Editing existing service
       if (onUpdateService) {
-        onUpdateService(editingService.id, serviceData);
+        await onUpdateService(editingService.id, serviceData);
       } else if (onEditService) {
         onEditService({ ...serviceData, id: editingService.id });
       }
     } else {
       // Creating new service
       if (onSubmitService) {
-        onSubmitService(serviceData);
+        await onSubmitService(serviceData);
       } else if (onCreateService) {
         onCreateService();
       }
@@ -194,8 +201,9 @@ export function ProviderDashboard({
             setActiveSection("services");
           }}
           onEdit={(svc) => handleStartEditService(svc)}
-          onDelete={(id) => {
-            onDeleteService(id);
+          onSetAvailability={onSetAvailability}
+          onDelete={async (id) => {
+            await onDeleteService(id);
             setSelectedServiceId(null);
             setActiveSection("services");
           }}
@@ -236,6 +244,7 @@ export function ProviderDashboard({
           onEditService={handleStartEditService}
           onDeleteService={onDeleteService}
           onViewDetail={handleViewDetail}
+          onSetAvailability={onSetAvailability}
         />
       ) : (
         /* 5. Provider Overview Dashboard (KPIs, Charts, Recent items) */

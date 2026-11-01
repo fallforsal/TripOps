@@ -760,6 +760,7 @@ export interface Service {
   priceTo?: number; // Khoảng giá đến (VNĐ/người)
   pricePerPerson?: number; // Giá cho một người
   location: string;
+  fullAddress?: string; // Địa chỉ đầy đủ (VD: 02 Trần Phú, Phường 3, Đà Lạt, Lâm Đồng)
   // Địa chỉ chuẩn 2 cấp (Tỉnh/Thành phố & Phường/Xã)
   province?: string; // Tỉnh/Thành phố
   ward?: string; // Phường/Xã
@@ -768,11 +769,14 @@ export interface Service {
   latitude?: number; // Vĩ độ GPS
   longitude?: number; // Kinh độ GPS
   image: string;
-  images?: string[]; // Nhiều ảnh cho bài đăng
+  thumbnailUrl?: string; // URL ảnh đại diện chính (lấy từ ảnh được chọn)
+  images?: string[]; // Danh sách các ảnh còn lại hoặc toàn bộ ảnh bộ sưu tập
+  operatingHours?: string; // Khung giờ hoạt động / đón khách (VD: 07:00 - 22:00 hoặc 14:00 - 12:00)
   thumbnailIndex?: number; // Vị trí ảnh làm thumbnail
   rating: number;
   capacity?: number;
   status: "pending" | "approved" | "rejected" | "hidden";
+  isPaused?: boolean; // Provider tạm ngừng cung cấp, độc lập với kiểm duyệt Admin.
   rejectionReason?: string; // Lý do từ chối bài đăng
   hiddenReason?: string; // Lý do Admin tạm ẩn bài đăng
   createdAt?: string; // Service previews and legacy records may not include creation metadata.

@@ -70,10 +70,11 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         { throw new AccountException(409, "Hồ sơ đã được nộp. Vui lòng tải lại trạng thái."); }
         return Profile(profile);
     }
-    public async Task<object> Partners(string? status, string? role, string? search, int page, int pageSize, CancellationToken ct)
+    public async Task<object> Partners(string? status, string? role, string? search, int page, int pageSize, CancellationToken ct, string? userId = null)
     {
         var query = db.BusinessProfiles.AsNoTracking().Where(p =>
             (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider));
+        if (!string.IsNullOrWhiteSpace(userId)) query = query.Where(p => p.UserId == userId);
         if (!string.IsNullOrWhiteSpace(status)) {
             if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state)) throw new AccountException(400, "Trạng thái không hợp lệ.");
             query = query.Where(p => p.Status == state);
