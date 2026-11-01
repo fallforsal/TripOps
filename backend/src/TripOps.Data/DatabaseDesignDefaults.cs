@@ -54,6 +54,7 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<BookingParticipant>().Property(e => e.Price).HasDefaultValue(0m);
         modelBuilder.Entity<BookingParticipant>().Property(e => e.AttendanceStatus).HasDefaultValue(AttendanceStatus.Pending);
         modelBuilder.Entity<BookingParticipant>().Property(e => e.Status).HasDefaultValue("ACTIVE");
+        modelBuilder.Entity<BookingSnapshot>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingParticipant>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingParticipant>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingAssignedGuide>().Property(e => e.Role).HasDefaultValue("lead_guide");

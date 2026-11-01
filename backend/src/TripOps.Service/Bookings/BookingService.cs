@@ -32,26 +32,30 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             throw new BookingException(422, "Ngày khởi hành phải từ hôm nay trở đi.");
 
         static string Clean(string value) => System.Text.RegularExpressions.Regex.Replace(value.Trim(), @"\s*\(\d+★\)\s*$", "");
-        var hotelSelections = new Dictionary<string,TourAccommodation>(StringComparer.OrdinalIgnoreCase);
-        var mealSelections = new Dictionary<(int,string),TourMeal>();
+        var hotelSelections = new Dictionary<string, TourAccommodation>(StringComparer.OrdinalIgnoreCase);
+        var mealSelections = new Dictionary<(int, string), TourMeal>();
         decimal extra = 0;
-        foreach (var choice in request.HotelChoices ?? []) {
-            if (hotelSelections.ContainsKey(choice.Destination)) throw new BookingException(422,"Duplicate hotel selection.");
-            var option = tour.Accommodations.FirstOrDefault(h => h.DestinationName.Equals(choice.Destination,StringComparison.OrdinalIgnoreCase) && (choice.ServiceId.HasValue ? h.ServiceId == choice.ServiceId : h.HotelName.Equals(Clean(choice.Name),StringComparison.OrdinalIgnoreCase)));
-            if (option is null) throw new BookingException(422,"Khách sạn phải thuộc phương án Agency đã cấu hình.");
+        foreach (var choice in request.HotelChoices ?? [])
+        {
+            if (hotelSelections.ContainsKey(choice.Destination)) throw new BookingException(422, "Duplicate hotel selection.");
+            var option = tour.Accommodations.FirstOrDefault(h => h.DestinationName.Equals(choice.Destination, StringComparison.OrdinalIgnoreCase) && (choice.ServiceId.HasValue ? h.ServiceId == choice.ServiceId : h.HotelName.Equals(Clean(choice.Name), StringComparison.OrdinalIgnoreCase)));
+            if (option is null) throw new BookingException(422, "Khách sạn phải thuộc phương án Agency đã cấu hình.");
             hotelSelections[choice.Destination] = option; extra += option.PriceDifference ?? 0;
         }
-        foreach (var choice in request.MealChoices ?? []) {
-            var key = (choice.DayNumber,choice.MealType);
-            if (mealSelections.ContainsKey(key)) throw new BookingException(422,"Duplicate meal selection.");
-            var option = tour.Timelines.FirstOrDefault(d => d.DayNumber == choice.DayNumber)?.Meals.FirstOrDefault(m => m.MealType == choice.MealType && (choice.ServiceId.HasValue ? m.ServiceId == choice.ServiceId : m.RestaurantName.Equals(Clean(choice.Name),StringComparison.OrdinalIgnoreCase)));
-            if (option is null) throw new BookingException(422,"Bữa ăn phải thuộc phương án Agency đã cấu hình.");
-            mealSelections[key]=option;extra+=option.PriceDifference;
+        foreach (var choice in request.MealChoices ?? [])
+        {
+            var key = (choice.DayNumber, choice.MealType);
+            if (mealSelections.ContainsKey(key)) throw new BookingException(422, "Duplicate meal selection.");
+            var option = tour.Timelines.FirstOrDefault(d => d.DayNumber == choice.DayNumber)?.Meals.FirstOrDefault(m => m.MealType == choice.MealType && (choice.ServiceId.HasValue ? m.ServiceId == choice.ServiceId : m.RestaurantName.Equals(Clean(choice.Name), StringComparison.OrdinalIgnoreCase)));
+            if (option is null) throw new BookingException(422, "Bữa ăn phải thuộc phương án Agency đã cấu hình.");
+            mealSelections[key] = option; extra += option.PriceDifference;
         }
-        var selectedServiceIds = tour.Accommodations.Where(h=>h.IsDefault==true).Select(h=>hotelSelections.GetValueOrDefault(h.DestinationName,h).ServiceId)
-            .Concat(tour.Timelines.SelectMany(d=>d.Meals.Where(m=>m.IsDefault).Select(m=>mealSelections.GetValueOrDefault((d.DayNumber,m.MealType),m).ServiceId)))
-            .Where(id=>id.HasValue).Select(id=>id!.Value).Distinct().ToArray();
-        if(await repository.EligibleServiceCount(selectedServiceIds,ct)!=selectedServiceIds.Length)throw new BookingException(422,"Dịch vụ Provider trong phương án đã ngừng hoạt động; vui lòng liên hệ Agency.");
+        var selectedServiceIds = tour.Accommodations.Where(h => h.IsDefault == true).Select(h => hotelSelections.GetValueOrDefault(h.DestinationName, h).ServiceId)
+            .Concat(tour.Timelines.SelectMany(d => d.Meals.Where(m => m.IsDefault).Select(m => mealSelections.GetValueOrDefault((d.DayNumber, m.MealType), m).ServiceId)))
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        if (await repository.EligibleServiceCount(selectedServiceIds, ct) != selectedServiceIds.Length)
+            throw new BookingException(422, "Dịch vụ Provider trong phương án đã ngừng hoạt động; vui lòng liên hệ Agency.");
+
         // Tính toán tổng tiền theo pricing tiers hoặc base price
         var tiers = tour.PricingTiers.ToDictionary(t => t.Id);
         decimal totalAmount = 0;
@@ -87,7 +91,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             }
 
             price = Money(price + extra);
-            if(price<0)throw new BookingException(422,"Giá khách sau phụ thu không hợp lệ.");
+            if (price < 0) throw new BookingException(422, "Giá khách sau phụ thu không hợp lệ.");
             totalAmount += price;
 
             participants.Add(new BookingParticipant
@@ -97,7 +101,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
                 IsPrimary = true,
                 TierName = tierName,
                 Price = Money(price),
-                RoommateNote = p.RoommateNote, RestaurantNote = p.RestaurantNote,
+                RoommateNote = p.RoommateNote,
+                RestaurantNote = p.RestaurantNote,
                 FullName = p.FullName.Trim(),
                 Note = ParticipantNote(p.Note, p.PhoneNumber),
                 DateOfBirth = p.DateOfBirth,
@@ -110,9 +115,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         totalAmount = Money(totalAmount);
         var depositAmount = Money(totalAmount * 0.3m); // Mặc định cọc 30%
-
         var code = $"BK{DateTime.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
-
 
         var booking = new Booking
         {
@@ -121,8 +124,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             TourId = tour.Id,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
-            OriginalTotalPrice = totalAmount - extra*participants.Count,
-            HasCustomization = hotelSelections.Count>0 || mealSelections.Count>0,
+            OriginalTotalPrice = totalAmount - extra * participants.Count,
+            HasCustomization = hotelSelections.Count > 0 || mealSelections.Count > 0,
             Status = BookingStatus.Pending,
             PaymentStatus = PaymentStatus.Unpaid,
             ContactName = request.ContactName.Trim(),
@@ -134,32 +137,74 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             Timelines = Enumerable.Range(1, Math.Max(1, tour.DurationDays ?? 1)).Select(number => {
                 var day = tour.Timelines.SingleOrDefault(d => d.DayNumber == number);
                 return new BookingTimeline {
-                    DayNumber = number, Title = day?.Title ?? $"Ngày {number}", Description = day?.Description,
+                    DayNumber = number,
+                    Title = day?.Title ?? $"Ngày {number}",
+                    Description = day?.Description,
                     Attractions = (day?.Attractions ?? []).Select(a => new BookingTimelineAttraction {
-                        AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
+                        AgencyId = a.AgencyId ?? tour.AgencyId,
+                        OriginalLocationName = a.Name ?? "",
+                        Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number - 1).Add(a.Time.Value.TimeOfDay) : null
+                    }).ToList(),
                     Meals = (day?.Meals ?? []).Where(m => m.IsDefault == true).Select(m => new BookingTimelineMeal {
-                        MealType = m.MealType, OriginalRestaurantName = m.RestaurantName,
-                        CustomizedRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var chosenMeal) ? chosenMeal.RestaurantName : null,
-                        IsCustomized = mealSelections.ContainsKey((number,m.MealType)),
-                        PriceDifference = mealSelections.TryGetValue((number,m.MealType),out var mealOption) ? mealOption.PriceDifference : 0,
-                        ServiceId = mealSelections.TryGetValue((number,m.MealType),out var selectedMeal) ? selectedMeal.ServiceId : m.ServiceId, DateService = request.StartDate.Date.AddDays(number-1), Time = m.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(m.Time.Value.TimeOfDay) : null }).ToList()
+                        MealType = m.MealType,
+                        OriginalRestaurantName = m.RestaurantName,
+                        CustomizedRestaurantName = mealSelections.TryGetValue((number, m.MealType), out var chosenMeal) ? chosenMeal.RestaurantName : null,
+                        IsCustomized = mealSelections.ContainsKey((number, m.MealType)),
+                        PriceDifference = mealSelections.TryGetValue((number, m.MealType), out var mealOption) ? mealOption.PriceDifference : 0,
+                        ServiceId = mealSelections.TryGetValue((number, m.MealType), out var selectedMeal) ? selectedMeal.ServiceId : m.ServiceId,
+                        DateService = request.StartDate.Date.AddDays(number - 1),
+                        Time = m.Time.HasValue ? request.StartDate.Date.AddDays(number - 1).Add(m.Time.Value.TimeOfDay) : null
+                    }).ToList()
                 };
             }).ToList(),
             Accommodations = tour.Accommodations.Where(a => a.IsDefault == true).Select(a => new BookingAccommodation {
-                CustomizedHotelName = hotelSelections.TryGetValue(a.DestinationName,out var chosenHotel) ? chosenHotel.HotelName : null,
-                CustomizedStars = hotelSelections.TryGetValue(a.DestinationName,out var starsHotel) ? starsHotel.StarRating : null,
+                CustomizedHotelName = hotelSelections.TryGetValue(a.DestinationName, out var chosenHotel) ? chosenHotel.HotelName : null,
+                CustomizedStars = hotelSelections.TryGetValue(a.DestinationName, out var starsHotel) ? starsHotel.StarRating : null,
                 IsCustomized = hotelSelections.ContainsKey(a.DestinationName),
-                PriceDifference = hotelSelections.TryGetValue(a.DestinationName,out var priceHotel) ? priceHotel.PriceDifference : 0,
-                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date, DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1), Destination = a.DestinationName, OriginalHotelName = a.HotelName, OriginalStars = a.StarRating,
-                NightsCount = a.NightsCount }).ToList(),
-            PaymentRequests = [new PaymentRequest { Description = "Đặt cọc 30%", Amount = depositAmount,
-                DueDate = request.StartDate.Date, CreatedBy = customerId }]
+                PriceDifference = hotelSelections.TryGetValue(a.DestinationName, out var priceHotel) ? priceHotel.PriceDifference : 0,
+                ServiceId = hotelSelections.TryGetValue(a.DestinationName, out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId,
+                DateFrom = request.StartDate.Date,
+                DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1),
+                Destination = a.DestinationName,
+                OriginalHotelName = a.HotelName,
+                OriginalStars = a.StarRating,
+                NightsCount = a.NightsCount
+            }).ToList(),
+            PaymentRequests = [new PaymentRequest {
+                Description = "Đặt cọc 30%",
+                Amount = depositAmount,
+                DueDate = request.StartDate.Date,
+                CreatedBy = customerId
+            }]
         };
 
         repository.Add(booking);
+
+        // Đóng gói Snapshot v1 (initial_request) ngay trong cùng giao dịch tạo booking
+        int? sourceTourVersion = tour.Versions?.Max(v => (int?)v.VersionNumber) ?? 1;
+        var initialPayload = BuildSnapshotPayload(booking, tour, sourceTourVersion, request.SpecialRequests);
+        var initialJson = System.Text.Json.JsonSerializer.Serialize(initialPayload, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        });
+
+        var initialSnapshot = new BookingSnapshot
+        {
+            Booking = booking,
+            Version = 1,
+            SnapshotType = "initial_request",
+            SnapshotData = initialJson,
+            SourceTourVersion = initialPayload.SourceTourVersion,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = customerId
+        };
+        repository.AddSnapshot(initialSnapshot);
+        booking.Snapshots.Add(initialSnapshot);
+
         await repository.SaveChangesAsync(ct);
 
-        return ToDto(booking, tour.Name, tour.AgencyId, tour.Agency?.Name);
+        return ToDto(booking);
     }
 
     public async Task<BookingDto> Get(string actorId, int id, CancellationToken ct)
@@ -168,14 +213,14 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         var user = await accounts.Current(actorId, ct);
 
         bool isOwner = booking.CustomerId == actorId;
-        bool isAgency = booking.Tour?.AgencyId == actorId;
+        bool isAgency = booking.Tour?.AgencyId == actorId || booking.BookingAgencies.Any(ba => ba.AgencyId == actorId);
         bool isGuide = booking.AssignedGuides.Any(ag => ag.GuideId == actorId);
         bool isAdmin = user.Role == UserRole.Admin;
 
         if (!isOwner && !isAgency && !isGuide && !isAdmin)
             throw new BookingException(403, "Bạn không có quyền xem thông tin đơn đặt này.");
 
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return ToDto(booking);
     }
 
     public async Task<BookingPage<BookingListItem>> ListForCustomer(
@@ -186,10 +231,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             status = s;
 
         var (rows, total) = await repository.ListForCustomer(customerId, status, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
-        var items = rows.Select(b => new BookingListItem(
-            b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
+        var items = rows.Select(ToListItem).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -203,10 +245,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             status = s;
 
         var (rows, total) = await repository.ListForAgency(agencyId, status, search, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
-        var items = rows.Select(b => new BookingListItem(
-            b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
+        var items = rows.Select(ToListItem).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -214,7 +253,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
     public async Task<BookingDto> Decide(string agencyId, int id, BookingDecisionRequest request, CancellationToken ct)
     {
         var booking = await repository.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
-        if (booking.Tour?.AgencyId != agencyId)
+        if (booking.Tour?.AgencyId != agencyId && !booking.BookingAgencies.Any(ba => ba.AgencyId == agencyId))
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền duyệt đơn này.");
 
         if (booking.Status is not (BookingStatus.Pending or BookingStatus.Deposited))
@@ -232,7 +271,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         }
 
         await repository.SaveChangesAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return ToDto(booking);
     }
 
     public async Task<BookingDto> Deposit(string customerId, int id, BookingDepositRequest request, CancellationToken ct)
@@ -251,15 +290,22 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         {
             if (previous.BookingId != id || previous.Amount != request.Amount)
                 throw new BookingException(409, "Mã giao dịch đã được sử dụng.");
-            return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+            return ToDto(booking);
         }
         var paid = Money(PaidAmount(booking) + request.Amount);
         if (paid > booking.TotalAmount) throw new BookingException(422, "Số tiền vượt quá phần còn phải thanh toán.");
         var deposit = booking.PaymentRequests.FirstOrDefault(p => p.Description.StartsWith("Đặt cọc"));
-        booking.PaymentTransactions.Add(new PaymentTransaction {
-            TransactionCode = code, Amount = Money(request.Amount), PaymentMethod = "DEMO",
-            Status = PaymentTransactionStatus.Success, ProofImageUrl = request.PaymentProofUrl,
-            PayerName = booking.ContactName, PaidAt = DateTime.UtcNow, PaymentRequest = deposit });
+        booking.PaymentTransactions.Add(new PaymentTransaction
+        {
+            TransactionCode = code,
+            Amount = Money(request.Amount),
+            PaymentMethod = "DEMO",
+            Status = PaymentTransactionStatus.Success,
+            ProofImageUrl = request.PaymentProofUrl,
+            PayerName = booking.ContactName,
+            PaidAt = DateTime.UtcNow,
+            PaymentRequest = deposit
+        });
         if (paid >= booking.TotalAmount)
         {
             booking.PaymentStatus = PaymentStatus.Paid;
@@ -279,7 +325,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         }
 
         await repository.SaveChangesAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return ToDto(booking);
     }
 
     public async Task<BookingDto> Cancel(string customerId, int id, BookingCancellationRequest request, CancellationToken ct)
@@ -297,14 +343,14 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         booking.SpecialRequests = $"{booking.SpecialRequests} [Khách hủy: {request.Reason}]".Trim();
 
         await repository.SaveChangesAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return ToDto(booking);
     }
 
     // WF06: Phân công Hướng dẫn viên
     public async Task<BookingDto> AssignGuide(string agencyId, int id, GuideAssignmentRequest request, CancellationToken ct)
     {
         var booking = await repository.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
-        if (booking.Tour?.AgencyId != agencyId)
+        if (booking.Tour?.AgencyId != agencyId && !booking.BookingAgencies.Any(ba => ba.AgencyId == agencyId))
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền phân công hướng dẫn viên.");
 
         var guide = await repository.FindUser(request.GuideId, ct);
@@ -324,7 +370,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
                 AgencyId = agencyId,
                 AssignedAt = DateTime.UtcNow,
                 Role = request.Role ?? "Lead",
-                    Notes = request.Notes
+                Notes = request.Notes
             });
         }
         else
@@ -336,22 +382,126 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         }
 
         await repository.SaveChangesAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return ToDto(booking);
     }
 
     // WF06: Guide xem danh sách tour được giao
     public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
+        (await repository.AvailableGuides(agencyId, ct)).Select(g => new AvailableGuideDto(g.Id, g.Name ?? "", g.Phone)).ToList();
 
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
-        var items = rows.Select(b => new BookingListItem(
-            b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
+        var items = rows.Select(ToListItem).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
+    }
+
+    // Snapshot Operations
+    public async Task<List<BookingSnapshotSummaryDto>> ListSnapshots(string actorId, int bookingId, CancellationToken ct)
+    {
+        var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        var user = await accounts.Current(actorId, ct);
+        bool isOwner = booking.CustomerId == actorId;
+        bool isAgency = booking.Tour?.AgencyId == actorId || booking.BookingAgencies.Any(ba => ba.AgencyId == actorId);
+        bool isAdmin = user.Role == UserRole.Admin;
+
+        if (!isOwner && !isAgency && !isAdmin)
+            throw new BookingException(403, "Bạn không có quyền xem snapshot của booking này.");
+
+        var snapshots = await repository.ListSnapshots(bookingId, ct);
+        return snapshots.Select(ToSnapshotSummaryDto).ToList();
+    }
+
+    public async Task<BookingSnapshotDto> GetSnapshot(string actorId, int bookingId, int snapshotId, CancellationToken ct)
+    {
+        var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        var user = await accounts.Current(actorId, ct);
+        bool isOwner = booking.CustomerId == actorId;
+        bool isAgency = booking.Tour?.AgencyId == actorId || booking.BookingAgencies.Any(ba => ba.AgencyId == actorId);
+        bool isAdmin = user.Role == UserRole.Admin;
+
+        if (!isOwner && !isAgency && !isAdmin)
+            throw new BookingException(403, "Bạn không có quyền xem snapshot của booking này.");
+
+        var snapshot = await repository.FindSnapshot(snapshotId, ct) ?? throw new BookingException(404, "Không tìm thấy snapshot.");
+        if (snapshot.BookingId != bookingId)
+            throw new BookingException(404, "Snapshot không thuộc booking này.");
+
+        return ToSnapshotDto(snapshot);
+    }
+
+    public async Task<BookingSnapshotDto> CreateProposal(string agencyId, int bookingId, CreateProposalRequest request, CancellationToken ct)
+    {
+        var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        if (booking.Tour?.AgencyId != agencyId && !booking.BookingAgencies.Any(ba => ba.AgencyId == agencyId))
+            throw new BookingException(403, "Chỉ Agency phụ trách mới có quyền gửi phương án đề xuất cho booking này.");
+
+        if (booking.Status == BookingStatus.Cancelled || booking.Status == BookingStatus.Rejected)
+            throw new BookingException(422, "Không thể gửi phương án cho đơn đặt đã hủy hoặc bị từ chối.");
+
+        var maxVersion = await repository.GetMaxSnapshotVersion(bookingId, ct);
+        var newVersion = maxVersion + 1;
+
+        var note = string.IsNullOrWhiteSpace(request?.Note)
+            ? booking.SpecialRequests
+            : (string.IsNullOrWhiteSpace(booking.SpecialRequests) ? request.Note : $"{booking.SpecialRequests}\n[Ghi chú đề xuất: {request.Note}]");
+
+        var payload = BuildSnapshotPayload(booking, booking.Tour!, null, note);
+        var json = System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        });
+
+        var proposalSnapshot = new BookingSnapshot
+        {
+            BookingId = bookingId,
+            Version = newVersion,
+            SnapshotType = "proposal",
+            SnapshotData = json,
+            SourceTourVersion = payload.SourceTourVersion,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = agencyId
+        };
+
+        repository.AddSnapshot(proposalSnapshot);
+        await repository.SaveChangesAsync(ct);
+
+        return ToSnapshotDto(proposalSnapshot);
+    }
+
+    public async Task<BookingDto> AcceptProposal(string customerId, int bookingId, int snapshotId, CancellationToken ct)
+    {
+        var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        if (booking.CustomerId != customerId)
+            throw new BookingException(403, "Chỉ khách hàng sở hữu đơn mới có quyền chấp nhận phương án.");
+
+        var snapshot = await repository.FindSnapshot(snapshotId, ct) ?? throw new BookingException(404, "Không tìm thấy snapshot phương án.");
+        if (snapshot.BookingId != bookingId)
+            throw new BookingException(404, "Snapshot không thuộc booking này.");
+
+        // Idempotent: nếu đã được duyệt trước đó
+        if (snapshot.SnapshotType == "agreed" && snapshot.AcceptedAt.HasValue && snapshot.AcceptedBy == customerId)
+        {
+            return ToDto(booking);
+        }
+
+        if (snapshot.SnapshotType != "proposal")
+            throw new BookingException(422, "Chỉ có thể chấp nhận snapshot loại phương án đề xuất (proposal).");
+
+        // Kiểm tra xem có proposal mới hơn không
+        var latestProposal = await repository.FindLatestProposal(bookingId, ct);
+        if (latestProposal is not null && latestProposal.Id != snapshot.Id && latestProposal.Version > snapshot.Version)
+            throw new BookingException(409, "Phương án này đã cũ. Vui lòng xem xét phương án mới nhất do đại lý gửi.");
+
+        snapshot.SnapshotType = "agreed";
+        snapshot.AcceptedAt = DateTime.UtcNow;
+        snapshot.AcceptedBy = customerId;
+
+        await repository.SaveChangesAsync(ct);
+
+        return ToDto(booking);
     }
 
     // WF06: Điểm danh hành khách
@@ -403,8 +553,124 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
     }
 
-    private static BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName) =>
-        new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
+    private static BookingSnapshotPayload BuildSnapshotPayload(Booking booking, Tour tour, int? sourceTourVersion, string? customNotes = null)
+    {
+        var pricingTiers = tour.PricingTiers.OrderBy(t => t.DisplayOrder).Select(t => new SnapshotPricingTier(
+            t.Id, t.Name ?? "Tiêu chuẩn", t.MinAge, t.MaxAge, t.PricePerGuest ?? 0)).ToList();
+
+        var passengers = booking.Participants.OrderBy(p => p.ParticipantIndex).Select(p => new SnapshotPassenger(
+            p.ParticipantIndex,
+            p.FullName,
+            Phone(p.Note),
+            p.DateOfBirth,
+            p.Gender,
+            p.IdentityNumber,
+            p.TierName,
+            p.Price)).ToList();
+
+        var itinerary = booking.Timelines.OrderBy(t => t.DayNumber).Select(t => new SnapshotDay(
+            t.DayNumber,
+            t.Title,
+            t.Description,
+            t.Attractions.Select(a => new SnapshotLocation(t.DayNumber, a.CustomizedLocationName ?? a.OriginalLocationName, a.Time)).ToList(),
+            t.Meals.Select(m => new SnapshotMeal(t.DayNumber, m.MealType, m.CustomizedRestaurantName ?? m.OriginalRestaurantName, m.Time, m.ServiceId, m.PriceDifference ?? 0)).ToList())).ToList();
+
+        var hotels = booking.Accommodations.Select(h => new SnapshotHotel(
+            h.Destination,
+            h.CustomizedHotelName ?? h.OriginalHotelName,
+            h.CustomizedStars ?? h.OriginalStars,
+            h.NightsCount,
+            h.ServiceId,
+            h.PriceDifference ?? 0)).ToList();
+
+        var paymentConditions = booking.PaymentRequests.Select(pr => new SnapshotPaymentCondition(
+            pr.Description.StartsWith("Đặt cọc") ? "deposit" : "balance",
+            pr.Amount,
+            pr.DueDate,
+            pr.Description)).ToList();
+
+        return new BookingSnapshotPayload(
+            SchemaVersion: 1,
+            TourId: booking.TourId ?? tour.Id,
+            TourCode: tour.Code ?? $"TRIP-{tour.Id}",
+            TourName: tour.Name ?? "Tour Du Lịch",
+            SourceTourVersion: sourceTourVersion,
+            Destination: tour.Destination,
+            DepartureLocation: tour.DepartureLocation,
+            DurationDays: tour.DurationDays ?? Math.Max(1, booking.Timelines.Count),
+            DurationNights: tour.DurationNights ?? 0,
+            StartDate: booking.StartDate,
+            EndDate: EndDate(booking),
+            AgencyId: tour.AgencyId ?? booking.Tour?.AgencyId ?? "",
+            AgencyName: tour.Agency?.Name ?? booking.Tour?.Agency?.Name,
+            BasePrice: tour.BasePrice ?? 0,
+            TotalAmount: booking.TotalAmount,
+            DepositAmount: DepositAmount(booking),
+            MinGuests: tour.MinGuests,
+            MaxGuests: tour.MaxGuests,
+            PricingTiers: pricingTiers,
+            Passengers: passengers,
+            Itinerary: itinerary,
+            Hotels: hotels,
+            Inclusions: tour.Inclusions,
+            Exclusions: tour.Exclusions,
+            CancellationPolicy: tour.CancellationPolicy,
+            PaymentConditions: paymentConditions,
+            CustomerNotes: customNotes ?? booking.SpecialRequests,
+            GeneratedAt: DateTime.UtcNow
+        );
+    }
+
+    private static BookingSnapshotSummaryDto ToSnapshotSummaryDto(BookingSnapshot s) =>
+        new(s.Id, s.BookingId, s.Version, s.SnapshotType, s.SourceTourVersion,
+            s.CreatedAt, s.CreatedBy, s.AcceptedAt, s.AcceptedBy);
+
+    private static BookingSnapshotDto ToSnapshotDto(BookingSnapshot s)
+    {
+        var payload = System.Text.Json.JsonSerializer.Deserialize<BookingSnapshotPayload>(s.SnapshotData,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException("Invalid snapshot json data");
+
+        return new(s.Id, s.BookingId, s.Version, s.SnapshotType, s.SourceTourVersion,
+            payload, s.CreatedAt, s.CreatedBy, s.AcceptedAt, s.AcceptedBy);
+    }
+
+    private static BookingDto ToDto(Booking b)
+    {
+        var snapshots = b.Snapshots ?? [];
+        var agreed = snapshots.Where(s => s.SnapshotType == "agreed" && s.AcceptedAt.HasValue && s.AcceptedBy != null)
+            .OrderByDescending(s => s.Version).FirstOrDefault();
+        var latestProposal = snapshots.Where(s => s.SnapshotType == "proposal")
+            .OrderByDescending(s => s.Version).FirstOrDefault();
+        var initialRequest = snapshots.Where(s => s.SnapshotType == "initial_request")
+            .OrderBy(s => s.Version).FirstOrDefault();
+
+        var effectiveSnapshot = agreed ?? latestProposal ?? initialRequest;
+        BookingSnapshotPayload? effectivePayload = null;
+        if (effectiveSnapshot is not null)
+        {
+            try
+            {
+                effectivePayload = System.Text.Json.JsonSerializer.Deserialize<BookingSnapshotPayload>(effectiveSnapshot.SnapshotData,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { }
+        }
+
+        string tourName = effectivePayload?.TourName ?? b.Tour?.Name ?? "Tour Du Lịch";
+        string? agencyId = effectivePayload?.AgencyId ?? b.Tour?.AgencyId;
+        string? agencyName = effectivePayload?.AgencyName ?? b.Tour?.Agency?.Name;
+
+        string snapshotStatus = agreed is not null
+            ? "agreed"
+            : (latestProposal is not null
+                ? "proposal_pending"
+                : (initialRequest is not null ? "initial_pending" : "legacy_unverified"));
+
+        int? effectiveVersion = effectiveSnapshot?.Version;
+
+        return new BookingDto(
+            b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
             b.TourId, tourName, agencyId, agencyName,
             b.StartDate, EndDate(b), TotalGuests(b), b.TotalAmount,
             DepositAmount(b), PaidAmount(b), b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(),
@@ -416,10 +682,56 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             b.CreatedAt ?? DateTime.UnixEpoch, b.UpdatedAt,
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
                 i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
-            b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
-                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CustomizedLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus)).ToList(),
-                t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CustomizedRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0)).ToList())).ToList(),
-            b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CustomizedHotelName??h.OriginalHotelName,h.CustomizedStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0)).ToList());
+            b.Timelines.OrderBy(t => t.DayNumber).Select(t => new BookingDayDto(t.Id, t.DayNumber, t.Title, t.Description,
+                t.Attractions.Select(a => new BookingLocationDto(a.Id, a.CustomizedLocationName ?? a.OriginalLocationName, a.Time, a.AttendanceStatus)).ToList(),
+                t.Meals.Select(m => new BookingMealDto(m.Id, m.MealType, m.CustomizedRestaurantName ?? m.OriginalRestaurantName, m.DateService, m.Time, m.ServiceId, m.PriceDifference ?? 0)).ToList())).ToList(),
+            b.Accommodations.Select(h => new BookingHotelDto(h.Id, h.Destination, h.CustomizedHotelName ?? h.OriginalHotelName, h.CustomizedStars ?? h.OriginalStars, h.NightsCount, h.ServiceId, h.PriceDifference ?? 0)).ToList(),
+            AgreedSnapshot: agreed is not null ? ToSnapshotDto(agreed) : null,
+            LatestProposal: latestProposal is not null ? ToSnapshotDto(latestProposal) : null,
+            InitialRequestSnapshot: initialRequest is not null ? ToSnapshotDto(initialRequest) : null,
+            SnapshotStatus: snapshotStatus,
+            EffectiveSnapshotVersion: effectiveVersion);
+    }
+
+    private static BookingListItem ToListItem(Booking b)
+    {
+        var snapshots = b.Snapshots ?? [];
+        var agreed = snapshots.Where(s => s.SnapshotType == "agreed" && s.AcceptedAt.HasValue && s.AcceptedBy != null)
+            .OrderByDescending(s => s.Version).FirstOrDefault();
+        var latestProposal = snapshots.Where(s => s.SnapshotType == "proposal")
+            .OrderByDescending(s => s.Version).FirstOrDefault();
+        var initialRequest = snapshots.Where(s => s.SnapshotType == "initial_request")
+            .OrderBy(s => s.Version).FirstOrDefault();
+        var effective = agreed ?? latestProposal ?? initialRequest;
+
+        string? tourName = null;
+        if (effective is not null)
+        {
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(effective.SnapshotData);
+                if (doc.RootElement.TryGetProperty("tourName", out var nameProp))
+                    tourName = nameProp.GetString();
+            }
+            catch { }
+        }
+        tourName ??= b.Tour?.Name;
+
+        string snapshotStatus = agreed is not null
+            ? "agreed"
+            : (latestProposal is not null
+                ? "proposal_pending"
+                : (initialRequest is not null ? "initial_pending" : "legacy_unverified"));
+
+        return new BookingListItem(
+            b.Id, b.BookingCode, tourName, b.Customer?.Name, b.ContactPhone,
+            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(),
+            b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(),
+            b.CreatedAt ?? DateTime.UnixEpoch,
+            snapshotStatus,
+            effective?.Version);
+    }
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),

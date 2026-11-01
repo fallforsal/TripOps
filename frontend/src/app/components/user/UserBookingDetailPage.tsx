@@ -51,6 +51,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
 
 interface UserBookingDetailPageProps {
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
@@ -460,6 +461,12 @@ export function UserBookingDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Booking Snapshot & Versioning Panel */}
+        <BookingSnapshotPanel
+          booking={booking}
+          currentUserRole="customer"
+        />
 
         {/* 2-Columns Main Layout (Similar to Company Booking Detail Page) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

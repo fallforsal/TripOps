@@ -92,6 +92,7 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
 
 interface AgencyBookingDetailPageProps {
   booking: Booking;
@@ -1758,6 +1759,12 @@ export function AgencyBookingDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Booking Snapshot & Versioning Panel */}
+      <BookingSnapshotPanel
+        booking={booking}
+        currentUserRole="agency"
+      />
 
       {/* Provider Price Verification Notice for Pending Bookings */}
       {booking.status === "pending" && (

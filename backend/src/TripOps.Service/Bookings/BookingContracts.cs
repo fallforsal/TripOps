@@ -79,7 +79,12 @@ public sealed record BookingDto(
     DateTime? UpdatedAt,
     IReadOnlyList<IncidentDto>? Incidents = null,
     IReadOnlyList<BookingDayDto>? SnapshotDays = null,
-    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null);
+    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null,
+    BookingSnapshotDto? AgreedSnapshot = null,
+    BookingSnapshotDto? LatestProposal = null,
+    BookingSnapshotDto? InitialRequestSnapshot = null,
+    string? SnapshotStatus = null,
+    int? EffectiveSnapshotVersion = null);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference);
@@ -100,7 +105,9 @@ public sealed record BookingListItem(
     decimal PaidAmount,
     string Status,
     string PaymentStatus,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? SnapshotStatus = null,
+    int? EffectiveSnapshotVersion = null);
 
 public sealed record ParticipantDto(
     int Id,
@@ -141,3 +148,119 @@ public sealed record IncidentDto(
     DateTime CreatedAt);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
+
+public sealed record CreateProposalRequest(string? Note);
+
+public sealed record BookingSnapshotSummaryDto(
+    int Id,
+    int BookingId,
+    int Version,
+    string SnapshotType,
+    int? SourceTourVersion,
+    DateTime CreatedAt,
+    string CreatedBy,
+    DateTime? AcceptedAt,
+    string? AcceptedBy
+);
+
+public sealed record BookingSnapshotDto(
+    int Id,
+    int BookingId,
+    int Version,
+    string SnapshotType,
+    int? SourceTourVersion,
+    BookingSnapshotPayload SnapshotData,
+    DateTime CreatedAt,
+    string CreatedBy,
+    DateTime? AcceptedAt,
+    string? AcceptedBy
+);
+
+public sealed record BookingSnapshotPayload(
+    int SchemaVersion,
+    int TourId,
+    string TourCode,
+    string TourName,
+    int? SourceTourVersion,
+    string? Destination,
+    string? DepartureLocation,
+    int DurationDays,
+    int DurationNights,
+    DateTime StartDate,
+    DateTime EndDate,
+    string AgencyId,
+    string? AgencyName,
+    decimal BasePrice,
+    decimal TotalAmount,
+    decimal DepositAmount,
+    int? MinGuests,
+    int? MaxGuests,
+    IReadOnlyList<SnapshotPricingTier> PricingTiers,
+    IReadOnlyList<SnapshotPassenger> Passengers,
+    IReadOnlyList<SnapshotDay> Itinerary,
+    IReadOnlyList<SnapshotHotel> Hotels,
+    string? Inclusions,
+    string? Exclusions,
+    string? CancellationPolicy,
+    IReadOnlyList<SnapshotPaymentCondition>? PaymentConditions,
+    string? CustomerNotes,
+    DateTime GeneratedAt
+);
+
+public sealed record SnapshotPricingTier(
+    int Id,
+    string Name,
+    int? MinAge,
+    int? MaxAge,
+    decimal PricePerGuest
+);
+
+public sealed record SnapshotPassenger(
+    int Index,
+    string FullName,
+    string? PhoneNumber,
+    DateTime? DateOfBirth,
+    string? Gender,
+    string? IdentityNumber,
+    string? TierName,
+    decimal Price
+);
+
+public sealed record SnapshotDay(
+    int DayNumber,
+    string Title,
+    string? Description,
+    IReadOnlyList<SnapshotLocation> Locations,
+    IReadOnlyList<SnapshotMeal> Meals
+);
+
+public sealed record SnapshotLocation(
+    int DayNumber,
+    string Name,
+    DateTime? Time
+);
+
+public sealed record SnapshotMeal(
+    int DayNumber,
+    string MealType,
+    string Name,
+    DateTime? Time,
+    int? ServiceId,
+    decimal PriceDifference
+);
+
+public sealed record SnapshotHotel(
+    string Destination,
+    string Name,
+    int? Stars,
+    int? Nights,
+    int? ServiceId,
+    decimal PriceDifference
+);
+
+public sealed record SnapshotPaymentCondition(
+    string ConditionType,
+    decimal Amount,
+    DateTime? DueDate,
+    string Description
+);

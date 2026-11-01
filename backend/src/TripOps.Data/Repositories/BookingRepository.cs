@@ -17,6 +17,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
+        .Include(b => b.Snapshots!).ThenInclude(s => s.Creator)
+        .Include(b => b.Snapshots!).ThenInclude(s => s.Acceptor)
         .AsSplitQuery();
 
     public Task<Booking?> Find(int id, CancellationToken ct) =>
@@ -33,7 +35,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
-            .Include(b => b.PaymentRequests).AsSplitQuery()
+            .Include(b => b.PaymentRequests)
+            .Include(b => b.Snapshots).AsSplitQuery()
             .Where(b => b.CustomerId == customerId);
 
         if (status.HasValue)
@@ -55,7 +58,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
-            .Include(b => b.PaymentRequests).AsSplitQuery()
+            .Include(b => b.PaymentRequests)
+            .Include(b => b.Snapshots).AsSplitQuery()
             .Where(b => b.Tour != null && b.Tour.AgencyId == agencyId);
 
         if (status.HasValue)
@@ -86,7 +90,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
-            .Include(b => b.PaymentRequests).AsSplitQuery()
+            .Include(b => b.PaymentRequests)
+            .Include(b => b.Snapshots).AsSplitQuery()
             .Where(b => b.AssignedGuides.Any(ag => ag.GuideId == guideId));
 
         var total = await query.CountAsync(ct);
@@ -129,6 +134,54 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.PaymentTransactions.AsNoTracking().SingleOrDefaultAsync(t => t.TransactionCode == code, ct);
 
     public void AddIncident(BookingIncident incident) => db.BookingIncidents.Add(incident);
+
+    public Task<BookingSnapshot?> FindSnapshot(int snapshotId, CancellationToken ct) =>
+        db.BookingSnapshots
+            .Include(s => s.Booking)
+            .Include(s => s.Creator)
+            .Include(s => s.Acceptor)
+            .SingleOrDefaultAsync(s => s.Id == snapshotId, ct);
+
+    public Task<List<BookingSnapshot>> ListSnapshots(int bookingId, CancellationToken ct) =>
+        db.BookingSnapshots
+            .Include(s => s.Creator)
+            .Include(s => s.Acceptor)
+            .Where(s => s.BookingId == bookingId)
+            .OrderByDescending(s => s.Version)
+            .ToListAsync(ct);
+
+    public Task<BookingSnapshot?> FindEffectiveAgreedSnapshot(int bookingId, CancellationToken ct) =>
+        db.BookingSnapshots
+            .Include(s => s.Creator)
+            .Include(s => s.Acceptor)
+            .Where(s => s.BookingId == bookingId &&
+                        s.SnapshotType == "agreed" &&
+                        s.AcceptedAt != null &&
+                        s.AcceptedBy != null)
+            .OrderByDescending(s => s.Version)
+            .FirstOrDefaultAsync(ct);
+
+    public Task<BookingSnapshot?> FindLatestProposal(int bookingId, CancellationToken ct) =>
+        db.BookingSnapshots
+            .Include(s => s.Creator)
+            .Include(s => s.Acceptor)
+            .Where(s => s.BookingId == bookingId && s.SnapshotType == "proposal")
+            .OrderByDescending(s => s.Version)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<int> GetMaxSnapshotVersion(int bookingId, CancellationToken ct)
+    {
+        var max = await db.BookingSnapshots
+            .Where(s => s.BookingId == bookingId)
+            .Select(s => (int?)s.Version)
+            .MaxAsync(ct);
+        return max ?? 0;
+    }
+
+    public void AddSnapshot(BookingSnapshot snapshot) => db.BookingSnapshots.Add(snapshot);
+
+    public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken ct) =>
+        db.Database.BeginTransactionAsync(ct);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

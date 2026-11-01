@@ -64,6 +64,129 @@ export interface AssignedGuideDto {
   agencyId?: string;
 }
 
+export interface SnapshotPricingTier {
+  id: number;
+  name: string;
+  minAge?: number;
+  maxAge?: number;
+  pricePerGuest: number;
+}
+
+export interface SnapshotPassenger {
+  index: number;
+  fullName: string;
+  dateOfBirth?: string;
+  gender?: string;
+  identityNumber?: string;
+  tierName?: string;
+  basePrice: number;
+  extraPrice: number;
+  finalPrice: number;
+  roommateNote?: string;
+  restaurantNote?: string;
+  note?: string;
+}
+
+export interface SnapshotDay {
+  dayNumber: number;
+  title: string;
+  description?: string;
+  locations?: {
+    name: string;
+    time?: string;
+    customerNote?: string;
+    priceDifference: number;
+  }[];
+  meals?: {
+    serviceId?: number;
+    mealType: string;
+    restaurantName: string;
+    dateService?: string;
+    time?: string;
+    priceDifference: number;
+    isCustomized: boolean;
+  }[];
+}
+
+export interface SnapshotHotel {
+  serviceId?: number;
+  destination: string;
+  hotelName: string;
+  stars?: number;
+  nights?: number;
+  priceDifference: number;
+  isCustomized: boolean;
+}
+
+export interface SnapshotPaymentCondition {
+  type: string;
+  amount: number;
+  dueDate?: string;
+  description: string;
+}
+
+export interface BookingSnapshotPayload {
+  schemaVersion: number;
+  tourId: number;
+  tourCode: string;
+  tourName: string;
+  sourceTourVersion?: number;
+  destination?: string;
+  departureLocation?: string;
+  durationDays: number;
+  durationNights: number;
+  startDate: string;
+  endDate: string;
+  agencyId: string;
+  agencyName?: string;
+  basePrice: number;
+  totalAmount: number;
+  depositAmount: number;
+  minGuests?: number;
+  maxGuests?: number;
+  pricingTiers: SnapshotPricingTier[];
+  passengers: SnapshotPassenger[];
+  itinerary: SnapshotDay[];
+  hotels: SnapshotHotel[];
+  inclusions?: string;
+  exclusions?: string;
+  cancellationPolicy?: string;
+  paymentConditions?: SnapshotPaymentCondition[];
+  customerNotes?: string;
+  generatedAt: string;
+}
+
+export interface BookingSnapshotDto {
+  id: number;
+  bookingId: number;
+  version: number;
+  snapshotType: "initial_request" | "proposal" | "agreed";
+  sourceTourVersion?: number;
+  createdAt: string;
+  createdBy: string;
+  creatorName?: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
+  acceptorName?: string;
+  snapshotData: BookingSnapshotPayload;
+}
+
+export interface BookingSnapshotSummaryDto {
+  id: number;
+  bookingId: number;
+  version: number;
+  snapshotType: "initial_request" | "proposal" | "agreed";
+  sourceTourVersion?: number;
+  createdAt: string;
+  createdBy: string;
+  creatorName?: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
+  acceptorName?: string;
+  tourName: string;
+  totalAmount: number;
+}
+
 export interface BookingDto {
   id: number;
   bookingCode: string;
@@ -80,14 +203,14 @@ export interface BookingDto {
   depositAmount: number;
   paidAmount: number;
   status:
-    | "Pending"
-    | "Deposited"
-    | "Confirmed"
-    | "Paid"
-    | "InProgress"
-    | "Completed"
-    | "Cancelled"
-    | "Rejected";
+  | "Pending"
+  | "Deposited"
+  | "Confirmed"
+  | "Paid"
+  | "InProgress"
+  | "Completed"
+  | "Cancelled"
+  | "Rejected";
   paymentStatus: "Unpaid" | "PartiallyPaid" | "Paid" | "Refunded";
   contactName?: string;
   contactPhone?: string;
@@ -324,6 +447,39 @@ export async function reportIncident(
   return await http<IncidentDto>(`/guide/bookings/${bookingId}/incidents`, {
     method: "POST",
     body: JSON.stringify({ incidentType, title, description, severity }),
+  });
+}
+
+export async function getBookingSnapshots(
+  bookingId: number,
+): Promise<BookingSnapshotSummaryDto[]> {
+  return await http<BookingSnapshotSummaryDto[]>(`/bookings/${bookingId}/snapshots`);
+}
+
+export async function getBookingSnapshotDetail(
+  bookingId: number,
+  snapshotId: number,
+): Promise<BookingSnapshotDto> {
+  return await http<BookingSnapshotDto>(`/bookings/${bookingId}/snapshots/${snapshotId}`);
+}
+
+export async function createAgencyProposal(
+  bookingId: number,
+  proposal?: { note?: string } | string,
+): Promise<BookingSnapshotDto> {
+  const note = typeof proposal === "string" ? proposal : proposal?.note;
+  return await http<BookingSnapshotDto>(`/agency/bookings/${bookingId}/proposals`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function acceptBookingProposal(
+  bookingId: number,
+  snapshotId: number,
+): Promise<BookingDto> {
+  return await http<BookingDto>(`/bookings/${bookingId}/snapshots/${snapshotId}/accept`, {
+    method: "POST",
   });
 }
 

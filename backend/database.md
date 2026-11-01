@@ -298,6 +298,20 @@ Table bookings {
 // ============================================================================
 // DANH SÁCH HÀNH KHÁCH THEO TỪNG CHẶNG VÀ CÔNG TY
 // ============================================================================
+Table booking_snapshots {
+  id int [pk, increment]
+  booking_id int [not null, note: 'FK trỏ tới bookings.id']
+  version int [not null]
+  snapshot_type varchar(30) [not null, note: 'initial_request, proposal, agreed']
+  snapshot_data json [not null]
+  source_tour_version int [note: 'Phiên bản tour nguồn tại thời điểm tạo']
+  created_at timestamp [not null, default: `now()`]
+  created_by varchar(36) [not null, note: 'FK tới users.id']
+  accepted_at timestamp
+  accepted_by varchar(36) [note: 'FK tới users.id']
+  Note: 'Lưu snapshot thương mại của booking: initial_request, proposal, agreed. Version > 0, unique(booking_id, version).'
+}
+
 Table booking_participants {
   id int [pk, increment]
   booking_id int [not null, note: 'FK trỏ tới bookings.id']
