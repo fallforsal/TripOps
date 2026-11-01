@@ -22,11 +22,13 @@ import { AgencyBookingManagement } from "./AgencyBookingManagement";
 import { AgencyGuideManagement } from "./AgencyGuideManagement";
 import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
+import type { BookingDto } from "@/app/services/wf05Bookings";
 import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface AgencyDashboardProps {
+  onSnapshotUpdated?: (updated: BookingDto) => void;
   providerGroupRequests?: ProviderGroupReservationRequest[];
   currentUser: User;
   company: TourCompany;
@@ -63,6 +65,7 @@ interface AgencyDashboardProps {
 }
 
 export function AgencyDashboard({
+  onSnapshotUpdated,
   currentUser,
   company,
   tours,
@@ -277,6 +280,7 @@ export function AgencyDashboard({
         if (currentSelectedBooking) {
           return (
             <AgencyBookingDetailPage
+              onSnapshotUpdated={onSnapshotUpdated}
               booking={currentSelectedBooking}
               guides={companyGuides}
               companyName={company.name}

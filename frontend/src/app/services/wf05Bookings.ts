@@ -75,16 +75,12 @@ export interface SnapshotPricingTier {
 export interface SnapshotPassenger {
   index: number;
   fullName: string;
+  phoneNumber?: string | null;
   dateOfBirth?: string;
   gender?: string;
   identityNumber?: string;
   tierName?: string;
-  basePrice: number;
-  extraPrice: number;
-  finalPrice: number;
-  roommateNote?: string;
-  restaurantNote?: string;
-  note?: string;
+  price: number;
 }
 
 export interface SnapshotDay {
@@ -94,32 +90,29 @@ export interface SnapshotDay {
   locations?: {
     name: string;
     time?: string;
-    customerNote?: string;
-    priceDifference: number;
+    dayNumber: number;
   }[];
   meals?: {
     serviceId?: number;
-    mealType: string;
-    restaurantName: string;
-    dateService?: string;
+    mealType: "breakfast" | "lunch" | "dinner";
+    dayNumber: number;
+    name: string;
     time?: string;
     priceDifference: number;
-    isCustomized: boolean;
   }[];
 }
 
 export interface SnapshotHotel {
   serviceId?: number;
   destination: string;
-  hotelName: string;
+  name: string;
   stars?: number;
   nights?: number;
   priceDifference: number;
-  isCustomized: boolean;
 }
 
 export interface SnapshotPaymentCondition {
-  type: string;
+  conditionType: string;
   amount: number;
   dueDate?: string;
   description: string;
@@ -130,7 +123,7 @@ export interface BookingSnapshotPayload {
   tourId: number;
   tourCode: string;
   tourName: string;
-  sourceTourVersion?: number;
+  sourceTourVersion?: number | null;
   destination?: string;
   departureLocation?: string;
   durationDays: number;
@@ -161,7 +154,7 @@ export interface BookingSnapshotDto {
   bookingId: number;
   version: number;
   snapshotType: "initial_request" | "proposal" | "agreed";
-  sourceTourVersion?: number;
+  sourceTourVersion?: number | null;
   createdAt: string;
   createdBy: string;
   creatorName?: string;
@@ -176,16 +169,16 @@ export interface BookingSnapshotSummaryDto {
   bookingId: number;
   version: number;
   snapshotType: "initial_request" | "proposal" | "agreed";
-  sourceTourVersion?: number;
+  sourceTourVersion?: number | null;
   createdAt: string;
   createdBy: string;
   creatorName?: string;
   acceptedAt?: string;
   acceptedBy?: string;
   acceptorName?: string;
-  tourName: string;
-  totalAmount: number;
 }
+
+export type BookingSnapshotStatus = "initial_pending" | "proposal_pending" | "agreed" | "legacy_unverified";
 
 export interface BookingDto {
   id: number;
@@ -221,6 +214,11 @@ export interface BookingDto {
   createdAt: string;
   updatedAt?: string;
   incidents?: IncidentDto[];
+  agreedSnapshot?: BookingSnapshotDto | null;
+  latestProposal?: BookingSnapshotDto | null;
+  initialRequestSnapshot?: BookingSnapshotDto | null;
+  snapshotStatus?: BookingSnapshotStatus;
+  effectiveSnapshotVersion?: number | null;
   snapshotDays?: {
     id: number;
     dayNumber: number;
@@ -255,6 +253,8 @@ export interface BookingDto {
 export interface BookingListItem {
   id: number;
   bookingCode: string;
+  snapshotStatus?: BookingSnapshotStatus;
+  effectiveSnapshotVersion?: number | null;
   tourName?: string;
   customerName?: string;
   contactPhone?: string;

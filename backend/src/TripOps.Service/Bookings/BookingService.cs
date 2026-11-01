@@ -181,7 +181,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         repository.Add(booking);
 
         // Đóng gói Snapshot v1 (initial_request) ngay trong cùng giao dịch tạo booking
-        int? sourceTourVersion = tour.Versions?.Max(v => (int?)v.VersionNumber) ?? 1;
+        int? sourceTourVersion = tour.Version;
         var initialPayload = BuildSnapshotPayload(booking, tour, sourceTourVersion, request.SpecialRequests);
         var initialJson = System.Text.Json.JsonSerializer.Serialize(initialPayload, new System.Text.Json.JsonSerializerOptions
         {
@@ -433,12 +433,14 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
     public async Task<BookingSnapshotDto> CreateProposal(string agencyId, int bookingId, CreateProposalRequest request, CancellationToken ct)
     {
+        await using var transaction = await repository.BeginSnapshotChange(bookingId, ct);
         var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.Tour?.AgencyId != agencyId && !booking.BookingAgencies.Any(ba => ba.AgencyId == agencyId))
             throw new BookingException(403, "Chỉ Agency phụ trách mới có quyền gửi phương án đề xuất cho booking này.");
 
-        if (booking.Status == BookingStatus.Cancelled || booking.Status == BookingStatus.Rejected)
-            throw new BookingException(422, "Không thể gửi phương án cho đơn đặt đã hủy hoặc bị từ chối.");
+        EnsureProposalAllowed(booking);
+        if (booking.Snapshots.Any(s => s.SnapshotType == "agreed"))
+            throw new BookingException(409, "Đơn đã có phương án được chấp nhận. Thay đổi thỏa thuận cần thực hiện qua phụ lục (amendment).");
 
         var maxVersion = await repository.GetMaxSnapshotVersion(bookingId, ct);
         var newVersion = maxVersion + 1;
@@ -447,7 +449,26 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             ? booking.SpecialRequests
             : (string.IsNullOrWhiteSpace(booking.SpecialRequests) ? request.Note : $"{booking.SpecialRequests}\n[Ghi chú đề xuất: {request.Note}]");
 
-        var payload = BuildSnapshotPayload(booking, booking.Tour!, null, note);
+        // Preserve the catalogue terms that this booking was based on, even if the
+        // public tour has since changed. Refresh operational choices/prices from the booking.
+        var source = booking.Snapshots.Where(s => s.SnapshotType == "initial_request")
+            .OrderBy(s => s.Version).FirstOrDefault()
+            ?? booking.Snapshots.OrderByDescending(s => s.Version).FirstOrDefault();
+        var terms = source is null ? null : ToSnapshotDto(source).SnapshotData;
+        var current = BuildSnapshotPayload(booking, booking.Tour!, booking.Tour!.Version, note);
+        var payload = terms is null ? current : terms with
+        {
+            StartDate = current.StartDate,
+            EndDate = current.EndDate,
+            TotalAmount = current.TotalAmount,
+            DepositAmount = current.DepositAmount,
+            Passengers = current.Passengers,
+            Itinerary = current.Itinerary,
+            Hotels = current.Hotels,
+            PaymentConditions = current.PaymentConditions,
+            CustomerNotes = current.CustomerNotes,
+            GeneratedAt = current.GeneratedAt
+        };
         var json = System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions
         {
             PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
@@ -467,12 +488,14 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         repository.AddSnapshot(proposalSnapshot);
         await repository.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return ToSnapshotDto(proposalSnapshot);
     }
 
     public async Task<BookingDto> AcceptProposal(string customerId, int bookingId, int snapshotId, CancellationToken ct)
     {
+        await using var transaction = await repository.BeginSnapshotChange(bookingId, ct);
         var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.CustomerId != customerId)
             throw new BookingException(403, "Chỉ khách hàng sở hữu đơn mới có quyền chấp nhận phương án.");
@@ -484,24 +507,34 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         // Idempotent: nếu đã được duyệt trước đó
         if (snapshot.SnapshotType == "agreed" && snapshot.AcceptedAt.HasValue && snapshot.AcceptedBy == customerId)
         {
+            await transaction.CommitAsync(ct);
             return ToDto(booking);
         }
 
+        EnsureProposalAllowed(booking);
         if (snapshot.SnapshotType != "proposal")
             throw new BookingException(422, "Chỉ có thể chấp nhận snapshot loại phương án đề xuất (proposal).");
 
-        // Kiểm tra xem có proposal mới hơn không
-        var latestProposal = await repository.FindLatestProposal(bookingId, ct);
-        if (latestProposal is not null && latestProposal.Id != snapshot.Id && latestProposal.Version > snapshot.Version)
+        var latestVersion = await repository.GetMaxSnapshotVersion(bookingId, ct);
+        if (snapshot.Version != latestVersion)
             throw new BookingException(409, "Phương án này đã cũ. Vui lòng xem xét phương án mới nhất do đại lý gửi.");
+        if (booking.Snapshots.Any(s => s.SnapshotType == "agreed"))
+            throw new BookingException(409, "Đơn đã chốt phương án. Thay đổi thỏa thuận cần thực hiện qua phụ lục (amendment).");
 
         snapshot.SnapshotType = "agreed";
         snapshot.AcceptedAt = DateTime.UtcNow;
         snapshot.AcceptedBy = customerId;
 
         await repository.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return ToDto(booking);
+    }
+
+    private static void EnsureProposalAllowed(Booking booking)
+    {
+        if (booking.Status is not (BookingStatus.Pending or BookingStatus.Deposited or BookingStatus.Confirmed or BookingStatus.Paid))
+            throw new BookingException(409, "Trạng thái đơn đặt không còn cho phép gửi hoặc chấp nhận phương án.");
     }
 
     // WF06: Điểm danh hành khách

@@ -418,6 +418,12 @@ function Application() {
     });
   };
 
+  const handleSnapshotUpdated = (dto: BookingDto) => {
+    const updated = fromApiBooking(dto, tours, currentUser);
+    setBookings(prev => prev.map(b => b.id === updated.id ? updated : b));
+    setSelectedUserBooking(prev => prev?.id === updated.id ? updated : prev);
+  };
+
   const handleViewUserBookingDetail = async (booking: Booking) => {
     setSelectedUserBooking(booking);
     setCurrentPage("user-booking-detail");
@@ -1166,6 +1172,7 @@ function Application() {
               onUpdateGuide={handleUpdateGuide}
               onRemoveGuide={handleRemoveGuide}
               onApproveBooking={handleApproveBooking}
+              onSnapshotUpdated={handleSnapshotUpdated}
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
               onUpdateAssignedGuides={handleUpdateAssignedGuides}
@@ -1412,6 +1419,7 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
+              onSnapshotUpdated={handleSnapshotUpdated}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking

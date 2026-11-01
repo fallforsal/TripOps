@@ -9,6 +9,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
     private IQueryable<Booking> Details() => db.Bookings
         .Include(b => b.Customer)
         .Include(b => b.Tour!).ThenInclude(t => t.Agency)
+        .Include(b => b.Tour!).ThenInclude(t => t.PricingTiers)
         .Include(b => b.Participants!).ThenInclude(p => p.AssignedGuide)
         .Include(b => b.AssignedGuides!).ThenInclude(ag => ag.Guide)
         .Include(b => b.Incidents)
@@ -179,6 +180,24 @@ public sealed class BookingRepository(TripOpsDbContext db)
     }
 
     public void AddSnapshot(BookingSnapshot snapshot) => db.BookingSnapshots.Add(snapshot);
+
+    // Serialize proposal/accept changes per booking, including the latest-version check.
+    public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginSnapshotChange(int bookingId, CancellationToken ct)
+    {
+        var transaction = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            if (db.Database.IsSqlServer())
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT [id] FROM [bookings] WITH (UPDLOCK, HOLDLOCK) WHERE [id] = {bookingId}", ct);
+            return transaction;
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
 
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(CancellationToken ct) =>
         db.Database.BeginTransactionAsync(ct);

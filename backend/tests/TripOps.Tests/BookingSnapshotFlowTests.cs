@@ -212,6 +212,11 @@ public sealed class BookingSnapshotFlowTests
         Assert.Null(proposal.AcceptedAt);
         Assert.Null(proposal.AcceptedBy);
         Assert.Contains("Nâng cấp phòng hướng biển", proposal.SnapshotData.CustomerNotes);
+        Assert.Equal("Tour Đà Nẵng 3N2Đ Ban Đầu", proposal.SnapshotData.TourName);
+        Assert.Equal(3000000, proposal.SnapshotData.BasePrice);
+        Assert.Equal(created.InitialRequestSnapshot.SourceTourVersion, proposal.SourceTourVersion);
+        Assert.Single(proposal.SnapshotData.PricingTiers);
+        Assert.Equal(3000000, proposal.SnapshotData.PricingTiers[0].PricePerGuest);
 
         // Booking status is proposal_pending
         var afterProposal = await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{bookingId}");
@@ -239,6 +244,9 @@ public sealed class BookingSnapshotFlowTests
         // 8. Idempotent acceptance
         var reAcceptRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/snapshots/{proposal.Id}/accept", new { });
         Assert.Equal(HttpStatusCode.OK, reAcceptRes.StatusCode);
+        var repeated = await reAcceptRes.Content.ReadFromJsonAsync<BookingDto>();
+        Assert.Equal(agreedBooking.AgreedSnapshot.AcceptedAt, repeated!.AgreedSnapshot!.AcceptedAt);
+        Assert.Equal(2, (await customer.GetFromJsonAsync<List<BookingSnapshotSummaryDto>>($"/api/v1/bookings/{bookingId}/snapshots"))!.Count);
 
         // 9. Entity Framework change tracker immutability validation
         using (var scope = app.Services.CreateScope())
@@ -251,6 +259,7 @@ public sealed class BookingSnapshotFlowTests
             db.BookingSnapshots.Remove(snapEntity);
             var exDelete = await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
             Assert.Contains("immutable", exDelete.Message, StringComparison.OrdinalIgnoreCase);
+            db.ChangeTracker.Clear();
 
             // Re-fetch and verify cannot tamper version or data
             var snapEntity2 = await db.BookingSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == proposal.Id);
@@ -260,5 +269,74 @@ public sealed class BookingSnapshotFlowTests
             var exModify = await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
             Assert.Contains("immutable", exModify.Message, StringComparison.OrdinalIgnoreCase);
         }
+    }
+    private static async Task<int> NewBooking(HttpClient customer) {
+        var response = await customer.PostAsJsonAsync("/api/v1/bookings", new CreateBookingRequest(
+            1, DateTime.UtcNow.Date.AddDays(7), "Snapshot Review", "0901234567", "customer1@example.test", "REVIEW ONLY",
+            [new ParticipantInput("Review Passenger", "0901234567", new DateTime(1990,1,1), "Nam", "001234567890", 1,
+                Note: "Ghi chu rieng", RoommateNote: "Hai giuong don", RestaurantNote: "An chay")]));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<BookingDto>())!.Id;
+    }
+    private static async Task<BookingSnapshotDto> Proposal(HttpClient agency, int bookingId, string note) {
+        var response = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/proposals", new CreateProposalRequest(note));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<BookingSnapshotDto>())!;
+    }
+    [Fact] public async Task CancelledBooking_MustNotAcceptPendingProposal() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer); var proposal=await Proposal(agency,id,"v2");
+        var cancel=await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/cancel",new {reason="REVIEW cancellation"});
+        cancel.EnsureSuccessStatusCode();
+        var response=await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{proposal.Id}/accept", new {});
+        Assert.True(response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity,
+            $"Expected rejection for cancelled booking; actual={(int)response.StatusCode}; body={await response.Content.ReadAsStringAsync()}");
+    }
+    [Fact] public async Task AcceptedBooking_RequiresAmendmentForFurtherChanges() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer); var p2=await Proposal(agency,id,"v2");
+        var accepted = await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p2.Id}/accept", new {});
+        accepted.EnsureSuccessStatusCode();
+        var original = (await accepted.Content.ReadFromJsonAsync<BookingDto>())!.AgreedSnapshot!;
+        var another = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/proposals",new CreateProposalRequest("v3"));
+        Assert.Equal(HttpStatusCode.Conflict, another.StatusCode);
+        int pendingId;
+        // Simulate a pending proposal left by an older deployment after an agreement.
+        using(var scope=app.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var pending = new BookingSnapshot {BookingId=id,Version=3,SnapshotType="proposal",SnapshotData=System.Text.Json.JsonSerializer.Serialize(p2.SnapshotData),CreatedBy="agency1",CreatedAt=DateTime.UtcNow};
+            db.BookingSnapshots.Add(pending); await db.SaveChangesAsync(); pendingId=pending.Id;
+        }
+        var response=await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{pendingId}/accept", new {});
+        Assert.Equal(HttpStatusCode.Conflict,response.StatusCode);
+        var unchanged=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{id}");
+        Assert.Equal(original.Id,unchanged!.AgreedSnapshot!.Id);
+        Assert.Equal(original.AcceptedAt,unchanged.AgreedSnapshot.AcceptedAt);
+    }
+    [Fact] public async Task OlderProposal_MustStayStaleAfterNewerProposalAccepted() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer); var p2=await Proposal(agency,id,"v2"); var p3=await Proposal(agency,id,"v3");
+        (await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p3.Id}/accept", new {})).EnsureSuccessStatusCode();
+        var response=await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p2.Id}/accept", new {});
+        Assert.Equal(HttpStatusCode.Conflict,response.StatusCode);
+    }
+    [Fact] public async Task Proposal_MustRetainPricingTiersFromAuthoritativeBookingSource() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer); var proposal=await Proposal(agency,id,"v2");
+        Assert.NotEmpty(proposal.SnapshotData.PricingTiers);
+    }
+    [Fact] public async Task InitialSnapshot_MustUseActualTourVersion() {
+        using var app = new App(); await app.Initialize();
+        using(var scope=app.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var tour=await db.Tours.FindAsync(1); tour!.Version=7; await db.SaveChangesAsync();
+        }
+        var customer=await app.Client("customer1@example.test"); var id=await NewBooking(customer);
+        var booking=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{id}");
+        Assert.Equal(7, booking!.InitialRequestSnapshot!.SourceTourVersion);
     }
 }

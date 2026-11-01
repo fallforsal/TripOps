@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   History,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { toast } from "sonner";
@@ -34,14 +35,17 @@ import {
   getBookingSnapshotDetail,
   createAgencyProposal,
   acceptBookingProposal,
+  getAgencyBookingDetail,
+  type BookingDto,
   type BookingSnapshotSummaryDto,
   type BookingSnapshotDto,
 } from "@/app/services/wf05Bookings";
+import { acceptedSnapshotFromBooking, canChangeBookingProposal, selectSnapshotVersions } from "@/app/services/bookingSnapshots";
 
 interface BookingSnapshotPanelProps {
   booking: Booking;
   currentUserRole?: "customer" | "agency" | "admin" | "guide";
-  onSnapshotUpdated?: () => void;
+  onSnapshotUpdated?: (updated: BookingDto) => void;
 }
 
 function formatVND(n: number) {
@@ -86,6 +90,10 @@ export function BookingSnapshotPanel({
   const [activeSnapshotDetail, setActiveSnapshotDetail] = useState<BookingSnapshotDto | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRevision, setDetailRevision] = useState(0);
+  const listRequest = useRef(0);
 
   // Agency proposal creation modal state
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -103,28 +111,33 @@ export function BookingSnapshotPanel({
   const bookingIdNumber = Number(booking.id);
 
   // Load snapshot list
-  const loadSnapshots = async () => {
+  const loadSnapshots = async (preferredId?: number) => {
     if (!bookingIdNumber || isNaN(bookingIdNumber)) return;
+    const requestId = ++listRequest.current;
     try {
       setIsLoading(true);
+      setLoadError(null);
       const list = await getBookingSnapshots(bookingIdNumber);
-      setSnapshots(list);
-
-      // Default select the effective/agreed snapshot or the latest proposal/version
-      if (list.length > 0) {
-        const agreed = list.find((s) => s.snapshotType === "agreed");
-        const defaultChoice = agreed || list[list.length - 1];
-        setSelectedSnapshotId(defaultChoice.id);
-      }
+      if (requestId !== listRequest.current) return;
+      const versions = selectSnapshotVersions(list);
+      setSnapshots(versions.sorted);
+      const selection = versions.sorted.find(s => s.id === preferredId) ?? versions.effective;
+      setSelectedSnapshotId(selection?.id ?? null);
+      if (!selection) setActiveSnapshotDetail(null);
+      setDetailRevision(r => r + 1);
     } catch (err: any) {
-      console.warn("Could not load snapshots:", err.message);
+      if (requestId === listRequest.current) setLoadError(err.message || "Không tải được lịch sử phương án.");
     } finally {
-      setIsLoading(false);
+      if (requestId === listRequest.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    setSnapshots([]);
+    setSelectedSnapshotId(null);
+    setActiveSnapshotDetail(null);
     loadSnapshots();
+    return () => { listRequest.current++; };
   }, [booking.id]);
 
   // Load detail whenever selectedSnapshotId changes
@@ -135,13 +148,15 @@ export function BookingSnapshotPanel({
     const fetchDetail = async () => {
       try {
         setIsLoadingDetail(true);
+        setDetailError(null);
+        setActiveSnapshotDetail(null);
         const detail = await getBookingSnapshotDetail(bookingIdNumber, selectedSnapshotId);
         if (!cancelled) {
           setActiveSnapshotDetail(detail);
         }
       } catch (err: any) {
         if (!cancelled) {
-          console.warn("Could not load snapshot detail:", err.message);
+          setDetailError(err.message || "Không tải được chi tiết phương án.");
         }
       } finally {
         if (!cancelled) setIsLoadingDetail(false);
@@ -152,24 +167,13 @@ export function BookingSnapshotPanel({
     return () => {
       cancelled = true;
     };
-  }, [bookingIdNumber, selectedSnapshotId]);
+  }, [bookingIdNumber, selectedSnapshotId, detailRevision]);
 
   // Identify snapshot status
-  const latestProposal = useMemo(() => {
-    return snapshots.filter((s) => s.snapshotType === "proposal").pop();
-  }, [snapshots]);
-
-  const agreedSnapshot = useMemo(() => {
-    return snapshots.find((s) => s.snapshotType === "agreed");
-  }, [snapshots]);
-
-  const initialSnapshot = useMemo(() => {
-    return snapshots.find((s) => s.snapshotType === "initial_request");
-  }, [snapshots]);
-
-  const hasPendingProposal =
-    Boolean(latestProposal) &&
-    (!agreedSnapshot || (latestProposal && latestProposal.version > agreedSnapshot.version));
+  const { proposal: latestProposal, agreed: agreedSnapshot } = useMemo(
+    () => selectSnapshotVersions(snapshots), [snapshots]);
+  const canChangeProposal = canChangeBookingProposal(booking.status) && !agreedSnapshot && !booking.agreedSnapshot;
+  const hasPendingProposal = canChangeProposal && Boolean(latestProposal) && !isLoading && !loadError;
 
   // Handler: Agency sends proposal
   const handleCreateProposal = async () => {
@@ -182,9 +186,9 @@ export function BookingSnapshotPanel({
       toast.success(`Đã gửi phương án phiên bản ${created.version} tới khách hàng!`);
       setIsProposalModalOpen(false);
       setProposalNote("");
-      await loadSnapshots();
-      setSelectedSnapshotId(created.id);
-      onSnapshotUpdated?.();
+      await loadSnapshots(created.id);
+      const refreshed = await getAgencyBookingDetail(bookingIdNumber);
+      onSnapshotUpdated?.(refreshed);
     } catch (err: any) {
       toast.error(err.message || "Không thể tạo phương án mới");
     } finally {
@@ -198,12 +202,13 @@ export function BookingSnapshotPanel({
     try {
       setIsAccepting(true);
       const updated = await acceptBookingProposal(bookingIdNumber, proposalId);
+      const agreed = acceptedSnapshotFromBooking(updated);
       toast.success(
-        `Đã chấp nhận phương án phiên bản ${updated.version}! Hợp đồng dịch vụ đã được cập nhật.`
+        `Đã chấp nhận phương án phiên bản ${agreed.version}! Hợp đồng dịch vụ đã được cập nhật.`
       );
-      await loadSnapshots();
-      setSelectedSnapshotId(updated.id);
-      onSnapshotUpdated?.();
+      setActiveSnapshotDetail(agreed);
+      onSnapshotUpdated?.(updated);
+      await loadSnapshots(agreed.id);
     } catch (err: any) {
       toast.error(err.message || "Không thể chấp nhận phương án này");
     } finally {
@@ -213,7 +218,7 @@ export function BookingSnapshotPanel({
 
   const currentSnapData = activeSnapshotDetail?.snapshotData;
 
-  const isLegacy = snapshots.length === 0 && !isLoading;
+  const isLegacy = snapshots.length === 0 && !isLoading && !loadError;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
@@ -253,7 +258,7 @@ export function BookingSnapshotPanel({
         </div>
 
         {/* Agency Action Button */}
-        {currentUserRole === "agency" && booking.status !== "cancelled" && booking.status !== "rejected" && (
+        {currentUserRole === "agency" && canChangeProposal && !isLoading && !loadError && (
           <Button
             size="sm"
             onClick={() => setIsProposalModalOpen(true)}
@@ -343,7 +348,15 @@ export function BookingSnapshotPanel({
       )}
 
       {/* Snapshot Content View */}
-      {isLoadingDetail ? (
+      {loadError || detailError ? (
+        <div role="alert" className="p-6 text-sm text-red-700">
+          <p>{loadError || detailError}</p>
+          <Button variant="outline" className="mt-3" onClick={() => {
+            if (loadError) void loadSnapshots(selectedSnapshotId ?? undefined);
+            else setDetailRevision(r => r + 1);
+          }}>Thử lại</Button>
+        </div>
+      ) : isLoading || isLoadingDetail ? (
         <div className="py-12 text-center text-slate-400 text-sm">
           Đang tải chi tiết snapshot...
         </div>
@@ -384,9 +397,11 @@ export function BookingSnapshotPanel({
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-amber-600 font-medium block mb-0.5">Trạng thái:</span>
-                    <span className="text-amber-800 font-semibold">Chờ khách duyệt</span>
+                    <span className="text-amber-800 font-semibold">
+                      {canChangeProposal && activeSnapshotDetail.id === latestProposal?.id ? "Chờ khách duyệt" : "Chỉ xem lịch sử"}
+                    </span>
                   </div>
-                  {currentUserRole === "customer" && (
+                  {currentUserRole === "customer" && canChangeProposal && activeSnapshotDetail.id === latestProposal?.id && !loadError && (
                     <Button
                       size="sm"
                       onClick={() => handleAcceptProposal(activeSnapshotDetail.id)}
@@ -421,7 +436,7 @@ export function BookingSnapshotPanel({
                   {currentSnapData.startDate?.split("T")[0]} → {currentSnapData.endDate?.split("T")[0]}
                 </span>
                 <span>•</span>
-                <span>{currentSnapData.totalGuests} hành khách</span>
+                <span>{currentSnapData.passengers.length} hành khách</span>
                 {currentSnapData.destination && (
                   <>
                     <span>•</span>
@@ -432,9 +447,9 @@ export function BookingSnapshotPanel({
             </div>
 
             <div className="text-right">
-              <span className="text-xs text-slate-400 block">Tổng chi phí chốt:</span>
+              <span className="text-xs text-slate-400 block">{activeSnapshotDetail.snapshotType === "agreed" ? "Giá trị đã thống nhất:" : "Giá trị phương án:"}</span>
               <span className="text-xl font-bold text-blue-700">
-                {formatVND(currentSnapData.totalPrice)}
+                {formatVND(currentSnapData.totalAmount)}
               </span>
             </div>
           </div>
@@ -454,14 +469,14 @@ export function BookingSnapshotPanel({
                   >
                     <div>
                       <div className="font-medium text-slate-800 text-xs">
-                        {tier.tierName || tier.ageGroup || `Hạng ${idx + 1}`}
+                        {tier.name}
                       </div>
                       <div className="text-slate-500 text-[11px] mt-0.5">
-                        {tier.guestCount ? `${tier.guestCount} khách` : ""}
+                        {currentSnapData.passengers.filter(p => p.tierName === tier.name).length} khách
                       </div>
                     </div>
                     <div className="font-semibold text-slate-800 text-xs">
-                      {formatVND(tier.price)}
+                      {formatVND(tier.pricePerGuest)}
                     </div>
                   </div>
                 ))}
@@ -603,10 +618,10 @@ export function BookingSnapshotPanel({
                     <p className="text-slate-600 whitespace-pre-line">{currentSnapData.cancellationPolicy}</p>
                   </div>
                 )}
-                {(currentSnapData.notes || currentSnapData.customerNotes) && (
+                {currentSnapData.customerNotes && (
                   <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200 md:col-span-2">
                     <span className="font-semibold text-amber-900 block mb-1">Ghi chú phương án:</span>
-                    <p className="text-amber-800 whitespace-pre-line">{currentSnapData.notes || currentSnapData.customerNotes}</p>
+                    <p className="text-amber-800 whitespace-pre-line">{currentSnapData.customerNotes}</p>
                   </div>
                 )}
               </div>
@@ -615,7 +630,7 @@ export function BookingSnapshotPanel({
         </div>
       ) : isLegacy ? (
         <div className="p-6 text-center text-slate-500 text-xs">
-          Đơn đặt tour này được tạo trước khi áp dụng hệ thống Versioning Snapshot. Thông tin hiện hữu lấy từ bảng vận hành và được bảo lưu độc lập với tour gốc.
+          Đơn đặt tour này chưa có snapshot lịch sử. Thông tin đang hiển thị từ dữ liệu hiện có, chưa được xác minh là phương án đã chấp nhận.
         </div>
       ) : (
         <div className="p-6 text-center text-slate-400 text-xs">
@@ -631,6 +646,7 @@ export function BookingSnapshotPanel({
               <Send className="w-4 h-4 text-blue-600" />
               Gửi phương án điều chỉnh cho khách
             </DialogTitle>
+            <DialogDescription>Gửi phương án để khách xem xét trước khi chấp nhận.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 text-xs">
             <p className="text-slate-600">

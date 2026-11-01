@@ -41,7 +41,7 @@ export function fromApiBooking(
   const tourName =
     snap?.tourName || dto.tourName || matchedTour?.name || "Tour Du Lịch";
   const tourCode =
-    snap?.tourCode || dto.tourCode || matchedTour?.tourCode || `TRIP-${dto.tourId || "0"}`;
+    snap?.tourCode || matchedTour?.tourCode || `TRIP-${dto.tourId || "0"}`;
 
   const numDays =
     dto.snapshotDays?.length ||
@@ -60,16 +60,16 @@ export function fromApiBooking(
     duration: `${numDays} ngày`,
     image: matchedTour?.image || "",
     rating: matchedTour?.rating || 0,
-    minGuests: 1,
-    price: snap?.totalPrice || dto.totalAmount,
-    maxGuests: dto.totalGuests || 10,
+    minGuests: snap?.minGuests ?? 1,
+    price: snap?.basePrice ?? dto.totalAmount,
+    maxGuests: snap?.maxGuests ?? dto.totalGuests,
     images: matchedTour?.images || [],
     status: "completed",
     companyId: dto.agencyId || matchedTour?.companyId || "",
     companyName: dto.agencyName || matchedTour?.companyName || "TripOps Partner",
     itinerary: [],
-    inclusions: toList(snap?.inclusions).length ? toList(snap?.inclusions) : (matchedTour?.inclusions ?? []),
-    exclusions: toList(snap?.exclusions).length ? toList(snap?.exclusions) : (matchedTour?.exclusions ?? []),
+    inclusions: snap ? toList(snap.inclusions) : (matchedTour?.inclusions ?? []),
+    exclusions: snap ? toList(snap.exclusions) : (matchedTour?.exclusions ?? []),
     highlights: matchedTour?.highlights || [],
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt || dto.createdAt,
