@@ -44,6 +44,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
     public DbSet<BookingSnapshot> BookingSnapshots => Set<BookingSnapshot>();
+    public DbSet<BookingProposalEvent> BookingProposalEvents => Set<BookingProposalEvent>();
 
     // 5. Finance
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();

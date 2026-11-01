@@ -7,6 +7,24 @@ internal static class DatabaseDesignConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<BookingProposalEvent>(entity =>
+        {
+            entity.ToTable("booking_proposal_events", t => t.HasCheckConstraint("CK_booking_proposal_events_type",
+                "[event_type] IN ('proposal_sent', 'proposal_accepted', 'changes_requested')"));
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.SnapshotId).HasColumnName("snapshot_id");
+            entity.Property(e => e.ActorId).HasColumnName("actor_id").HasMaxLength(36).IsRequired();
+            entity.Property(e => e.RecipientId).HasColumnName("recipient_id").HasMaxLength(36).IsRequired();
+            entity.Property(e => e.EventType).HasColumnName("event_type").HasMaxLength(30).IsRequired();
+            entity.Property(e => e.Message).HasColumnName("message").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.Property(e => e.ReadAt).HasColumnName("read_at").HasColumnType("datetime2");
+            entity.HasOne(e => e.Snapshot).WithMany(s => s.Events).HasForeignKey(e => e.SnapshotId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ActorId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RecipientId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => new { e.SnapshotId, e.EventType, e.RecipientId }).IsUnique();
+            entity.HasIndex(e => new { e.RecipientId, e.ReadAt, e.CreatedAt });
+        });
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("users");

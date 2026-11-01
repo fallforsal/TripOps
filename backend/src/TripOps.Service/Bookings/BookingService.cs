@@ -444,6 +444,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         var maxVersion = await repository.GetMaxSnapshotVersion(bookingId, ct);
         var newVersion = maxVersion + 1;
+        if (request.Note?.Length > 2000)
+            throw new BookingException(400, "Nội dung phương án tối đa 2.000 ký tự.");
 
         var note = string.IsNullOrWhiteSpace(request?.Note)
             ? booking.SpecialRequests
@@ -487,6 +489,9 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         };
 
         repository.AddSnapshot(proposalSnapshot);
+        if (booking.CustomerId is not null)
+            proposalSnapshot.Events.Add(new BookingProposalEvent { ActorId = agencyId,
+                RecipientId = booking.CustomerId, EventType = "proposal_sent", Message = request?.Note?.Trim() });
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
@@ -520,14 +525,46 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             throw new BookingException(409, "Phương án này đã cũ. Vui lòng xem xét phương án mới nhất do đại lý gửi.");
         if (booking.Snapshots.Any(s => s.SnapshotType == "agreed"))
             throw new BookingException(409, "Đơn đã chốt phương án. Thay đổi thỏa thuận cần thực hiện qua phụ lục (amendment).");
+        if (snapshot.Events.Any(e => e.EventType == "changes_requested"))
+            throw new BookingException(409, "Bạn đã yêu cầu chỉnh sửa phương án này. Vui lòng chờ phương án mới từ công ty lữ hành.");
 
         snapshot.SnapshotType = "agreed";
         snapshot.AcceptedAt = DateTime.UtcNow;
         snapshot.AcceptedBy = customerId;
+        snapshot.Events.Add(new BookingProposalEvent { ActorId = customerId, RecipientId = snapshot.CreatedBy,
+            EventType = "proposal_accepted" });
 
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
+        return ToDto(booking);
+    }
+
+    public async Task<BookingDto> RequestProposalChanges(string customerId, int bookingId, int snapshotId,
+        RequestProposalChangesRequest request, CancellationToken ct)
+    {
+        var message = request.Message?.Trim();
+        if (string.IsNullOrWhiteSpace(message) || message.Length > 2000)
+            throw new BookingException(400, "Vui lòng nhập nội dung cần chỉnh sửa (tối đa 2.000 ký tự).");
+        await using var transaction = await repository.BeginSnapshotChange(bookingId, ct);
+        var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        if (booking.CustomerId != customerId) throw new BookingException(403, "Bạn không sở hữu đơn đặt tour này.");
+        var snapshot = booking.Snapshots.SingleOrDefault(s => s.Id == snapshotId)
+            ?? throw new BookingException(404, "Không tìm thấy phương án trong đơn đặt tour.");
+        EnsureProposalAllowed(booking);
+        if (snapshot.SnapshotType != "proposal" || booking.Snapshots.Any(s => s.SnapshotType == "agreed") ||
+            snapshot.Version != await repository.GetMaxSnapshotVersion(bookingId, ct))
+            throw new BookingException(409, "Chỉ có thể phản hồi phương án mới nhất chưa được chấp nhận.");
+        var existing = snapshot.Events.SingleOrDefault(e => e.EventType == "changes_requested");
+        if (existing is not null && existing.Message != message)
+            throw new BookingException(409, "Phản hồi đã được gửi. Vui lòng chờ công ty lữ hành gửi phương án mới.");
+        if (existing is null)
+        {
+            snapshot.Events.Add(new BookingProposalEvent { ActorId = customerId, RecipientId = snapshot.CreatedBy,
+                EventType = "changes_requested", Message = message });
+            await repository.SaveChangesAsync(ct);
+        }
+        await transaction.CommitAsync(ct);
         return ToDto(booking);
     }
 
@@ -656,7 +693,13 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
     private static BookingSnapshotSummaryDto ToSnapshotSummaryDto(BookingSnapshot s) =>
         new(s.Id, s.BookingId, s.Version, s.SnapshotType, s.SourceTourVersion,
-            s.CreatedAt, s.CreatedBy, s.AcceptedAt, s.AcceptedBy);
+            Utc(s.CreatedAt), s.CreatedBy, s.AcceptedAt is { } at ? Utc(at) : null, s.AcceptedBy,
+            ChangeRequest(s), s.Events.FirstOrDefault(e => e.EventType == "proposal_sent")?.Message);
+
+    private static DateTime Utc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    private static ProposalChangeRequestDto? ChangeRequest(BookingSnapshot s) =>
+        s.Events.FirstOrDefault(e => e.EventType == "changes_requested") is { } feedback
+            ? new(feedback.Message ?? "", Utc(feedback.CreatedAt)) : null;
 
     private static BookingSnapshotDto ToSnapshotDto(BookingSnapshot s)
     {
@@ -665,7 +708,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             ?? throw new InvalidOperationException("Invalid snapshot json data");
 
         return new(s.Id, s.BookingId, s.Version, s.SnapshotType, s.SourceTourVersion,
-            payload, s.CreatedAt, s.CreatedBy, s.AcceptedAt, s.AcceptedBy);
+            payload, Utc(s.CreatedAt), s.CreatedBy, s.AcceptedAt is { } at ? Utc(at) : null, s.AcceptedBy,
+            ChangeRequest(s), s.Events.FirstOrDefault(e => e.EventType == "proposal_sent")?.Message);
     }
 
     private static BookingDto ToDto(Booking b)

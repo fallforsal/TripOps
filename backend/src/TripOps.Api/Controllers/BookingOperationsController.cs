@@ -69,6 +69,12 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AcceptProposal(int id, int snapshotId, CancellationToken ct) =>
         Ok(await bookings.AcceptProposal(Actor, id, snapshotId, ct));
+
+    [HttpPost("snapshots/{snapshotId:int}/request-changes")]
+    [EndpointSummary("Customer requests changes to the latest proposal")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RequestChanges(int id, int snapshotId, RequestProposalChangesRequest request, CancellationToken ct) =>
+        Ok(await bookings.RequestProposalChanges(Actor, id, snapshotId, request, ct));
 #if false
     }
 }

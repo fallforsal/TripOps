@@ -35,12 +35,14 @@ import {
   getBookingSnapshotDetail,
   createAgencyProposal,
   acceptBookingProposal,
+  requestBookingProposalChanges,
+  getBookingDetail,
   getAgencyBookingDetail,
   type BookingDto,
   type BookingSnapshotSummaryDto,
   type BookingSnapshotDto,
 } from "@/app/services/wf05Bookings";
-import { acceptedSnapshotFromBooking, canChangeBookingProposal, selectSnapshotVersions } from "@/app/services/bookingSnapshots";
+import { acceptedSnapshotFromBooking, canChangeBookingProposal, proposalVersionStyle, selectSnapshotVersions } from "@/app/services/bookingSnapshots";
 
 interface BookingSnapshotPanelProps {
   booking: Booking;
@@ -94,6 +96,14 @@ export function BookingSnapshotPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRevision, setDetailRevision] = useState(0);
   const listRequest = useRef(0);
+  const snapshotsRef = useRef(snapshots);
+  snapshotsRef.current = snapshots;
+  const updatedRef = useRef(onSnapshotUpdated);
+  updatedRef.current = onSnapshotUpdated;
+  const [isChangesOpen, setIsChangesOpen] = useState(false);
+  const [changeMessage, setChangeMessage] = useState("");
+  const [isSendingChanges, setIsSendingChanges] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
 
   // Agency proposal creation modal state
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -120,6 +130,7 @@ export function BookingSnapshotPanel({
       const list = await getBookingSnapshots(bookingIdNumber);
       if (requestId !== listRequest.current) return;
       const versions = selectSnapshotVersions(list);
+      snapshotsRef.current = versions.sorted;
       setSnapshots(versions.sorted);
       const selection = versions.sorted.find(s => s.id === preferredId) ?? versions.effective;
       setSelectedSnapshotId(selection?.id ?? null);
@@ -139,6 +150,37 @@ export function BookingSnapshotPanel({
     loadSnapshots();
     return () => { listRequest.current++; };
   }, [booking.id]);
+
+  // Refresh only changed history; keep the selected older version and open form drafts.
+  useEffect(() => {
+    if (!bookingIdNumber) return;
+    let cancelled = false, busy = false;
+    const refresh = async () => {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      const generation = listRequest.current;
+      try {
+        const list = await getBookingSnapshots(bookingIdNumber);
+        if (cancelled || generation !== listRequest.current) return;
+        setRefreshError("");
+        if (JSON.stringify(list) !== JSON.stringify(snapshotsRef.current)) {
+          const previous = selectSnapshotVersions(snapshotsRef.current).effective;
+          const next = selectSnapshotVersions(list);
+          snapshotsRef.current = next.sorted;
+          setSnapshots(next.sorted);
+          setSelectedSnapshotId(id => !id || id === previous?.id ? next.effective?.id ?? null : id);
+          setDetailRevision(r => r + 1);
+          const detail = currentUserRole === "agency" ? await getAgencyBookingDetail(bookingIdNumber) : await getBookingDetail(bookingIdNumber);
+          if (!cancelled && generation === listRequest.current) updatedRef.current?.(detail);
+        }
+      } catch { if (!cancelled) setRefreshError("Chưa cập nhật được phản hồi mới. Vui lòng thử lại."); }
+      finally { busy = false; }
+    };
+    const interval = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [bookingIdNumber, currentUserRole]);
 
   // Load detail whenever selectedSnapshotId changes
   useEffect(() => {
@@ -173,7 +215,7 @@ export function BookingSnapshotPanel({
   const { proposal: latestProposal, agreed: agreedSnapshot } = useMemo(
     () => selectSnapshotVersions(snapshots), [snapshots]);
   const canChangeProposal = canChangeBookingProposal(booking.status) && !agreedSnapshot && !booking.agreedSnapshot;
-  const hasPendingProposal = canChangeProposal && Boolean(latestProposal) && !isLoading && !loadError;
+  const hasPendingProposal = canChangeProposal && Boolean(latestProposal) && !latestProposal?.changeRequest && !isLoading && !loadError;
 
   // Handler: Agency sends proposal
   const handleCreateProposal = async () => {
@@ -189,6 +231,7 @@ export function BookingSnapshotPanel({
       await loadSnapshots(created.id);
       const refreshed = await getAgencyBookingDetail(bookingIdNumber);
       onSnapshotUpdated?.(refreshed);
+      window.dispatchEvent(new Event("booking-proposal-updated"));
     } catch (err: any) {
       toast.error(err.message || "Không thể tạo phương án mới");
     } finally {
@@ -209,11 +252,26 @@ export function BookingSnapshotPanel({
       setActiveSnapshotDetail(agreed);
       onSnapshotUpdated?.(updated);
       await loadSnapshots(agreed.id);
+      window.dispatchEvent(new Event("booking-proposal-updated"));
     } catch (err: any) {
       toast.error(err.message || "Không thể chấp nhận phương án này");
     } finally {
       setIsAccepting(false);
     }
+  };
+
+  const handleRequestChanges = async () => {
+    if (!latestProposal || !changeMessage.trim()) return;
+    try {
+      setIsSendingChanges(true);
+      const updated = await requestBookingProposalChanges(bookingIdNumber, latestProposal.id, changeMessage.trim());
+      onSnapshotUpdated?.(updated);
+      setIsChangesOpen(false); setChangeMessage("");
+      await loadSnapshots(latestProposal.id);
+      window.dispatchEvent(new Event("booking-proposal-updated"));
+      toast.success("Đã gửi yêu cầu chỉnh sửa cho công ty lữ hành.");
+    } catch (err: any) { toast.error(err.message || "Chưa gửi được phản hồi. Vui lòng thử lại."); }
+    finally { setIsSendingChanges(false); }
   };
 
   const currentSnapData = activeSnapshotDetail?.snapshotData;
@@ -223,7 +281,7 @@ export function BookingSnapshotPanel({
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
       {/* Header */}
-      <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-blue-50/40 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
             <History className="w-5 h-5" />
@@ -231,7 +289,7 @@ export function BookingSnapshotPanel({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-slate-800 text-base">
-                Lịch sử phương án & Snapshot hợp đồng
+                Phương án đặt tour & lịch sử trao đổi
               </h3>
               {agreedSnapshot && (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
@@ -247,12 +305,12 @@ export function BookingSnapshotPanel({
               )}
               {isLegacy && (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-300">
-                  Dữ liệu lịch sử (Legacy)
+                  Đơn chưa có lịch sử phương án
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Lưu vết bất biến mọi điều khoản, lịch trình, bảng giá giữa khách hàng và công ty lữ hành.
+              Xem các phiên bản lịch trình, dịch vụ, giá và phản hồi giữa hai bên.
             </p>
           </div>
         </div>
@@ -279,27 +337,15 @@ export function BookingSnapshotPanel({
             </div>
             <div>
               <h4 className="font-semibold text-amber-900 text-sm">
-                Đại lý vừa gửi Phương án điều chỉnh (Phiên bản {latestProposal.version})
+                Công ty lữ hành đã gửi phương án (Phiên bản {latestProposal.version})
               </h4>
               <p className="text-xs text-amber-700 mt-1">
-                Phương án đã cập nhật lịch trình hoặc chi phí phù hợp nhất cho đoàn của bạn. Vui lòng kiểm tra chi tiết bên dưới và xác nhận để cập nhật hợp đồng.
+                Vui lòng xem lịch trình, dịch vụ và giá bên dưới. Bạn có thể chấp nhận hoặc gửi nội dung cần chỉnh sửa.
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => handleAcceptProposal(latestProposal.id)}
-            disabled={isAccepting}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 flex items-center gap-1.5 shadow"
-          >
-            {isAccepting ? (
-              <>Đang xử lý...</>
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                Chấp nhận phương án này
-              </>
-            )}
+          <Button variant="outline" size="sm" onClick={() => setSelectedSnapshotId(latestProposal.id)} className="shrink-0 border-amber-400 text-amber-900">
+            Xem phương án {latestProposal.version}
           </Button>
         </div>
       )}
@@ -313,24 +359,14 @@ export function BookingSnapshotPanel({
           {snapshots.map((s) => {
             const isSelected = selectedSnapshotId === s.id;
             const isAgreed = s.snapshotType === "agreed";
-            const isProposal = s.snapshotType === "proposal";
             const isInitial = s.snapshotType === "initial_request";
 
             return (
               <button
                 key={s.id}
                 onClick={() => setSelectedSnapshotId(s.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 border ${
-                  isSelected
-                    ? isAgreed
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : "bg-blue-600 text-white border-blue-600 shadow-sm"
-                    : isAgreed
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
-                      : isProposal
-                        ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                }`}
+                aria-pressed={isSelected}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shrink-0 border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${proposalVersionStyle(s.snapshotType, isSelected)}`}
               >
                 <span>
                   v{s.version} -{" "}
@@ -338,7 +374,7 @@ export function BookingSnapshotPanel({
                     ? "Yêu cầu ban đầu"
                     : isAgreed
                       ? "Đã thống nhất"
-                      : "Phương án đại lý"}
+                      : "Phương án lữ hành"}
                 </span>
                 {isAgreed && <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-emerald-600"}`} />}
               </button>
@@ -358,20 +394,21 @@ export function BookingSnapshotPanel({
         </div>
       ) : isLoading || isLoadingDetail ? (
         <div className="py-12 text-center text-slate-400 text-sm">
-          Đang tải chi tiết snapshot...
+          Đang tải chi tiết phương án...
         </div>
       ) : activeSnapshotDetail && currentSnapData ? (
         <div className="p-6 space-y-6">
+          {refreshError && <p role="alert" className="text-sm text-red-700">{refreshError} <Button variant="link" onClick={() => void loadSnapshots(selectedSnapshotId ?? undefined)}>Thử lại</Button></p>}
           {/* Metadata Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
             <div>
-              <span className="text-slate-400 block mb-0.5">Loại snapshot:</span>
-              <span className="font-semibold text-slate-800 text-sm capitalize">
+              <span className="text-slate-400 block mb-0.5">Nội dung phiên bản:</span>
+              <span className="font-semibold text-slate-800 text-sm">
                 {activeSnapshotDetail.snapshotType === "initial_request"
-                  ? "Yêu cầu ban đầu (Khách đặt)"
+                  ? "Yêu cầu đặt tour của khách"
                   : activeSnapshotDetail.snapshotType === "agreed"
-                    ? "Phương án đã thống nhất (Agreed)"
-                    : "Phương án đề xuất (Proposal)"}
+                    ? "Phương án đã chốt"
+                    : "Phương án từ công ty lữ hành"}
               </span>
             </div>
             <div>
@@ -379,11 +416,7 @@ export function BookingSnapshotPanel({
               <span className="font-medium text-slate-700">
                 {formatDateTime(activeSnapshotDetail.createdAt)}
               </span>
-              {activeSnapshotDetail.sourceTourVersion && (
-                <span className="text-slate-400 block mt-0.5">
-                  (Dựa theo Tour gốc v{activeSnapshotDetail.sourceTourVersion})
-                </span>
-              )}
+
             </div>
             <div>
               {activeSnapshotDetail.acceptedAt ? (
@@ -398,28 +431,38 @@ export function BookingSnapshotPanel({
                   <div>
                     <span className="text-amber-600 font-medium block mb-0.5">Trạng thái:</span>
                     <span className="text-amber-800 font-semibold">
-                      {canChangeProposal && activeSnapshotDetail.id === latestProposal?.id ? "Chờ khách duyệt" : "Chỉ xem lịch sử"}
+                      {activeSnapshotDetail.changeRequest ? "Khách đã yêu cầu chỉnh sửa" : canChangeProposal && activeSnapshotDetail.id === latestProposal?.id ? "Chờ khách phản hồi" : "Chỉ xem lịch sử"}
                     </span>
                   </div>
-                  {currentUserRole === "customer" && canChangeProposal && activeSnapshotDetail.id === latestProposal?.id && !loadError && (
-                    <Button
-                      size="sm"
-                      onClick={() => handleAcceptProposal(activeSnapshotDetail.id)}
-                      disabled={isAccepting}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-7 px-2.5"
-                    >
-                      {isAccepting ? "..." : "Chấp nhận"}
-                    </Button>
-                  )}
+
                 </div>
               ) : (
                 <div>
                   <span className="text-slate-400 block mb-0.5">Trạng thái:</span>
-                  <span className="font-medium text-slate-600">Bản ghi ban đầu</span>
+                  <span className="font-medium text-slate-600">Yêu cầu đặt tour ban đầu</span>
                 </div>
               )}
             </div>
           </div>
+
+          {(activeSnapshotDetail.proposalNote || currentSnapData.customerNotes) && (
+            <div className="rounded-md border border-slate-200 p-4 text-sm">
+              <h4 className="font-semibold text-slate-800">{activeSnapshotDetail.snapshotType === "initial_request" ? "Yêu cầu của khách" : "Nội dung từ công ty lữ hành"}</h4>
+              <p className="mt-2 whitespace-pre-line text-slate-700">{activeSnapshotDetail.proposalNote || currentSnapData.customerNotes}</p>
+            </div>
+          )}
+          {activeSnapshotDetail.changeRequest && <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm" role="status">
+            <h4 className="font-semibold text-amber-950">Khách yêu cầu chỉnh sửa · {formatDateTime(activeSnapshotDetail.changeRequest.createdAt)}</h4>
+            <p className="mt-2 whitespace-pre-line text-amber-950">{activeSnapshotDetail.changeRequest.message}</p>
+            <p className="mt-2 text-xs text-amber-800">{currentUserRole === "agency" ? "Hãy điều chỉnh đơn và gửi phương án mới để khách xem xét." : "Đã gửi phản hồi. Vui lòng chờ công ty lữ hành gửi phương án mới."}</p>
+          </div>}
+          {currentUserRole === "customer" && hasPendingProposal && activeSnapshotDetail.id === latestProposal?.id && <div className="flex flex-wrap gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+            <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => handleAcceptProposal(activeSnapshotDetail.id)} disabled={isAccepting || isSendingChanges}>
+              <Check className="size-4" />{isAccepting ? "Đang xử lý..." : `Chấp nhận phương án ${activeSnapshotDetail.version}`}
+            </Button>
+            <Button variant="outline" className="border-amber-400 text-amber-950" disabled={isAccepting || isSendingChanges} onClick={() => setIsChangesOpen(true)}>Yêu cầu chỉnh sửa</Button>
+            <p className="w-full text-xs text-slate-600">Nội dung phản hồi sẽ được gửi cho công ty lữ hành. Yêu cầu chỉnh sửa không hủy đơn đặt tour.</p>
+          </div>}
 
           {/* Commercial Header: Tour Name, Price, Guests */}
           <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -448,7 +491,7 @@ export function BookingSnapshotPanel({
 
             <div className="text-right">
               <span className="text-xs text-slate-400 block">{activeSnapshotDetail.snapshotType === "agreed" ? "Giá trị đã thống nhất:" : "Giá trị phương án:"}</span>
-              <span className="text-xl font-bold text-blue-700">
+              <span className={`text-xl font-bold ${activeSnapshotDetail.snapshotType === "agreed" ? "text-emerald-700" : activeSnapshotDetail.snapshotType === "proposal" ? "text-amber-800" : "text-slate-800"}`}>
                 {formatVND(currentSnapData.totalAmount)}
               </span>
             </div>
@@ -618,19 +661,14 @@ export function BookingSnapshotPanel({
                     <p className="text-slate-600 whitespace-pre-line">{currentSnapData.cancellationPolicy}</p>
                   </div>
                 )}
-                {currentSnapData.customerNotes && (
-                  <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200 md:col-span-2">
-                    <span className="font-semibold text-amber-900 block mb-1">Ghi chú phương án:</span>
-                    <p className="text-amber-800 whitespace-pre-line">{currentSnapData.customerNotes}</p>
-                  </div>
-                )}
+
               </div>
             )}
           </div>
         </div>
       ) : isLegacy ? (
         <div className="p-6 text-center text-slate-500 text-xs">
-          Đơn đặt tour này chưa có snapshot lịch sử. Thông tin đang hiển thị từ dữ liệu hiện có, chưa được xác minh là phương án đã chấp nhận.
+          Đơn đặt tour này chưa có lịch sử phương án. Thông tin đang hiển thị từ dữ liệu hiện có, chưa được xác minh là phương án đã chấp nhận.
         </div>
       ) : (
         <div className="p-6 text-center text-slate-400 text-xs">
@@ -638,9 +676,21 @@ export function BookingSnapshotPanel({
         </div>
       )}
 
+      <Dialog open={isChangesOpen} onOpenChange={open => { if (!isSendingChanges) setIsChangesOpen(open); }}>
+        <DialogContent className="max-w-md bg-white text-slate-900">
+          <DialogHeader><DialogTitle>Yêu cầu chỉnh sửa phương án {latestProposal?.version}</DialogTitle>
+            <DialogDescription>Cho công ty lữ hành biết nội dung bạn muốn thay đổi trước khi chốt phương án.</DialogDescription></DialogHeader>
+          <label htmlFor="proposal-change-message" className="text-sm font-medium">Nội dung cần chỉnh sửa <span className="text-red-600">*</span></label>
+          <Textarea id="proposal-change-message" rows={5} maxLength={2000} value={changeMessage} onChange={e => setChangeMessage(e.target.value)} placeholder="Ví dụ: Đoàn muốn đổi khách sạn sang hai giường đơn và giảm ngân sách bữa tối..." />
+          <p className="text-xs text-slate-500">Bắt buộc nhập nội dung, tối đa 2.000 ký tự. Đây là phản hồi phương án, không phải yêu cầu hủy tour.</p>
+          <DialogFooter><Button variant="outline" disabled={isSendingChanges} onClick={() => setIsChangesOpen(false)}>Đóng</Button>
+            <Button disabled={!changeMessage.trim() || isSendingChanges || isAccepting} onClick={handleRequestChanges}>{isSendingChanges ? "Đang gửi..." : "Gửi yêu cầu chỉnh sửa"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Agency Proposal Modal */}
       <Dialog open={isProposalModalOpen} onOpenChange={setIsProposalModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-white text-slate-900">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <Send className="w-4 h-4 text-blue-600" />
@@ -650,14 +700,16 @@ export function BookingSnapshotPanel({
           </DialogHeader>
           <div className="space-y-4 py-2 text-xs">
             <p className="text-slate-600">
-              Hệ thống sẽ tạo một snapshot phiên bản mới (Proposal) dựa trên hiện trạng lịch trình và chi phí mới nhất của đơn đặt tour #{booking.bookingCode}. Khách hàng sẽ nhận thông báo để xem xét và chấp nhận.
+              Phương án sẽ lưu lịch trình, dịch vụ và chi phí hiện tại của đơn {booking.bookingCode}. Hãy kiểm tra các thay đổi trước khi gửi. Khách nhận thông báo và có thể chấp nhận hoặc yêu cầu chỉnh sửa.
             </p>
             <div>
-              <label className="font-medium text-slate-700 block mb-1">
+              <label htmlFor="agency-proposal-note" className="font-medium text-slate-700 block mb-1">
                 Ghi chú diễn giải phương án (tùy chọn):
               </label>
               <Textarea
+                id="agency-proposal-note"
                 rows={4}
+                maxLength={2000}
                 value={proposalNote}
                 onChange={(e) => setProposalNote(e.target.value)}
                 placeholder="Ví dụ: Đã nâng cấp khách sạn 4 sao tại Nha Trang, điều chỉnh ngày 2 ghé thêm tháp Bà Ponagar theo yêu cầu..."

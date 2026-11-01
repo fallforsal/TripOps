@@ -150,6 +150,8 @@ export interface BookingSnapshotPayload {
 }
 
 export interface BookingSnapshotDto {
+  changeRequest?: { message: string; createdAt: string } | null;
+  proposalNote?: string | null;
   id: number;
   bookingId: number;
   version: number;
@@ -165,6 +167,8 @@ export interface BookingSnapshotDto {
 }
 
 export interface BookingSnapshotSummaryDto {
+  changeRequest?: { message: string; createdAt: string } | null;
+  proposalNote?: string | null;
   id: number;
   bookingId: number;
   version: number;
@@ -481,6 +485,24 @@ export async function acceptBookingProposal(
   return await http<BookingDto>(`/bookings/${bookingId}/snapshots/${snapshotId}/accept`, {
     method: "POST",
   });
+}
+
+export async function requestBookingProposalChanges(bookingId: number, snapshotId: number, message: string): Promise<BookingDto> {
+  return http<BookingDto>(`/bookings/${bookingId}/snapshots/${snapshotId}/request-changes`, {
+    method: "POST", body: JSON.stringify({ message }),
+  });
+}
+
+export interface BookingNotification {
+  id: number; bookingId: number; bookingCode: string; version: number;
+  eventType: "proposal_sent" | "proposal_accepted" | "changes_requested";
+  message?: string | null; createdAt: string; readAt?: string | null;
+}
+export function getBookingNotifications() {
+  return http<{ items: BookingNotification[]; unreadCount: number }>("/me/booking-notifications");
+}
+export function readBookingNotification(id: number) {
+  return http<void>(`/me/booking-notifications/${id}/read`, { method: "POST" });
 }
 
 export { fromApiBooking } from "./bookingAdapter";

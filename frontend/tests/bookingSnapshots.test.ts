@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fromApiBooking } from "../src/app/services/bookingAdapter.ts";
-import { acceptedSnapshotFromBooking, selectSnapshotVersions } from "../src/app/services/bookingSnapshots.ts";
+import { acceptedSnapshotFromBooking, selectSnapshotVersions, proposalVersionStyle } from "../src/app/services/bookingSnapshots.ts";
+
+test("version colors remain consistent across selection and proposal version numbers", () => {
+  for (const selected of [true, false]) {
+    assert.match(proposalVersionStyle("initial_request", selected), /slate/);
+    assert.match(proposalVersionStyle("proposal", selected), /amber/);
+    assert.match(proposalVersionStyle("agreed", selected), /emerald/);
+    assert.doesNotMatch(proposalVersionStyle("proposal", selected), /blue|emerald/);
+  }
+});
 import type { BookingDto, BookingSnapshotDto, BookingSnapshotSummaryDto } from "../src/app/services/wf05Bookings.ts";
 
 const initial: BookingSnapshotDto = {

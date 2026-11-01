@@ -278,6 +278,59 @@ public sealed class BookingSnapshotFlowTests
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<BookingDto>())!.Id;
     }
+    [Fact] public async Task ProposalFeedback_NotifiesBothSides_AndPreservesHistory()
+    {
+        using var app = new App(); await app.Initialize();
+        var customer = await app.Client("customer1@example.test");
+        var other = await app.Client("customer2@example.test");
+        var agency = await app.Client("agency1@example.test");
+        var id = await NewBooking(customer);
+        var p2 = await Proposal(agency, id, "Đã cập nhật khách sạn, vui lòng xem xét.");
+        var feed = await customer.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications");
+        var sent = Assert.Single(feed!.Items);
+        Assert.Equal("proposal_sent", sent.EventType); Assert.Equal(id, sent.BookingId);
+        Assert.Equal(p2.ProposalNote, sent.Message); Assert.Equal(1, feed.UnreadCount);
+        Assert.Equal(DateTimeKind.Utc, p2.CreatedAt.Kind);
+        Assert.Empty((await other.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications"))!.Items);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/api/v1/me/booking-notifications/{sent.Id}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await customer.PostAsync($"/api/v1/me/booking-notifications/{sent.Id}/read", null)).StatusCode);
+        Assert.Equal(0, (await customer.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications"))!.UnreadCount);
+
+        var url = $"/api/v1/bookings/{id}/snapshots/{p2.Id}/request-changes";
+        Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync(url, new { message = "  " })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync(url, new { message = new string('a', 2001) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync(url, new { message = "Không sở hữu" })).StatusCode);
+        const string feedback = "Xin đổi sang hai giường đơn, giữ nguyên ngân sách.";
+        (await customer.PostAsJsonAsync(url, new { message = feedback })).EnsureSuccessStatusCode();
+        (await customer.PostAsJsonAsync(url, new { message = feedback })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync(url, new { message = "Khác" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p2.Id}/accept", new {})).StatusCode);
+        var detail = await agency.GetFromJsonAsync<BookingSnapshotDto>($"/api/v1/bookings/{id}/snapshots/{p2.Id}");
+        Assert.Equal(feedback, detail!.ChangeRequest!.Message);
+        var agencyFeed = await agency.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications");
+        Assert.Equal("changes_requested", Assert.Single(agencyFeed!.Items).EventType);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var data = (await db.BookingSnapshots.FindAsync(p2.Id))!.SnapshotData;
+            var payload = System.Text.Json.JsonSerializer.Deserialize<BookingSnapshotPayload>(data, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            Assert.Equal(p2.SnapshotData.CustomerNotes, payload!.CustomerNotes);
+            Assert.Equal("proposal", (await db.BookingSnapshots.FindAsync(p2.Id))!.SnapshotType);
+        }
+        var p3 = await Proposal(agency, id, "Đã đổi sang hai giường đơn.");
+        Assert.Null(p3.ChangeRequest); Assert.Equal(3, p3.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync(url, new { message = feedback })).StatusCode);
+        var acceptUrl = $"/api/v1/bookings/{id}/snapshots/{p3.Id}/accept";
+        (await customer.PostAsJsonAsync(acceptUrl, new {})).EnsureSuccessStatusCode();
+        (await customer.PostAsJsonAsync(acceptUrl, new {})).EnsureSuccessStatusCode();
+        var finalFeed = await agency.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications");
+        Assert.Equal(2, finalFeed!.Items.Count);
+        Assert.Single(finalFeed.Items, e => e.EventType == "proposal_accepted");
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p3.Id}/request-changes", new { message = feedback })).StatusCode);
+        var history = await customer.GetFromJsonAsync<List<BookingSnapshotSummaryDto>>($"/api/v1/bookings/{id}/snapshots");
+        Assert.Equal(feedback, history!.Single(s => s.Id == p2.Id).ChangeRequest!.Message);
+        Assert.Equal("agreed", history!.Single(s => s.Id == p3.Id).SnapshotType);
+    }
     private static async Task<BookingSnapshotDto> Proposal(HttpClient agency, int bookingId, string note) {
         var response = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/proposals", new CreateProposalRequest(note));
         response.EnsureSuccessStatusCode();

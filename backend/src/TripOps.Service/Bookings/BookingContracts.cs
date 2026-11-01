@@ -150,6 +150,8 @@ public sealed record IncidentDto(
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
 public sealed record CreateProposalRequest(string? Note);
+public sealed record RequestProposalChangesRequest(string Message);
+public sealed record ProposalChangeRequestDto(string Message, DateTime CreatedAt);
 
 public sealed record BookingSnapshotSummaryDto(
     int Id,
@@ -160,7 +162,9 @@ public sealed record BookingSnapshotSummaryDto(
     DateTime CreatedAt,
     string CreatedBy,
     DateTime? AcceptedAt,
-    string? AcceptedBy
+    string? AcceptedBy,
+    ProposalChangeRequestDto? ChangeRequest = null,
+    string? ProposalNote = null
 );
 
 public sealed record BookingSnapshotDto(
@@ -173,7 +177,9 @@ public sealed record BookingSnapshotDto(
     DateTime CreatedAt,
     string CreatedBy,
     DateTime? AcceptedAt,
-    string? AcceptedBy
+    string? AcceptedBy,
+    ProposalChangeRequestDto? ChangeRequest = null,
+    string? ProposalNote = null
 );
 
 public sealed record BookingSnapshotPayload(

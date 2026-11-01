@@ -47,6 +47,18 @@ public string? AcceptedBy { get; set; }
 public virtual Booking Booking { get; set; } = null!;
 public virtual User Creator { get; set; } = null!;
 public virtual User? Acceptor { get; set; }
+public virtual ICollection<BookingProposalEvent> Events { get; set; } = new List<BookingProposalEvent>();
+}
+
+public class BookingProposalEvent : BaseEntity<int> {
+public int SnapshotId { get; set; }
+public string ActorId { get; set; } = string.Empty;
+public string RecipientId { get; set; } = string.Empty;
+public string EventType { get; set; } = string.Empty;
+public string? Message { get; set; }
+public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+public DateTime? ReadAt { get; set; }
+public virtual BookingSnapshot Snapshot { get; set; } = null!;
 }
 
 public class BookingParticipant : BaseEntity<int> {

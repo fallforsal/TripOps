@@ -18,6 +18,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
+        .Include(b => b.BookingAgencies)
+        .Include(b => b.Snapshots).ThenInclude(s => s.Events)
         .Include(b => b.Snapshots!).ThenInclude(s => s.Creator)
         .Include(b => b.Snapshots!).ThenInclude(s => s.Acceptor)
         .AsSplitQuery();
@@ -138,6 +140,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
 
     public Task<BookingSnapshot?> FindSnapshot(int snapshotId, CancellationToken ct) =>
         db.BookingSnapshots
+            .Include(s => s.Events)
             .Include(s => s.Booking)
             .Include(s => s.Creator)
             .Include(s => s.Acceptor)
@@ -145,6 +148,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
 
     public Task<List<BookingSnapshot>> ListSnapshots(int bookingId, CancellationToken ct) =>
         db.BookingSnapshots
+            .Include(s => s.Events)
             .Include(s => s.Creator)
             .Include(s => s.Acceptor)
             .Where(s => s.BookingId == bookingId)
@@ -180,6 +184,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
     }
 
     public void AddSnapshot(BookingSnapshot snapshot) => db.BookingSnapshots.Add(snapshot);
+    public void AddProposalEvent(BookingProposalEvent item) => db.BookingProposalEvents.Add(item);
 
     // Serialize proposal/accept changes per booking, including the latest-version check.
     public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginSnapshotChange(int bookingId, CancellationToken ct)
