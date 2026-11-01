@@ -43,10 +43,22 @@ public class Repository<TEntity, TKey> : IRepository<TEntity, TKey> where TEntit
 
     public virtual void Delete(TEntity entity)
     {
-        if (entity is ISoftDelete softDelete)
+        // Lifecycle fields come from database.md; there are no generic
+        // IsDeleted/DeletedAt columns on every aggregate.
+        if (entity is Entities.Tour tour)
         {
-            softDelete.IsDeleted = true;
-            softDelete.DeletedAt = DateTime.UtcNow;
+            tour.Status = Enums.TourStatus.Deleted;
+            tour.Visibility = Enums.TourVisibility.Hidden;
+            _dbSet.Update(entity);
+        }
+        else if (entity is Entities.Complaint complaint)
+        {
+            complaint.DeletedAt = DateTime.UtcNow;
+            _dbSet.Update(entity);
+        }
+        else if (entity is Entities.User user)
+        {
+            user.Status = Enums.UserStatus.Inactive;
             _dbSet.Update(entity);
         }
         else

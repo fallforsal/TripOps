@@ -1,4 +1,4 @@
-﻿import { Tour, Booking, Service, User } from "@/app/types";
+import { Tour, Booking, Service, User } from "@/app/types";
 import {
   Package,
   Calendar,

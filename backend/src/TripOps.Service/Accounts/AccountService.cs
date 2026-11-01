@@ -10,9 +10,10 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     public static string RoleName(UserRole role) => role switch {
         UserRole.Admin => "admin", UserRole.TravelAgency => "agency", UserRole.Provider => "provider",
         UserRole.TourGuide => "guide", _ => "user" };
-    private ProfileDto Profile(BusinessProfile p) => new(p.Id, p.UserId, p.BusinessName, p.TaxCode,
+    private ProfileDto Profile(BusinessProfile p) => new(p.Id, p.UserId ?? "", p.BusinessName, p.TaxCode,
         p.BusinessAddress, storage.DeliveryUrl(p.BusinessLicenseUrl), p.Description,
-        p.Status.ToString().ToLowerInvariant(), p.RejectionReason, p.ApprovedAt, p.CreatedAt, p.UpdatedAt);
+        p.Status?.ToString().ToLowerInvariant() ?? "pending", p.RejectionReason, p.ApprovedAt,
+        p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch);
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
         u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
@@ -71,7 +72,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     }
     public async Task<object> Partners(string? status, string? role, string? search, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.BusinessProfiles.AsNoTracking().Where(p => !p.User.IsDeleted &&
+        var query = db.BusinessProfiles.AsNoTracking().Where(p =>
             (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider));
         if (!string.IsNullOrWhiteSpace(status)) {
             if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state)) throw new AccountException(400, "Trạng thái không hợp lệ.");
@@ -89,7 +90,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         if (!approve && string.IsNullOrWhiteSpace(reason)) throw new AccountException(400, "Vui lòng nhập lý do từ chối.");
         var now = DateTime.UtcNow;
         var count = await db.BusinessProfiles.Where(p => p.Id == id && p.Status == BusinessProfileStatus.Pending &&
-            !p.User.IsDeleted && (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider))
+            (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider))
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, approve ? BusinessProfileStatus.Approved : BusinessProfileStatus.Rejected)
                 .SetProperty(p => p.RejectionReason, approve ? null : reason!.Trim())
                 .SetProperty(p => p.ApprovedAt, approve ? (DateTime?)now : null).SetProperty(p => p.UpdatedAt, now), ct);

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Tour,
   Booking,
   User,

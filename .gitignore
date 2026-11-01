@@ -448,3 +448,6 @@ FodyWeavers.xsd
 **/ephemeral/
 **/Pods/
 **/.symlinks/
+
+# Local development media
+backend/src/TripOps.Api/App_Data/

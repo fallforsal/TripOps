@@ -3,6 +3,7 @@ import {
   Tour,
   Service,
   TourHotel,
+  TourMeal,
   CustomHotelChange,
   CustomLocationChange,
   CustomMealChange,
@@ -50,9 +51,8 @@ import {
   DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
-import { mockUsers } from "@/app/data/mockData";
+import { mockUsers, mockTourCompanies } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
-import { formatTourCode } from "@/app/components/ui/utils";
 
 export interface TourDetailCustomData {
   customHotelChanges?: CustomHotelChange[];
@@ -237,87 +237,190 @@ function ProgramTab({ tour }: { tour: Tour }) {
                 </button>
 
                 {isOpen && (
-                  <div className="px-4 py-4 space-y-3.5">
-                    <p className="text-gray-700 leading-relaxed text-sm">{day.description}</p>
-                    {day.locations.length > 0 && (
-                      <div className="space-y-1.5">
-                        {day.locations.map((loc) => (
-                          <div key={loc.id} className="flex items-center justify-between text-sm text-gray-700">
-                            <div className="flex items-center gap-2">
-                              <MapPin className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                              <span className="font-medium text-gray-900">{loc.name}</span>
-                            </div>
-                            {loc.createdByCompanyName && (
-                              <span className="text-[10px] text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded font-normal">
-                                Tạo bởi: {loc.createdByCompanyName}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                  <div className="px-4 py-4 space-y-4">
+                    {day.description && (
+                      <p className="text-gray-700 leading-relaxed text-xs sm:text-sm bg-[#F0F9FF] p-3 rounded-xl border border-blue-100">
+                        {day.description}
+                      </p>
                     )}
 
-                    {/* Chế độ ẩm thực & Bữa ăn (Chỗ ăn) trong ngày */}
-                    {day.meals && day.meals.length > 0 && (
-                      <div className="pt-3 border-t border-gray-100 space-y-2">
-                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-                          <Utensils className="w-3.5 h-3.5 text-emerald-600" />
-                          Chế độ ẩm thực &amp; Bữa ăn (Chỗ ăn)
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                          {day.meals.map((meal, mIdx) => {
-                            const mealType = meal.type;
-                            const label = mealType === "breakfast" ? "Ăn sáng" : mealType === "lunch" ? "Ăn trưa" : "Ăn tối";
-                            const isBreakfast = mealType === "breakfast";
-                            const isLunch = mealType === "lunch";
-                            return (
-                              <div
-                                key={mIdx}
-                                className={`p-2.5 rounded-xl border flex items-start gap-2.5 ${
-                                  isBreakfast
-                                    ? "bg-amber-50/60 border-amber-200/80"
-                                    : isLunch
-                                    ? "bg-emerald-50/60 border-emerald-200/80"
-                                    : "bg-[#F0F9FF]/60 border-[#F97316]/30/80"
-                                }`}
-                              >
-                                <div
-                                  className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                    isBreakfast
-                                      ? "bg-amber-100 text-amber-700"
-                                      : isLunch
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-[#F97316]/15 text-[#EA580C]"
-                                  }`}
-                                >
-                                  {isBreakfast ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
+                    {/* UNIFIED TIMELINE: ĐIỂM THAM QUAN & BỮA ĂN TRONG NGÀY THEO KHUNG GIỜ */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#F97316]" />
+                          Lịch trình chi tiết &amp; Bữa ăn trong ngày {day.day}
+                        </h5>
+                        <span className="text-[11px] text-gray-500">Sắp xếp theo thứ tự khung giờ trong ngày</span>
+                      </div>
+
+                      <div className="relative pl-1 pt-1">
+                        {/* Đường trục dọc timeline liên tục */}
+                        <div className="absolute left-[95px] top-3 bottom-3 w-0.5 bg-gray-200" />
+
+                        <div className="space-y-3">
+                          {(() => {
+                            type UnifiedItem =
+                              | { kind: "location"; loc: (typeof day.locations)[0]; minutes: number; time: string }
+                              | { kind: "meal"; meal: NonNullable<typeof day.meals>[0]; minutes: number; time: string };
+
+                            const items: UnifiedItem[] = [
+                              ...(day.locations || []).map((loc) => ({
+                                kind: "location" as const,
+                                loc,
+                                time: loc.time || "08:30",
+                                minutes: parseTimeToMinutes(loc.time || "08:30"),
+                              })),
+                              ...(day.meals || []).map((meal) => {
+                                const defTime = meal.type === "breakfast" ? "07:30" : meal.type === "lunch" ? "12:00" : "18:30";
+                                return {
+                                  kind: "meal" as const,
+                                  meal,
+                                  time: meal.time || defTime,
+                                  minutes: parseTimeToMinutes(meal.time || defTime),
+                                };
+                              }),
+                            ];
+
+                            items.sort((a, b) => a.minutes - b.minutes);
+
+                            if (items.length === 0) {
+                              return (
+                                <div className="p-4 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400 bg-gray-50/50">
+                                  Chưa có lịch trình cụ thể cho ngày này.
                                 </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="text-xs font-bold text-gray-900">{label}</p>
-                                    {meal.createdByCompanyName && (
-                                      <span className="text-[10px] text-emerald-700 bg-white border border-emerald-200 px-1 py-0.2 rounded font-normal">
-                                        Tạo bởi: {meal.createdByCompanyName}
+                              );
+                            }
+
+                            return items.map((tItem, idx) => {
+                              if (tItem.kind === "location") {
+                                const { loc, time } = tItem;
+                                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name + (tour.destination ? " " + tour.destination : ""))}`;
+
+                                return (
+                                  <div key={loc.id || `loc-${idx}`} className="relative flex items-start gap-2.5">
+                                    {/* Time pill */}
+                                    <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                                        <Clock className="w-3 h-3 text-blue-500" />
+                                        {time}
                                       </span>
-                                    )}
+                                    </div>
+
+                                    {/* Dot on line */}
+                                    <div className="relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center flex-shrink-0 shadow-2xs">
+                                      <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                    </div>
+
+                                    {/* Location card */}
+                                    <div className="flex-1 border border-gray-200 rounded-xl p-3 bg-white hover:border-blue-300 transition-colors shadow-2xs">
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
+                                            Tham quan
+                                          </span>
+                                          <h5 className="text-xs sm:text-sm font-bold text-gray-900">{loc.name}</h5>
+                                        </div>
+                                        <a
+                                          href={mapsUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                        >
+                                          <MapPin className="w-3 h-3" />
+                                          Bản đồ
+                                        </a>
+                                      </div>
+                                      {loc.createdByCompanyName && (
+                                        <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+                                          <Building2 className="w-3 h-3 text-gray-400" />
+                                          Tạo bởi: {loc.createdByCompanyName}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-gray-800 font-semibold truncate">
-                                    {meal.serviceName || "Nhà hàng theo chương trình"}
-                                  </p>
-                                  {meal.description && (
-                                    <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
-                                      {meal.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                                );
+                              } else {
+                                const { meal, time } = tItem;
+                                const mealType = meal.type;
+                                const mealLabel = mealType === "breakfast" ? "Ăn sáng" : mealType === "lunch" ? "Ăn trưa" : "Ăn tối";
+                                const isBreakfast = mealType === "breakfast";
+                                const isLunch = mealType === "lunch";
+
+                                return (
+                                  <div key={meal.id || `meal-${idx}`} className="relative flex items-start gap-2.5">
+                                    {/* Time pill */}
+                                    <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${
+                                        isBreakfast
+                                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                                          : isLunch
+                                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                          : "bg-purple-50 text-purple-700 border-purple-200"
+                                      }`}>
+                                        <Clock className="w-3 h-3" />
+                                        {time}
+                                      </span>
+                                    </div>
+
+                                    {/* Dot on line */}
+                                    <div className={`relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${
+                                      isBreakfast
+                                        ? "border-amber-400 text-amber-600"
+                                        : isLunch
+                                        ? "border-emerald-500 text-emerald-600"
+                                        : "border-[#F97316] text-[#EA580C]"
+                                    }`}>
+                                      {isBreakfast ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
+                                    </div>
+
+                                    {/* Meal card */}
+                                    <div className={`flex-1 border rounded-xl p-3 bg-white shadow-2xs ${
+                                      isBreakfast
+                                        ? "border-amber-200 bg-amber-50/20"
+                                        : isLunch
+                                        ? "border-emerald-200 bg-emerald-50/20"
+                                        : "border-purple-200 bg-purple-50/20"
+                                    }`}>
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${
+                                            isBreakfast
+                                              ? "bg-amber-100 text-amber-800 border-amber-300"
+                                              : isLunch
+                                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                              : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
+                                          }`}>
+                                            {mealLabel}
+                                          </span>
+                                          <h5 className="text-xs sm:text-sm font-bold text-gray-900">{meal.serviceName || "Nhà hàng theo chương trình"}</h5>
+                                        </div>
+                                        {meal.alternativeMeals && meal.alternativeMeals.length > 0 && (
+                                          <span className="text-[10px] font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                                            +{meal.alternativeMeals.length} phương án ẩm thực
+                                          </span>
+                                        )}
+                                      </div>
+                                      {meal.description && (
+                                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                                          {meal.description}
+                                        </p>
+                                      )}
+                                      {meal.createdByCompanyName && (
+                                        <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+                                          <Building2 className="w-3 h-3 text-gray-400" />
+                                          Tạo bởi: {meal.createdByCompanyName}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            });
+                          })()}
                         </div>
                       </div>
-                    )}
-
-
+                    </div>
                   </div>
                 )}
               </div>
@@ -413,7 +516,7 @@ function PricingTab({ tour }: { tour: Tour }) {
           <thead>
             <tr className="bg-gray-100">
               <th className="px-4 py-3 text-left font-semibold text-gray-700">Loại khách</th>
-              
+
               <th className="px-4 py-3 text-right font-semibold text-gray-700">Giá tiền</th>
             </tr>
           </thead>
@@ -421,7 +524,7 @@ function PricingTab({ tour }: { tour: Tour }) {
             {tour.priceTable.map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-4 py-3 font-medium text-gray-900">{row.ageGroupLabel ?? row.ageGroup}</td>
-                
+
                 <td className="px-4 py-3 text-right font-bold text-[#075985]">
                   {row.price === 0 ? "Miễn phí" : formatVND(row.price)}
                 </td>
@@ -443,6 +546,40 @@ function PricingTab({ tour }: { tour: Tour }) {
 }
 
 // -------- Custom Tab --------
+
+const SYSTEM_HOTELS = [
+  { name: "Khách sạn Đà Lạt Palace Heritage", pricePerNight: 2800000, description: "Khách sạn cổ kính – View hồ Xuân Hương thơ mộng" },
+  { name: "Dalat Edensee Lake Resort & Spa", pricePerNight: 3200000, description: "Resort ven hồ Tuyền Lâm – Không gian nghỉ dưỡng đẳng cấp" },
+  { name: "Ana Mandara Villas Dalat Resort", pricePerNight: 3550000, description: "Khu resort biệt thự Pháp cổ giữa rừng thông bạt ngàn" },
+  { name: "MerPerle Dalat Hotel", pricePerNight: 4000000, description: "Khách sạn phong cách cổ điển lộng lẫy, dịch vụ chuẩn mực" },
+  { name: "Tuyền Lâm Lake View Resort", pricePerNight: 4600000, description: "Khu nghỉ dưỡng cao cấp hòa quyện thiên nhiên hồ Tuyền Lâm" },
+  { name: "Terracotta Hotel & Resort Dalat", pricePerNight: 3100000, description: "Resort bán đảo hồ Tuyền Lâm với nhiều tiện ích thư giãn" },
+  { name: "TTC Hotel Premium Ngọc Lan", pricePerNight: 2450000, description: "Khách sạn ngay chợ Đà Lạt, view toàn cảnh hồ Xuân Hương" },
+  { name: "Khách sạn Sammy Đà Lạt", pricePerNight: 2200000, description: "Khách sạn phong cách Pháp trung tâm thành phố, tiện nghi" },
+  { name: "Khách sạn Golf 3 Đà Lạt", pricePerNight: 2000000, description: "Khách sạn ngay phố đi bộ, thuận tiện mua sắm và ẩm thực" },
+];
+
+const SYSTEM_RESTAURANTS: Array<{ name: string; mealType: "breakfast" | "lunch" | "dinner"; pricePerPerson: number; description: string }> = [
+  // Bữa sáng (Breakfast)
+  { name: "Buffet sáng tiêu chuẩn tại Khách sạn", mealType: "breakfast", pricePerPerson: 70000, description: "Buffet sáng phong phú nhiều món Á - Âu kèm trà, cà phê tại khách sạn" },
+  { name: "Bánh căn Lệ Đà Lạt", mealType: "breakfast", pricePerPerson: 50000, description: "Bánh căn giòn rụm xíu mại trứng cút, nước mắm hành mỡ cay nồng" },
+  { name: "Bánh mì xíu mại Hoàng Diệu", mealType: "breakfast", pricePerPerson: 45000, description: "Bánh mì giòn chấm chén xíu mại nóng hổi béo ngậy đặc sản Đà Lạt" },
+  { name: "Phở thố đá Chu Gia Đà Lạt", mealType: "breakfast", pricePerPerson: 85000, description: "Phở bò thố đá sôi sục giữ trọn hương vị tươi ngọt đậm đà" },
+  { name: "Bún bò Huế ấp Ánh Sáng", mealType: "breakfast", pricePerPerson: 65000, description: "Tô bún bò đậm đà thơm mùi sả ruốc hương vị cố đô giữa lòng phố núi" },
+
+  // Bữa trưa (Lunch)
+  { name: "Nhà hàng Hương Rừng Đà Lạt", mealType: "lunch", pricePerPerson: 120000, description: "Đặc sản gà đồi, cơm lam, rau củ tươi organic Đà Lạt" },
+  { name: "Nhà hàng Trúc Lâm Viên", mealType: "lunch", pricePerPerson: 140000, description: "Cơm niêu gia đình, cá kho tộ, canh atiso sườn non" },
+  { name: "Nhà hàng Làng Nướng Đà Lạt", mealType: "lunch", pricePerPerson: 160000, description: "Thịt rừng nướng ngói, rau rừng xào tỏi thơm lừng" },
+  { name: "Nhà hàng Leguda Buffet Rau Cáp Treo", mealType: "lunch", pricePerPerson: 150000, description: "Buffet không giới hạn các loại rau tươi sạch trên đỉnh đồi Robin" },
+
+  // Bữa tối (Dinner)
+  { name: "Nhà hàng Chợ Đêm & Phố Ẩm Thực Đà Lạt", mealType: "dinner", pricePerPerson: 90000, description: "Ẩm thực đường phố: bánh tráng nướng, sữa đậu nành, dâu lắc" },
+  { name: "Nhà hàng Dalat Palace Ristorante", mealType: "dinner", pricePerPerson: 320000, description: "Ẩm thực Âu - Á cao cấp sang trọng" },
+  { name: "Nhà hàng Lẩu Gà Lá É Tao Ngộ", mealType: "dinner", pricePerPerson: 130000, description: "Đặc sản lẩu gà lá é trứ danh thơm cay ấm bụng đêm sương mù" },
+  { name: "Nhà hàng Quán Nướng Chu", mealType: "dinner", pricePerPerson: 180000, description: "Các món nướng đá nóng, bò tơ nướng sa tế đậm đà" },
+  { name: "Nhà hàng La Viet Coffee & Fine Dining", mealType: "dinner", pricePerPerson: 220000, description: "Trải nghiệm ẩm thực phong cách hiện đại kết hợp cà phê nguyên bản" },
+];
 
 interface HotelChoice {
   mode: "system" | "custom" | "provider";
@@ -486,6 +623,16 @@ interface MealChoice {
   serviceImage?: string;
   latitude?: number;
   longitude?: number;
+}
+
+function parseTimeToMinutes(timeStr?: string): number {
+  if (!timeStr) return 9999;
+  const clean = timeStr.trim().toLowerCase();
+  const match = clean.match(/(\d{1,2})(?:[:h](\d{0,2}))?/i);
+  if (!match) return 9999;
+  const hours = parseInt(match[1], 10);
+  const mins = match[2] ? parseInt(match[2], 10) : 0;
+  return hours * 60 + mins;
 }
 
 interface LocationChoice {
@@ -550,11 +697,24 @@ function getDestinationGroups(tour: Tour): DestinationHotelState[] {
         defaultHotel: defHotel,
         hotelChoice: defHotel
           ? { mode: "system", systemName: defHotel.name, systemStars: defHotel.stars || 4, systemPricePerNight: defHotel.pricePerNight }
-          : { mode: "system", systemName: "", systemStars: 0, systemPricePerNight: 0 },
+          : { mode: "system", systemName: SYSTEM_HOTELS[0].name, systemStars: 4, systemPricePerNight: SYSTEM_HOTELS[0].pricePerNight },
       });
     }
   });
   return groups.filter((g) => g.nightCount > 0);
+}
+
+
+function getGoogleMapsSearchUrl(name?: string, address?: string, destination?: string): string | null {
+  const cleanName = name?.trim() || "";
+  const cleanAddress = address?.trim() || "";
+  const cleanDest = destination?.trim() || "";
+
+  if (!cleanName && !cleanAddress) return null;
+
+  const parts = [cleanName, cleanAddress, cleanDest].filter(Boolean);
+  const query = parts.join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function CustomTab({
@@ -815,6 +975,7 @@ function CustomTab({
           customMealChanges.push({
             dayNumber: day.day,
             mealType: mc.mealType,
+            time: defaultMeal?.time || (mc.mealType === "breakfast" ? "07:30" : mc.mealType === "lunch" ? "12:00" : "18:30"),
             originalMealName: defaultMeal?.serviceName || "Nhà hàng theo tour",
             newMealName:
               mc.mode === "custom"
@@ -913,7 +1074,12 @@ function CustomTab({
         {Object.values(destHotels).map((group) => {
           const { destination, nightCount, defaultHotel: defHotel, hotelChoice: choice } = group;
           const isExpanded = expandedHotelDest === destination;
-          const priceDiffPerNight = choice.priceDifference || 0;
+          const selectedSystem = choice.mode === "system"
+            ? SYSTEM_HOTELS.find((h) => h.name === choice.systemName)
+            : null;
+          const priceDiffPerNight = selectedSystem && defHotel
+            ? selectedSystem.pricePerNight - defHotel.pricePerNight
+            : 0;
 
           return (
             <div key={destination} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -949,7 +1115,7 @@ function CustomTab({
                       Đối tác Nền tảng
                     </span>
                   )}
-                  {choice.mode === "system" && (priceDiffPerNight !== 0) && (
+                  {choice.mode === "system" && (choice.priceDifference !== undefined ? choice.priceDifference !== 0 : selectedSystem && priceDiffPerNight !== 0) && (
                     <span className={`text-xs font-bold ${(choice.priceDifference ?? priceDiffPerNight) > 0 ? "text-amber-600" : "text-emerald-600"}`}>
                       {(choice.priceDifference ?? priceDiffPerNight) > 0 ? "+" : ""}{formatVND(choice.priceDifference ?? priceDiffPerNight)}
                     </span>
@@ -960,7 +1126,7 @@ function CustomTab({
 
               {isExpanded && (
                 <div className="px-4 py-4 space-y-4">
-                  {/* Mode tabs (Tour / Provider / Custom) */}
+                  {/* Mode tabs (Tour / Custom) */}
                   <div className="flex flex-wrap gap-1.5 p-1 bg-gray-100 rounded-xl">
                     <button
                       type="button"
@@ -973,18 +1139,6 @@ function CustomTab({
                     >
                       <Building2 className="w-3.5 h-3.5" />
                       Khách sạn theo Tour
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateDestHotel(destination, { ...choice, mode: "provider" })}
-                      className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                        choice.mode === "provider"
-                          ? "bg-white text-indigo-700 shadow-xs border border-indigo-300"
-                          : "text-gray-600 hover:text-indigo-700"
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      🌟 Đối tác Nền tảng
                     </button>
                     <button
                       type="button"
@@ -1002,18 +1156,31 @@ function CustomTab({
 
                   {/* System / Configured hotel cards */}
                   {choice.mode === "system" && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {(() => {
-                        const options: Array<{ name: string; stars?: number; description?: string; diff: number; pricePerNight?: number }> = [];
+                        const options: Array<{
+                          name: string;
+                          stars?: number;
+                          description?: string;
+                          diff: number;
+                          pricePerNight?: number;
+                          serviceId?: string;
+                          address?: string;
+                          mapUrl?: string;
+                        }> = [];
 
                         // 1. Default Tour Hotel (0đ)
                         if (defHotel) {
+                          const matchingServiceId = defHotel.serviceId || tour.itinerary.find((d) => d.hotel && d.hotel.name === defHotel.name)?.hotel?.serviceId;
                           options.push({
                             name: defHotel.name,
                             stars: defHotel.stars || 4,
                             description: defHotel.description || defHotel.address || "Khách sạn tiêu chuẩn theo tour",
                             diff: 0,
                             pricePerNight: defHotel.pricePerNight,
+                            serviceId: matchingServiceId,
+                            address: defHotel.address,
+                            mapUrl: (defHotel as any).mapUrl || (defHotel as any).googleMapsUrl,
                           });
                         }
 
@@ -1026,170 +1193,150 @@ function CustomTab({
                               description: alt.description || alt.address || "",
                               diff: alt.priceDifference,
                               pricePerNight: (defHotel.pricePerNight || 0) + alt.priceDifference,
+                              serviceId: alt.serviceId,
+                              address: alt.address,
+                              mapUrl: (alt as any).mapUrl || (alt as any).googleMapsUrl,
                             });
+                          });
+                        } else {
+                          // Fallback to SYSTEM_HOTELS if no alternatives configured yet
+                          SYSTEM_HOTELS.forEach((h: any) => {
+                            if (h.name !== defHotel?.name) {
+                              const diff = defHotel ? h.pricePerNight - defHotel.pricePerNight : 0;
+                              options.push({
+                                name: h.name,
+                                stars: h.stars || 4,
+                                description: h.description,
+                                diff,
+                                pricePerNight: h.pricePerNight,
+                                serviceId: h.serviceId,
+                                address: h.address,
+                                mapUrl: h.mapUrl || h.googleMapsUrl,
+                              });
+                            }
                           });
                         }
 
-                        return options.map((opt) => {
+                        return options.map((opt, optIdx) => {
                           const isSel = choice.systemName === opt.name;
+                          const linkedService = opt.serviceId
+                            ? services.find((s) => s.id === opt.serviceId && s.category === "hotel")
+                            : services.find((s) => s.category === "hotel" && (s.name.toLowerCase().includes(opt.name.toLowerCase()) || opt.name.toLowerCase().includes(s.name.toLowerCase())));
+
+                          const mapsUrl = opt.mapUrl || getGoogleMapsSearchUrl(opt.name, opt.address, destination);
+                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500";
+                          const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Đối tác";
+
                           return (
-                            <button
+                            <div
                               key={opt.name}
-                              onClick={() => updateDestHotel(destination, {
-                                mode: "system",
-                                systemName: opt.name,
-                                systemStars: opt.stars,
-                                systemPricePerNight: opt.pricePerNight,
-                                priceDifference: opt.diff,
-                              })}
-                              className={`text-left p-3.5 rounded-xl border-2 transition-all ${
-                                isSel ? "border-blue-500 bg-white ring-1 ring-blue-400/30" : "border-gray-200 bg-white hover:border-[#CBD5E1]"
+                              className={`rounded-2xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 ${
+                                isSel
+                                  ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
+                                  : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
                               }`}
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="font-semibold text-gray-900 text-sm">{opt.name}</p>
+                              <div>
+                                {/* Top Banner Tag */}
+                                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-gray-100 flex-wrap gap-1">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                    opt.diff === 0
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                      : "bg-amber-50 text-amber-900 border-amber-300"
+                                  }`}>
+                                    <Star className="w-3 h-3 fill-current text-amber-500" />
+                                    {opt.diff === 0 ? "Khách sạn Tiêu chuẩn (Mặc định)" : `Phương án thay thế (Option ${optIdx + 1})`}
+                                  </span>
+                                  {isSel && (
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                      <Check className="w-3 h-3 text-emerald-600" /> Đang chọn
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Card Body with Image Thumbnail */}
+                                <div className="flex items-start gap-3">
+                                  <div className="relative w-20 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-gray-200">
+                                    <img src={imgUrl} alt={opt.name} className="w-full h-full object-cover" />
                                     {opt.stars && (
-                                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                        {opt.stars} <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                                      <span className="absolute bottom-1 right-1 bg-black/70 text-amber-300 text-[9px] font-bold px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                        {opt.stars}★
                                       </span>
                                     )}
                                   </div>
-                                  {opt.description && <p className="text-xs text-gray-400 mt-1">{opt.description}</p>}
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  {opt.diff === 0 ? (
-                                    <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded">
-                                      Tiêu chuẩn tour (0đ)
+
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 inline-block truncate max-w-full">
+                                      {providerName}
                                     </span>
-                                  ) : (
-                                    <div className="space-y-0.5">
-                                      <p className="text-[10px] text-gray-400 uppercase font-medium">CHÊNH LỆCH</p>
-                                      <p className={`text-sm font-bold ${opt.diff > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                                        {opt.diff > 0 ? "+" : ""}{formatVND(opt.diff)}
+                                    <h5 className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 truncate">{opt.name}</h5>
+                                    {opt.address && (
+                                      <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5 truncate">
+                                        <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
+                                        {opt.address}
                                       </p>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-                  )}
-
-                  {/* Provider hotel list */}
-                  {choice.mode === "provider" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs text-gray-500 bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
-                        <span className="flex items-center gap-1.5 text-indigo-900 font-semibold">
-                          <Sparkles className="w-4 h-4 text-amber-500" />
-                          Khách sạn &amp; Resort Đối tác Nền tảng tại {destination}
-                        </span>
-                        <span className="text-[11px] text-gray-500 hidden sm:inline">
-                          Xem bài viết blog &amp; toạ độ Google Maps trước khi chọn
-                        </span>
-                      </div>
-
-                      {(() => {
-                        const providerHotels = services.filter((s) => {
-                          if (s.category !== "hotel" || s.status !== "approved") return false;
-                          if (!destination) return true;
-                          const destLower = destination.toLowerCase();
-                          const locLower = (s.location || "").toLowerCase();
-                          const provLower = (s.province || "").toLowerCase();
-                          return locLower.includes(destLower) || provLower.includes(destLower) || destLower.includes(locLower) || destLower.includes(provLower);
-                        });
-                        const displayHotels = providerHotels.length > 0 ? providerHotels : services.filter((s) => s.category === "hotel" && s.status === "approved");
-
-                        if (displayHotels.length === 0) {
-                          return (
-                            <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                              Chưa có khách sạn đối tác nào tại khu vực này. Bạn có thể chọn tab "Tự đề xuất" để nhập khách sạn mong muốn.
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {displayHotels.map((serv) => {
-                              const isSel = choice.mode === "provider" && choice.serviceId === serv.id;
-                              return (
-                                <div
-                                  key={serv.id}
-                                  className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 ${
-                                    isSel
-                                      ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-300"
-                                      : "border-gray-200 bg-white hover:border-indigo-200 shadow-2xs"
-                                  }`}
-                                >
-                                  <div className="flex gap-3">
-                                    <div className="relative w-24 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                      <img src={serv.image} alt={serv.name} className="w-full h-full object-cover" />
-                                      {serv.stars && (
-                                        <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-amber-400 font-bold text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                          {serv.stars}★
+                                    )}
+                                    <div className="mt-1">
+                                      {opt.diff === 0 ? (
+                                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                                          Tiêu chuẩn tour (0đ chênh lệch)
+                                        </span>
+                                      ) : (
+                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border inline-block ${
+                                          opt.diff > 0
+                                            ? "text-amber-800 bg-amber-50 border-amber-200"
+                                            : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                        }`}>
+                                          {opt.diff > 0 ? "Phụ thu +" : "Tiết kiệm "}{formatVND(Math.abs(opt.diff))}/đêm
                                         </span>
                                       )}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <span className="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mb-1">
-                                        {serv.providerName}
-                                      </span>
-                                      <h5 className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight">
-                                        {serv.name}
-                                      </h5>
-                                      <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-1 truncate">
-                                        <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
-                                        {serv.location}
-                                      </p>
-                                      <p className="text-xs font-bold text-blue-900 mt-1">
-                                        {formatVND(serv.pricePerPerson || serv.price)}
-                                        <span className="text-[10px] font-normal text-gray-400"> (giá tham khảo)</span>
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setModalService(serv);
-                                        setModalTarget({ type: "hotel", destination });
-                                        setIsModalOpen(true);
-                                      }}
-                                      className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white hover:bg-indigo-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1 transition-colors"
-                                    >
-                                      <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                                      Xem bài viết &amp; Bản đồ
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSelectProviderHotel(destination, serv)}
-                                      className={`py-1.5 px-3 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                                        isSel
-                                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                                      }`}
-                                    >
-                                      {isSel ? (
-                                        <>
-                                          <Check className="w-3.5 h-3.5" />
-                                          Đã chọn
-                                        </>
-                                      ) : (
-                                        "Chọn khách sạn"
-                                      )}
-                                    </button>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        );
+                              </div>
+
+                              {/* Action Footer */}
+                              <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-gray-100 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (linkedService) {
+                                      setModalService(linkedService);
+                                      setModalTarget({ type: "hotel", destination });
+                                      setIsModalOpen(true);
+                                    } else if (mapsUrl) {
+                                      window.open(mapsUrl, "_blank");
+                                    }
+                                  }}
+                                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                                  title="Xem bài viết chi tiết & Bản đồ"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Xem bài viết &amp; Bản đồ</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => updateDestHotel(destination, {
+                                    mode: "system",
+                                    systemName: opt.name,
+                                    systemStars: opt.stars,
+                                    systemPricePerNight: opt.pricePerNight,
+                                    priceDifference: opt.diff,
+                                  })}
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                    isSel
+                                      ? "bg-emerald-600 text-white cursor-default"
+                                      : "bg-[#075985] text-white hover:bg-[#F97316] cursor-pointer"
+                                  }`}
+                                >
+                                  {isSel ? "✓ Đang chọn" : "Chọn khách sạn này"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        });
                       })()}
                     </div>
                   )}
@@ -1199,7 +1346,7 @@ function CustomTab({
                     <div className="space-y-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <p className="text-xs text-amber-700 flex items-start gap-1.5">
                         <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        Nhập thông tin khách sạn bạn muốn tại {destination}. Công ty sẽ xác nhận và báo giá.
+                        Nhập thông tin khách sạn bạn muốn tại {destination}. Công ty sẽ xác nhận tình trạng phòng và báo giá chính thức.
                       </p>
                       <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Tên khách sạn *</label>
@@ -1230,6 +1377,25 @@ function CustomTab({
                           placeholder="VD: Yêu cầu phòng view hồ, loại phòng superior…"
                           className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
                         />
+                      </div>
+
+                      {/* Dynamic Google Maps check */}
+                      <div className="pt-2 border-t border-amber-200/70 flex items-center justify-between text-xs">
+                        {choice.customName?.trim() || choice.customAddress?.trim() ? (
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([choice.customName?.trim(), choice.customAddress?.trim(), destination].filter(Boolean).join(", "))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 font-semibold text-teal-800 hover:text-teal-950 hover:underline transition-colors"
+                            title="Xem vị trí khách sạn bạn vừa nhập trên Google Maps (Mở tab mới)"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Xem vị trí đã nhập trên Google Maps</span>
+                            <ExternalLink className="w-3 h-3 text-teal-600" />
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 italic">Chưa có thông tin vị trí để tìm kiếm trên bản đồ</span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1306,89 +1472,171 @@ function CustomTab({
                   </p>
                 )}
 
-                {/* Pure locations timeline (No meal changes here) */}
-                <div className="relative pl-1">
-                  <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-gray-200" />
+                {/* UNIFIED DAY TIMELINE: LỊCH TRÌNH THAM QUAN & ẨM THỰC SẮP XẾP THEO GIỜ */}
+                {(() => {
+                  type CustActivity =
+                    | { kind: "location"; loc: LocationChoice; time: string; key: string }
+                    | { kind: "meal"; meal: TourMeal; time: string; key: string };
 
-                  <div className="space-y-2.5">
-                    {locations.map((loc) => (
-                      <div key={loc.locationId} className="relative flex items-start gap-3">
-                        {/* Dot */}
-                        <div className={`relative z-10 flex-shrink-0 mt-3 w-7 h-7 rounded-full flex items-center justify-center border-2 ${
-                          loc.changed ? "bg-amber-400 border-amber-400" : "bg-white border-blue-400"
-                        }`}>
-                          <MapPin className={`w-3.5 h-3.5 ${loc.changed ? "text-white" : "text-blue-500"}`} />
-                        </div>
+                  const activities: CustActivity[] = [];
+                  locations.forEach((loc) => {
+                    const origLoc = day.locations?.find((l) => l.id === loc.locationId);
+                    const time = (loc as any).time || origLoc?.time || "08:30";
+                    activities.push({
+                      kind: "location",
+                      loc,
+                      time,
+                      key: `loc-${loc.locationId}`,
+                    });
+                  });
 
-                        {/* Content */}
-                        <div className={`flex-1 rounded-xl border p-3 ${
-                          loc.changed ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"
-                        }`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex-1">
-                              {loc.changed ? (
-                                <p className="text-xs text-gray-400 line-through">{loc.locationName}</p>
-                              ) : (
-                                <p className="font-medium text-gray-900 text-sm">{loc.locationName}</p>
-                              )}
-                              {loc.changed && loc.changeRequest && (
-                                <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                  → {loc.changeRequest}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => updateLocation(day.id, loc.locationId, {
-                                changed: !loc.changed,
-                                changeRequest: loc.changed ? "" : loc.changeRequest,
-                              })}
-                              className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                                loc.changed
-                                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                                  : "bg-gray-100 text-gray-600 hover:bg-[#F97316]/15 hover:text-[#EA580C]"
-                              }`}
-                            >
-                              {loc.changed ? "Huỷ thay đổi" : "Thay đổi"}
-                            </button>
-                          </div>
+                  (day.meals || []).forEach((meal, mIdx) => {
+                    const defaultTime = meal.type === "breakfast" ? "07:30" : meal.type === "lunch" ? "12:00" : "18:30";
+                    activities.push({
+                      kind: "meal",
+                      meal,
+                      time: meal.time || defaultTime,
+                      key: `meal-${meal.type}-${meal.id || mIdx}`,
+                    });
+                  });
 
-                          {loc.changed && (
-                            <div className="mt-2">
-                              <textarea
-                                value={loc.changeRequest}
-                                onChange={(e) => updateLocation(day.id, loc.locationId, { changeRequest: e.target.value })}
-                                placeholder={`Thay thế "${loc.locationName}" bằng địa điểm nào? (VD: Vườn hoa thành phố Đà Lạt, Ga Đà Lạt, ...)`}
-                                className="w-full border border-amber-300 rounded-lg p-2.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                                rows={2}
-                              />
-                              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info className="w-3 h-3 flex-shrink-0" />
-                                Công ty sẽ xem xét và báo giá sau khi nhận booking.
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                  // Chronological order by time
+                  activities.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+
+                  if (activities.length === 0) {
+                    return (
+                      <div className="p-4 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400">
+                        Chưa có lịch trình cho ngày này.
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    );
+                  }
 
-                {/* Day Meals Section (Chế độ ẩm thực & Bữa ăn trong ngày) */}
-                {day.meals && day.meals.length > 0 && (
-                  <div className="pt-3 border-t border-gray-100 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                        <Utensils className="w-3.5 h-3.5 text-emerald-600" />
-                        Chế độ ẩm thực &amp; Bữa ăn Ngày {day.day}
-                      </span>
-                      <span className="text-[11px] text-gray-400">
-                        (Có thể đổi nhà hàng hoặc yêu cầu riêng)
-                      </span>
-                    </div>
+                  return (
+                    <div className="relative pl-1">
+                      {/* Vertical line through dots */}
+                      <div className="absolute left-[95px] top-4 bottom-4 w-0.5 bg-gray-200" />
 
-                    <div className="space-y-2">
-                      {day.meals.map((defaultMeal) => {
+                      <div className="space-y-3">
+                        {activities.map((act) => {
+                          if (act.kind === "location") {
+                            const { loc } = act;
+                            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.locationName + (day.destinationCity ? " " + day.destinationCity : ""))}`;
+
+                            return (
+                              <div key={act.key} className="relative flex items-start gap-2.5">
+                                {/* Time badge */}
+                                <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2.5">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-blue-500" />
+                                    {act.time}
+                                  </span>
+                                </div>
+
+                                {/* Dot */}
+                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
+                                  loc.changed ? "bg-amber-400 border-amber-400 text-white" : "bg-white border-blue-400 text-blue-500"
+                                }`}>
+                                  <MapPin className="w-3.5 h-3.5" />
+                                </div>
+
+                                {/* Content Card */}
+                                <div className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${
+                                  loc.changed ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white hover:border-blue-300"
+                                }`}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex-1">
+                                      {loc.changed ? (
+                                        <p className="text-xs text-gray-400 line-through">{loc.locationName}</p>
+                                      ) : (
+                                        <a
+                                          href={mapsUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="font-medium text-gray-900 text-sm hover:text-blue-600 hover:underline flex items-center gap-1.5 group inline-flex"
+                                          title="Bấm để xem vị trí trên Google Maps"
+                                        >
+                                          <span>{loc.locationName}</span>
+                                          <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-blue-600" />
+                                        </a>
+                                      )}
+                                      {loc.changed && loc.changeRequest && (
+                                        <p className="text-sm font-medium text-amber-800 mt-0.5">
+                                          → {loc.changeRequest}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => updateLocation(day.id, loc.locationId, {
+                                        changed: !loc.changed,
+                                        changeRequest: loc.changed ? "" : loc.changeRequest,
+                                      })}
+                                      className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                                        loc.changed
+                                          ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                          : "bg-gray-100 text-gray-600 hover:bg-[#F97316]/15 hover:text-[#EA580C]"
+                                      }`}
+                                    >
+                                      {loc.changed ? "Huỷ thay đổi" : "Thay đổi"}
+                                    </button>
+                                  </div>
+
+                                  {loc.changed && (
+                                    <div className="mt-2">
+                                      <textarea
+                                        value={loc.changeRequest}
+                                        onChange={(e) => updateLocation(day.id, loc.locationId, { changeRequest: e.target.value })}
+                                        placeholder={`Thay thế "${loc.locationName}" bằng địa điểm nào? (VD: Vườn hoa thành phố Đà Lạt, Ga Đà Lạt, ...)`}
+                                        className="w-full border border-amber-300 rounded-lg p-2.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                        rows={2}
+                                      />
+                                      <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                        <Info className="w-3 h-3 flex-shrink-0" />
+                                        Công ty sẽ xem xét và báo giá sau khi nhận booking.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            // act.kind === "meal"
+                            const defaultMeal = act.meal;
+                            const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
+
+                            return (
+                              <div key={act.key} className="relative flex items-start gap-2.5">
+                                {/* Time badge */}
+                                <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2.5">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${
+                                    mealType === "breakfast"
+                                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                                      : mealType === "lunch"
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                      : "bg-purple-50 text-[#EA580C] border-purple-200"
+                                  }`}>
+                                    <Clock className={`w-3 h-3 ${
+                                      mealType === "breakfast" ? "text-amber-600" : mealType === "lunch" ? "text-emerald-600" : "text-[#F97316]"
+                                    }`} />
+                                    {act.time}
+                                  </span>
+                                </div>
+
+                                {/* Dot */}
+                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
+                                  mealType === "breakfast"
+                                    ? "bg-amber-100 border-amber-400 text-amber-700"
+                                    : mealType === "lunch"
+                                    ? "bg-emerald-100 border-emerald-500 text-emerald-700"
+                                    : "bg-[#F97316]/15 border-purple-500 text-[#EA580C]"
+                                }`}>
+                                  {mealType === "breakfast" ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
+                                </div>
+
+                                {/* Meal Accordion Content */}
+                                <div className="flex-1 min-w-0">
+                                  {(() => {
                         const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
                         const mealChoice = mealChoices.find((mc) => mc.mealType === mealType);
                         const mealKey = `${day.id}-${mealType}`;
@@ -1487,7 +1735,7 @@ function CustomTab({
 
                               {isExpanded && (
                                 <div className="p-3.5 space-y-3 bg-white border-t border-gray-100">
-                                  {/* Mode tabs (Tour / Provider / Custom) */}
+                                  {/* Mode tabs (Tour / Custom) */}
                                   <div className="flex flex-wrap gap-1.5 p-1 bg-gray-100 rounded-xl">
                                     <button
                                       type="button"
@@ -1501,18 +1749,7 @@ function CustomTab({
                                       <Utensils className="w-3.5 h-3.5" />
                                       Nhà hàng theo Tour
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateMealChoice(day.id, mealType, { mode: "provider" })}
-                                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                                        mealChoice?.mode === "provider"
-                                          ? "bg-white text-indigo-700 shadow-xs border border-indigo-300"
-                                          : "text-gray-600 hover:text-indigo-700"
-                                      }`}
-                                    >
-                                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                                      🌟 Đối tác Nền tảng
-                                    </button>
+                                    {defaultMeal.allowCustomMealRequest !== false && (
                                       <button
                                         type="button"
                                         onClick={() => updateMealChoice(day.id, mealType, { mode: "custom" })}
@@ -1525,11 +1762,12 @@ function CustomTab({
                                         <Edit3 className="w-3.5 h-3.5" />
                                         Tự đề xuất
                                       </button>
+                                    )}
                                   </div>
 
                                   {/* System restaurant list */}
                                   {mealChoice?.mode === "system" && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       {(() => {
                                         const options: Array<{ name: string; description?: string; diff: number; pricePerPerson?: number }> = [];
 
@@ -1551,156 +1789,127 @@ function CustomTab({
                                               pricePerPerson: (defaultMeal.pricePerPerson || 0) + alt.priceDifference,
                                             });
                                           });
+                                        } else {
+                                          // Fallback sang danh mục nhà hàng hệ thống
+                                          SYSTEM_RESTAURANTS.filter((r) => r.mealType === mealType && r.name !== defaultMeal.serviceName).forEach((r) => {
+                                            const diff = r.pricePerPerson - (defaultMeal.pricePerPerson ?? 0);
+                                            options.push({
+                                              name: r.name,
+                                              description: r.description,
+                                              diff,
+                                              pricePerPerson: r.pricePerPerson,
+                                            });
+                                          });
                                         }
 
-                                        return options.map((opt) => {
+                                        return options.map((opt, optIdx) => {
                                           const isSel = (mealChoice?.systemName || defaultMeal.serviceName) === opt.name;
+                                          const linkedService = services.find((s) =>
+                                            s.category === "fnb" &&
+                                            (s.name.toLowerCase().includes(opt.name.toLowerCase()) ||
+                                              opt.name.toLowerCase().includes(s.name.toLowerCase()))
+                                          );
+                                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500";
+                                          const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Heritage";
+
                                           return (
-                                            <button
-                                              type="button"
+                                            <div
                                               key={opt.name}
-                                              onClick={() => updateMealChoice(day.id, mealType, {
-                                                mode: "system",
-                                                systemName: opt.name,
-                                                systemPrice: opt.pricePerPerson,
-                                                priceDifference: opt.diff,
-                                              })}
-                                              className={`text-left p-2.5 rounded-xl border transition-all ${
+                                              className={`rounded-2xl border-2 transition-all p-3 flex flex-col justify-between gap-2.5 ${
                                                 isSel
-                                                  ? "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-400"
-                                                  : "border-gray-200 bg-white hover:border-emerald-200"
+                                                  ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
+                                                  : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
                                               }`}
                                             >
-                                              <div className="flex items-start justify-between gap-2">
-                                                <div>
-                                                  <p className="font-semibold text-gray-900 text-xs">{opt.name}</p>
-                                                  {opt.description && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{opt.description}</p>}
-                                                </div>
-                                                <div className="text-right flex-shrink-0">
-                                                  {opt.diff === 0 ? (
-                                                    <span className="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">Mặc định (0đ)</span>
-                                                  ) : (
-                                                    <div className="space-y-0.5">
-                                                      <p className="text-[9px] text-gray-400 uppercase font-medium">Chênh lệch</p>
-                                                      <span className={`text-xs font-bold ${opt.diff > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                                                        {opt.diff > 0 ? "+" : ""}{formatVND(opt.diff)}/người
-                                                      </span>
-                                                    </div>
+                                              <div>
+                                                {/* Top Banner Tag */}
+                                                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-gray-100 flex-wrap gap-1">
+                                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                                    opt.diff === 0
+                                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                                      : "bg-amber-50 text-amber-900 border-amber-300"
+                                                  }`}>
+                                                    <Utensils className="w-3 h-3 text-emerald-600" />
+                                                    {opt.diff === 0 ? "Món ăn Tiêu chuẩn (Mặc định)" : `Lựa chọn đổi món (Option ${optIdx + 1})`}
+                                                  </span>
+                                                  {isSel && (
+                                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                                      <Check className="w-3 h-3 text-emerald-600" /> Đang chọn
+                                                    </span>
                                                   )}
                                                 </div>
-                                              </div>
-                                            </button>
-                                          );
-                                        });
-                                      })()}
-                                    </div>
-                                  )}
 
-                                  {/* Provider restaurant list */}
-                                  {mealChoice?.mode === "provider" && (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center justify-between text-xs text-gray-500 bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-100">
-                                        <span className="flex items-center gap-1.5 text-indigo-900 font-semibold">
-                                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                                          Nhà hàng &amp; Ẩm thực Đối tác Nền tảng (Ngày {day.day})
-                                        </span>
-                                        <span className="text-[11px] text-gray-500 hidden sm:inline">
-                                          Xem bài viết blog &amp; toạ độ Google Maps trước khi chọn
-                                        </span>
-                                      </div>
-
-                                      {(() => {
-                                        const destCity = day.destinationCity || tour.destination || "";
-                                        const providerMeals = services.filter((s) => {
-                                          if ((s.category !== "fnb" && s.category !== "restaurant") || s.status !== "approved") return false;
-                                          if (!destCity) return true;
-                                          const destLower = destCity.toLowerCase();
-                                          const locLower = (s.location || "").toLowerCase();
-                                          const provLower = (s.province || "").toLowerCase();
-                                          return locLower.includes(destLower) || provLower.includes(destLower) || destLower.includes(locLower) || destLower.includes(provLower);
-                                        });
-                                        const displayMeals = providerMeals.length > 0 ? providerMeals : services.filter((s) => (s.category === "fnb" || s.category === "restaurant") && s.status === "approved");
-
-                                        if (displayMeals.length === 0) {
-                                          return (
-                                            <div className="p-5 text-center text-xs text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                              Chưa có nhà hàng đối tác nào cho khu vực này. Bạn có thể chọn tab "Tự đề xuất" để nhập địa điểm muốn đến.
-                                            </div>
-                                          );
-                                        }
-
-                                        return (
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            {displayMeals.map((serv) => {
-                                              const isSel = mealChoice?.mode === "provider" && mealChoice.serviceId === serv.id;
-                                              return (
-                                                <div
-                                                  key={serv.id}
-                                                  className={`rounded-xl border-2 transition-all p-3 flex flex-col justify-between gap-2.5 ${
-                                                    isSel
-                                                      ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-300"
-                                                      : "border-gray-200 bg-white hover:border-indigo-200 shadow-2xs"
-                                                  }`}
-                                                >
-                                                  <div className="flex gap-2.5">
-                                                    <div className="relative w-20 h-18 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                                      <img src={serv.image} alt={serv.name} className="w-full h-full object-cover" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                      <span className="inline-block text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mb-0.5">
-                                                        {serv.providerName}
-                                                      </span>
-                                                      <h6 className="font-bold text-gray-900 text-xs line-clamp-1 leading-snug">
-                                                        {serv.name}
-                                                      </h6>
-                                                      <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">
-                                                        {serv.cuisineType || serv.subCategory || "Ẩm thực truyền thống"}
-                                                      </p>
-                                                      <p className="text-xs font-bold text-emerald-700 mt-1">
-                                                        {formatVND(serv.pricePerPerson || serv.price)}
-                                                        <span className="text-[10px] font-normal text-gray-400">/suất (tham khảo)</span>
-                                                      </p>
-                                                    </div>
+                                                {/* Body */}
+                                                <div className="flex items-start gap-2.5">
+                                                  <div className="w-16 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-gray-200">
+                                                    <img src={imgUrl} alt={opt.name} className="w-full h-full object-cover" />
                                                   </div>
-
-                                                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setModalService(serv);
-                                                        setModalTarget({ type: "meal", dayId: day.id, mealType });
-                                                        setIsModalOpen(true);
-                                                      }}
-                                                      className="flex-1 py-1.5 px-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white hover:bg-indigo-50 text-[10px] font-semibold text-gray-700 flex items-center justify-center gap-1 transition-colors"
-                                                    >
-                                                      <FileText className="w-3 h-3 text-indigo-600" />
-                                                      Xem bài viết &amp; Bản đồ
-                                                    </button>
-
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleSelectProviderMeal(day.id, mealType, serv)}
-                                                      className={`py-1.5 px-2.5 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
-                                                        isSel
-                                                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                                                      }`}
-                                                    >
-                                                      {isSel ? (
-                                                        <>
-                                                          <Check className="w-3 h-3" />
-                                                          Đã chọn
-                                                        </>
+                                                  <div className="min-w-0 flex-1">
+                                                    <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 inline-block truncate max-w-full">
+                                                      {providerName}
+                                                    </span>
+                                                    <h5 className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 truncate">{opt.name}</h5>
+                                                    {opt.description && (
+                                                      <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{opt.description}</p>
+                                                    )}
+                                                    <div className="mt-1">
+                                                      {opt.diff === 0 ? (
+                                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                                                          Đã bao gồm trong tour (0đ chênh lệch)
+                                                        </span>
                                                       ) : (
-                                                        "Chọn nhà hàng"
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${
+                                                          opt.diff > 0
+                                                            ? "text-amber-800 bg-amber-50 border-amber-200"
+                                                            : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                                        }`}>
+                                                          {opt.diff > 0 ? "Phụ thu +" : "Tiết kiệm "}{formatVND(Math.abs(opt.diff))}/người
+                                                        </span>
                                                       )}
-                                                    </button>
+                                                    </div>
                                                   </div>
                                                 </div>
-                                              );
-                                            })}
-                                          </div>
-                                        );
+                                              </div>
+
+                                              {/* Action Footer */}
+                                              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 flex-wrap">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (linkedService) {
+                                                      setModalService(linkedService);
+                                                      setModalTarget({ type: "meal", dayId: day.id, mealType });
+                                                      setIsModalOpen(true);
+                                                    }
+                                                  }}
+                                                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                                                  title="Xem bài viết & Bản đồ nhà hàng"
+                                                >
+                                                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                                  <span>Xem bài viết &amp; Bản đồ</span>
+                                                </button>
+
+                                                <button
+                                                  type="button"
+                                                  onClick={() => updateMealChoice(day.id, mealType, {
+                                                    mode: "system",
+                                                    systemName: opt.name,
+                                                    systemPrice: opt.pricePerPerson,
+                                                    priceDifference: opt.diff,
+                                                  })}
+                                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                                    isSel
+                                                      ? "bg-emerald-600 text-white cursor-default"
+                                                      : "bg-[#075985] text-white hover:bg-[#F97316] cursor-pointer"
+                                                  }`}
+                                                >
+                                                  {isSel ? "✓ Đang chọn" : "Chọn món này"}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        });
                                       })()}
                                     </div>
                                   )}
@@ -1725,11 +1934,17 @@ function CustomTab({
                                 </div>
                               )}
                             </div>
-                          );
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          }
                         })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           );
@@ -1913,6 +2128,7 @@ function CustomTab({
       <ServiceBlogDetailModal
         service={modalService}
         isOpen={isModalOpen}
+        hidePrice={true}
         onClose={() => {
           setIsModalOpen(false);
           setModalService(null);
@@ -2180,28 +2396,28 @@ export function TourDetailPage({
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 font-sans">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-4">
             {/* Hero */}
-            <div className="relative rounded-2xl overflow-hidden shadow-lg h-72 sm:h-96">
+            <div className="relative rounded-[6px] overflow-hidden border border-[#CBD5E1] h-72 sm:h-96">
               <img src={selectedPhoto || tour.image} alt={tour.name} className="w-full h-full object-cover transition-all duration-300" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-black/40" />
               {tour.companyName && (
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5">
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-white rounded-[4px] px-3 py-1.5 border border-[#CBD5E1]">
                   {tour.companyLogo && (
-                    <img src={tour.companyLogo} alt="" className="w-5 h-5 rounded object-cover" />
+                    <img src={tour.companyLogo} alt="" className="w-4 h-4 rounded-[2px] object-cover" />
                   )}
-                  <span className="text-xs font-semibold text-gray-800">{tour.companyName}</span>
+                  <span className="text-xs font-semibold text-[#0F172A]">{tour.companyName}</span>
                 </div>
               )}
-              <div className="absolute top-4 right-4 bg-amber-400 text-white text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1">
+              <div className="absolute top-4 right-4 bg-[#B45309] text-white text-xs font-bold px-2.5 py-1 rounded-[4px] flex items-center gap-1">
                 <Star className="w-3.5 h-3.5 fill-white" />
-                {tour.rating}
+                <span>{tour.rating}</span>
               </div>
               <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-xs text-white/70 font-medium mb-1">MÃ TOUR: {formatTourCode(tour.tourCode)}</p>
+                <p className="text-xs text-white/80 font-medium mb-1">MÃ TOUR: {tour.tourCode}</p>
                 <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">{tour.name}</h1>
               </div>
             </div>
@@ -2238,7 +2454,9 @@ export function TourDetailPage({
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Users className="w-4 h-4 text-blue-500" />
-                {tour.minGuests}–{tour.maxGuests} khách
+                {tour.minGuests > 0
+                  ? `Tối thiểu ${tour.minGuests} khách có vé tính tiền · Tối đa ${tour.maxGuests} người`
+                  : `Tối đa ${tour.maxGuests} người`}
               </div>
               {tour.operationPeriod && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -2427,8 +2645,12 @@ export function TourDetailPage({
                   </div>
                 )}
                 <div className="flex justify-between text-gray-600">
-                  <span>Nhóm khách</span>
-                  <span className="font-medium">{tour.minGuests}–{tour.maxGuests} người</span>
+                  <span>Quy mô đoàn</span>
+                  <span className="font-medium text-right text-xs">
+                    {tour.minGuests > 0
+                      ? `Tối thiểu ${tour.minGuests} khách tính tiền · Tối đa ${tour.maxGuests} người`
+                      : `Tối đa ${tour.maxGuests} người`}
+                  </span>
                 </div>
               </div>
 
@@ -2495,36 +2717,39 @@ export function TourDetailPage({
               )}
 
               {tour.companyName && (() => {
-                const companyPhone = tour.companyPhone;
-                const companyEmail = tour.companyEmail;
+                const matchedCompany = mockTourCompanies.find(
+                  (c) => c.id === tour.companyId || c.name.toLowerCase() === tour.companyName?.toLowerCase()
+                );
+                const companyPhone = tour.companyPhone || matchedCompany?.phone || "1900 1234";
+                const companyEmail = tour.companyEmail || matchedCompany?.email || "info@viettravel.com.vn";
 
                 return (
                   <div className="border-t border-gray-100 pt-4 space-y-2.5">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Liên hệ công ty</p>
-                    
+
                     <div className="flex items-center gap-2 text-sm text-gray-800">
                       <Building2 className="w-4 h-4 text-[#075985] flex-shrink-0" />
                       <span className="font-semibold">{tour.companyName}</span>
                     </div>
 
                     <div className="space-y-1 text-xs text-gray-600 pl-0.5">
-                      {companyPhone && <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>SĐT: <strong className="text-gray-900 font-medium">{companyPhone}</strong></span>
-                      </div>}
-                      {companyEmail && <div className="flex items-center gap-2">
+                      </div>
+                      <div className="flex items-center gap-2">
                         <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>Email: <strong className="text-gray-900 font-medium">{companyEmail}</strong></span>
-                      </div>}
+                      </div>
                     </div>
 
-                    {companyPhone && <a
+                    <a
                       href={`tel:${companyPhone.replace(/\s+/g, "")}`}
                       className="w-full flex items-center justify-center gap-2 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Phone className="w-4 h-4 text-emerald-600" />
                       Gọi tư vấn miễn phí
-                    </a>}
+                    </a>
                   </div>
                 );
               })()}

@@ -1,4 +1,4 @@
-﻿import { Tag, Copy, Check, Clock, Percent } from "lucide-react";
+import { Tag, Copy, Check, Clock, Percent } from "lucide-react";
 import { useState } from "react";
 
 interface Promotion {

@@ -10,11 +10,12 @@ public sealed class TourRepository(TripOpsDbContext db)
         .Include(t => t.PricingTiers)
         .Include(t => t.Timelines).ThenInclude(d => d.Attractions)
         .Include(t => t.Timelines).ThenInclude(d => d.Meals)
-        .Include(t => t.Timelines).ThenInclude(d => d.Accommodations).AsSplitQuery();
+        .Include(t => t.Accommodations)
+        .Include(t => t.Versions.OrderByDescending(v => v.VersionNumber).Take(1)).AsSplitQuery();
 
     private static IQueryable<Tour> Public(IQueryable<Tour> query) => query.Where(t =>
-        t.Status == TourStatus.Completed && t.Visibility == TourVisibility.Public && !t.IsRequest &&
-        !t.Agency.IsDeleted && t.Agency.Status == UserStatus.Active && t.Agency.Role == UserRole.TravelAgency &&
+        t.Status == TourStatus.Completed && t.Visibility == TourVisibility.Public && t.IsRequest != true &&
+        t.Agency.Status == UserStatus.Active && t.Agency.Role == UserRole.TravelAgency &&
         t.Agency.BusinessProfile != null && t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved);
 
     public Task<Tour?> Find(int id, string? owner, bool publicOnly, CancellationToken ct, bool includeDeleted = false)
@@ -35,7 +36,7 @@ public sealed class TourRepository(TripOpsDbContext db)
         if (owner != null) query = query.Where(t => t.AgencyId == owner);
         if (publicOnly) query = Public(query);
         if (status != null) query = query.Where(t => t.Status == status);
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(t => t.Name.Contains(search));
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(t => t.Name != null && t.Name.Contains(search));
         if (!string.IsNullOrWhiteSpace(destination)) query = query.Where(t => t.Destination != null && t.Destination.Contains(destination));
         if (maxPrice != null) query = query.Where(t => t.BasePrice <= maxPrice);
         if (headcount != null) query = query.Where(t => (t.MinGuests == null || t.MinGuests <= headcount) && (t.MaxGuests == null || t.MaxGuests >= headcount));
@@ -46,7 +47,7 @@ public sealed class TourRepository(TripOpsDbContext db)
     }
 
     public Task<List<Entities.Service>> EligibleServices(int[] ids, CancellationToken ct) => db.Services.AsNoTracking()
-        .Where(s => ids.Contains(s.Id) && s.Status == ServiceStatus.Approved && !s.Provider.IsDeleted &&
+        .Where(s => ids.Contains(s.Id) && s.Status == ServiceStatus.Approved &&
             s.Provider.Status == UserStatus.Active && s.Provider.Role == UserRole.Provider &&
             s.Provider.BusinessProfile != null && s.Provider.BusinessProfile.Status == BusinessProfileStatus.Approved)
         .ToListAsync(ct);
@@ -55,7 +56,7 @@ public sealed class TourRepository(TripOpsDbContext db)
         string? search, int page, int pageSize, CancellationToken ct)
     {
         var query = db.Services.AsNoTracking().Where(s => s.Status == ServiceStatus.Approved &&
-            !s.Provider.IsDeleted && s.Provider.Status == UserStatus.Active && s.Provider.Role == UserRole.Provider &&
+            s.Provider.Status == UserStatus.Active && s.Provider.Role == UserRole.Provider &&
             s.Provider.BusinessProfile != null && s.Provider.BusinessProfile.Status == BusinessProfileStatus.Approved);
         if (category != null) query = query.Where(s => s.Category == category);
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(s => s.Name.Contains(search));
@@ -81,12 +82,17 @@ public sealed class TourRepository(TripOpsDbContext db)
     }
 
     public void Add(Tour tour) => db.Tours.Add(tour);
+    public Task<bool> CodeExists(string code,int exceptId,CancellationToken ct)=>db.Tours.IgnoreQueryFilters().AnyAsync(t=>t.Code==code&&t.Id!=exceptId,ct);
     public void AddVersion(Tour tour, TourVersion version) => tour.Versions.Add(version);
     public void RemoveConfiguration(Tour tour)
     {
+        db.TouristAttractions.RemoveRange(tour.Timelines.SelectMany(t => t.Attractions));
+        db.TourMeals.RemoveRange(tour.Timelines.SelectMany(t => t.Meals));
         db.TourPricingTiers.RemoveRange(tour.PricingTiers);
+        db.TourAccommodations.RemoveRange(tour.Accommodations);
         db.TourTimelines.RemoveRange(tour.Timelines);
         tour.PricingTiers.Clear();
+        tour.Accommodations.Clear();
         tour.Timelines.Clear();
     }
     // One SaveChanges transaction includes the aggregate, children, and immutable history.

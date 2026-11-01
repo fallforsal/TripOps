@@ -47,6 +47,7 @@ export function CreateTourForm({
   const [formData, setFormData] = useState({
     name: "",
     destination: "",
+    region: "Miền Trung",
     numberOfDays: "1", // Số ngày
     numberOfNights: "0", // Số đêm
     price: "",
@@ -57,38 +58,29 @@ export function CreateTourForm({
       "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800",
   });
 
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-  const [imageUrlInput, setImageUrlInput] = useState("");
-  const [imageError, setImageError] = useState("");
-
-  const handleAddImageUrl = (overrideUrl?: string) => {
-    let raw = (overrideUrl || imageUrlInput).trim();
-    if (!raw) return;
-    if (!/^https?:\/\//i.test(raw)) {
-      raw = `https://${raw}`;
-    } else if (raw.startsWith("http://")) {
-      raw = "https://" + raw.slice(7);
-    }
-    try {
-      const url = new URL(raw);
-      setUploadedImages(prev => [...prev, url.href]);
-      setImageUrlInput("");
-      setImageError("");
-    } catch {
-      setImageError("URL hình ảnh không đúng định dạng.");
-    }
-  };
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    for (const file of Array.from(event.target.files || [])) {
-      if (!file.type.startsWith("image/")) continue;
-      const reader = new FileReader();
-      reader.onload = () => setUploadedImages(previous => [...previous, String(reader.result)]);
-      reader.readAsDataURL(file);
-    }
-  };
-  const handleRemoveImage = (index: number) => setUploadedImages(previous => previous.filter((_, i) => i !== index));
   const [highlights, setHighlights] = useState<string[]>([""]);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+    const images = await Promise.all(files.map((file) => new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    })));
+    const loaded = images.filter((image): image is string => image !== null);
+    setUploadedImages((previous) => [...previous, ...loaded]);
+    if (loaded.length) setFormData((previous) => ({ ...previous, image: loaded[0] }));
+    event.target.value = "";
+  };
+  const handleRemoveImage = (index: number) => {
+    const remaining = uploadedImages.filter((_, imageIndex) => imageIndex !== index);
+    setUploadedImages(remaining);
+    setFormData((previous) => ({
+      ...previous,
+      image: previous.image === uploadedImages[index] ? remaining[0] ?? "" : previous.image,
+    }));
+  };
   const [itinerary, setItinerary] = useState<DailyItinerary[]>([
     {
       id: `day-1`,
@@ -205,16 +197,17 @@ export function CreateTourForm({
       tourCode,
       name: formData.name,
       destination: formData.destination,
+      region: formData.region || "Miền Trung",
       duration: `${formData.numberOfDays} ngày ${formData.numberOfNights} đêm`,
       numberOfDays: parseInt(formData.numberOfDays),
       numberOfNights: parseInt(formData.numberOfNights),
       price: parseFloat(formData.price),
       description: formData.description,
       maxGuests: parseInt(formData.maxGuests),
-      minGuests: Number(formData.minGuests) || 1,
-      images: uploadedImages,
+      minGuests: parseInt(formData.minGuests),
       rating: 0, // New tours start with no rating
       image: formData.image,
+      images: uploadedImages,
       highlights: highlights.filter((h) => h.trim() !== ""),
       itinerary: itinerary,
       // Add admin creator info
@@ -414,7 +407,7 @@ export function CreateTourForm({
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Số khách tối thiểu{" "}
+                  Số khách có vé tính tiền tối thiểu{" "}
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -456,21 +449,26 @@ export function CreateTourForm({
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Mô tả <span className="text-red-500">*</span>
+                Khu vực tour <span className="text-red-500">*</span>
               </label>
-              <textarea
+              <select
                 required
-                value={formData.description}
+                value={formData.region}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    description: e.target.value,
+                    region: e.target.value,
                   })
                 }
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#075985] focus:border-transparent"
-                placeholder="Mô tả chi tiết về tour..."
-              />
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#075985] focus:border-transparent bg-white text-sm"
+              >
+                <option value="">-- Chọn khu vực tour --</option>
+                <option value="Miền Bắc">Miền Bắc</option>
+                <option value="Miền Trung">Miền Trung</option>
+                <option value="Miền Nam">Miền Nam</option>
+                <option value="Tây Nguyên">Tây Nguyên</option>
+                <option value="Miền Tây">Miền Tây</option>
+              </select>
             </div>
           </div>
 
@@ -481,75 +479,15 @@ export function CreateTourForm({
               Hình ảnh tour
             </h3>
 
-            {/* Nhập URL ảnh & Gợi ý ảnh mẫu */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={imageUrlInput}
-                  onChange={(e) => {
-                    setImageUrlInput(e.target.value);
-                    if (imageError) setImageError("");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddImageUrl();
-                    }
-                  }}
-                  placeholder="Dán link ảnh HTTPS (VD: https://images.unsplash.com/...)"
-                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-pink-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAddImageUrl()}
-                  className="px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors"
-                >
-                  Thêm URL
-                </button>
-              </div>
-              {imageError && (
-                <p className="text-[11px] text-red-600 font-medium">{imageError}</p>
-              )}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-gray-500 font-medium">Gợi ý ảnh nhanh:</span>
-                <button
-                  type="button"
-                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800")}
-                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  Biển & Resort
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1528127269322-539801943592?w=800")}
-                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  Hạ Long
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800")}
-                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  Hội An
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddImageUrl("https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800")}
-                  className="text-[10px] bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  Sapa
-                </button>
-              </div>
-            </div>
-
             <div>
               <label className="block w-full cursor-pointer">
-                <div className="border-2 border-dashed border-pink-300 rounded-lg p-5 text-center hover:border-pink-500 hover:bg-pink-100 transition-colors">
-                  <Upload className="w-8 h-8 text-pink-600 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold text-gray-700">
-                    Hoặc click để tải ảnh từ máy tính (PNG, JPG, tối đa 5MB)
+                <div className="border-2 border-dashed border-pink-300 rounded-lg p-6 text-center hover:border-pink-500 hover:bg-pink-100 transition-colors">
+                  <Upload className="w-12 h-12 text-pink-600 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-gray-700">
+                    Click để upload hình ảnh
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    PNG, JPG, JPEG (tối đa 5MB)
                   </p>
                 </div>
                 <input

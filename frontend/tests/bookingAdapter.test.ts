@@ -50,3 +50,13 @@ test("guide schedule data retains persisted incidents and actual trip duration",
   assert.equal(booking.tour.duration, "3 ngày");
   assert.equal(booking.tour.images?.length, 0);
 });
+
+test("passenger snapshot prices retain different age prices and a free infant", () => {
+  const booking = fromApiBooking({ ...dto, totalGuests: 3, totalAmount: 5000000,
+    participants: [
+      { ...dto.participants[0], id: 1, price: 3000000, tierName: "Adult" },
+      { ...dto.participants[0], id: 2, price: 2000000, tierName: "Child" },
+      { ...dto.participants[0], id: 3, price: 0, tierName: "Infant" },
+    ] });
+  assert.deepEqual(booking.passengers?.map(p => p.price), [3000000, 2000000, 0]);
+});

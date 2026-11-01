@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { User, Service } from "@/app/types";
 import {
   ArrowLeft,
@@ -237,8 +237,8 @@ export function ProviderCreateServicePage({
   // Category
   const [category, setCategory] = useState<ServiceCategory>(
     ((initialService?.category as ServiceCategory) &&
-    CATEGORY_CONFIGS[initialService.category as ServiceCategory]
-      ? initialService.category
+    CATEGORY_CONFIGS[initialService?.category as ServiceCategory]
+      ? initialService?.category
       : "hotel") as ServiceCategory
   );
 
@@ -434,7 +434,6 @@ export function ProviderCreateServicePage({
 
     // Single unified payload saved to 1 table
     const fullPayload: Omit<Service, "id"> = {
-      rating: initialService?.rating || 0,
       providerId: currentUser.id,
       providerName: currentUser.businessName || currentUser.name,
       name,
@@ -461,6 +460,7 @@ export function ProviderCreateServicePage({
       image: thumbnailPhoto,
       images,
       thumbnailIndex,
+      rating: initialService?.rating ?? 0,
       status: "pending",
       createdAt: initialService?.createdAt || new Date().toISOString().split("T")[0],
     };
@@ -929,7 +929,7 @@ export function ProviderCreateServicePage({
                   : "Khoảng giá dự kiến tính trên đầu người (VNĐ / Người)"}
               </h3>
               <p className="text-xs text-gray-500 mt-1">
-                Mức giá tham khảo giúp các đơn vị lữ hành ước lượng chi phí khi thiết kế tour
+                Thông tin giá giúp các đơn vị lữ hành ước lượng chi phí khi thiết kế tour
               </p>
             </div>
 

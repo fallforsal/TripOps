@@ -7,7 +7,7 @@ namespace TripOps.Api.Controllers;
 
 [ApiController, Authorize(Roles = "user"), Route("api/v1/bookings")]
 [Tags("Booking Management")]
-public sealed class CustomerBookingsController(BookingService bookings) : ControllerBase
+public sealed class CustomerBookingsController(BookingService bookings, IWebHostEnvironment environment) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
@@ -33,10 +33,14 @@ public sealed class CustomerBookingsController(BookingService bookings) : Contro
         Ok(await bookings.Get(Actor, id, ct));
 
     [HttpPost("{id:int}/deposit")]
-    [EndpointSummary("Pay deposit or payment proof for booking")]
+    [EndpointSummary("Record a simulated deposit in Development; no bank transaction is executed")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Deposit(int id, BookingDepositRequest request, CancellationToken ct) =>
-        Ok(await bookings.Deposit(Actor, id, request, ct));
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Deposit(int id, BookingDepositRequest request, CancellationToken ct)
+    {
+        if(!environment.IsDevelopment())throw new BookingException(503,"Thanh toán thực chưa được cấu hình.");
+        return Ok(await bookings.Deposit(Actor, id, request, ct));
+    }
 
     [HttpPost("{id:int}/cancel")]
     [EndpointSummary("Cancel a pending or confirmed booking")]
@@ -55,7 +59,7 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [EndpointSummary("List active tour guides available for booking assignment")]
     [ProducesResponseType<IReadOnlyList<AvailableGuideDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AvailableGuides(CancellationToken ct) =>
-        Ok(await bookings.AvailableGuides(ct));
+        Ok(await bookings.AvailableGuides(Actor,ct));
 
     [HttpGet]
     [EndpointSummary("List bookings for tours owned by the authenticated agency")]

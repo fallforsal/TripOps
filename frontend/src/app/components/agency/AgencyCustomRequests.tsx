@@ -114,13 +114,35 @@ export function AgencyCustomRequests({
       <TourFormPage
         company={company}
         tour={editingTourForRequest || null}
-        onSubmit={handleSaveTourFromRequest}
         onBack={() => {
           setDesigningRequest(null);
           setEditingTourForRequest(null);
         }}
-        isCustomTour={true}
+        onSubmit={handleSaveTourFromRequest}
         customRequest={designingRequest}
+        isCustomTour={true}
+        companyId={company.id}
+        companyName={company.name}
+        companyLogo={company.logo}
+        onSave={handleSaveTourFromRequest}
+        onCancel={() => {
+          setDesigningRequest(null);
+          setEditingTourForRequest(null);
+        }}
+        isCustomDesign={true}
+        customRequestData={{
+          id: designingRequest.id,
+          destinations: designingRequest.destinations,
+          departureDate: designingRequest.departureDate,
+          returnDate: designingRequest.returnDate,
+          numberOfPeople: designingRequest.numberOfPeople,
+          budgetPerPerson: designingRequest.budgetPerPerson,
+          contactName: designingRequest.contactName,
+          businessName: designingRequest.businessName,
+          specialRequirements: designingRequest.additionalInfo,
+          version: editingTourForRequest ? (editingTourForRequest.version || 1) + 1 : 1,
+        }}
+        initialTour={editingTourForRequest || undefined}
       />
     );
   }
@@ -199,7 +221,7 @@ export function AgencyCustomRequests({
           onClose={() => setVersionHistoryTour(null)}
           tour={versionHistoryTour}
           onRestoreVersion={(tourId, verNum) => {
-            onRestoreTourVersion?.(versionHistoryTour.id, verNum);
+            onRestoreTourVersion?.(tourId, verNum);
             setVersionHistoryTour(null);
           }}
         />

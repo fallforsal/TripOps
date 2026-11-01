@@ -1,4 +1,4 @@
-﻿import { Booking, User } from "@/app/types";
+import { Booking, User } from "@/app/types";
 import {
   Check,
   X,

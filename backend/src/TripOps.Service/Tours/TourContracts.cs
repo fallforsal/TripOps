@@ -20,7 +20,8 @@ public sealed record TourConfiguration(
     string[]? Images = null,
     PricingTierInput[]? PricingTiers = null,
     TimelineInput[]? Timelines = null,
-    [StringLength(255)] string? DepartureLocation = null);
+    [StringLength(255)] string? DepartureLocation = null,
+    [StringLength(50)] string? Code = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
@@ -32,13 +33,14 @@ public sealed record ActivityInput([Required, StringLength(255)] string Name,
     [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
 public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "dinner")] string MealType, [Required, StringLength(255)] string RestaurantName,
     [StringLength(10000)] string? Description = null, bool IsDefault = true,
-    [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0);
+    [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
+    int? ServiceId = null, TimeSpan? Time = null);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
     [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
-    [StringLength(10000)] string? AddressNotes = null);
+    [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null);
 
 public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Version,
     [Required] TourConfiguration Configuration, [Required, StringLength(2000)] string ChangeNote);

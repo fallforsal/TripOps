@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Tour, User, GuideSchedule } from "@/app/types";
 import {
   Users,
@@ -59,7 +59,7 @@ export function AgencyGuideManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "on_tour" | "inactive">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "domestic" | "international">("all");
-  
+
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingGuide, setEditingGuide] = useState<User | null>(null);
@@ -460,7 +460,7 @@ export function AgencyGuideManagement({
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         const newStatus = guide.guideStatus === "inactive" ? "active" : "inactive";

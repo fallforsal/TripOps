@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { DailyItinerary, Location, TourMeal } from "@/app/types";
 import {
   Sparkles,
@@ -255,7 +255,7 @@ export function AIItineraryPlannerModal({
         ];
 
         itinerary.push({
-          id: `day-${day}`, date: "",
+          id: `ai-day-${day}`,
           day,
           title: dayTitle,
           description: dayDesc,
@@ -300,12 +300,12 @@ export function AIItineraryPlannerModal({
                 </span>
                 <span className="text-xs text-white/80">· Dành cho Công ty Lữ hành</span>
               </div>
-              <h2 className="text-xl font-extrabold mt-0.5">Lên Lịch Trình Tour Tự Động Bằng AI</h2>
+              <DialogTitle className="text-xl font-extrabold mt-0.5">Lên Lịch Trình Tour Tự Động Bằng AI</DialogTitle>
             </div>
           </div>
-          <p className="text-xs text-white/90 mt-2 max-w-2xl">
+          <DialogDescription className="text-xs text-white/90 mt-2 max-w-2xl">
             Tự động khởi tạo cấu trúc lịch trình nhiều ngày chuyên nghiệp, tích hợp giờ giấc di chuyển hợp lý, gợi ý các bữa ăn và điểm tham quan phù hợp cho khách đoàn.
-          </p>
+          </DialogDescription>
         </div>
 
         <div className="p-6 space-y-6 bg-slate-50">

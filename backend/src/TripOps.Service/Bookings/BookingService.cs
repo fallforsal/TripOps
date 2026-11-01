@@ -31,6 +31,27 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         if (request.StartDate.Date < DateTime.UtcNow.Date)
             throw new BookingException(422, "Ngày khởi hành phải từ hôm nay trở đi.");
 
+        static string Clean(string value) => System.Text.RegularExpressions.Regex.Replace(value.Trim(), @"\s*\(\d+★\)\s*$", "");
+        var hotelSelections = new Dictionary<string,TourAccommodation>(StringComparer.OrdinalIgnoreCase);
+        var mealSelections = new Dictionary<(int,string),TourMeal>();
+        decimal extra = 0;
+        foreach (var choice in request.HotelChoices ?? []) {
+            if (hotelSelections.ContainsKey(choice.Destination)) throw new BookingException(422,"Duplicate hotel selection.");
+            var option = tour.Accommodations.FirstOrDefault(h => h.DestinationName.Equals(choice.Destination,StringComparison.OrdinalIgnoreCase) && (choice.ServiceId.HasValue ? h.ServiceId == choice.ServiceId : h.HotelName.Equals(Clean(choice.Name),StringComparison.OrdinalIgnoreCase)));
+            if (option is null) throw new BookingException(422,"Khách sạn phải thuộc phương án Agency đã cấu hình.");
+            hotelSelections[choice.Destination] = option; extra += option.PriceDifference ?? 0;
+        }
+        foreach (var choice in request.MealChoices ?? []) {
+            var key = (choice.DayNumber,choice.MealType);
+            if (mealSelections.ContainsKey(key)) throw new BookingException(422,"Duplicate meal selection.");
+            var option = tour.Timelines.FirstOrDefault(d => d.DayNumber == choice.DayNumber)?.Meals.FirstOrDefault(m => m.MealType == choice.MealType && (choice.ServiceId.HasValue ? m.ServiceId == choice.ServiceId : m.RestaurantName.Equals(Clean(choice.Name),StringComparison.OrdinalIgnoreCase)));
+            if (option is null) throw new BookingException(422,"Bữa ăn phải thuộc phương án Agency đã cấu hình.");
+            mealSelections[key]=option;extra+=option.PriceDifference;
+        }
+        var selectedServiceIds = tour.Accommodations.Where(h=>h.IsDefault==true).Select(h=>hotelSelections.GetValueOrDefault(h.DestinationName,h).ServiceId)
+            .Concat(tour.Timelines.SelectMany(d=>d.Meals.Where(m=>m.IsDefault).Select(m=>mealSelections.GetValueOrDefault((d.DayNumber,m.MealType),m).ServiceId)))
+            .Where(id=>id.HasValue).Select(id=>id!.Value).Distinct().ToArray();
+        if(await repository.EligibleServiceCount(selectedServiceIds,ct)!=selectedServiceIds.Length)throw new BookingException(422,"Dịch vụ Provider trong phương án đã ngừng hoạt động; vui lòng liên hệ Agency.");
         // Tính toán tổng tiền theo pricing tiers hoặc base price
         var tiers = tour.PricingTiers.ToDictionary(t => t.Id);
         decimal totalAmount = 0;
@@ -38,7 +59,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         foreach (var p in request.Participants)
         {
-            decimal price = tour.BasePrice;
+            decimal price = tour.BasePrice ?? 0;
+            string? tierName = null;
             int? age = null;
             if (p.DateOfBirth.HasValue)
             {
@@ -54,21 +76,30 @@ public sealed class BookingService(BookingRepository repository, AccountService 
                     throw new BookingException(422, "Nhóm giá không thuộc tour đang đặt.");
                 if (age.HasValue && ((tier.MinAge.HasValue && age < tier.MinAge) || (tier.MaxAge.HasValue && age > tier.MaxAge)))
                     throw new BookingException(422, "Nhóm giá không phù hợp với tuổi hành khách.");
-                price = tier.PricePerGuest;
+                price = tier.PricePerGuest ?? 0;
+                tierName = tier.Name;
             }
             else if (age.HasValue)
             {
                 var tier = tour.PricingTiers.OrderBy(t => t.DisplayOrder).FirstOrDefault(t =>
                     (!t.MinAge.HasValue || age >= t.MinAge) && (!t.MaxAge.HasValue || age <= t.MaxAge));
-                if (tier is not null) price = tier.PricePerGuest;
+                if (tier is not null) { price = tier.PricePerGuest ?? 0; tierName = tier.Name; }
             }
 
+            price = Money(price + extra);
+            if(price<0)throw new BookingException(422,"Giá khách sau phụ thu không hợp lệ.");
             totalAmount += price;
 
             participants.Add(new BookingParticipant
             {
+                AgencyId = tour.AgencyId ?? throw new BookingException(422, "Tour requires an Agency."),
+                ParticipantIndex = participants.Count + 1,
+                IsPrimary = true,
+                TierName = tierName,
+                Price = Money(price),
+                RoommateNote = p.RoommateNote, RestaurantNote = p.RestaurantNote,
                 FullName = p.FullName.Trim(),
-                PhoneNumber = p.PhoneNumber?.Trim(),
+                Note = ParticipantNote(p.Note, p.PhoneNumber),
                 DateOfBirth = p.DateOfBirth,
                 Gender = p.Gender?.Trim(),
                 IdentityNumber = p.IdentityNumber?.Trim(),
@@ -81,7 +112,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         var depositAmount = Money(totalAmount * 0.3m); // Mặc định cọc 30%
 
         var code = $"BK{DateTime.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
-        var endDate = request.StartDate.Date.AddDays(Math.Max(1, tour.DurationDays) - 1);
+
 
         var booking = new Booking
         {
@@ -89,18 +120,40 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             CustomerId = customerId,
             TourId = tour.Id,
             StartDate = request.StartDate.Date,
-            EndDate = endDate,
-            TotalGuests = participants.Count,
             TotalAmount = totalAmount,
-            DepositAmount = depositAmount,
-            PaidAmount = 0,
+            OriginalTotalPrice = totalAmount - extra*participants.Count,
+            HasCustomization = hotelSelections.Count>0 || mealSelections.Count>0,
             Status = BookingStatus.Pending,
             PaymentStatus = PaymentStatus.Unpaid,
             ContactName = request.ContactName.Trim(),
             ContactPhone = request.ContactPhone.Trim(),
             ContactEmail = request.ContactEmail.Trim().ToLowerInvariant(),
             SpecialRequests = request.SpecialRequests?.Trim(),
-            Participants = participants
+            Participants = participants,
+            BookingAgencies = [new BookingAgency { AgencyId = tour.AgencyId!, IsHost = true, OriginalAmount = totalAmount, FinalAmount = totalAmount, NetPayout = totalAmount }],
+            Timelines = Enumerable.Range(1, Math.Max(1, tour.DurationDays ?? 1)).Select(number => {
+                var day = tour.Timelines.SingleOrDefault(d => d.DayNumber == number);
+                return new BookingTimeline {
+                    DayNumber = number, Title = day?.Title ?? $"Ngày {number}", Description = day?.Description,
+                    Attractions = (day?.Attractions ?? []).Select(a => new BookingTimelineAttraction {
+                        AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
+                    Meals = (day?.Meals ?? []).Where(m => m.IsDefault == true).Select(m => new BookingTimelineMeal {
+                        MealType = m.MealType, OriginalRestaurantName = m.RestaurantName,
+                        CustomizedRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var chosenMeal) ? chosenMeal.RestaurantName : null,
+                        IsCustomized = mealSelections.ContainsKey((number,m.MealType)),
+                        PriceDifference = mealSelections.TryGetValue((number,m.MealType),out var mealOption) ? mealOption.PriceDifference : 0,
+                        ServiceId = mealSelections.TryGetValue((number,m.MealType),out var selectedMeal) ? selectedMeal.ServiceId : m.ServiceId, DateService = request.StartDate.Date.AddDays(number-1), Time = m.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(m.Time.Value.TimeOfDay) : null }).ToList()
+                };
+            }).ToList(),
+            Accommodations = tour.Accommodations.Where(a => a.IsDefault == true).Select(a => new BookingAccommodation {
+                CustomizedHotelName = hotelSelections.TryGetValue(a.DestinationName,out var chosenHotel) ? chosenHotel.HotelName : null,
+                CustomizedStars = hotelSelections.TryGetValue(a.DestinationName,out var starsHotel) ? starsHotel.StarRating : null,
+                IsCustomized = hotelSelections.ContainsKey(a.DestinationName),
+                PriceDifference = hotelSelections.TryGetValue(a.DestinationName,out var priceHotel) ? priceHotel.PriceDifference : 0,
+                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date, DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1), Destination = a.DestinationName, OriginalHotelName = a.HotelName, OriginalStars = a.StarRating,
+                NightsCount = a.NightsCount }).ToList(),
+            PaymentRequests = [new PaymentRequest { Description = "Đặt cọc 30%", Amount = depositAmount,
+                DueDate = request.StartDate.Date, CreatedBy = customerId }]
         };
 
         repository.Add(booking);
@@ -135,8 +188,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         var (rows, total) = await repository.ListForCustomer(customerId, status, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
             b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, b.TotalGuests, b.TotalAmount, b.PaidAmount,
-            b.Status.ToString(), b.PaymentStatus.ToString(), b.CreatedAt)).ToList();
+            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -152,8 +205,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         var (rows, total) = await repository.ListForAgency(agencyId, status, search, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
             b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, b.TotalGuests, b.TotalAmount, b.PaidAmount,
-            b.Status.ToString(), b.PaymentStatus.ToString(), b.CreatedAt)).ToList();
+            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -191,19 +244,38 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected)
             throw new BookingException(422, "Không thể thanh toán cho đơn đã hủy hoặc bị từ chối.");
 
-        booking.PaidAmount = Money(booking.PaidAmount + request.Amount);
-
-        if (booking.PaidAmount >= booking.TotalAmount)
+        var code = string.IsNullOrWhiteSpace(request.TransactionReference)
+            ? $"DEMO-{Guid.NewGuid():N}" : request.TransactionReference.Trim();
+        var previous = await repository.FindTransaction(code, ct);
+        if (previous is not null)
+        {
+            if (previous.BookingId != id || previous.Amount != request.Amount)
+                throw new BookingException(409, "Mã giao dịch đã được sử dụng.");
+            return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        }
+        var paid = Money(PaidAmount(booking) + request.Amount);
+        if (paid > booking.TotalAmount) throw new BookingException(422, "Số tiền vượt quá phần còn phải thanh toán.");
+        var deposit = booking.PaymentRequests.FirstOrDefault(p => p.Description.StartsWith("Đặt cọc"));
+        booking.PaymentTransactions.Add(new PaymentTransaction {
+            TransactionCode = code, Amount = Money(request.Amount), PaymentMethod = "DEMO",
+            Status = PaymentTransactionStatus.Success, ProofImageUrl = request.PaymentProofUrl,
+            PayerName = booking.ContactName, PaidAt = DateTime.UtcNow, PaymentRequest = deposit });
+        if (paid >= booking.TotalAmount)
         {
             booking.PaymentStatus = PaymentStatus.Paid;
             if (booking.Status is BookingStatus.Pending or BookingStatus.Deposited or BookingStatus.Confirmed)
                 booking.Status = BookingStatus.Paid;
         }
-        else if (booking.PaidAmount > 0)
+        else
         {
             booking.PaymentStatus = PaymentStatus.PartiallyPaid;
-            if (booking.PaidAmount >= booking.DepositAmount && booking.Status == BookingStatus.Pending)
+            if (paid >= DepositAmount(booking) && booking.Status == BookingStatus.Pending)
                 booking.Status = BookingStatus.Deposited;
+        }
+        if (deposit is not null && paid >= deposit.Amount)
+        {
+            deposit.Status = PaymentRequestStatus.Paid;
+            deposit.PaidAt = DateTime.UtcNow;
         }
 
         await repository.SaveChangesAsync(ct);
@@ -220,6 +292,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             throw new BookingException(422, $"Không thể hủy đơn đặt đang ở trạng thái {booking.Status}.");
 
         booking.Status = BookingStatus.Cancelled;
+        booking.CancelReason = request.Reason.Trim();
+        booking.CancelledAt = DateTime.UtcNow;
         booking.SpecialRequests = $"{booking.SpecialRequests} [Khách hủy: {request.Reason}]".Trim();
 
         await repository.SaveChangesAsync(ct);
@@ -234,7 +308,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền phân công hướng dẫn viên.");
 
         var guide = await repository.FindUser(request.GuideId, ct);
-        if (guide is null || guide.Role != UserRole.TourGuide || guide.Status != UserStatus.Active)
+        if (guide is null || guide.Role != UserRole.TourGuide || guide.Status != UserStatus.Active || guide.AgencyId != agencyId)
             throw new BookingException(404, "Hướng dẫn viên không tồn tại hoặc đã bị vô hiệu hóa.");
 
         if (booking.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress))
@@ -247,16 +321,18 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             {
                 BookingId = id,
                 GuideId = request.GuideId,
+                AgencyId = agencyId,
+                AssignedAt = DateTime.UtcNow,
                 Role = request.Role ?? "Lead",
-                Status = "ASSIGNED",
-                Notes = request.Notes
+                    Notes = request.Notes
             });
         }
         else
         {
+            existing.AgencyId = agencyId;
+            existing.AssignedAt ??= DateTime.UtcNow;
             existing.Role = request.Role ?? existing.Role;
             existing.Notes = request.Notes ?? existing.Notes;
-            existing.Status = "ASSIGNED";
         }
 
         await repository.SaveChangesAsync(ct);
@@ -264,16 +340,16 @@ public sealed class BookingService(BookingRepository repository, AccountService 
     }
 
     // WF06: Guide xem danh sách tour được giao
-    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(CancellationToken ct) =>
-        (await repository.AvailableGuides(ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
+    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
+        (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
 
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
             b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, b.TotalGuests, b.TotalAmount, b.PaidAmount,
-            b.Status.ToString(), b.PaymentStatus.ToString(), b.CreatedAt)).ToList();
+            b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -293,13 +369,11 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         else
             throw new BookingException(400, "Trạng thái điểm danh không hợp lệ.");
 
+        participant.CheckedBy = guideId;
+        participant.CheckedAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(ct);
 
-        return new ParticipantDto(
-            participant.Id, participant.FullName, participant.PhoneNumber,
-            participant.DateOfBirth, participant.Gender, participant.IdentityNumber,
-            participant.AttendanceStatus.ToString(), participant.Status,
-            participant.AssignedGuide?.Guide?.Name);
+        return Participant(participant);
     }
 
     // WF06: Báo cáo sự cố
@@ -312,9 +386,10 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         var incident = new BookingIncident
         {
             BookingId = bookingId,
+            AgencyId = booking.Tour!.AgencyId ?? throw new BookingException(422, "Booking requires an Agency."),
+            IncidentType = request.IncidentType.Trim(),
             Title = string.IsNullOrWhiteSpace(request.IncidentType) ? request.Title.Trim() : $"[{request.IncidentType.Trim()}] {request.Title.Trim()}",
-            Description = request.Description.Trim(),
-            ResolutionNotes = request.Severity?.Trim(),
+            Description = IncidentDescription(request.Description, request.Severity),
             Status = IncidentStatus.Reported,
             ReportedBy = guideId
         };
@@ -324,24 +399,44 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         return new IncidentDto(
             incident.Id, incident.BookingId,
-            incident.Title, incident.Description, incident.ResolutionNotes,
-            incident.Status.ToString(), incident.CreatedAt);
+            incident.Title, incident.Description, Severity(incident.Description),
+            incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
     }
 
     private static BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName) =>
-        new(b.Id, b.BookingCode, b.CustomerId, b.Customer?.Name ?? "",
+        new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
             b.TourId, tourName, agencyId, agencyName,
-            b.StartDate, b.EndDate, b.TotalGuests, b.TotalAmount,
-            b.DepositAmount, b.PaidAmount, b.Status.ToString(), b.PaymentStatus.ToString(),
+            b.StartDate, EndDate(b), TotalGuests(b), b.TotalAmount,
+            DepositAmount(b), PaidAmount(b), b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(),
             b.ContactName, b.ContactPhone, b.ContactEmail, b.SpecialRequests,
-            b.Participants.Select(p => new ParticipantDto(
-                p.Id, p.FullName, p.PhoneNumber, p.DateOfBirth, p.Gender,
-                p.IdentityNumber, p.AttendanceStatus.ToString(), p.Status,
-                p.AssignedGuide?.Guide?.Name)).ToList(),
+            b.Participants.OrderBy(p => p.ParticipantIndex).Select(Participant).ToList(),
             b.AssignedGuides.Select(ag => new AssignedGuideDto(
                 ag.Id, ag.GuideId, ag.Guide?.Name ?? "", ag.Guide?.Phone,
-                ag.Role, ag.Status, ag.Notes)).ToList(),
-            b.CreatedAt, b.UpdatedAt,
+                ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId)).ToList(),
+            b.CreatedAt ?? DateTime.UnixEpoch, b.UpdatedAt,
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
-                i.Id, i.BookingId, i.Title, i.Description, i.ResolutionNotes, i.Status.ToString(), i.CreatedAt)).ToList());
+                i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
+            b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
+                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CustomizedLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus)).ToList(),
+                t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CustomizedRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0)).ToList())).ToList(),
+            b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CustomizedHotelName??h.OriginalHotelName,h.CustomizedStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0)).ToList());
+
+    private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
+        p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),
+        p.Status ?? "ACTIVE", p.AssignedGuide?.Name, p.Price, p.TierName, p.AgencyId, p.ParticipantIndex, p.IsPrimary, p.Note, p.RoommateNote, p.RestaurantNote, p.CheckedBy, p.CheckedAt, p.AssignedGuideId);
+    private static int TotalGuests(Booking booking) => booking.Participants.Count(p => p.IsPrimary != false && p.Status != "INACTIVE");
+    private static decimal PaidAmount(Booking booking) => booking.PaymentTransactions
+        .Where(t => t.Status == PaymentTransactionStatus.Success).Sum(t => t.Amount);
+    private static decimal DepositAmount(Booking booking) => booking.PaymentRequests
+        .Where(p => p.Description.StartsWith("Đặt cọc")).Select(p => (decimal?)p.Amount).FirstOrDefault() ?? Money(booking.TotalAmount * 0.3m);
+    private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
+        booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
+    private static string? ParticipantNote(string? note, string? phone) => string.IsNullOrWhiteSpace(phone)
+        ? note?.Trim() : string.Join("\n", new[] { note?.Trim(), $"Điện thoại: {phone.Trim()}" }.Where(s => !string.IsNullOrWhiteSpace(s)));
+    private static string? Phone(string? note) => string.IsNullOrWhiteSpace(note) ? null
+        : System.Text.RegularExpressions.Regex.Match(note, @"(?:^|\n)Điện thoại: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
+    private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)
+        ? description.Trim() : $"{description.Trim()}\nMức độ: {severity.Trim()}";
+    private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null
+        : System.Text.RegularExpressions.Regex.Match(description, @"(?:^|\n)Mức độ: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
 }

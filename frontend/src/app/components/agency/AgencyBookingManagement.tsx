@@ -36,29 +36,25 @@ export interface AgencyBookingManagementProps {
   bookings: Booking[];
   guides: User[];
   companyName: string;
-  onApproveBooking: (bookingId: string) => void | Promise<void>;
-  onRejectBooking: (bookingId: string, reason?: string) => void | Promise<void>;
-  onAssignGuide: (bookingId: string, guideId: string) => void | Promise<void>;
-  onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void | Promise<void>;
-  onMarkDepositPaid?: (bookingId: string) => void | Promise<void>;
-  onMarkFullyPaid?: (bookingId: string) => void | Promise<void>;
-  onGenerateContract?: (bookingId: string) => void | Promise<void>;
-  onViewBookingDetail?: (booking: Booking) => void | Promise<void>;
+  onApproveBooking: (bookingId: string) => void;
+  onRejectBooking: (bookingId: string, reason?: string) => void;
+  onAssignGuide: (bookingId: string, guideId: string) => void;
+  onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
+  onMarkDepositPaid?: (bookingId: string) => void;
+  onMarkFullyPaid?: (bookingId: string) => void;
+  onGenerateContract?: (bookingId: string) => void;
+  onViewBookingDetail?: (booking: Booking) => void;
 }
 
 const statusMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
   pending: { label: "Chờ chốt giá & duyệt", bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-300" },
-  deposited: { label: "Đã đặt cọc", bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-400" },
-  in_progress: { label: "Đang diễn ra", bg: "bg-blue-50", text: "text-blue-800", border: "border-blue-200" },
   confirmed: { label: "Đã xác nhận", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
-  paid: { label: "Đã thanh toán đủ", bg: "bg-teal-50", text: "text-teal-800", border: "border-teal-300" },
   cancelled: { label: "Đã hủy", bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
   completed: { label: "Hoàn thành", bg: "bg-[#F0F9FF]", text: "text-[#075985]", border: "border-[#CBD5E1]" },
   rejected: { label: "Từ chối", bg: "bg-gray-100", text: "text-gray-700", border: "border-[#CBD5E1]" },
 };
 
 const paymentStatusMap: Record<string, { label: string; color: string; badgeBg: string }> = {
-  partially_paid: { label: "Đã thanh toán một phần", color: "text-amber-800", badgeBg: "bg-amber-50 border-amber-200" },
   unpaid: { label: "Chưa thanh toán (Thanh toán sau)", color: "text-amber-800", badgeBg: "bg-amber-50 border-amber-200" },
   paid: { label: "Đã thanh toán", color: "text-emerald-700", badgeBg: "bg-emerald-50 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "text-[#EA580C]", badgeBg: "bg-[#F0F9FF] border-[#F97316]/30" },
@@ -77,7 +73,7 @@ function ContractModal({
   booking: Booking;
   companyName: string;
   open: boolean;
-  onClose: () => void | Promise<void>;
+  onClose: () => void;
 }) {
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
   const today = new Date().toLocaleDateString("vi-VN");
@@ -163,15 +159,6 @@ export function AgencyBookingManagement({
   onGenerateContract,
   onViewBookingDetail,
 }: AgencyBookingManagementProps) {
-  const [actionError, setActionError] = useState("");
-  const [actionSaving, setActionSaving] = useState(false);
-  async function runAction(action: () => void | Promise<void>, onSuccess?: () => void) {
-    if (actionSaving) return;
-    setActionSaving(true); setActionError("");
-    try { await action(); onSuccess?.(); }
-    catch (error) { setActionError(error instanceof Error ? error.message : "Không lưu được thay đổi."); }
-    finally { setActionSaving(false); }
-  }
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [contractBooking, setContractBooking] = useState<Booking | null>(null);
@@ -192,7 +179,6 @@ export function AgencyBookingManagement({
         (b.contactName ?? b.userName).toLowerCase().includes(search.toLowerCase()) ||
         b.tour.name.toLowerCase().includes(search.toLowerCase()) ||
         b.id.toLowerCase().includes(search.toLowerCase()) ||
-        (b.bookingCode ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (b.contactPhone ?? "").includes(search)
     );
 
@@ -232,11 +218,7 @@ export function AgencyBookingManagement({
           {[
             { id: "all", label: "Tất cả" },
             { id: "pending", label: "Chờ duyệt" },
-            { id: "deposited", label: "Đã đặt cọc" },
             { id: "confirmed", label: "Đã xác nhận" },
-            { id: "paid", label: "Đã thanh toán đủ" },
-            { id: "in_progress", label: "Đang diễn ra" },
-            { id: "rejected", label: "Từ chối" },
             { id: "completed", label: "Hoàn thành" },
             { id: "cancelled", label: "Đã hủy" },
           ].map((tab) => (
@@ -302,7 +284,7 @@ export function AgencyBookingManagement({
                       {/* Mã đơn */}
                       <td className="px-4 py-4 align-top whitespace-nowrap">
                         <span className="font-mono text-xs font-bold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded border border-[#CBD5E1]">
-                          {booking.bookingCode || booking.id.toUpperCase()}
+                          {booking.id.toUpperCase()}
                         </span>
                         <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
@@ -439,15 +421,15 @@ export function AgencyBookingManagement({
                             Xem chi tiết
                           </Button>
 
-                          {/* Quick Approve / Reject for Pending or Deposited */}
-                          {(booking.status === "pending" || booking.status === "deposited") && (
+                          {/* Quick Approve / Reject for Pending */}
+                          {booking.status === "pending" && (
                             <>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-8 px-2 text-xs"
                                 title="Phê duyệt ngay"
-                                disabled={actionSaving} onClick={() => runAction(() => onApproveBooking(booking.id))}
+                                onClick={() => onApproveBooking(booking.id)}
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
                               </Button>
@@ -490,7 +472,6 @@ export function AgencyBookingManagement({
         </div>
       </div>
 
-      {actionError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-800">{actionError}</p>}
       {/* Reject modal */}
       <Dialog open={!!rejectTarget} onOpenChange={() => setRejectTarget(null)}>
         <DialogContent className="max-w-sm">
@@ -507,7 +488,9 @@ export function AgencyBookingManagement({
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
                 if (rejectTarget) {
-                  void runAction(() => onRejectBooking(rejectTarget, rejectReason), () => { setRejectTarget(null); setRejectReason(""); });
+                  onRejectBooking(rejectTarget, rejectReason);
+                  setRejectTarget(null);
+                  setRejectReason("");
                 }
               }}
             >
@@ -520,7 +503,7 @@ export function AgencyBookingManagement({
       {/* Assign guide modal */}
       <Dialog open={!!assignTarget} onOpenChange={() => setAssignTarget(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Giao Hướng dẫn viên phụ trách</DialogTitle></DialogHeader>{actionError && <p role="alert" className="text-red-700">{actionError}</p>}
+          <DialogHeader><DialogTitle>Giao Hướng dẫn viên phụ trách</DialogTitle></DialogHeader>
           {guides.length === 0 ? (
             <p className="text-sm text-gray-500">Công ty chưa có hướng dẫn viên.</p>
           ) : (
@@ -530,7 +513,8 @@ export function AgencyBookingManagement({
                   key={guide.id}
                   onClick={() => {
                     if (assignTarget) {
-                      void runAction(() => onAssignGuide(assignTarget, guide.id), () => setAssignTarget(null));
+                      onAssignGuide(assignTarget, guide.id);
+                      setAssignTarget(null);
                     }
                   }}
                   className="w-full flex items-center gap-3 p-3 rounded-2xl border border-[#CBD5E1] hover:border-blue-300 hover:bg-[#F0F9FF] transition-colors text-left"
