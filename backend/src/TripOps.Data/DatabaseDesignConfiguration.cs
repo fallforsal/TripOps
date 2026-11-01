@@ -151,6 +151,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.TourTimelineId).HasColumnName("tour_timeline_id").HasColumnType("int").IsRequired();
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.Time).HasColumnName("time").HasColumnType("datetime2");
+            entity.Property(e => e.SupplierSource).HasColumnName("supplier_source").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.AgencySupplierId).HasColumnName("agency_supplier_id").HasColumnType("int");
+            entity.Property(e => e.SupplierSnapshot).HasColumnName("supplier_snapshot").HasColumnType("nvarchar(max)");
             entity.Property(e => e.MealType).HasColumnName("meal_type").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
             entity.Property(e => e.RestaurantName).HasColumnName("restaurant_name").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
             entity.Property(e => e.Description).HasColumnName("description").HasColumnType("nvarchar(max)");
@@ -171,6 +174,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.NightsCount).HasColumnName("nights_count").HasColumnType("int");
             entity.Property(e => e.IsDefault).HasColumnName("is_default").HasColumnType("bit");
             entity.Property(e => e.PriceDifference).HasColumnName("price_difference").HasColumnType("decimal(12, 2)");
+            entity.Property(e => e.SupplierSource).HasColumnName("supplier_source").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.AgencySupplierId).HasColumnName("agency_supplier_id").HasColumnType("int");
+            entity.Property(e => e.SupplierSnapshot).HasColumnName("supplier_snapshot").HasColumnType("nvarchar(max)");
             entity.Property(e => e.AddressNotes).HasColumnName("address").HasColumnType("nvarchar(max)");
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
@@ -210,6 +216,38 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.TourId, e.Id }).IsUnique();
             entity.HasIndex(e => new { e.TourId, e.VersionNumber }).IsUnique();
+        });
+        modelBuilder.Entity<AgencySupplier>(entity =>
+        {
+            entity.ToTable("agency_suppliers");
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
+            entity.Property(e => e.SupplierType).HasColumnName("supplier_type").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Address).HasColumnName("address").HasColumnType("nvarchar(500)").HasMaxLength(500);
+            entity.Property(e => e.Area).HasColumnName("area").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.ContactName).HasColumnName("contact_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.ContactPhone).HasColumnName("contact_phone").HasColumnType("nvarchar(30)").HasMaxLength(30);
+            entity.Property(e => e.ContactEmail).HasColumnName("contact_email").HasColumnType("nvarchar(191)").HasMaxLength(191);
+            entity.Property(e => e.StarRating).HasColumnName("star_rating").HasColumnType("int");
+            entity.Property(e => e.ReferencePrice).HasColumnName("reference_price").HasColumnType("decimal(12, 2)");
+            entity.Property(e => e.Conditions).HasColumnName("conditions").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
+            entity.Property(e => e.Notes).HasColumnName("notes").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
+            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
+            entity.HasIndex(e => new { e.AgencyId, e.SupplierType, e.Status });
+            entity.HasIndex(e => new { e.AgencyId, e.SupplierType, e.Name });
+        });
+        modelBuilder.Entity<TourProvince>(entity =>
+        {
+            entity.ToTable("tour_provinces");
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.TourId).HasColumnName("tour_id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.ProvinceCode).HasColumnName("province_code").HasColumnType("nvarchar(32)").HasMaxLength(32).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.HasIndex(e => new { e.TourId, e.ProvinceCode }).IsUnique();
+            entity.HasIndex(e => new { e.ProvinceCode, e.TourId });
         });
         modelBuilder.Entity<TourDesignRequestAgency>(entity =>
         {
@@ -714,6 +752,10 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<TourTimeline>().HasOne(e => e.Tour).WithMany(e => e.Timelines).HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourVersion>().HasOne<User>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourVersion>().HasOne(e => e.Tour).WithMany(e => e.Versions).HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<TourProvince>().HasOne(e => e.Tour).WithMany(e => e.Provinces).HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<AgencySupplier>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<TourMeal>().HasOne<AgencySupplier>().WithMany().HasForeignKey(e => e.AgencySupplierId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<TourAccommodation>().HasOne<AgencySupplier>().WithMany().HasForeignKey(e => e.AgencySupplierId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TouristAttraction>().HasOne<User>().WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TouristAttraction>().HasOne(e => e.TourTimeline).WithMany(e => e.Attractions).HasForeignKey(e => e.TourTimelineId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<User>().HasOne<User>().WithMany().HasForeignKey(e => e.AgencyId).HasPrincipalKey(e => e.Id).OnDelete(DeleteBehavior.Restrict);

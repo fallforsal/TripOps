@@ -71,7 +71,7 @@ internal static class DemoSeed
             Enumerable.Range(1, 3).Select(day => new TimelineInput(day, $"Ngày {day}: Khám phá Đà Lạt", "Lịch trình mẫu.",
                 [new ActivityInput(day == 1 ? "Hồ Xuân Hương" : day == 2 ? "Hồ Tuyền Lâm" : "Chợ Đà Lạt", EstimatedTime: new TimeSpan(9, 0, 0))],
                 [],
-                day == 1 ? [new AccommodationInput(hotel.Name, "Đà Lạt", NightsCount: 2, StarRating: 4, ServiceId: hotel.Id)] : [])).ToArray(), "TP. Hồ Chí Minh", "DL-3N2D-001");
+                day == 1 ? [new AccommodationInput(hotel.Name, "Đà Lạt", NightsCount: 2, StarRating: 4, ServiceId: hotel.Id)] : [])).ToArray(), "TP. Hồ Chí Minh", "DL-3N2D-001", ["LAM_DONG"]);
         var tour = await tours.Create(users["agency"].Id, config, CancellationToken.None);
         await tours.Command(users["agency"].Id, tour.Id, "publish", new TourCommand(tour.Version), CancellationToken.None);
         await transaction.CommitAsync();

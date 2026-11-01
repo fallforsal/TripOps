@@ -26,6 +26,8 @@ public class TripOpsDbContext : DbContext
     public DbSet<TourMeal> TourMeals => Set<TourMeal>();
     public DbSet<TourAccommodation> TourAccommodations => Set<TourAccommodation>();
     public DbSet<TourVersion> TourVersions => Set<TourVersion>();
+    public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
+    public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
     public DbSet<TourDesignRequest> TourDesignRequests => Set<TourDesignRequest>();
     public DbSet<TourDesignRequestAgency> TourDesignRequestAgencies => Set<TourDesignRequestAgency>();
 

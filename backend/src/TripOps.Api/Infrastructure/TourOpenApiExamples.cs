@@ -32,7 +32,8 @@ internal static class TourOpenApiExamples
                     new("Phương án khách sạn nâng hạng tại Đà Nẵng", "Đà Nẵng", RoomType: "Phòng superior", NightsCount: 2, StarRating: 4, IsDefault: false, PriceDifference: 150000)]),
             new(2, "Tham quan phố cổ Hội An", Activities: [new("Phố cổ Hội An", EstimatedTime: new TimeSpan(8, 30, 0))],
                 Meals: [new("lunch", "Nhà hàng địa phương tại Hội An")], Accommodations: []),
-            new(3, "Cầu Rồng – kết thúc chương trình", Activities: [new("Cầu Rồng", EstimatedTime: new TimeSpan(9, 0, 0))], Accommodations: [])]);
+            new(3, "Cầu Rồng – kết thúc chương trình", Activities: [new("Cầu Rồng", EstimatedTime: new TimeSpan(9, 0, 0))], Accommodations: [])],
+        ProvinceCodes: ["DA_NANG", "QUANG_NAM"]);
 
     internal static void Apply(OpenApiOperation operation, ControllerActionDescriptor action)
     {
@@ -53,12 +54,14 @@ internal static class TourOpenApiExamples
                 Request("restoreAsNewDraft", "Thay version bằng phiên bản hiện tại; number trên URL là phiên bản nguồn", new TourCommand(6, "Khôi phục lịch trình trước đó để chỉnh sửa")); break;
             case ("AgencyTours", "Duplicate"):
                 Request("duplicateDraft", "Tạo tour và lịch sử độc lập", new DuplicateTourRequest("Đà Nẵng – Hội An: phương án mới")); break;
+            case ("AgencyTours", "CandidateAgencies"):
+                Response(new CandidateAgencyDto[] { new("agency-001", "TripOps Travel", "agency@tripops.test", "0901234567", null, ["DA_NANG", "QUANG_NAM"], 2) }); break;
             case ("ItineraryDrafts", "Create"):
                 Request("optionalAiDraft", "Trả 503 khi chưa cấu hình AI", new AiDraftRequest("Đà Nẵng, Hội An", 3, "Nghỉ dưỡng gia đình")); break;
             case ("Tours", "Get"):
                 Response(new PublicTourDto(42, "TOUR-EXAMPLE-DANANG", 5, ThreeDayTour())); break;
             case ("Tours", "List"):
-                Response(new TourPage<TourListItem>([new(42, ThreeDayTour().Name, "Đà Nẵng, Hội An", 3500000, "completed", "public", 2)], 1, 1, 20)); break;
+                Response(new TourPage<TourListItem>([new(42, ThreeDayTour().Name, "Đà Nẵng, Hội An", 3500000, "completed", "public", 2, ["DA_NANG", "QUANG_NAM"])], 1, 1, 20)); break;
         }
         if (action.ControllerName is "AgencyTours" or "AdminTours" or "Tours" or "ItineraryDrafts")
         {
@@ -72,6 +75,7 @@ internal static class TourOpenApiExamples
             value.Example = value.Name switch {
                 "id" => JsonValue.Create(42), "number" => JsonValue.Create(1), "page" => JsonValue.Create(1),
                 "pageSize" => JsonValue.Create(20), "destination" => JsonValue.Create("Đà Nẵng"),
+                "provinceCode" => JsonValue.Create("DA_NANG"),
                 "maxPrice" => JsonValue.Create(4000000), "headcount" => JsonValue.Create(20), _ => value.Example };
             if (value.Name == "id") value.Description = "Use the actual resource ID returned by creation or catalogue lookup; 42 is illustrative.";
         }
@@ -117,6 +121,9 @@ internal static class TourOpenApiExamples
         if (type == typeof(TourConfiguration) && name == "Images" && schema.Items is OpenApiSchema item) {
             schema.Description = "Optional/null/empty list of HTTPS image URLs, each at most 2048 characters. Upload local files with POST /api/v1/agency/tours/images first. The first URL is the primary image.";
             item.Format = "uri"; item.MaxLength = 2048; item.Pattern = "^[hH][tT][tT][pP][sS]://";
+        }
+        if (type == typeof(TourConfiguration) && name == "ProvinceCodes") {
+            schema.Description = "Required for tour completion/publication (1–63 distinct standardized Vietnam province codes such as LAM_DONG, KHANH_HOA, DA_NANG, QUANG_NAM). Optional when saving a draft.";
         }
     }
 }

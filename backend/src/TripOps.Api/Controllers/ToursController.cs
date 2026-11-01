@@ -33,12 +33,19 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
         var tour = await tours.Create(Actor, request, ct);
         return CreatedAtAction(nameof(Get), new { id = tour.Id }, tour);
     }
+
+
     [HttpGet]
     [EndpointSummary("List the authenticated Agency's tours")]
     [ProducesResponseType<TourPage<TourListItem>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct, string? status = null,
-        string? search = null, int page = 1, int pageSize = 20) =>
-        Ok(await tours.List(Actor, false, status, search, null, null, null, page, pageSize, ct));
+        string? search = null, string? provinceCode = null, int page = 1, int pageSize = 20) =>
+        Ok(await tours.List(Actor, false, status, search, null, null, null, page, pageSize, ct, provinceCode));
+    [HttpGet("candidate-agencies")]
+    [EndpointSummary("Find candidate co-hosting Agencies with published tours in the specified province(s)")]
+    [ProducesResponseType<IReadOnlyList<CandidateAgencyDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CandidateAgencies(CancellationToken ct, string? provinceCode = null, bool excludeSelf = true) =>
+        Ok(await tours.FindCandidateAgencies(Actor, provinceCode, excludeSelf, ct));
     [HttpGet("{id:int}")]
     [EndpointSummary("Get an Agency-owned tour and its configuration")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
@@ -91,6 +98,28 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     public async Task<IActionResult> Restore(int id, int number, TourCommand request, CancellationToken ct) => Ok(await tours.Restore(Actor, id, number, request, ct));
 }
 
+[ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/suppliers")]
+[Tags("Agency Supplier Directory")]
+public sealed class AgencySuppliersController(TourService tours) : ControllerBase
+{
+    private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    [HttpGet]
+    [EndpointSummary("List private hotels and restaurants belonging to the authenticated Agency")]
+    [ProducesResponseType<IReadOnlyList<SupplierDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(CancellationToken ct, string? type = null, string? search = null) =>
+        Ok(await tours.Suppliers(Actor, type, search, ct));
+    [HttpPost]
+    [EndpointSummary("Save a hotel or restaurant in the Agency's private directory")]
+    [ProducesResponseType<SupplierDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Create(SupplierRequest request, CancellationToken ct) =>
+        Ok(await tours.CreateSupplier(Actor, request, ct));
+    [HttpPut("{id:int}")]
+    [EndpointSummary("Edit an Agency-owned supplier without changing tour snapshots")]
+    [ProducesResponseType<SupplierDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Update(int id, SupplierRequest request, CancellationToken ct) =>
+        Ok(await tours.UpdateSupplier(Actor, id, request, ct));
+}
+
 [ApiController, Authorize(Roles = "admin"), Route("api/v1/admin/tours")]
 [Tags("Tour Moderation")]
 public sealed class AdminToursController(TourService tours) : ControllerBase
@@ -100,7 +129,7 @@ public sealed class AdminToursController(TourService tours) : ControllerBase
     [EndpointSummary("List tours for post-publication moderation")]
     [ProducesResponseType<TourPage<TourListItem>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct, string? status = "completed", string? search = null,
-        int page = 1, int pageSize = 20) => Ok(await tours.List(Actor, true, status, search, null, null, null, page, pageSize, ct));
+        string? provinceCode = null, int page = 1, int pageSize = 20) => Ok(await tours.List(Actor, true, status, search, null, null, null, page, pageSize, ct, provinceCode));
     [HttpGet("{id:int}")]
     [EndpointSummary("Inspect a tour for moderation")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
@@ -119,8 +148,8 @@ public sealed class ToursController(TourService tours) : ControllerBase
     [EndpointSummary("Browse published tours with filtering and pagination")]
     [ProducesResponseType<TourPage<TourListItem>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct, string? search = null, string? destination = null,
-        decimal? maxPrice = null, int? headcount = null, int page = 1, int pageSize = 20) =>
-        Ok(await tours.List(null, false, null, search, destination, maxPrice, headcount, page, pageSize, ct));
+        string? provinceCode = null, decimal? maxPrice = null, int? headcount = null, int page = 1, int pageSize = 20) =>
+        Ok(await tours.List(null, false, null, search, destination, maxPrice, headcount, page, pageSize, ct, provinceCode));
     [HttpGet("{id:int}")]
     [EndpointSummary("Get a public published tour")]
     [ProducesResponseType<PublicTourDto>(StatusCodes.Status200OK)]
