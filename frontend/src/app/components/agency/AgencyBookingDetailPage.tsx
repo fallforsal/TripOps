@@ -92,8 +92,11 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
+import type { BookingDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
+  onSnapshotUpdated?: (updated: BookingDto) => void;
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -192,6 +195,7 @@ export function AgencyBookingDetailPage({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
+  onSnapshotUpdated,
 }: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -1758,6 +1762,13 @@ export function AgencyBookingDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Booking Snapshot & Versioning Panel */}
+      <BookingSnapshotPanel
+        booking={booking}
+        currentUserRole="agency"
+        onSnapshotUpdated={onSnapshotUpdated}
+      />
 
       {/* Provider Price Verification Notice for Pending Bookings */}
       {booking.status === "pending" && (

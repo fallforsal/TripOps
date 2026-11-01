@@ -427,21 +427,34 @@ function Application() {
     });
   };
 
+  const handleSnapshotUpdated = (dto: BookingDto) => {
+    const updated = fromApiBooking(dto, tours, currentUser);
+    setBookings(prev => prev.some(b => b.id === updated.id)
+      ? prev.map(b => b.id === updated.id ? updated : b) : [updated, ...prev]);
+    setSelectedUserBooking(prev => prev?.id === updated.id ? updated : prev);
+  };
+
   const handleViewUserBookingDetail = async (booking: Booking) => {
-    setSelectedUserBooking(booking);
-    setCurrentPage("user-booking-detail");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const detailHash = `#/my-bookings/${encodeURIComponent(booking.id)}`;
+    navigateForward(() => {
+      setSelectedUserBooking(booking);
+      setCurrentPage("user-booking-detail");
+      if (window.location.hash !== detailHash) window.location.hash = detailHash;
+    });
     const numericId = Number(booking.id);
     if (Number.isSafeInteger(numericId) && numericId > 0) {
       try {
         const detail = await getBookingDetail(numericId);
         const converted = fromApiBooking(detail, tours, currentUser);
-        setSelectedUserBooking(converted);
+        // The user may have returned to the list while this request was running.
+        if (window.location.hash === detailHash) setSelectedUserBooking(converted);
         setBookings((prev) =>
           prev.map((b) => (b.id === booking.id ? converted : b)),
         );
       } catch (err) {
         console.error("Failed to fetch fresh booking detail", err);
+        if (window.location.hash === detailHash)
+          toast.error(err instanceof Error ? err.message : "Không thể tải thông tin đơn đặt tour.");
       }
     }
   };
@@ -1196,6 +1209,7 @@ function Application() {
               onUpdateGuide={handleUpdateGuide}
               onRemoveGuide={handleRemoveGuide}
               onApproveBooking={handleApproveBooking}
+              onSnapshotUpdated={handleSnapshotUpdated}
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
               onUpdateAssignedGuides={handleUpdateAssignedGuides}
@@ -1324,6 +1338,14 @@ function Application() {
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] font-sans antialiased text-[#0F172A]">
       <CustomerHeader
         currentUser={currentUser}
+        onOpenBooking={async id => {
+          try {
+            const dto = await getBookingDetail(id);
+            handleSnapshotUpdated(dto);
+            const booking = fromApiBooking(dto, tours, currentUser);
+            await handleViewUserBookingDetail(booking);
+          } catch (error: any) { toast.error(error.message || "Không tải được đơn đặt tour."); }
+        }}
         currentPage={currentPage}
         onNavigate={handleNavigate}
         onShowLogin={() => setShowLogin(true)}
@@ -1443,6 +1465,7 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
+              onSnapshotUpdated={handleSnapshotUpdated}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking
@@ -1450,11 +1473,7 @@ function Application() {
               systemBank={systemBankAccount}
               onSubmitRefundRequest={handleCreateRefundRequest}
               onBack={() => {
-                if (window.history.length > 1) {
-                  window.history.back();
-                } else {
-                  handleNavigate("my-bookings");
-                }
+                goBack(() => handleNavigate("my-bookings"));
               }}
               onCancelBooking={handleCancelBooking}
               onPayPaymentRequest={handlePayPaymentRequest}

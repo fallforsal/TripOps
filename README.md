@@ -59,6 +59,8 @@ Chỉ giữ 4 tài khoản trên; Agency và Provider đã duyệt. Có 1 dịch
 
 Đặt `Cloudinary:CloudName`, `Cloudinary:ApiKey`, `Cloudinary:ApiSecret` bằng user secrets/biến môi trường rồi khởi động lại BE. Không đưa khóa vào Git hoặc FE. Từ thư mục gốc:
 
+Các giá trị Cloudinary trong `appsettings.Development.json` được để trống. Mỗi thành viên cấu hình User Secrets trên máy mình; User Secrets không được đồng bộ khi pull code. Khi khóa đã bị lộ, người quản lý Cloudinary cần thu hồi/đổi khóa và cấp lại qua kênh riêng.
+
 ```powershell
 dotnet user-secrets set "Cloudinary:CloudName" "<cloud-name>" --project backend/src/TripOps.Api
 dotnet user-secrets set "Cloudinary:ApiKey" "<api-key>" --project backend/src/TripOps.Api

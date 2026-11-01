@@ -22,11 +22,14 @@ import { AgencyBookingManagement } from "./AgencyBookingManagement";
 import { AgencyGuideManagement } from "./AgencyGuideManagement";
 import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
+import { getAgencyBookingDetail, type BookingDto } from "@/app/services/wf05Bookings";
+import { toast } from "sonner";
 import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface AgencyDashboardProps {
+  onSnapshotUpdated?: (updated: BookingDto) => void;
   providerGroupRequests?: ProviderGroupReservationRequest[];
   currentUser: User;
   company: TourCompany;
@@ -63,6 +66,7 @@ interface AgencyDashboardProps {
 }
 
 export function AgencyDashboard({
+  onSnapshotUpdated,
   currentUser,
   company,
   tours,
@@ -277,6 +281,7 @@ export function AgencyDashboard({
         if (currentSelectedBooking) {
           return (
             <AgencyBookingDetailPage
+              onSnapshotUpdated={onSnapshotUpdated}
               booking={currentSelectedBooking}
               guides={companyGuides}
               companyName={company.name}
@@ -434,6 +439,14 @@ export function AgencyDashboard({
     <AgencyLayout
       activeSection={activeSection}
       onNavigate={handleNavigateSection}
+      onOpenBooking={async id => {
+        try {
+          const updated = await getAgencyBookingDetail(id);
+          onSnapshotUpdated?.(updated);
+          setActiveSection("bookings");
+          setSelectedBookingId(String(id));
+        } catch (error: any) { toast.error(error.message || "Không tải được đơn đặt tour."); }
+      }}
       company={company}
       currentUser={currentUser}
       coHostingBadgeCount={pendingCoHostInvitesCount}

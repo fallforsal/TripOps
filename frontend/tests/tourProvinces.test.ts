@@ -37,4 +37,3 @@ test("suggestProvincesFromDestinationText suggests unselected provinces without 
     ["KHANH_HOA"],
   );
 });
-
