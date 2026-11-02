@@ -153,7 +153,7 @@ export function CustomerHeader({
           </nav>
         )}
         <div className="trip-header-actions">
-          {currentUser?.role === "user" && onOpenBooking && <BookingNotificationBell key={currentUser.id} onOpenBooking={onOpenBooking} />}
+          {currentUser?.role === "user" && onOpenBooking && <BookingNotificationBell key={currentUser.id} viewer="customer" onOpenBooking={onOpenBooking} />}
           {onOpenAIAdvisor && (
             <button
               className="trip-ai-trigger"

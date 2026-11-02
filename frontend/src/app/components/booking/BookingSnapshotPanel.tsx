@@ -43,7 +43,7 @@ import {
   type BookingSnapshotSummaryDto,
   type BookingSnapshotDto,
 } from "@/app/services/wf05Bookings";
-import { acceptedSnapshotFromBooking, canChangeBookingProposal, proposalVersionStyle, selectSnapshotVersions, snapshotHasPassengerNotes, snapshotNotes } from "@/app/services/bookingSnapshots";
+import { acceptedSnapshotFromBooking, canChangeBookingProposal, proposalVersionStyle, selectSnapshotVersions, snapshotHasPassengerNotes, snapshotNotes, agreedByAgency } from "@/app/services/bookingSnapshots";
 
 interface BookingSnapshotPanelProps {
   booking: Booking;
@@ -181,7 +181,9 @@ export function BookingSnapshotPanel({
     const interval = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
-    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+    // Cập nhật ngay khi nơi khác (vd. nút Duyệt của Agency) vừa đổi phương án.
+    window.addEventListener("booking-proposal-updated", refresh);
+    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); window.removeEventListener("booking-proposal-updated", refresh); };
   }, [bookingIdNumber, currentUserRole]);
 
   // Load detail whenever selectedSnapshotId changes
@@ -423,7 +425,9 @@ export function BookingSnapshotPanel({
             <div>
               {activeSnapshotDetail.acceptedAt ? (
                 <div>
-                  <span className="text-emerald-600 font-medium block mb-0.5">Khách chấp nhận vào:</span>
+                  <span className="text-emerald-600 font-medium block mb-0.5">
+                    {agreedByAgency(activeSnapshotDetail) ? "Công ty lữ hành chốt theo yêu cầu ban đầu vào:" : "Khách chấp nhận vào:"}
+                  </span>
                   <span className="font-semibold text-slate-800">
                     {formatDateTime(activeSnapshotDetail.acceptedAt)}
                   </span>
@@ -454,22 +458,22 @@ export function BookingSnapshotPanel({
               <div className="space-y-3">
                 {notes.agencyNote && (
                   <div className="rounded-md border border-slate-200 p-4 text-sm">
-                    <h4 className="font-semibold text-slate-800">Nội dung từ công ty lữ hành</h4>
-                    <p className="mt-2 whitespace-pre-line text-slate-700">{notes.agencyNote}</p>
+                    <h4 className="font-semibold text-slate-800">Từ công ty lữ hành · {formatDateTime(activeSnapshotDetail.createdAt)}</h4>
+                    <p className="mt-2 whitespace-pre-line text-slate-700"><span className="font-medium text-slate-500">Nội dung: </span>{notes.agencyNote}</p>
                   </div>
                 )}
                 {notes.customerNote && (
                   <div className="rounded-md border border-slate-200 bg-slate-50/60 p-4 text-sm">
-                    <h4 className="font-semibold text-slate-800">Yêu cầu của khách</h4>
-                    <p className="mt-2 whitespace-pre-line text-slate-700">{notes.customerNote}</p>
+                    <h4 className="font-semibold text-slate-800">{currentUserRole === "customer" ? "Yêu cầu ban đầu của tôi" : "Yêu cầu ban đầu của khách"}</h4>
+                    <p className="mt-2 whitespace-pre-line text-slate-700"><span className="font-medium text-slate-500">Nội dung: </span>{notes.customerNote}</p>
                   </div>
                 )}
               </div>
             );
           })()}
           {activeSnapshotDetail.changeRequest && <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm" role="status">
-            <h4 className="font-semibold text-amber-950">Khách yêu cầu chỉnh sửa · {formatDateTime(activeSnapshotDetail.changeRequest.createdAt)}</h4>
-            <p className="mt-2 whitespace-pre-line text-amber-950">{activeSnapshotDetail.changeRequest.message}</p>
+            <h4 className="font-semibold text-amber-950">{currentUserRole === "customer" ? "Yêu cầu chỉnh sửa của tôi" : "Yêu cầu chỉnh sửa của khách"} · {formatDateTime(activeSnapshotDetail.changeRequest.createdAt)}</h4>
+            <p className="mt-2 whitespace-pre-line text-amber-950"><span className="font-medium">Nội dung: </span>{activeSnapshotDetail.changeRequest.message}</p>
             <p className="mt-2 text-xs text-amber-800">{currentUserRole === "agency" ? "Hãy điều chỉnh đơn và gửi phương án mới để khách xem xét." : "Đã gửi phản hồi. Vui lòng chờ công ty lữ hành gửi phương án mới."}</p>
           </div>}
           {currentUserRole === "customer" && hasPendingProposal && activeSnapshotDetail.id === latestProposal?.id && <div className="flex flex-wrap gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">

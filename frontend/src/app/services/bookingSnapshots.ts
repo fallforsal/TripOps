@@ -36,6 +36,14 @@ export function snapshotNotes(detail: Pick<BookingSnapshotDto, "snapshotType" | 
   };
 }
 
+/**
+ * Bản chốt do Agency tạo khi bấm "Duyệt" đơn chưa có phương án (đồng ý theo yêu cầu ban đầu):
+ * người tạo và người chốt đều là Agency. Bản khách chấp nhận phương án có createdBy = Agency, acceptedBy = khách.
+ */
+export function agreedByAgency(detail: Pick<BookingSnapshotDto, "snapshotType" | "createdBy" | "acceptedBy">) {
+  return detail.snapshotType === "agreed" && !!detail.acceptedBy && detail.acceptedBy === detail.createdBy;
+}
+
 /** Bản chụp schema 1 không lưu ghi chú hành khách. */
 export function snapshotHasPassengerNotes(data: Pick<BookingSnapshotDto["snapshotData"], "schemaVersion">) {
   return (data.schemaVersion ?? 1) >= 2;
@@ -71,6 +79,7 @@ export function contractFromAgreedSnapshot(bookingCode: string, agreed?: Booking
     customerNote: notes.customerNote,
     agencyNote: notes.agencyNote,
     hasPassengerNotes: snapshotHasPassengerNotes(data),
+    agreedByAgency: agreedByAgency(agreed),
   };
 }
 

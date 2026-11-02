@@ -1948,7 +1948,7 @@ export function UserBookingDetailPage({
               </p>
               <p className="text-base font-bold mt-2 text-blue-800">HỢP ĐỒNG DỊCH VỤ LỮ HÀNH</p>
               <p className="text-[11px] text-gray-400">
-                Số: {contract.contractNo} – Theo phương án {contract.version}, khách chấp nhận ngày {new Date(contract.acceptedAt).toLocaleDateString("vi-VN")}
+                Số: {contract.contractNo} – Theo phương án {contract.version}, {contract.agreedByAgency ? "công ty lữ hành xác nhận theo yêu cầu đặt tour" : "khách chấp nhận"} ngày {new Date(contract.acceptedAt).toLocaleDateString("vi-VN")}
               </p>
             </div>
 
@@ -2035,7 +2035,7 @@ export function UserBookingDetailPage({
             )}
 
             <p className="text-[11px] text-gray-400 border-t pt-2">
-              Nội dung hợp đồng được lập từ phương án {contract.version} đã được Bên B chấp nhận và không thay đổi theo các chỉnh sửa sau đó. Mọi thay đổi sau khi chốt cần lập phụ lục riêng.
+              Nội dung hợp đồng được lập từ phương án {contract.version} {contract.agreedByAgency ? "do Bên A xác nhận theo đúng yêu cầu đặt tour của Bên B" : "đã được Bên B chấp nhận"} và không thay đổi theo các chỉnh sửa sau đó. Mọi thay đổi sau khi chốt cần lập phụ lục riêng.
             </p>
           </div>
           )}

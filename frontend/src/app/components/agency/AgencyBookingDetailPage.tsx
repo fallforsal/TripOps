@@ -102,7 +102,7 @@ interface AgencyBookingDetailPageProps {
   companyName: string;
   companyId?: string;
   onBack: () => void;
-  onApproveBooking: (bookingId: string) => void;
+  onApproveBooking: (bookingId: string) => void | Promise<boolean | void>;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
@@ -1105,19 +1105,18 @@ export function AgencyBookingDetailPage({
   };
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
-  const handleApproveHappyCase = () => {
-    const updatedAgencies: BookingAgencyShare[] = agenciesList.map((a) => ({
+  // Duyệt qua API thật. Kết quả (thành công/lỗi) được App báo bằng toast; chỉ cập nhật giao diện khi máy chủ xác nhận.
+  // Chưa gọi onUpdateBookingAgencies vì API đồng tổ chức chưa có (chỉ báo "chưa triển khai").
+  const handleApproveHappyCase = async () => {
+    const approved = await onApproveBooking(booking.id);
+    if (approved === false) return;
+    setAgenciesList((current) => current.map((a) => ({
       ...a,
       confirmationStatus: "confirmed" as const,
       quoteConfirmed: true,
       confirmedAt: a.confirmedAt || new Date().toISOString(),
-    }));
-    setAgenciesList(updatedAgencies);
-    onUpdateBookingAgencies?.(booking.id, updatedAgencies);
-
-    onApproveBooking(booking.id);
+    })));
     setHappyCaseModalOpen(false);
-    alert(`✓ Đã duyệt booking thành công!\n\n🏢 Đơn vị chủ trì đã xác nhận công ty và các bên liên minh có thể tham gia dẫn dắt đoàn theo đúng lịch trình.\n\n👉 Bước tiếp theo: Quý công ty vui lòng sử dụng nút "Tạo yêu cầu thanh toán" trên thanh công cụ để tạo các đợt thu (đặt cọc đợt 1, thanh toán đợt 2, v.v.) theo thỏa thuận với khách hàng.`);
   };
 
   // Multi-Guide Management Handlers
@@ -2284,7 +2283,7 @@ export function AgencyBookingDetailPage({
                       Quy trình duyệt booking &amp; Thỏa thuận liên minh
                     </p>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      Công ty chủ trì duyệt booking khi xác nhận cty và đối tác có thể dẫn dắt đoàn. Sau khi duyệt, Chủ trì có thể chủ động tạo các đợt yêu cầu thanh toán (chia đợt đặt cọc hoặc thanh toán toàn bộ tùy thỏa thuận với khách hàng).
+                      Duyệt booking khi chưa gửi phương án nghĩa là đồng ý theo đúng yêu cầu đặt tour ban đầu: hệ thống lưu thành phương án đã thống nhất và báo cho khách. Nếu cần đổi giá hoặc dịch vụ, hãy gửi phương án mới thay vì duyệt; khi có phương án đang chờ khách phản hồi thì chưa duyệt được.
                     </p>
                   </div>
                   {isCurrentCompanyLead && (
