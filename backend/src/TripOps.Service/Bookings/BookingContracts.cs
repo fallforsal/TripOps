@@ -79,7 +79,30 @@ public sealed record BookingDto(
     DateTime? UpdatedAt,
     IReadOnlyList<IncidentDto>? Incidents = null,
     IReadOnlyList<BookingDayDto>? SnapshotDays = null,
-    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null);
+    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null,
+    IReadOnlyList<PaymentScheduleItemDto>? PaymentSchedule = null,
+    IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null);
+
+/// <summary>
+/// Một đợt trong lịch thanh toán. Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).
+/// Status: Pending | Overdue | Paid | Scheduled (chưa mở thu). Outstanding = số tiền còn phải trả của đợt.
+/// </summary>
+public sealed record PaymentScheduleItemDto(
+    int? Id, string Stage, string Description, decimal Amount, decimal Outstanding,
+    DateTime? DueDate, string Status, DateTime? PaidAt);
+
+/// <summary>Giao dịch tiền. Method: VNPAY (sandbox) | DEMO (mô phỏng Development). Status: Pending | Success | Failed | Expired | Refunded.</summary>
+public sealed record PaymentTransactionDto(
+    int Id, int? PaymentRequestId, string TransactionCode, string PaymentMethod, decimal Amount,
+    string Status, DateTime? PaidAt, DateTime? CreatedAt, string? GatewayTransactionNo);
+
+/// <summary>Kết quả tạo phiên thanh toán VNPAY: FE chuyển trình duyệt tới PaymentUrl.</summary>
+public sealed record VnPayCheckoutDto(string PaymentUrl, string TransactionCode, decimal Amount, DateTime ExpiresAt);
+
+/// <summary>Phản hồi IPN theo đặc tả VNPAY.</summary>
+public sealed record VnPayIpnResponse(
+    [property: System.Text.Json.Serialization.JsonPropertyName("RspCode")] string RspCode,
+    [property: System.Text.Json.Serialization.JsonPropertyName("Message")] string Message);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference);

@@ -592,6 +592,7 @@ Ref: booking_incidents.reported_by > users.id
 Table payment_requests {
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
+  stage varchar(20) [note: 'Đợt thu: deposit (cọc, mở khi Agency duyệt đơn) | balance (phần còn lại sau tour). NULL = khoản cũ trước khi có lịch thanh toán. CHECK CK_payment_requests_stage']
   description varchar(255) [not null, note: 'Khớp 100% với ô nhập "Nội dung yêu cầu" trên Modal (công ty có thể gõ tự do: "Cọc đợt 1 (50%)", "Thanh toán đợt 2", "Phụ thu đổi khách sạn"...).']
   amount decimal(12, 2) [not null, note: 'Số tiền cần thu']
   due_date date [note: 'Hạn chót thanh toán']
@@ -602,6 +603,7 @@ Table payment_requests {
 
   indexes {
     (booking_id, id) [unique]
+    (booking_id, stage) [unique, name: 'UX_payment_requests_active_stage', note: 'Lọc: stage IS NOT NULL AND status IN (Pending, Overdue, Paid) — mỗi đơn chỉ một khoản đang hiệu lực cho mỗi đợt']
   }
 }
 
@@ -618,7 +620,10 @@ Table payment_transactions {
   status varchar(30) [default: 'SUCCESS', note: 'SUCCESS, PENDING, FAILED, REFUNDED']
   payer_name varchar(150)
   payment_proof_url text [note: 'Ảnh chụp bill']
-  paid_at timestamp [default: `now()`]
+  paid_at timestamp [default: `now()`, note: 'Chỉ có nghĩa khi status = SUCCESS; giao dịch VNPAY được ghi lại đúng lúc cổng xác nhận thành công']
+  gateway_transaction_no varchar(100) [note: 'Mã giao dịch phía cổng (VNPAY: vnp_TransactionNo)']
+  gateway_response_code varchar(10) [note: 'Mã kết quả cổng trả về (VNPAY: vnp_ResponseCode, 00 = thành công)']
+  created_at timestamp [default: `now()`, note: 'Thời điểm tạo lần thanh toán (dùng để xét hết hạn phiên VNPAY)']
 }
 
 // ============================================================================

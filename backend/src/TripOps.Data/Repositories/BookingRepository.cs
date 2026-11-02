@@ -137,6 +137,18 @@ public sealed class BookingRepository(TripOpsDbContext db)
 
     public void Add(Booking booking) => db.Bookings.Add(booking);
 
+    /// <summary>
+    /// Mở giao dịch DB và khóa dòng booking (UPDATE giả) để các thao tác tiền trên cùng một đơn chạy tuần tự:
+    /// hai lần bấm thanh toán, IPN và trang return của VNPAY đến cùng lúc sẽ không ghi trùng.
+    /// </summary>
+    public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginPaymentChange(int bookingId, CancellationToken ct)
+    {
+        var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Bookings.IgnoreQueryFilters().Where(b => b.Id == bookingId)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.UpdatedAt, b => b.UpdatedAt), ct);
+        return transaction;
+    }
+
     public Task<PaymentTransaction?> FindTransaction(string code, CancellationToken ct) =>
         db.PaymentTransactions.AsNoTracking().SingleOrDefaultAsync(t => t.TransactionCode == code, ct);
 

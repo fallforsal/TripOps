@@ -74,9 +74,16 @@ app.Use(async (context, next) => {
     if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
         var origin = context.Request.Headers.Origin.ToString();
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (context.Request.Headers["Sec-Fetch-Site"] == "cross-site" ||
-            (!string.IsNullOrEmpty(origin) && origin != $"{context.Request.Scheme}://{context.Request.Host}" && !allowed.Contains(origin))) {
-            context.Response.StatusCode = 403; return;
+        var crossSite = context.Request.Headers["Sec-Fetch-Site"] == "cross-site";
+        var untrustedOrigin = !string.IsNullOrEmpty(origin) &&
+            origin != $"{context.Request.Scheme}://{context.Request.Host}" && !allowed.Contains(origin);
+        if (crossSite || untrustedOrigin) {
+            app.Logger.LogWarning("Browser mutation rejected: {Method} {Path}; crossSite={CrossSite}; untrustedOrigin={UntrustedOrigin}",
+                context.Request.Method, context.Request.Path, crossSite, untrustedOrigin);
+            await Results.Problem(statusCode: StatusCodes.Status403Forbidden,
+                title: "Nguồn truy cập chưa được cho phép. Hãy kiểm tra cấu hình tên miền của ứng dụng.",
+                extensions: new Dictionary<string, object?> { ["code"] = "untrusted_request_origin" }).ExecuteAsync(context);
+            return;
         }
     }
     try { await next(); }

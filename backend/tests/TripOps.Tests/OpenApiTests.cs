@@ -76,7 +76,7 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(70, protectedCount);
+        Assert.Equal(71, protectedCount);
     }
 
     [Fact]

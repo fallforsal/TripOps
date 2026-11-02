@@ -1811,6 +1811,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("paid_at");
 
+                    b.Property<string>("Stage")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("stage");
+
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
@@ -1825,7 +1830,15 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("BookingId", "Id")
                         .IsUnique();
 
-                    b.ToTable("payment_requests", (string)null);
+                    b.HasIndex("BookingId", "Stage")
+                        .IsUnique()
+                        .HasDatabaseName("UX_payment_requests_active_stage")
+                        .HasFilter("[stage] IS NOT NULL AND [status] IN ('Pending', 'Overdue', 'Paid')");
+
+                    b.ToTable("payment_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance')");
+                        });
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.PaymentTransaction", b =>
@@ -1844,6 +1857,22 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("BookingId")
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("GatewayResponseCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("gateway_response_code");
+
+                    b.Property<string>("GatewayTransactionNo")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("gateway_transaction_no");
 
                     b.Property<DateTime?>("PaidAt")
                         .ValueGeneratedOnAdd()

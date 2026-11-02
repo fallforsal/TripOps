@@ -194,9 +194,10 @@ public sealed partial class BookingFlowTests
         Assert.Equal(1, created.TourId);
         Assert.Equal(2, created.TotalGuests);
         Assert.Equal(5000000, created.TotalAmount);
-        Assert.Equal(1500000, created.DepositAmount); // 30% cọc
+        Assert.Equal(1500000, created.DepositAmount); // 30% cọc (dự kiến, chưa mở thu)
         Assert.Equal("Pending", created.Status);
         Assert.Equal("Unpaid", created.PaymentStatus);
+        Assert.Empty(created.PaymentSchedule!); // Chờ duyệt: chưa có lịch thanh toán
         int bookingId = created.Id;
 
         // 2. Customer xem danh sách đơn đặt của mình
@@ -216,23 +217,46 @@ public sealed partial class BookingFlowTests
             Assert.Equal(new[] { "Người lớn", "Trẻ em" }, snapshots.Select(p => p.TierName));
         }
 
-        // 3. Customer đặt cọc
-        var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(1500000, "VQR001", null));
-        Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
-        var deposited = await depositRes.Content.ReadFromJsonAsync<BookingDto>();
-        Assert.NotNull(deposited);
-        Assert.Equal(1500000, deposited.PaidAmount);
-        Assert.Equal("PartiallyPaid", deposited.PaymentStatus);
-        Assert.Equal("Deposited", deposited.Status);
+        // 3. Chưa được duyệt thì chưa cho trả cọc
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit",
+            new BookingDepositRequest(1500000, "VQR000", null))).StatusCode);
 
-        // 4. Agency xem danh sách booking và duyệt
+        // 4. Agency xem danh sách booking và duyệt → mở đợt cọc
         var agencyListRes = await agency.GetFromJsonAsync<BookingPage<BookingListItem>>("/api/v1/agency/bookings");
         Assert.NotNull(agencyListRes);
         Assert.Single(agencyListRes.Items);
 
         var decisionRes = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/decision", new BookingDecisionRequest("approve", "Đã kiểm tra đơn"));
         Assert.Equal(HttpStatusCode.OK, decisionRes.StatusCode);
-        Assert.Equal("Confirmed", (await decisionRes.Content.ReadFromJsonAsync<BookingDto>())!.Status);
+        var approved = (await decisionRes.Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal("Confirmed", approved.Status);
+        Assert.Collection(approved.PaymentSchedule!,
+            deposit =>
+            {
+                Assert.Equal("deposit", deposit.Stage);
+                Assert.Equal(1500000, deposit.Amount);
+                Assert.Equal(1500000, deposit.Outstanding);
+                Assert.Equal("Pending", deposit.Status);
+                Assert.Equal(DateTime.UtcNow.Date.AddDays(3), deposit.DueDate!.Value.Date);
+            },
+            balance =>
+            {
+                Assert.Equal("balance", balance.Stage);
+                Assert.Equal(3500000, balance.Amount);
+                Assert.Equal("Scheduled", balance.Status);
+            });
+
+        // 5. Customer đặt cọc (mô phỏng Development) đúng số tiền của đợt cọc
+        var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(1500000, "VQR001", null));
+        Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
+        var deposited = await depositRes.Content.ReadFromJsonAsync<BookingDto>();
+        Assert.NotNull(deposited);
+        Assert.Equal(1500000, deposited.PaidAmount);
+        Assert.Equal("PartiallyPaid", deposited.PaymentStatus);
+        Assert.Equal("Confirmed", deposited.Status);
+        Assert.Equal("Paid", deposited.PaymentSchedule![0].Status);
+        Assert.Equal(0, deposited.PaymentSchedule[0].Outstanding);
+        Assert.Equal("Success", Assert.Single(deposited.PaymentTransactions!).Status);
 
         // The rolled-back flow must not generate contract versions or proposal notifications.
         // Their tables remain mapped so existing databases and migrations stay compatible.
@@ -243,7 +267,7 @@ public sealed partial class BookingFlowTests
             Assert.False(await db.BookingProposalEvents.AnyAsync());
         }
 
-        // 5. Agency phân công Hướng dẫn viên
+        // 6. Agency phân công Hướng dẫn viên
         var assignRes = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/guide-assignments", new GuideAssignmentRequest("guide1", "Lead", "HDV trưởng"));
         Assert.Equal(HttpStatusCode.OK, assignRes.StatusCode);
         var assigned = await assignRes.Content.ReadFromJsonAsync<BookingDto>();
@@ -323,21 +347,23 @@ public sealed partial class BookingFlowTests
         using var app = new App();
         await app.Initialize();
         var customer = await app.Client("customer1@example.test");
+        var agency = await app.Client("agency1@example.test");
         var created = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
         created.EnsureSuccessStatusCode();
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
-        var payment = new BookingDepositRequest(100000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
+        (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).EnsureSuccessStatusCode();
+        var payment = new BookingDepositRequest(900000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var response = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", payment);
             response.EnsureSuccessStatusCode();
-            Assert.Equal(100000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.PaidAmount);
+            Assert.Equal(900000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.PaidAmount);
         }
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             var transaction = await db.PaymentTransactions.AsNoTracking().SingleAsync(t => t.BookingId == booking.Id);
-            Assert.Equal(100000, transaction.Amount);
+            Assert.Equal(900000, transaction.Amount);
             Assert.Equal(payment.PaymentProofUrl, transaction.ProofImageUrl);
             Assert.Equal("DEMO", transaction.PaymentMethod);
             Assert.Null(db.Model.FindEntityType(typeof(Booking))!.FindProperty("PaidAmount"));
@@ -346,27 +372,9 @@ public sealed partial class BookingFlowTests
             await db.SaveChangesAsync();
         }
         var reloaded = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(100000, reloaded.PaidAmount);
+        Assert.Equal(900000, reloaded.PaidAmount);
         Assert.Equal(booking.EndDate, reloaded.EndDate);
         Assert.Equal(1, reloaded.TotalGuests);
-    }
-
-    [Fact]
-    public async Task DepositRequiresAgencyDecision_AndPartialDepositIsAccumulated()
-    {
-        using var app = new App(); await app.Initialize();
-        var customer = await app.Client("customer1@example.test");
-        var agency = await app.Client("agency1@example.test");
-        var create = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
-        var booking = (await create.Content.ReadFromJsonAsync<BookingDto>())!;
-        var partial = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(100000, "PARTIAL", null));
-        Assert.Equal("Pending", (await partial.Content.ReadFromJsonAsync<BookingDto>())!.Status);
-        var rest = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(booking.DepositAmount - 100000, "REST", null));
-        var deposited = (await rest.Content.ReadFromJsonAsync<BookingDto>())!;
-        Assert.Equal("Deposited", deposited.Status);
-        Assert.Equal(booking.DepositAmount, deposited.PaidAmount);
-        var decision = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
-        Assert.Equal("Confirmed", (await decision.Content.ReadFromJsonAsync<BookingDto>())!.Status);
     }
 
     [Fact]

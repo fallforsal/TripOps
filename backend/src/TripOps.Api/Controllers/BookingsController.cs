@@ -42,8 +42,16 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
         return Ok(await bookings.Deposit(Actor, id, request, ct));
     }
 
+    [HttpPost("{id:int}/payments/vnpay")]
+    [EndpointSummary("Start a VNPAY sandbox payment for the deposit stage and return the signed payment URL")]
+    [ProducesResponseType<VnPayCheckoutDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> StartVnPay(int id, CancellationToken ct) =>
+        Ok(await bookings.StartVnPayDeposit(Actor, id, HttpContext.Connection.RemoteIpAddress?.ToString(), ct));
+
     [HttpPost("{id:int}/cancel")]
-    [EndpointSummary("Cancel a pending or confirmed booking")]
+    [EndpointSummary("Cancel a booking that has no recorded payment")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(int id, BookingCancellationRequest request, CancellationToken ct) =>
         Ok(await bookings.Cancel(Actor, id, request, ct));
