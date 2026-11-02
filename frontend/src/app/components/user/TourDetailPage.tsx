@@ -53,6 +53,7 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { mockUsers, mockTourCompanies } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
+import { getProvinceName } from "@/app/data/vietnamProvinces";
 
 export interface TourDetailCustomData {
   customHotelChanges?: CustomHotelChange[];
@@ -138,6 +139,21 @@ function ProgramTab({ tour }: { tour: Tour }) {
             <p>
               <span className="text-gray-500">Nơi xuất phát / Khởi hành:</span>{" "}
               <strong>{tour.departureLocation || tour.departureCity}</strong>
+            </p>
+            {tour.provinceCodes && tour.provinceCodes.length > 0 && (
+              <p className="pt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="text-gray-500">Tỉnh/thành đi qua:</span>
+                {tour.provinceCodes.map((code) => (
+                  <span
+                    key={code}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-[#E0F2FE] text-[#075985] border border-sky-200"
+                  >
+                    {getProvinceName(code)}
+                  </span>
+                ))}
+              </p>
+            )}
+            <p className="hidden">
             </p>
           </div>
         </section>

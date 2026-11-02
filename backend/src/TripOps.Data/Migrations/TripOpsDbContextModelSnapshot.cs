@@ -112,6 +112,103 @@ namespace TripOps.Data.Migrations
                     b.ToTable("agency_subscriptions", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.AgencySupplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("AgencyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
+                    b.Property<string>("Area")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("area");
+
+                    b.Property<string>("Conditions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("conditions");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(191)
+                        .HasColumnType("nvarchar(191)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("notes");
+
+                    b.Property<decimal?>("ReferencePrice")
+                        .HasColumnType("decimal(12, 2)")
+                        .HasColumnName("reference_price");
+
+                    b.Property<int?>("StarRating")
+                        .HasColumnType("int")
+                        .HasColumnName("star_rating");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SupplierType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_type");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId", "SupplierType", "Name");
+
+                    b.HasIndex("AgencyId", "SupplierType", "Status");
+
+                    b.ToTable("agency_suppliers", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.Booking", b =>
                 {
                     b.Property<int>("Id")
@@ -823,6 +920,141 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("BookingId", "AgencyId");
 
                     b.ToTable("booking_price_adjustments", (string)null);
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingProposalEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("message");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("read_at");
+
+                    b.Property<string>("RecipientId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<int>("SnapshotId")
+                        .HasColumnType("int")
+                        .HasColumnName("snapshot_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("RecipientId", "ReadAt", "CreatedAt");
+
+                    b.HasIndex("SnapshotId", "EventType", "RecipientId")
+                        .IsUnique();
+
+                    b.ToTable("booking_proposal_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_booking_proposal_events_type", "[event_type] IN ('proposal_sent', 'proposal_accepted', 'changes_requested')");
+                        });
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<string>("AcceptedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("accepted_by");
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("SnapshotData")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("snapshot_data");
+
+                    b.Property<string>("SnapshotType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("snapshot_type");
+
+                    b.Property<int?>("SourceTourVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("source_tour_version");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcceptedBy");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("BookingId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("BookingId", "SnapshotType", "Version");
+
+                    b.ToTable("booking_snapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_booking_snapshots_accepted", "([snapshot_type] = 'agreed' AND [accepted_at] IS NOT NULL AND [accepted_by] IS NOT NULL) OR ([snapshot_type] IN ('initial_request', 'proposal') AND [accepted_at] IS NULL AND [accepted_by] IS NULL)");
+
+                            t.HasCheckConstraint("CK_booking_snapshots_data_isjson", "ISJSON([snapshot_data]) = 1");
+
+                            t.HasCheckConstraint("CK_booking_snapshots_type", "[snapshot_type] IN ('initial_request', 'proposal', 'agreed')");
+
+                            t.HasCheckConstraint("CK_booking_snapshots_version", "[version] > 0");
+                        });
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>
@@ -2386,6 +2618,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<int?>("AgencySupplierId")
+                        .HasColumnType("int")
+                        .HasColumnName("agency_supplier_id");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -2432,6 +2668,15 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValue(3)
                         .HasColumnName("star_rating");
 
+                    b.Property<string>("SupplierSnapshot")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("supplier_snapshot");
+
+                    b.Property<string>("SupplierSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_source");
+
                     b.Property<int>("TourId")
                         .HasColumnType("int")
                         .HasColumnName("tour_id");
@@ -2445,6 +2690,8 @@ namespace TripOps.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
+
+                    b.HasIndex("AgencySupplierId");
 
                     b.HasIndex("ServiceId");
 
@@ -2632,6 +2879,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<int?>("AgencySupplierId")
+                        .HasColumnType("int")
+                        .HasColumnName("agency_supplier_id");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -2670,6 +2921,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("service_id");
 
+                    b.Property<string>("SupplierSnapshot")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("supplier_snapshot");
+
+                    b.Property<string>("SupplierSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("supplier_source");
+
                     b.Property<DateTime?>("Time")
                         .HasColumnType("datetime2")
                         .HasColumnName("time");
@@ -2687,6 +2947,8 @@ namespace TripOps.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
+
+                    b.HasIndex("AgencySupplierId");
 
                     b.HasIndex("ServiceId");
 
@@ -2744,6 +3006,41 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("TourId");
 
                     b.ToTable("tour_pricing_tiers", (string)null);
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.TourProvince", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("ProvinceCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("province_code");
+
+                    b.Property<int>("TourId")
+                        .HasColumnType("int")
+                        .HasColumnName("tour_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProvinceCode", "TourId");
+
+                    b.HasIndex("TourId", "ProvinceCode")
+                        .IsUnique();
+
+                    b.ToTable("tour_provinces", (string)null);
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.TourTimeline", b =>
@@ -2970,6 +3267,17 @@ namespace TripOps.Data.Migrations
                     b.Navigation("SubscriptionPlan");
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.AgencySupplier", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.Booking", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.User", "Customer")
@@ -3186,6 +3494,55 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Adjuster");
 
                     b.Navigation("Booking");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingProposalEvent", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.BookingSnapshot", "Snapshot")
+                        .WithMany("Events")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Snapshot");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "Acceptor")
+                        .WithMany()
+                        .HasForeignKey("AcceptedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TripOps.Data.Entities.Booking", "Booking")
+                        .WithMany("Snapshots")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Acceptor");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>
@@ -3518,6 +3875,11 @@ namespace TripOps.Data.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TripOps.Data.Entities.AgencySupplier", null)
+                        .WithMany()
+                        .HasForeignKey("AgencySupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TripOps.Data.Entities.Service", null)
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -3573,6 +3935,11 @@ namespace TripOps.Data.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TripOps.Data.Entities.AgencySupplier", null)
+                        .WithMany()
+                        .HasForeignKey("AgencySupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TripOps.Data.Entities.Service", null)
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -3597,6 +3964,17 @@ namespace TripOps.Data.Migrations
 
                     b.HasOne("TripOps.Data.Entities.Tour", "Tour")
                         .WithMany("PricingTiers")
+                        .HasForeignKey("TourId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tour");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.TourProvince", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.Tour", "Tour")
+                        .WithMany("Provinces")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -3673,7 +4051,14 @@ namespace TripOps.Data.Migrations
 
                     b.Navigation("PriceAdjustments");
 
+                    b.Navigation("Snapshots");
+
                     b.Navigation("Timelines");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>
@@ -3708,6 +4093,8 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Accommodations");
 
                     b.Navigation("PricingTiers");
+
+                    b.Navigation("Provinces");
 
                     b.Navigation("Timelines");
 

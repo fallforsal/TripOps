@@ -5,6 +5,7 @@ import type {
   TourMeal,
   TourPriceRow,
   TourVersion,
+  TourSupplierSnapshot,
 } from "@/app/types";
 import { http } from "@/app/lib/http";
 
@@ -22,6 +23,9 @@ type Activity = {
   orderIndex: number;
 };
 type Meal = {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number | null;
+  supplier?: TourSupplierSnapshot | null;
   serviceId?: number | null;
   time?: string | null;
   mealType: "breakfast" | "lunch" | "dinner";
@@ -31,6 +35,9 @@ type Meal = {
   priceDifference: number;
 };
 type Accommodation = {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number | null;
+  supplier?: TourSupplierSnapshot | null;
   serviceId?: number | null;
   hotelName: string;
   destinationName: string;
@@ -69,6 +76,7 @@ export type TourConfiguration = {
   images: string[];
   pricingTiers: Tier[];
   timelines: Day[];
+  provinceCodes?: string[];
 };
 export type ApiTour = {
   id: number;
@@ -95,7 +103,16 @@ type TourPage<T> = {
   page: number;
   pageSize: number;
 };
-type TourListItem = { id: number };
+type TourListItem = { id: number; provinceCodes?: string[] };
+export type CandidateAgency = {
+  agencyId: string;
+  businessName: string;
+  email: string | null;
+  phone: string | null;
+  avatar: string | null;
+  matchedProvinceCodes: string[];
+  matchedTourCount: number;
+};
 export type ApiVersion = {
   version: number;
   changeNote: string | null;
@@ -111,6 +128,20 @@ export type EligibleService = {
   name: string;
   price: number;
 };
+export type AgencySupplier = {
+  id: number; type: "HOTEL" | "RESTAURANT"; name: string;
+  address?: string | null; area?: string | null; contactName?: string | null;
+  contactPhone?: string | null; contactEmail?: string | null; starRating?: number | null;
+  referencePrice?: number | null; conditions?: string | null; notes?: string | null;
+  status: string;
+};
+export type SupplierInput = Omit<AgencySupplier, "id" | "status">;
+export const agencySuppliers = (type: "HOTEL" | "RESTAURANT", search = "") =>
+  http<AgencySupplier[]>(`/agency/suppliers?type=${type}&search=${encodeURIComponent(search)}`);
+export const createAgencySupplier = (data: SupplierInput) =>
+  http<AgencySupplier>("/agency/suppliers", { method: "POST", body: JSON.stringify(data) });
+export const updateAgencySupplier = (id: number, data: SupplierInput) =>
+  http<AgencySupplier>(`/agency/suppliers/${id}`, { method: "PUT", body: JSON.stringify(data) });
 
 const lines = (value?: string | null) =>
   value
@@ -135,8 +166,11 @@ const hotelOption = (
   delta = 0,
   nights = 1,
 ): Accommodation => ({
+  supplierSource: hotel.supplierSource || (hotel.isCustom || !hotel.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
+  agencySupplierId: hotel.agencySupplierId || null,
+  supplier: hotel.supplier || (hotel.isCustom ? { address: hotel.address, area: hotel.destination, referencePrice: hotel.pricePerNight, conditions: hotel.description } : null),
   serviceId:
-    hotel.serviceId && /^\d+$/.test(hotel.serviceId)
+    hotel.supplierSource !== "AGENCY_SUPPLIER" && !hotel.isCustom && hotel.serviceId && /^\d+$/.test(hotel.serviceId)
       ? Number(hotel.serviceId)
       : null,
   hotelName: hotel.name.trim(),
@@ -181,10 +215,13 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       );
       const meals: Meal[] = (day.meals || []).flatMap((meal: TourMeal) => [
         {
+          supplierSource: meal.supplierSource || (meal.isCustom || !meal.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
+          agencySupplierId: meal.agencySupplierId || null,
+          supplier: meal.supplier || (meal.isCustom ? { address: meal.description, area: day.destinationCity || destination, referencePrice: meal.pricePerPerson, conditions: meal.description } : null),
           mealType: meal.type,
           restaurantName: (meal.serviceName || meal.description || "").trim(),
           serviceId:
-            meal.serviceId && /^\d+$/.test(meal.serviceId)
+            meal.supplierSource !== "AGENCY_SUPPLIER" && !meal.isCustom && meal.serviceId && /^\d+$/.test(meal.serviceId)
               ? Number(meal.serviceId)
               : null,
           time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
@@ -193,10 +230,13 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           priceDifference: 0,
         },
         ...(meal.alternativeMeals || []).map((option) => ({
+          supplierSource: option.supplierSource || (option.isCustom || !option.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
+          agencySupplierId: option.agencySupplierId || null,
+          supplier: option.supplier || (option.isCustom ? { address: option.address, area: day.destinationCity || destination, referencePrice: option.price, conditions: option.description } : null),
           mealType: meal.type,
           restaurantName: option.restaurantName.trim(),
           serviceId:
-            option.serviceId && /^\d+$/.test(option.serviceId)
+            option.supplierSource !== "AGENCY_SUPPLIER" && !option.isCustom && option.serviceId && /^\d+$/.test(option.serviceId)
               ? Number(option.serviceId)
               : null,
           time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
@@ -218,6 +258,10 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
                 {
                   ...hotel,
                   serviceId: option.serviceId,
+                  supplierSource: option.supplierSource,
+                  agencySupplierId: option.agencySupplierId,
+                  supplier: option.supplier,
+                  isCustom: option.isCustom,
                   name: option.name,
                   stars: option.stars || hotel.stars,
                   address: option.address || hotel.address,
@@ -268,6 +312,13 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       displayOrder,
     })),
     timelines,
+    provinceCodes: Array.from(
+      new Set(
+        (tour.provinceCodes || [])
+          .map((code) => code.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ),
   };
 }
 
@@ -295,11 +346,16 @@ export function fromConfiguration(
           serviceId: defaultHotel.serviceId
             ? String(defaultHotel.serviceId)
             : undefined,
+          supplierSource: defaultHotel.supplierSource || (defaultHotel.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
+          agencySupplierId: defaultHotel.agencySupplierId || undefined,
+          supplier: defaultHotel.supplier || undefined,
+          isCustom: defaultHotel.supplierSource === "AGENCY_SUPPLIER" || !defaultHotel.serviceId,
+          providerName: defaultHotel.supplierSource === "AGENCY_SUPPLIER" || !defaultHotel.serviceId ? "Nhà cung cấp của agency" : undefined,
           destination: defaultHotel.destinationName,
           nights: defaultHotel.nightsCount,
           stars: defaultHotel.starRating,
-          pricePerNight: 0,
-          address: defaultHotel.addressNotes || undefined,
+          pricePerNight: defaultHotel.supplier?.referencePrice || 0,
+          address: defaultHotel.supplier?.address || defaultHotel.addressNotes || undefined,
           alternativeHotels: day.accommodations
             .filter((option) => !option.isDefault)
             .map((option, index) => ({
@@ -307,10 +363,16 @@ export function fromConfiguration(
               serviceId: option.serviceId
                 ? String(option.serviceId)
                 : undefined,
+              supplierSource: option.supplierSource || (option.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
+              agencySupplierId: option.agencySupplierId || undefined,
+              supplier: option.supplier || undefined,
+              isCustom: option.supplierSource === "AGENCY_SUPPLIER" || !option.serviceId,
+              providerName: option.supplierSource === "AGENCY_SUPPLIER" || !option.serviceId ? "Nhà cung cấp của agency" : undefined,
               name: option.hotelName,
               stars: option.starRating,
               priceDifference: option.priceDifference,
-              address: option.addressNotes || undefined,
+              price: option.supplier?.referencePrice || undefined,
+              address: option.supplier?.address || option.addressNotes || undefined,
             })),
         }
       : undefined;
@@ -320,9 +382,15 @@ export function fromConfiguration(
         id: `meal-${day.dayNumber}-${index}`,
         type: meal.mealType,
         serviceId: meal.serviceId ? String(meal.serviceId) : undefined,
+        supplierSource: meal.supplierSource || (meal.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
+        agencySupplierId: meal.agencySupplierId || undefined,
+        supplier: meal.supplier || undefined,
+        isCustom: meal.supplierSource === "AGENCY_SUPPLIER" || !meal.serviceId,
+        providerName: meal.supplierSource === "AGENCY_SUPPLIER" || !meal.serviceId ? "Nhà cung cấp của agency" : undefined,
         time: meal.time?.slice(0, 5),
         serviceName: meal.restaurantName,
         description: meal.description || undefined,
+        pricePerPerson: meal.supplier?.referencePrice || undefined,
         alternativeMeals: day.meals
           .filter(
             (option) => option.mealType === meal.mealType && !option.isDefault,
@@ -330,9 +398,15 @@ export function fromConfiguration(
           .map((option, alternative) => ({
             id: `meal-${day.dayNumber}-${index}-${alternative}`,
             serviceId: option.serviceId ? String(option.serviceId) : undefined,
+            supplierSource: option.supplierSource || (option.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
+            agencySupplierId: option.agencySupplierId || undefined,
+            supplier: option.supplier || undefined,
+            isCustom: option.supplierSource === "AGENCY_SUPPLIER" || !option.serviceId,
+            providerName: option.supplierSource === "AGENCY_SUPPLIER" || !option.serviceId ? "Nhà cung cấp của agency" : undefined,
             restaurantName: option.restaurantName,
             priceDifference: option.priceDifference,
             description: option.description || undefined,
+            price: option.supplier?.referencePrice || undefined,
           })),
       }));
     return {
@@ -374,6 +448,7 @@ export function fromConfiguration(
     tourCode: code || String(id),
     name: c.name,
     destination: c.destination || "",
+    provinceCodes: c.provinceCodes || [],
     duration: `${c.durationDays} ngày ${c.durationNights} đêm`,
     numberOfDays: c.durationDays,
     numberOfNights: c.durationNights,
@@ -427,16 +502,23 @@ async function allPages(path: string): Promise<TourListItem[]> {
     if (items.length >= batch.total || !batch.items.length) return items;
   }
 }
-export async function publicTours(): Promise<Tour[]> {
-  const summaries = await allPages("/tours");
+// publicTours supports optional provinceCode filter
+export async function publicTours(provinceCode?: string): Promise<Tour[]> {
+  const query = provinceCode?.trim()
+    ? `/tours?provinceCode=${encodeURIComponent(provinceCode.trim().toUpperCase())}`
+    : "/tours";
+  const summaries = await allPages(query);
   return Promise.all(
     summaries.map(async (item) =>
       fromPublicTour(await http<PublicTour>(`/tours/${item.id}`)),
     ),
   );
 }
-export async function agencyTours(): Promise<Tour[]> {
-  const summaries = await allPages("/agency/tours");
+export async function agencyTours(provinceCode?: string): Promise<Tour[]> {
+  const query = provinceCode?.trim()
+    ? `/agency/tours?provinceCode=${encodeURIComponent(provinceCode.trim().toUpperCase())}`
+    : "/agency/tours";
+  const summaries = await allPages(query);
   return Promise.all(
     summaries.map(async (item) => {
       const api = await http<ApiTour>(`/agency/tours/${item.id}`);
@@ -571,6 +653,19 @@ export const restoreAgencyTour = (
     method: "POST",
     body: JSON.stringify({ version, reason: `Restore version ${number}` }),
   });
+
+export const findCandidateAgenciesByProvince = (
+  provinceCodes: string | string[],
+  excludeSelf = true,
+) => {
+  const joined = (Array.isArray(provinceCodes) ? provinceCodes : [provinceCodes])
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean)
+    .join(",");
+  return http<CandidateAgency[]>(
+    `/agency/tours/candidate-agencies?provinceCode=${encodeURIComponent(joined)}&excludeSelf=${excludeSelf}`,
+  );
+};
 
 export const completeAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/complete`, {

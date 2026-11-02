@@ -1,12 +1,15 @@
 import type { Tour } from "@/app/types";
+import { getProvinceName } from "@/app/data/vietnamProvinces";
 
 export interface TourSearchCriteria {
   destination: string;
+  provinceCode?: string;
   departureDate: string;
   guests: string;
 }
 export const emptyTourSearch: TourSearchCriteria = {
   destination: "",
+  provinceCode: "",
   departureDate: "",
   guests: "",
 };
@@ -20,10 +23,20 @@ export function normalizeDestination(value: string) {
     .trim();
 }
 export function matchesTourSearch(tour: Tour, criteria: TourSearchCriteria) {
+  if (
+    criteria.provinceCode &&
+    criteria.provinceCode !== "all" &&
+    !(tour.provinceCodes || []).includes(criteria.provinceCode)
+  ) {
+    return false;
+  }
   const term = normalizeDestination(criteria.destination);
+  const provinceNames = (tour.provinceCodes || [])
+    .map((code) => `${code} ${getProvinceName(code)}`)
+    .join(" ");
   if (
     term &&
-    !normalizeDestination(`${tour.destination} ${tour.name}`).includes(term)
+    !normalizeDestination(`${tour.destination} ${tour.name} ${provinceNames}`).includes(term)
   )
     return false;
   const guests = Number(criteria.guests);

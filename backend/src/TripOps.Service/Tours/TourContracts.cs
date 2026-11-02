@@ -21,7 +21,8 @@ public sealed record TourConfiguration(
     PricingTierInput[]? PricingTiers = null,
     TimelineInput[]? Timelines = null,
     [StringLength(255)] string? DepartureLocation = null,
-    [StringLength(50)] string? Code = null);
+    [StringLength(50)] string? Code = null,
+    string[]? ProvinceCodes = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
@@ -31,16 +32,33 @@ public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, Str
     ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
 public sealed record ActivityInput([Required, StringLength(255)] string Name,
     [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
+/// <summary>Per-tour snapshot of an Agency-supplied hotel/restaurant (kept in the immutable tour version).</summary>
+public sealed record SupplierSnapshotInput([StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
+    [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
+    [Range(typeof(decimal), "0", "9999999999")] decimal? ReferencePrice = null, [StringLength(2000)] string? Conditions = null);
 public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "dinner")] string MealType, [Required, StringLength(255)] string RestaurantName,
     [StringLength(10000)] string? Description = null, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
-    int? ServiceId = null, TimeSpan? Time = null);
+    int? ServiceId = null, TimeSpan? Time = null,
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
     [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
-    [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null);
+    [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null,
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
+
+public sealed record SupplierRequest([Required, AllowedValues("HOTEL", "RESTAURANT")] string Type,
+    [Required, StringLength(255)] string Name, [StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
+    [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
+    [EmailAddress, StringLength(191)] string? ContactEmail = null, [Range(1, 5)] int? StarRating = null,
+    [Range(typeof(decimal), "0", "9999999999")] decimal? ReferencePrice = null,
+    [StringLength(2000)] string? Conditions = null, [StringLength(2000)] string? Notes = null,
+    [AllowedValues("ACTIVE", "ARCHIVED")] string Status = "ACTIVE");
+public sealed record SupplierDto(int Id, string Type, string Name, string? Address, string? Area, string? ContactName,
+    string? ContactPhone, string? ContactEmail, int? StarRating, decimal? ReferencePrice, string? Conditions, string? Notes,
+    string Status, DateTime CreatedAt, DateTime UpdatedAt);
 
 public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Version,
     [Required] TourConfiguration Configuration, [Required, StringLength(2000)] string ChangeNote);
@@ -58,7 +76,15 @@ public sealed record TourServiceReference(int Id, string ProviderId, string Cate
     string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,
     string? HiddenReason = null, string? ThumbnailUrl = null, string[]? Images = null, int? Capacity = null, bool IsPaused = false);
 public sealed record TourListItem(int Id, string Name, string? Destination, decimal BasePrice,
-    string Status, string Visibility, int Version);
+    string Status, string Visibility, int Version, string[]? ProvinceCodes = null);
+public sealed record CandidateAgencyDto(
+    string AgencyId,
+    string BusinessName,
+    string? Email,
+    string? Phone,
+    string? Avatar,
+    string[] MatchedProvinceCodes,
+    int MatchedTourCount);
 public sealed record TourPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 public sealed record TourVersionDto(int Version, string? ChangeNote, string? CreatedBy, decimal? Price,
     DateTime CreatedAt, string? SnapshotData);

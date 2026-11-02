@@ -99,7 +99,7 @@ interface AgencyBookingDetailPageProps {
   companyName: string;
   companyId?: string;
   onBack: () => void;
-  onApproveBooking: (bookingId: string) => void;
+  onApproveBooking: (bookingId: string) => void | Promise<boolean | void>;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
@@ -1101,19 +1101,16 @@ export function AgencyBookingDetailPage({
   };
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
-  const handleApproveHappyCase = () => {
-    const updatedAgencies: BookingAgencyShare[] = agenciesList.map((a) => ({
+  const handleApproveHappyCase = async () => {
+    const approved = await onApproveBooking(booking.id);
+    if (approved === false) return;
+    setAgenciesList((current) => current.map((a) => ({
       ...a,
       confirmationStatus: "confirmed" as const,
       quoteConfirmed: true,
       confirmedAt: a.confirmedAt || new Date().toISOString(),
-    }));
-    setAgenciesList(updatedAgencies);
-    onUpdateBookingAgencies?.(booking.id, updatedAgencies);
-
-    onApproveBooking(booking.id);
+    })));
     setHappyCaseModalOpen(false);
-    alert(`✓ Đã duyệt booking thành công!\n\n🏢 Đơn vị chủ trì đã xác nhận công ty và các bên liên minh có thể tham gia dẫn dắt đoàn theo đúng lịch trình.\n\n👉 Bước tiếp theo: Quý công ty vui lòng sử dụng nút "Tạo yêu cầu thanh toán" trên thanh công cụ để tạo các đợt thu (đặt cọc đợt 1, thanh toán đợt 2, v.v.) theo thỏa thuận với khách hàng.`);
   };
 
   // Multi-Guide Management Handlers

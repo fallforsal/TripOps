@@ -159,6 +159,20 @@ Table tour_pricing_tiers {
 
 Ref: tour_pricing_tiers.agency_id > users.id
 
+Table tour_provinces {
+  id int [pk, increment]
+  tour_id int [not null]
+  province_code varchar(32) [not null]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (tour_id, province_code) [unique]
+    (province_code, tour_id)
+  }
+}
+
+Ref: tour_provinces.tour_id > tours.id
+
 Table tour_timeline {
   id int [pk, increment]
   tour_id int [not null] // FK tham chiếu tới tours.id
@@ -184,6 +198,9 @@ Table tourist_locations {
 Table tour_restaurants {
   id int [pk, increment]
   service_id int
+  supplier_source varchar(20) [note: 'PLATFORM_PARTNER or AGENCY_SUPPLIER']
+  agency_supplier_id int
+  supplier_snapshot text [note: 'Immutable tour-specific JSON: address, area, contact, reference price, conditions']
   tour_timeline_id int [not null]
   agency_id varchar(36)
   time timestamp
@@ -201,6 +218,9 @@ Table tour_hotels {
   id int [pk, increment]
   tour_id int [not null]
   service_id int
+  supplier_source varchar(20) [note: 'PLATFORM_PARTNER or AGENCY_SUPPLIER']
+  agency_supplier_id int
+  supplier_snapshot text [note: 'Immutable tour-specific JSON: address, area, contact, reference price, conditions']
   destination_name varchar(255) [not null]
   hotel_name varchar(255) [not null]
   star_rating int [default: 3]
@@ -211,6 +231,30 @@ Table tour_hotels {
   agency_id varchar(36)
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+}
+
+Table agency_suppliers {
+  id int [pk, increment]
+  agency_id varchar(36) [not null]
+  supplier_type varchar(20) [not null, note: 'HOTEL or RESTAURANT']
+  name varchar(255) [not null]
+  address varchar(500)
+  area varchar(255)
+  contact_name varchar(150)
+  contact_phone varchar(30)
+  contact_email varchar(191)
+  star_rating int
+  reference_price decimal(12, 2)
+  conditions varchar(2000)
+  notes varchar(2000)
+  status varchar(20) [not null, note: 'ACTIVE or ARCHIVED']
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (agency_id, supplier_type, status)
+    (agency_id, supplier_type, name)
+  }
 }
 
 
@@ -969,6 +1013,9 @@ Ref: tour_restaurants.service_id > services.id
 Ref: tour_restaurants.agency_id > users.id
 Ref: tour_hotels.service_id > services.id
 Ref: tour_hotels.agency_id > users.id
+Ref: agency_suppliers.agency_id > users.id
+Ref: tour_restaurants.agency_supplier_id > agency_suppliers.id
+Ref: tour_hotels.agency_supplier_id > agency_suppliers.id
 Ref: tour_design_requests.agency_id > users.id
 Ref: booking_locations.agency_id > users.id
 Ref: booking_restaurants.service_id > services.id

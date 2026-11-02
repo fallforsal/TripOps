@@ -291,6 +291,7 @@ ServiceFabricBackup/
 *.mdf
 *.ldf
 *.ndf
+*.bak
 
 # Business Intelligence projects
 *.rdl.data
@@ -456,3 +457,16 @@ backend/src/TripOps.Api/App_Data/
 .agents/
 .agents
 
+# ===== Chong lo bi mat khi dung git add . =====
+# File cau hinh/bi mat chi de tren may
+**/secrets.json
+**/appsettings.*.Local.json
+*.pfx
+*.p12
+*.pem
+*.key
+# Backup DB, ket qua test/QA tam
+*.bak
+*.bacpac
+/output/
+/auth-register-flow.*

@@ -100,6 +100,9 @@ export interface Location {
 }
 
 export interface TourAlternativeMeal {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number;
+  supplier?: TourSupplierSnapshot;
   id: string;
   restaurantName: string;
   priceDifference: number; // e.g. +50000, +180000, -30000
@@ -115,6 +118,9 @@ export interface TourAlternativeMeal {
 }
 
 export interface TourMeal {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number;
+  supplier?: TourSupplierSnapshot;
   id?: string;
   type: "breakfast" | "lunch" | "dinner";
   time?: string; // Giờ diễn ra bữa ăn (VD: "07:30", "11:30", "12:00", "18:30")
@@ -132,6 +138,9 @@ export interface TourMeal {
 }
 
 export interface TourAlternativeHotel {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number;
+  supplier?: TourSupplierSnapshot;
   id: string;
   serviceId?: string; // ID dịch vụ tương ứng trên hệ thống nếu là đối tác
   name: string;
@@ -151,6 +160,9 @@ export interface TourAlternativeHotel {
 }
 
 export interface TourHotel {
+  supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  agencySupplierId?: number;
+  supplier?: TourSupplierSnapshot;
   id?: string;
   serviceId?: string;
   providerName?: string;
@@ -172,6 +184,15 @@ export interface TourHotel {
   alternativeHotels?: TourAlternativeHotel[]; // Danh sách khách sạn nâng cấp/đổi hạng cho khách hàng chọn kèm giá chênh lệch
   createdByCompanyId?: string; // ID công ty thiết lập khách sạn này
   createdByCompanyName?: string; // Tên công ty thiết lập khách sạn này
+}
+
+export interface TourSupplierSnapshot {
+  address?: string;
+  area?: string;
+  contactName?: string;
+  contactPhone?: string;
+  referencePrice?: number;
+  conditions?: string;
 }
 
 export interface DailyItinerary {
@@ -299,6 +320,7 @@ export interface BookingProviderConfirmation {
 
 export interface CustomHotelChange {
   destination: string;
+  provinceCodes?: string[]; // Danh sách mã tỉnh/thành chuẩn hóa mà tour đi qua (VD: ["LAM_DONG", "KHANH_HOA"])
   originalHotelName?: string;
   originalPricePerNight?: number;
   newHotelName: string;
@@ -441,6 +463,7 @@ export interface Tour {
   tourCode: string;
   name: string;
   destination: string;
+  provinceCodes?: string[]; // Danh sách mã tỉnh/thành chuẩn hóa mà tour đi qua (VD: ["LAM_DONG", "KHANH_HOA"])
   region?: string; // Khu vực: Miền Bắc | Miền Trung | Miền Nam | Tây Nguyên | Miền Tây
   duration: string;
   numberOfDays?: number;

@@ -36,6 +36,7 @@ public virtual ICollection<TourPricingTier> PricingTiers { get; set; } = new Lis
 public virtual ICollection<TourTimeline> Timelines { get; set; } = new List<TourTimeline>();
 public virtual ICollection<TourVersion> Versions { get; set; } = new List<TourVersion>();
 public virtual ICollection<TourAccommodation> Accommodations { get; set; } = new List<TourAccommodation>();
+public virtual ICollection<TourProvince> Provinces { get; set; } = new List<TourProvince>();
 }
 
 public class TourPricingTier : BaseEntity<int> {
@@ -71,6 +72,9 @@ public class TourMeal : BaseEntity<int> {
 public int? ServiceId { get; set; }
 public int TourTimelineId { get; set; }
 public string? AgencyId { get; set; }
+public string? SupplierSource { get; set; }
+public int? AgencySupplierId { get; set; }
+public string? SupplierSnapshot { get; set; }
 public DateTime? Time { get; set; }
 public string MealType { get; set; } = string.Empty;
 public string RestaurantName { get; set; } = string.Empty;
@@ -92,6 +96,9 @@ public int? NightsCount { get; set; } = 1;
 public bool? IsDefault { get; set; } = false;
 public decimal? PriceDifference { get; set; } = 0m;
 public string? AddressNotes { get; set; }
+public string? SupplierSource { get; set; }
+public int? AgencySupplierId { get; set; }
+public string? SupplierSnapshot { get; set; }
 public string? AgencyId { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -141,4 +148,11 @@ public DateTime? AssignedAt { get; set; } = DateTime.UtcNow;
 public DateTime? RespondedAt { get; set; }
 public virtual TourDesignRequest TourDesignRequest { get; set; } = null!;
 public virtual User Agency { get; set; } = null!;
+}
+
+public class TourProvince : BaseEntity<int> {
+public int TourId { get; set; }
+public string ProvinceCode { get; set; } = string.Empty;
+public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+public virtual Tour Tour { get; set; } = null!;
 }

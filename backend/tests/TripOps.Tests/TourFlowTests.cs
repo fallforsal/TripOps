@@ -41,7 +41,13 @@ public sealed partial class TourFlowTests
         private readonly SqliteConnection connection = new("Data Source=:memory:");
         private readonly bool withCloudinary;
         public TourImageCloudHandler Cloud { get; } = new();
-        public App(bool withCloudinary = false) { this.withCloudinary = withCloudinary; connection.Open(); }
+        private readonly string? sqlServer;
+        // sqlServer != null => real SQL Server database (migrations applied); otherwise SQLite in-memory (EnsureCreated).
+        public App(bool withCloudinary = false, string? sqlServer = null)
+        {
+            this.withCloudinary = withCloudinary; this.sqlServer = sqlServer;
+            if (sqlServer is null) connection.Open();
+        }
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
@@ -54,7 +60,7 @@ public sealed partial class TourFlowTests
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
-                services.AddDbContext<TripOpsDbContext>(o => o.UseSqlite(connection));
+                services.AddDbContext<TripOpsDbContext>(o => { if (sqlServer is null) o.UseSqlite(connection); else o.UseSqlServer(sqlServer); });
                 services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
                 if (withCloudinary) services.AddHttpClient<CloudinaryStorage>().ConfigurePrimaryHttpMessageHandler(() => Cloud);
             });
@@ -63,7 +69,8 @@ public sealed partial class TourFlowTests
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            if (sqlServer is null) await db.Database.EnsureCreatedAsync();
+            else await db.Database.MigrateAsync();
             foreach (var (id, role) in new[] { ("agency", UserRole.TravelAgency), ("other", UserRole.TravelAgency),
                 ("pending", UserRole.TravelAgency), ("provider", UserRole.Provider), ("customer", UserRole.Customer), ("admin", UserRole.Admin) })
             {
@@ -108,7 +115,7 @@ public sealed partial class TourFlowTests
             Activities: [new("Gardens", EstimatedTime: TimeSpan.FromHours(9))],
             Meals: [new("lunch", "Restaurant"), new("lunch", "Alternative", IsDefault: false, PriceDifference: -10000)],
             Accommodations: [new("Hotel", "Da Lat"), new("Premium", "Da Lat", IsDefault: false, PriceDifference: 100000)]),
-            new(2, "Departure")]);
+            new(2, "Departure")], ProvinceCodes: ["LAM_DONG"]);
     private static async Task<T> Read<T>(HttpResponseMessage response, HttpStatusCode expected = HttpStatusCode.OK)
     {
         Assert.True(response.StatusCode == expected, $"Expected {expected}, got {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
@@ -462,5 +469,257 @@ public sealed partial class TourFlowTests
         (await invalidClient.PostAsJsonAsync("/api/v1/auth/login", new { email = "agency@example.test", password = "TourTest123!" })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await invalidClient.PostAsJsonAsync("/api/v1/agency/ai/itinerary-drafts", new AiDraftRequest("Da Lat", 2))).StatusCode);
         await app.Inspect(async db => Assert.Equal(1, await db.Tours.CountAsync()));
+    }
+
+    [Fact]
+    public async Task Tour_multi_provinces_save_reload_edit_search_validation_and_legacy_compatibility()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var agency = await app.Login("agency");
+        using var anonymous = app.CreateClient();
+
+        // 1. Draft without provinces is allowed
+        var draftWithoutProvinces = await Create(agency, Complete("Draft Without Provinces") with { ProvinceCodes = null });
+        Assert.Equal("draft", draftWithoutProvinces.Status);
+        Assert.Empty(draftWithoutProvinces.Configuration.ProvinceCodes ?? []);
+
+        // 2. Validation and publish/complete reject missing provinces
+        var validation = await agency.GetFromJsonAsync<TourValidationResult>($"{Root}/{draftWithoutProvinces.Id}/validation");
+        Assert.False(validation!.IsValid);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/complete", new TourCommand(draftWithoutProvinces.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/publish", new TourCommand(draftWithoutProvinces.Version))).StatusCode);
+
+        // 3. Invalid or duplicate province codes are rejected with 422
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
+            new UpdateTourRequest(draftWithoutProvinces.Version, Complete() with { ProvinceCodes = ["UNKNOWN_PROVINCE"] }, "Invalid province"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
+            new UpdateTourRequest(draftWithoutProvinces.Version, Complete() with { ProvinceCodes = ["LAM_DONG", "lam_dong"] }, "Duplicate province"))).StatusCode);
+
+        // 4. Update with 2 provinces (LAM_DONG, KHANH_HOA) and free-text Destination
+        var updated = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
+            new UpdateTourRequest(draftWithoutProvinces.Version, Complete("Đà Lạt - Nha Trang Liên Tuyến") with
+            {
+                Destination = "Đà Lạt - Nha Trang",
+                ProvinceCodes = ["LAM_DONG", "KHANH_HOA"]
+            }, "Add two provinces")));
+        Assert.Equal(["LAM_DONG", "KHANH_HOA"], updated.Configuration.ProvinceCodes!);
+        Assert.Equal("Đà Lạt - Nha Trang", updated.Configuration.Destination);
+
+        var reloaded = await agency.GetFromJsonAsync<TourDto>($"{Root}/{updated.Id}");
+        Assert.Equal(["LAM_DONG", "KHANH_HOA"], reloaded!.Configuration.ProvinceCodes!);
+
+        // 5. Publish and search by each province code
+        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{updated.Id}/publish", new TourCommand(updated.Version)));
+        Assert.Equal("completed", published.Status);
+        Assert.Equal("public", published.Visibility);
+
+        var byLamDong = await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=LAM_DONG");
+        Assert.Single(byLamDong!.Items);
+        Assert.Equal(["LAM_DONG", "KHANH_HOA"], byLamDong.Items[0].ProvinceCodes!);
+
+        var byKhanhHoa = await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=KHANH_HOA");
+        Assert.Single(byKhanhHoa!.Items);
+
+        var byDaNang = await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=DA_NANG");
+        Assert.Empty(byDaNang!.Items);
+
+        // 6. Edit province list (remove KHANH_HOA, add BINH_THUAN) and verify no orphan rows remain
+        var editedProvinces = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{published.Id}",
+            new UpdateTourRequest(published.Version, published.Configuration with { ProvinceCodes = ["LAM_DONG", "BINH_THUAN"] }, "Swap Khanh Hoa for Binh Thuan")));
+        Assert.Equal(["LAM_DONG", "BINH_THUAN"], editedProvinces.Configuration.ProvinceCodes!);
+        await app.Inspect(async db =>
+        {
+            var rows = await db.TourProvinces.Where(p => p.TourId == published.Id).Select(p => p.ProvinceCode).OrderBy(c => c).ToListAsync();
+            Assert.Equal(["BINH_THUAN", "LAM_DONG"], rows);
+        });
+
+        // 7. Legacy tour without provinces remains readable and editable, and requires provinces only on publish
+        int legacyId = 0;
+        await app.Inspect(async db =>
+        {
+            var legacy = new Tour
+            {
+                AgencyId = "agency",
+                Code = "LEGACY-001",
+                Name = "Legacy Da Lat Tour",
+                Destination = "Đà Lạt",
+                DurationDays = 1,
+                DurationNights = 0,
+                BasePrice = 900000,
+                MinGuests = 2,
+                MaxGuests = 20,
+                CancellationPolicy = "Legacy policy",
+                Status = TourStatus.Draft,
+                Visibility = TourVisibility.Hidden,
+                Version = 1,
+                PricingTiers = [new TourPricingTier { AgencyId = "agency", Name = "Adult", MinAge = 0, MaxAge = 100, PricePerGuest = 900000 }],
+                Timelines = [new TourTimeline { DayNumber = 1, Title = "Day 1" }]
+            };
+            db.Tours.Add(legacy);
+            await db.SaveChangesAsync();
+            legacyId = legacy.Id;
+        });
+        var legacyDto = await agency.GetFromJsonAsync<TourDto>($"{Root}/{legacyId}");
+        Assert.Equal("Legacy Da Lat Tour", legacyDto!.Configuration.Name);
+        Assert.Empty(legacyDto.Configuration.ProvinceCodes ?? []);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{legacyId}/publish", new TourCommand(legacyDto.Version))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Candidate_agencies_by_province_deduplicates_agency_with_multiple_matching_tours()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var agency = await app.Login("agency");
+        using var other = await app.Login("other");
+
+        // 'other' agency publishes 2 tours in LAM_DONG and leaves 1 as draft
+        var otherTour1 = await Create(other, Complete("Other Tour 1") with { ProvinceCodes = ["LAM_DONG", "KHANH_HOA"] });
+        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour1.Id}/publish", new TourCommand(otherTour1.Version)));
+
+        var otherTour2 = await Create(other, Complete("Other Tour 2") with { ProvinceCodes = ["LAM_DONG"] });
+        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour2.Id}/publish", new TourCommand(otherTour2.Version)));
+
+        await Create(other, Complete("Other Draft Tour") with { ProvinceCodes = ["LAM_DONG"] });
+
+        // 'agency' also publishes 2 tours in LAM_DONG
+        var selfTour1 = await Create(agency, Complete("Self Tour 1") with { ProvinceCodes = ["LAM_DONG"] });
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour1.Id}/publish", new TourCommand(selfTour1.Version)));
+
+        var selfTour2 = await Create(agency, Complete("Self Tour 2") with { ProvinceCodes = ["LAM_DONG", "DA_NANG"] });
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour2.Id}/publish", new TourCommand(selfTour2.Version)));
+
+        // Query excluding self (default excludeSelf=true)
+        var candidatesExcludingSelf = await agency.GetFromJsonAsync<CandidateAgencyDto[]>($"{Root}/candidate-agencies?provinceCode=LAM_DONG");
+        var singleOther = Assert.Single(candidatesExcludingSelf!);
+        Assert.Equal("other", singleOther.AgencyId);
+        Assert.Equal(2, singleOther.MatchedTourCount);
+        Assert.Equal(["LAM_DONG"], singleOther.MatchedProvinceCodes);
+
+        // Query including self (excludeSelf=false) -> both agencies appear once each
+        var candidatesIncludingSelf = await agency.GetFromJsonAsync<CandidateAgencyDto[]>($"{Root}/candidate-agencies?provinceCode=LAM_DONG&excludeSelf=false");
+        Assert.Equal(2, candidatesIncludingSelf!.Length);
+        Assert.Equal(2, candidatesIncludingSelf.Select(a => a.AgencyId).Distinct().Count());
+    }
+
+    // Reads tour_provinces with raw SQL (not through the EF navigation) so the assertion proves what is stored in the table.
+    private static async Task<string[]> StoredProvinceRows(App app, int tourId)
+    {
+        string[] rows = [];
+        await app.Inspect(async db => rows = await db.Database
+            .SqlQuery<string>($"SELECT province_code AS Value FROM tour_provinces WHERE tour_id = {tourId} ORDER BY province_code").ToArrayAsync());
+        return rows;
+    }
+
+    // Shared persistence scenario: runs on SQLite in-memory (always) and on a real SQL Server database (opt-in).
+    private static async Task ProvincePersistenceScenario(App app)
+    {
+        await app.Initialize();
+        using var agency = await app.Login("agency"); using var anonymous = app.CreateClient();
+
+        // Create with two codes -> exactly two rows in tour_provinces.
+        var tour = await Create(agency, Complete("Persisted provinces") with { ProvinceCodes = ["LAM_DONG", "KHANH_HOA"] });
+        Assert.Equal(["KHANH_HOA", "LAM_DONG"], await StoredProvinceRows(app, tour.Id));
+        Assert.Equal(["KHANH_HOA", "LAM_DONG"], (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!.Configuration.ProvinceCodes!.Order(StringComparer.Ordinal).ToArray());
+
+        // Stale version: nothing changes in the table (whole write is one SaveChanges transaction).
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version + 5, Complete() with { ProvinceCodes = ["DA_NANG"] }, "Stale"))).StatusCode);
+        Assert.Equal(["KHANH_HOA", "LAM_DONG"], await StoredProvinceRows(app, tour.Id));
+
+        // Invalid code: rejected, table unchanged.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, Complete() with { ProvinceCodes = ["LAM_DONG", "NOT_A_PROVINCE"] }, "Invalid"))).StatusCode);
+        Assert.Equal(["KHANH_HOA", "LAM_DONG"], await StoredProvinceRows(app, tour.Id));
+
+        // Replace the set: old rows removed, new rows added.
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, tour.Configuration with { ProvinceCodes = ["DA_NANG", "QUANG_NAM", "LAM_DONG"] }, "Replace provinces")));
+        Assert.Equal(["DA_NANG", "LAM_DONG", "QUANG_NAM"], await StoredProvinceRows(app, tour.Id));
+        await app.Inspect(async db => Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM tour_provinces").SingleAsync()));
+
+        // Read back through API, publish without admin, then filter by every province code.
+        Assert.Equal(["DA_NANG", "LAM_DONG", "QUANG_NAM"], (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!.Configuration.ProvinceCodes!.Order(StringComparer.Ordinal).ToArray());
+        tour = await Command(agency, tour, "publish");
+        Assert.Equal("public", tour.Visibility);
+        foreach (var code in new[] { "DA_NANG", "LAM_DONG", "QUANG_NAM" })
+        {
+            var page = await anonymous.GetFromJsonAsync<TourPage<TourListItem>>($"/api/v1/tours?provinceCode={code}");
+            Assert.Equal(tour.Id, Assert.Single(page!.Items).Id);
+        }
+        Assert.Empty((await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=KHANH_HOA"))!.Items);
+        Assert.Equal(3, (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!.Configuration.ProvinceCodes!.Length);
+
+        // Removing every province is allowed for a draft, deletes all rows, and publishing is then rejected.
+        var cleared = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Version, tour.Configuration with { ProvinceCodes = [] }, "Clear")));
+        Assert.Empty(await StoredProvinceRows(app, tour.Id));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(cleared.Version))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Province_codes_are_written_replaced_and_read_from_tour_provinces_table_on_SQLite()
+    {
+        await using var app = new App();
+        await ProvincePersistenceScenario(app);
+        // SQLite provider: EnsureCreated schema from the EF model, not the SQL Server migration.
+        await app.Inspect(async db => {
+            Assert.Equal("Microsoft.EntityFrameworkCore.Sqlite", db.Database.ProviderName);
+            Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sqlite_master WHERE type='table' AND name='tour_provinces'").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM pragma_foreign_key_list('tour_provinces') WHERE \"table\"='tours' AND \"from\"='tour_id'").SingleAsync());
+            Assert.True(await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM pragma_index_list('tour_provinces') WHERE \"unique\"=1").SingleAsync() >= 1);
+        });
+    }
+
+    private sealed class SqlServerFactAttribute : FactAttribute
+    {
+        public const string Variable = "TRIPOPS_TEST_SQLSERVER";
+        public SqlServerFactAttribute() { if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Variable))) Skip = $"Set {Variable} to a SQL Server instance (e.g. Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true) to run."; }
+    }
+
+    // Opt-in: creates a throw-away database "TripOps_Test_<guid>" on the given instance, applies the real EF migrations, then drops it.
+    [SqlServerFact]
+    public async Task Province_codes_are_persisted_in_real_SQL_Server_schema_created_by_migrations()
+    {
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(SqlServerFactAttribute.Variable)!)
+            { InitialCatalog = $"TripOps_Test_{Guid.NewGuid():N}" };
+        var connectionString = builder.ConnectionString;
+        try
+        {
+            await using var app = new App(sqlServer: connectionString);
+            await ProvincePersistenceScenario(app);
+            await app.Inspect(async db => {
+                Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", db.Database.ProviderName);
+                Assert.Contains("20261101130000_AddTourProvinces", await db.Database.GetAppliedMigrationsAsync());
+                Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='tour_provinces' AND COLUMN_NAME='province_code' AND DATA_TYPE='nvarchar' AND CHARACTER_MAXIMUM_LENGTH=32 AND IS_NULLABLE='NO'").SingleAsync());
+                Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.foreign_keys WHERE name='FK_tour_provinces_tours_tour_id' AND parent_object_id=OBJECT_ID('tour_provinces') AND referenced_object_id=OBJECT_ID('tours')").SingleAsync());
+                Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.indexes WHERE name='IX_tour_provinces_tour_id_province_code' AND is_unique=1 AND object_id=OBJECT_ID('tour_provinces')").SingleAsync());
+                // The unique index rejects a duplicate (tour_id, province_code) pair even when written directly.
+                var tourId = await db.Tours.Select(t => t.Id).FirstAsync();
+                db.TourProvinces.Add(new TourProvince { TourId = tourId, ProvinceCode = "LAM_DONG" });
+                db.TourProvinces.Add(new TourProvince { TourId = tourId, ProvinceCode = "LAM_DONG" });
+                await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            });
+        }
+        finally
+        {
+            await using var cleanup = new TripOpsDbContext(new DbContextOptionsBuilder<TripOpsDbContext>().UseSqlServer(connectionString).Options);
+            await cleanup.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Province_persistence_scenario_is_not_a_source_text_check()
+    {
+        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
+        var tour = await Create(agency, Complete() with { ProvinceCodes = ["LAM_DONG"] });
+        // Only the relational table is changed: the API must read the new set from tour_provinces rows.
+        await app.Inspect(async db => {
+            db.TourProvinces.Add(new TourProvince { TourId = tour.Id, ProvinceCode = "DA_NANG" });
+            await db.SaveChangesAsync();
+        });
+        var reloaded = await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}");
+        Assert.Contains("DA_NANG", reloaded!.Configuration.ProvinceCodes!);
+        Assert.Contains("LAM_DONG", reloaded.Configuration.ProvinceCodes!);
+
     }
 }

@@ -428,20 +428,26 @@ function Application() {
   };
 
   const handleViewUserBookingDetail = async (booking: Booking) => {
-    setSelectedUserBooking(booking);
-    setCurrentPage("user-booking-detail");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const detailHash = `#/my-bookings/${encodeURIComponent(booking.id)}`;
+    navigateForward(() => {
+      setSelectedUserBooking(booking);
+      setCurrentPage("user-booking-detail");
+      if (window.location.hash !== detailHash) window.location.hash = detailHash;
+    });
     const numericId = Number(booking.id);
     if (Number.isSafeInteger(numericId) && numericId > 0) {
       try {
         const detail = await getBookingDetail(numericId);
         const converted = fromApiBooking(detail, tours, currentUser);
-        setSelectedUserBooking(converted);
+        // Do not reopen the detail if the user returned to the list meanwhile.
+        if (window.location.hash === detailHash) setSelectedUserBooking(converted);
         setBookings((prev) =>
           prev.map((b) => (b.id === booking.id ? converted : b)),
         );
       } catch (err) {
         console.error("Failed to fetch fresh booking detail", err);
+        if (window.location.hash === detailHash)
+          toast.error(err instanceof Error ? err.message : "Không thể tải thông tin đơn đặt tour.");
       }
     }
   };
@@ -628,13 +634,19 @@ function Application() {
 
   // Admin / Company actions
   const handleApproveBooking = async (bookingId: string) => {
-    const updated = fromApiBooking(
-      await decideBooking(Number(bookingId), "approve"),
-      tours,
-      currentUser,
-    );
-    setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
-    toast.success("Đã xác nhận đơn đặt tour trên máy chủ.");
+    try {
+      const updated = fromApiBooking(
+        await decideBooking(Number(bookingId), "approve"),
+        tours,
+        currentUser,
+      );
+      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+      toast.success("Đã xác nhận đơn đặt tour trên máy chủ.");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không duyệt được đơn. Vui lòng thử lại.");
+      return false;
+    }
   };
 
   const handleUpdateBookingAgencies = (..._args: any[]) => {
@@ -1441,11 +1453,7 @@ function Application() {
               systemBank={systemBankAccount}
               onSubmitRefundRequest={handleCreateRefundRequest}
               onBack={() => {
-                if (window.history.length > 1) {
-                  window.history.back();
-                } else {
-                  handleNavigate("my-bookings");
-                }
+                goBack(() => handleNavigate("my-bookings"));
               }}
               onCancelBooking={handleCancelBooking}
               onPayPaymentRequest={handlePayPaymentRequest}
