@@ -252,6 +252,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
     public async Task<BookingDto> Decide(string agencyId, int id, BookingDecisionRequest request, CancellationToken ct)
     {
+        // Khóa đơn giống luồng phương án để Duyệt không chạy song song với gửi/chấp nhận phương án.
+        await using var transaction = await repository.BeginSnapshotChange(id, ct);
         var booking = await repository.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.Tour?.AgencyId != agencyId && !booking.BookingAgencies.Any(ba => ba.AgencyId == agencyId))
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền duyệt đơn này.");
@@ -261,6 +263,37 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         if (request.Decision == "approve")
         {
+            // Phương án A: Duyệt khi chưa có bản chốt = Agency đồng ý theo yêu cầu ban đầu.
+            // Hệ thống tạo phiên bản mới loại "agreed" (không sửa v1) để làm căn cứ hợp đồng/thanh toán.
+            if (!booking.Snapshots.Any(s => s.SnapshotType == "agreed"))
+            {
+                var pending = booking.Snapshots.Where(s => s.SnapshotType == "proposal")
+                    .OrderByDescending(s => s.Version).FirstOrDefault();
+                if (pending is not null)
+                    throw new BookingException(409, pending.Events.Any(e => e.EventType == "changes_requested")
+                        ? $"Khách đã yêu cầu chỉnh sửa phương án {pending.Version}. Vui lòng gửi phương án mới thay vì duyệt."
+                        : $"Phương án {pending.Version} đang chờ khách phản hồi. Chỉ duyệt được sau khi khách chấp nhận.");
+
+                const string approvalNote = "Công ty lữ hành đồng ý theo yêu cầu đặt tour ban đầu.";
+                var payload = ComposeSnapshotPayload(booking, approvalNote);
+                var now = DateTime.UtcNow;
+                var agreedSnapshot = new BookingSnapshot
+                {
+                    BookingId = booking.Id,
+                    Version = await repository.GetMaxSnapshotVersion(booking.Id, ct) + 1,
+                    SnapshotType = "agreed",
+                    SnapshotData = SerializeSnapshot(payload),
+                    SourceTourVersion = payload.SourceTourVersion,
+                    CreatedAt = now,
+                    CreatedBy = agencyId,
+                    AcceptedAt = now,
+                    AcceptedBy = agencyId
+                };
+                booking.Snapshots.Add(agreedSnapshot); // đơn đang được theo dõi -> EF thêm mới, DTO thấy ngay bản chốt
+                if (booking.CustomerId is not null)
+                    agreedSnapshot.Events.Add(new BookingProposalEvent { ActorId = agencyId, RecipientId = booking.CustomerId,
+                        EventType = "proposal_accepted", Message = approvalNote });
+            }
             booking.Status = BookingStatus.Confirmed;
         }
         else if (request.Decision == "reject")
@@ -271,6 +304,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         }
 
         await repository.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return ToDto(booking);
     }
 
@@ -449,33 +483,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         var agencyNote = string.IsNullOrWhiteSpace(request?.Note) ? null : request.Note.Trim();
 
-        // Preserve the catalogue terms that this booking was based on, even if the
-        // public tour has since changed. Refresh operational choices/prices from the booking.
-        var source = booking.Snapshots.Where(s => s.SnapshotType == "initial_request")
-            .OrderBy(s => s.Version).FirstOrDefault()
-            ?? booking.Snapshots.OrderByDescending(s => s.Version).FirstOrDefault();
-        var terms = source is null ? null : ToSnapshotDto(source).SnapshotData;
-        var current = BuildSnapshotPayload(booking, booking.Tour!, booking.Tour!.Version, agencyNote: agencyNote);
-        var payload = terms is null ? current : terms with
-        {
-            SchemaVersion = current.SchemaVersion,
-            StartDate = current.StartDate,
-            EndDate = current.EndDate,
-            TotalAmount = current.TotalAmount,
-            DepositAmount = current.DepositAmount,
-            Passengers = current.Passengers,
-            Itinerary = current.Itinerary,
-            Hotels = current.Hotels,
-            PaymentConditions = current.PaymentConditions,
-            CustomerNotes = current.CustomerNotes,
-            AgencyNote = current.AgencyNote,
-            GeneratedAt = current.GeneratedAt
-        };
-        var json = System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions
-        {
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            WriteIndented = false
-        });
+        var payload = ComposeSnapshotPayload(booking, agencyNote);
+        var json = SerializeSnapshot(payload);
 
         var proposalSnapshot = new BookingSnapshot
         {
@@ -622,6 +631,39 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             incident.Title, incident.Description, Severity(incident.Description),
             incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
     }
+
+    // Giữ điều khoản catalogue mà đơn đã dựa vào (từ v1), dù tour công khai đã đổi sau đó;
+    // làm mới ngày, hành khách, lịch trình, khách sạn, giá theo dữ liệu đơn hiện tại.
+    private static BookingSnapshotPayload ComposeSnapshotPayload(Booking booking, string? agencyNote)
+    {
+        var source = booking.Snapshots.Where(s => s.SnapshotType == "initial_request")
+            .OrderBy(s => s.Version).FirstOrDefault()
+            ?? booking.Snapshots.OrderByDescending(s => s.Version).FirstOrDefault();
+        var terms = source is null ? null : ToSnapshotDto(source).SnapshotData;
+        var current = BuildSnapshotPayload(booking, booking.Tour!, booking.Tour!.Version, agencyNote: agencyNote);
+        return terms is null ? current : terms with
+        {
+            SchemaVersion = current.SchemaVersion,
+            StartDate = current.StartDate,
+            EndDate = current.EndDate,
+            TotalAmount = current.TotalAmount,
+            DepositAmount = current.DepositAmount,
+            Passengers = current.Passengers,
+            Itinerary = current.Itinerary,
+            Hotels = current.Hotels,
+            PaymentConditions = current.PaymentConditions,
+            CustomerNotes = current.CustomerNotes,
+            AgencyNote = current.AgencyNote,
+            GeneratedAt = current.GeneratedAt
+        };
+    }
+
+    private static string SerializeSnapshot(BookingSnapshotPayload payload) =>
+        System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        });
 
     // Schema 2: tách AgencyNote khỏi CustomerNotes và lưu 3 ghi chú hành khách.
     // Bản chụp cũ (schema 1) giữ nguyên, không ghi đè.

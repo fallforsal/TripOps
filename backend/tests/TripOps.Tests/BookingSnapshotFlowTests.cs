@@ -437,6 +437,56 @@ public sealed class BookingSnapshotFlowTests
             Assert.Equal(legacyJson, (await db.BookingSnapshots.AsNoTracking().SingleAsync(s=>s.Id==legacyId)).SnapshotData);
         }
     }
+    private static Task<HttpResponseMessage> Approve(HttpClient agency, int id) =>
+        agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/decision", new BookingDecisionRequest("approve", null));
+    [Fact] public async Task Approve_WithoutProposal_AgreesOnInitialRequest() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer);
+        var initial=(await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{id}"))!.InitialRequestSnapshot!;
+        var response=await Approve(agency,id);
+        response.EnsureSuccessStatusCode();
+        var booking=(await response.Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal("Confirmed", booking.Status);
+        Assert.Equal("agreed", booking.SnapshotStatus);
+        var agreed=booking.AgreedSnapshot!;
+        Assert.Equal(2, agreed.Version);
+        Assert.Equal("agency1", agreed.CreatedBy);
+        Assert.Equal("agency1", agreed.AcceptedBy);
+        Assert.NotNull(agreed.AcceptedAt);
+        Assert.Equal("REVIEW ONLY", agreed.SnapshotData.CustomerNotes);
+        Assert.False(string.IsNullOrWhiteSpace(agreed.SnapshotData.AgencyNote));
+        Assert.Equal(initial.SnapshotData.TotalAmount, agreed.SnapshotData.TotalAmount);
+        Assert.Equal("An chay", Assert.Single(agreed.SnapshotData.Passengers).RestaurantNote);
+        // v1 giữ nguyên, chỉ thêm v2.
+        var history=(await customer.GetFromJsonAsync<List<BookingSnapshotSummaryDto>>($"/api/v1/bookings/{id}/snapshots"))!;
+        Assert.Equal(2, history.Count);
+        Assert.Equal("initial_request", history.Single(s=>s.Version==1).SnapshotType);
+        // Khách nhận thông báo; sau khi chốt không gửi phương án thường, không duyệt lại.
+        var feed=await customer.GetFromJsonAsync<TripOps.Api.Controllers.BookingNotificationFeed>("/api/v1/me/booking-notifications");
+        var item=Assert.Single(feed!.Items);
+        Assert.Equal("proposal_accepted", item.EventType); Assert.Equal(2, item.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{id}/proposals", new CreateProposalRequest("v3"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Approve(agency,id)).StatusCode);
+        Assert.Equal(2, (await customer.GetFromJsonAsync<List<BookingSnapshotSummaryDto>>($"/api/v1/bookings/{id}/snapshots"))!.Count);
+    }
+    [Fact] public async Task Approve_IsBlockedWhileProposalAwaitsCustomer() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer);
+        var p2=await Proposal(agency,id,"v2");
+        Assert.Equal(HttpStatusCode.Conflict, (await Approve(agency,id)).StatusCode);
+        (await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p2.Id}/request-changes", new { message = "Đổi 5 sao" })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await Approve(agency,id)).StatusCode);
+        var p3=await Proposal(agency,id,"v3");
+        (await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{p3.Id}/accept", new {})).EnsureSuccessStatusCode();
+        var approved=await Approve(agency,id);
+        approved.EnsureSuccessStatusCode();
+        var booking=(await approved.Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal("Confirmed", booking.Status);
+        Assert.Equal(p3.Id, booking.AgreedSnapshot!.Id);   // không tạo thêm bản chốt
+        Assert.Equal(3, (await customer.GetFromJsonAsync<List<BookingSnapshotSummaryDto>>($"/api/v1/bookings/{id}/snapshots"))!.Count);
+    }
     [Fact] public async Task InitialSnapshot_MustUseActualTourVersion() {
         using var app = new App(); await app.Initialize();
         using(var scope=app.Services.CreateScope()) {

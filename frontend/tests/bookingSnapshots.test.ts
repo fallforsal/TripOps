@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fromApiBooking } from "../src/app/services/bookingAdapter.ts";
-import { acceptedSnapshotFromBooking, selectSnapshotVersions, proposalVersionStyle, snapshotNotes, snapshotHasPassengerNotes, contractFromAgreedSnapshot } from "../src/app/services/bookingSnapshots.ts";
+import { acceptedSnapshotFromBooking, selectSnapshotVersions, proposalVersionStyle, snapshotNotes, snapshotHasPassengerNotes, contractFromAgreedSnapshot, agreedByAgency } from "../src/app/services/bookingSnapshots.ts";
 
 test("version colors remain consistent across selection and proposal version numbers", () => {
   for (const selected of [true, false]) {
@@ -120,4 +120,13 @@ test("contract is built from the agreed snapshot only", () => {
   assert.equal(contract.passengers.length, 3);
   assert.equal(contract.startDate, "2026-12-15");
   assert.equal(contract.cancellationPolicy, "Chính sách ban đầu");
+});
+
+test("agreement made by agency approval is distinguished from customer acceptance", () => {
+  const byCustomer = { ...agreed, createdBy: "agency", acceptedBy: "customer" };
+  const byAgency = { ...agreed, createdBy: "agency", acceptedBy: "agency" };
+  assert.equal(agreedByAgency(byCustomer), false);
+  assert.equal(agreedByAgency(byAgency), true);
+  assert.equal(agreedByAgency({ ...byAgency, snapshotType: "proposal" }), false);
+  assert.equal(contractFromAgreedSnapshot("BK-TEST", byAgency)!.agreedByAgency, true);
 });

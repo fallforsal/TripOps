@@ -5,8 +5,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/pop
 import { getBookingNotifications, readBookingNotification, type BookingNotification } from "@/app/services/wf05Bookings";
 
 const titles = { proposal_sent: "Có phương án mới từ công ty lữ hành", proposal_accepted: "Khách đã chấp nhận phương án", changes_requested: "Khách yêu cầu chỉnh sửa phương án" };
+// Khách chỉ nhận "proposal_accepted" khi Agency duyệt đơn theo yêu cầu ban đầu (Agency là người chốt).
+const customerTitles = { ...titles, proposal_accepted: "Công ty lữ hành đã xác nhận đơn theo yêu cầu của bạn" };
 
-export function BookingNotificationBell({ onOpenBooking }: { onOpenBooking: (id: number) => void }) {
+export function BookingNotificationBell({ onOpenBooking, viewer = "agency" }: { onOpenBooking: (id: number) => void; viewer?: "customer" | "agency" }) {
   const [items, setItems] = useState<BookingNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [error, setError] = useState("");
@@ -48,7 +50,7 @@ export function BookingNotificationBell({ onOpenBooking }: { onOpenBooking: (id:
       {loading ? <p className="p-4 text-sm text-slate-500">Đang tải thông báo...</p> : !error && !items.length ? <p className="p-4 text-sm text-slate-500">Chưa có thông báo về phương án đặt tour.</p> : null}
       <div className="max-h-96 overflow-y-auto">{items.map(item => <button key={item.id} onClick={() => void openItem(item)}
         className={`block w-full border-b p-4 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-teal-600 ${!item.readAt ? "bg-amber-50" : "bg-white"}`}>
-        <span className="block font-medium">{titles[item.eventType]}</span>
+        <span className="block font-medium">{(viewer === "customer" ? customerTitles : titles)[item.eventType]}</span>
         <span className="mt-1 block text-xs text-slate-600">{item.bookingCode} · Phiên bản {item.version} · {new Date(item.createdAt).toLocaleString("vi-VN")}</span>
         {item.message && <span className="mt-2 block whitespace-pre-line text-slate-700">{item.message}</span>}
       </button>)}</div>
