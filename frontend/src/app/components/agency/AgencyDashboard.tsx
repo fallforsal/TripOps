@@ -12,7 +12,9 @@ import {
   BookingAssignedGuide,
   BookingAttractionCheckin,
   BookingIncident,
+  ProviderGroupReservationRequest,
 } from "@/app/types";
+import { mockTourCompanies } from "@/app/data/mockData";
 import { AgencyLayout } from "./AgencyLayout";
 import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement, TourFormPage } from "./AgencyTourManagement";
@@ -22,9 +24,11 @@ import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
 import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
+import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface AgencyDashboardProps {
+  providerGroupRequests?: ProviderGroupReservationRequest[];
   currentUser: User;
   company: TourCompany;
   tours: Tour[];
@@ -37,6 +41,7 @@ interface AgencyDashboardProps {
   onCreateTour: (tour: Omit<Tour, "id">) => void;
   onEditTour: (tourId: string, tour: Partial<Tour>) => void;
   onDeleteTour: (tourId: string) => void;
+  onDuplicateTour?: (tourId:string,name:string)=>Promise<void>;
   onApproveBooking: (bookingId: string) => void;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
@@ -52,9 +57,7 @@ interface AgencyDashboardProps {
   onUpdateCustomRequest?: (id: string, update: Partial<CustomTourRequest>) => void;
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
-  onAddGuide?: (guideData: Omit<User, "id">) => void;
-  onUpdateGuide?: (guideId: string, update: Partial<User>) => void;
-  onRemoveGuide?: (guideId: string) => void;
+  onGuidesChanged?: () => void | Promise<void>;
   onLogout?: () => void;
 }
 
@@ -71,6 +74,7 @@ export function AgencyDashboard({
   onCreateTour,
   onEditTour,
   onDeleteTour,
+  onDuplicateTour,
   onApproveBooking,
   onRejectBooking,
   onAssignGuide,
@@ -86,9 +90,7 @@ export function AgencyDashboard({
   onUpdateCustomRequest,
   onRestoreTourVersion,
   onViewTour,
-  onAddGuide,
-  onUpdateGuide,
-  onRemoveGuide,
+  onGuidesChanged,
   onLogout,
 }: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
@@ -264,7 +266,7 @@ export function AgencyDashboard({
             company={company}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
-            onDeleteTour={onDeleteTour}
+            onDeleteTour={onDeleteTour} onDuplicateTour={onDuplicateTour}
             onRestoreTourVersion={onRestoreTourVersion}
           />
         );
@@ -273,7 +275,7 @@ export function AgencyDashboard({
           return (
             <AgencyBookingDetailPage
               booking={currentSelectedBooking}
-              guides={companyGuides}
+              guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}
               companyId={company.id}
               onBack={() => setSelectedBookingId(null)}
@@ -295,7 +297,7 @@ export function AgencyDashboard({
         return (
           <AgencyBookingManagement
             bookings={companyBookings}
-            guides={companyGuides}
+            guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
             companyName={company.name}
             onApproveBooking={onApproveBooking}
             onRejectBooking={onRejectBooking}
@@ -315,17 +317,17 @@ export function AgencyDashboard({
             companyName={company.name}
           />
         );
+      case "supplier-directory":
+        return (
+          <AgencySupplierDirectory key={company.id} />
+        );
       case "guides":
         return (
           <AgencyGuideManagement
-            guides={companyGuides}
-            tours={companyTours}
-            guideSchedules={guideSchedules}
-            companyId={company.id}
-            companyName={company.name}
-            onAddGuide={onAddGuide}
-            onUpdateGuide={onUpdateGuide}
-            onRemoveGuide={onRemoveGuide}
+            companyId={company.id} companyName={company.name}
+            onGuidesChanged={onGuidesChanged}
+            onNavigateToBookings={() => setActiveSection("bookings")}
+            onViewBookingDetail={(id) => { setSelectedBookingId(id); setActiveSection("bookings"); }}
           />
         );
       case "custom-requests":
@@ -334,7 +336,7 @@ export function AgencyDashboard({
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}
-            allCompanies={allCompanies || []}
+            allCompanies={allCompanies || mockTourCompanies}
             onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
@@ -402,7 +404,7 @@ export function AgencyDashboard({
             tours={tours}
             customTourRequests={customTourRequests}
             bookings={bookings}
-            allCompanies={allCompanies || []}
+            allCompanies={allCompanies || mockTourCompanies}
             onAcceptInvitation={handleAcceptCoHostInvitation}
             onRejectInvitation={handleRejectCoHostInvitation}
             onViewTour={onViewTour}

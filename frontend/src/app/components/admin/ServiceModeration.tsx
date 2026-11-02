@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Service } from "@/app/types";
 import {
   CheckCircle,
@@ -43,6 +43,7 @@ export function ServiceModeration({
     | "fnb"
     | "transportation"
     | "activity"
+    | "attraction"
   >("all");
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [serviceToReject, setServiceToReject] =
@@ -285,9 +286,7 @@ export function ServiceModeration({
                 <div className="flex items-center gap-1 text-gray-600">
                   <Calendar className="w-4 h-4" />
                   <span>
-                    {new Date(
-                      service.createdAt,
-                    ).toLocaleDateString("vi-VN")}
+                    {service.createdAt ? new Date(service.createdAt).toLocaleDateString("vi-VN") : "Chưa có thông tin"}
                   </span>
                 </div>
                 <div className="text-[#075985] font-bold">

@@ -14,6 +14,7 @@ import {
   PenSquare,
   Handshake,
   Compass,
+  BookUser,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 
@@ -44,6 +45,7 @@ export function AgencyLayout({
     { id: "tours", label: "Quản lý Tour", icon: Package },
     { id: "bookings", label: "Đặt tour & Khách", icon: Calendar },
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
+    { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
     { id: "custom-requests", label: "Yêu cầu thiết kế riêng", icon: PenSquare },
     { id: "co-hosting", label: "Liên minh lữ hành", icon: Handshake, badge: coHostingBadgeCount },
@@ -182,7 +184,7 @@ export function AgencyLayout({
 
       {/* Main Container */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 ${
+        className={`min-w-0 flex-1 flex flex-col transition-all duration-300 ${
           collapsed ? "lg:ml-16" : "lg:ml-64"
         }`}
       >

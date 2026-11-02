@@ -26,3 +26,16 @@ Rollback cannot recover the original Hidden/Suspended distinction.
 
 Apply the migration through the normal database deployment process; it is not
 automatically applied at API startup.
+
+## WF02 direct publication (2026-10-25)
+
+An active approved Agency can create and edit a hidden draft. Once its configuration
+passes publication validation, the owning Agency publishes it directly as
+completed/public. Admin has no Tour approval or rejection action. Admin moderation
+can hide a published tour afterward. Editing or restoring makes a new draft/hidden
+version. Hiding requires a reason; archiving requires hidden visibility and keeps
+history. Every successful change appends an immutable, uniquely numbered snapshot.
+
+Public queries require completed/public, a noncustom tour and an active approved
+Agency. Legacy approval fields remain in the already applied schema for data
+compatibility, but the Tour API does not expose or enforce them. See [WF02](WF02.md).

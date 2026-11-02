@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Tour } from "@/app/types";
 import { X, Calendar, Users, MapPin, Handshake, ShieldCheck } from "lucide-react";
 

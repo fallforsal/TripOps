@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Booking, User, PaymentRequest } from "@/app/types";
 import {
   Calendar,
@@ -54,8 +54,9 @@ const statusMap: Record<string, { label: string; bg: string; text: string; borde
   rejected: { label: "Từ chối", bg: "bg-gray-100", text: "text-gray-700", border: "border-[#CBD5E1]" },
 };
 
-const paymentStatusMap: Record<string, { label: string; color: string; badgeBg: string }> = {
-  unpaid: { label: "Chưa thanh toán (Thanh toán sau)", color: "text-amber-800", badgeBg: "bg-amber-50 border-amber-200" },
+const paymentStatusMap: Record<NonNullable<Booking["paymentStatus"]>, { label: string; color: string; badgeBg: string }> = {
+  unpaid: { label: "Chưa thanh toán", color: "text-amber-800", badgeBg: "bg-amber-50 border-amber-200" },
+  partially_paid: { label: "Đã thanh toán một phần", color: "text-sky-800", badgeBg: "bg-sky-50 border-sky-200" },
   paid: { label: "Đã thanh toán", color: "text-emerald-700", badgeBg: "bg-emerald-50 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "text-[#EA580C]", badgeBg: "bg-[#F0F9FF] border-[#F97316]/30" },
 };
@@ -272,7 +273,9 @@ export function AgencyBookingManagement({
                     text: "text-gray-700",
                     border: "border-[#CBD5E1]",
                   };
-                  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? paymentStatusMap["unpaid"];
+                  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
+                    label: "Chưa xác định", color: "text-gray-700", badgeBg: "bg-gray-100 border-gray-200",
+                  };
                   const assignedGuide = guides.find((g) => g.id === booking.guideId);
                   const hasCustom = booking.hasLocationCustomization || (booking.customHotelChanges && booking.customHotelChanges.length > 0);
 

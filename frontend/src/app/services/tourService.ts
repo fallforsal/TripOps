@@ -72,7 +72,7 @@ export const searchTours = async (
       filteredTours = filteredTours.filter(
         (t) =>
           t.name.toLowerCase().includes(keyword) ||
-          t.description.toLowerCase().includes(keyword) ||
+          (t.description ?? "").toLowerCase().includes(keyword) ||
           t.destination.toLowerCase().includes(keyword),
       );
     }
@@ -125,6 +125,7 @@ export interface CreateTourRequest {
   price: number;
   description: string;
   image: string;
+  minGuests: number;
   maxGuests: number;
   highlights: string[];
   itinerary: any[];

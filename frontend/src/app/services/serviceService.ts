@@ -135,6 +135,7 @@ export const createService = async (
     const newService: Service = {
       id: "service-" + Date.now(),
       ...data,
+      category: data.category === "eatery" ? "fnb" : data.category,
       rating: 0,
       status: "pending",
       createdAt: new Date().toLocaleDateString("vi-VN"),
@@ -291,7 +292,7 @@ export const searchServices = async (
       filtered = filtered.filter(
         (s) =>
           s.name.toLowerCase().includes(keyword) ||
-          s.description.toLowerCase().includes(keyword),
+          (s.description ?? "").toLowerCase().includes(keyword),
       );
     }
 

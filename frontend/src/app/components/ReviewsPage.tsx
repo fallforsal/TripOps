@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Star, MapPin, Calendar, Quote, CheckCircle2 } from "lucide-react";
 
 interface ReviewsPageProps {
@@ -75,7 +75,7 @@ export function ReviewsPage({ onShowLogin }: ReviewsPageProps) {
       {/* Filter & Reviews List */}
       <section className="py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Destination tabs */}
           <div className="flex flex-wrap items-center gap-2 border-b border-[#CBD5E1] pb-4">
             <span className="text-xs text-[#475569] mr-2">Lọc theo điểm đến:</span>

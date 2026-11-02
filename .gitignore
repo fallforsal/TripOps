@@ -291,6 +291,7 @@ ServiceFabricBackup/
 *.mdf
 *.ldf
 *.ndf
+*.bak
 
 # Business Intelligence projects
 *.rdl.data
@@ -441,9 +442,32 @@ FodyWeavers.xsd
 **/__pycache__/
 *.pyc
 **/appsettings.Local.json
+/backend/appsettings.Development.json
+/backend/src/TripOps.Api/appsettings.Development.json
 **/local.properties
 **/Generated.xcconfig
 **/flutter_export_environment.sh
 **/ephemeral/
 **/Pods/
 **/.symlinks/
+
+# Local development media
+backend/src/TripOps.Api/App_Data/
+
+# Local AI Agents / Skills
+.agents/
+.agents
+
+# ===== Chong lo bi mat khi dung git add . =====
+# File cau hinh/bi mat chi de tren may
+**/secrets.json
+**/appsettings.*.Local.json
+*.pfx
+*.p12
+*.pem
+*.key
+# Backup DB, ket qua test/QA tam
+*.bak
+*.bacpac
+/output/
+/auth-register-flow.*

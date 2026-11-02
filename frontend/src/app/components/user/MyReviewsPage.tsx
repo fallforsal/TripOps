@@ -1,387 +1,259 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Star,
   MapPin,
   Calendar,
-  Edit,
+  Building2,
+  Users,
+  CheckCircle2,
+  Edit2,
   Trash2,
-  Save,
-  X,
-  User,
-  Mail,
-  Phone,
+  MessageSquare,
+  Plus,
 } from "lucide-react";
+import { PageHeader } from "@/app/components/customer/PageHeader";
+import { EmptyState } from "@/app/components/customer/EmptyState";
+import { Button } from "@/app/components/ui/button";
 
-interface Review {
+interface SubmittedReview {
   id: string;
+  bookingId: string;
   tourName: string;
-  tourDestination: string;
-  tourStartDate: string;
-  tourEndDate: string;
-  guideName: string;
-  guidePhone: string;
-  numberOfGuests: number;
-  totalPrice: number;
+  destination: string;
+  agencyName: string;
+  departureDate: string;
   rating: number;
   comment: string;
-  reviewDate: string;
-  tourImage: string;
+  createdAt: string;
+  agencyReply?: string;
 }
 
-const mockReviews: Review[] = [
+const initialSubmittedReviews: SubmittedReview[] = [
   {
-    id: "review-1",
-    tourName: "Đà Lạt Romantic 3N2Đ",
-    tourDestination: "Đà Lạt",
-    tourStartDate: "2026-01-10",
-    tourEndDate: "2026-01-12",
-    guideName: "Trần Thị Bích",
-    guidePhone: "0987654321",
-    numberOfGuests: 3,
-    totalPrice: 13500000,
+    id: "rev-1",
+    bookingId: "booking-matrix-1",
+    tourName: "Hành Trình Di Sản Miền Trung: Huế - Hội An - Đà Nẵng 4N3Đ",
+    destination: "Đà Nẵng – Huế – Hội An",
+    agencyName: "Viettravel",
+    departureDate: "2026-11-20",
     rating: 5,
     comment:
-      "Tour rất tuyệt vời! Hướng dẫn viên nhiệt tình, lịch trình hợp lý. Khách sạn sạch sẽ, view đẹp. Tôi sẽ quay lại và giới thiệu cho bạn bè.",
-    reviewDate: "15/01/2026",
-    tourImage:
-      "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800",
+      "Chuyến đi rất thành công cho đoàn công ty! Hướng dẫn viên am hiểu lịch sử văn hóa Huế và ẩm thực Hội An. Lịch trình hợp lý, xe di chuyển đúng giờ.",
+    createdAt: "2026-11-25",
+    agencyReply:
+      "Cảm ơn quý đoàn đã tin tưởng lựa chọn Viettravel. Rất mong được tiếp tục đồng hành cùng quý doanh nghiệp trong các hành trình tiếp theo!",
   },
   {
-    id: "review-2",
-    tourName: "Phú Quốc Tropical 4N3Đ",
-    tourDestination: "Phú Quốc",
-    tourStartDate: "2026-01-05",
-    tourEndDate: "2026-01-08",
-    guideName: "Nguyễn Văn Hùng",
-    guidePhone: "0912345678",
-    numberOfGuests: 2,
-    totalPrice: 15600000,
+    id: "rev-2",
+    bookingId: "booking-matrix-4",
+    tourName: "Nghỉ Dưỡng Thượng Lưu Nha Trang - Vịnh Cam Ranh 3N2Đ",
+    destination: "Nha Trang",
+    agencyName: "Hà Giang Discovery Travel",
+    departureDate: "2026-10-05",
     rating: 4,
     comment:
-      "Tour ổn, biển đẹp, đồ ăn ngon. Tuy nhiên lịch trình hơi dày đặc, không có nhiều thời gian nghỉ ngơi.",
-    reviewDate: "10/01/2026",
-    tourImage:
-      "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800",
-  },
-  {
-    id: "review-3",
-    tourName: "Sapa Trekking 3N2Đ",
-    tourDestination: "Sapa",
-    tourStartDate: "2025-12-20",
-    tourEndDate: "2025-12-22",
-    guideName: "Lý Thị Hương",
-    guidePhone: "0909876543",
-    numberOfGuests: 4,
-    totalPrice: 10000000,
-    rating: 5,
-    comment:
-      "Trải nghiệm tuyệt vời! Cảnh đẹp, không khí trong lành. Hướng dẫn viên rất am hiểu văn hóa dân tộc địa phương.",
-    reviewDate: "25/12/2025",
-    tourImage:
-      "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800",
+      "Resort đẹp, cảnh biển tuyệt vời, thực đơn tiệc tối phong phú. Điểm trừ nhỏ là ngày đầu xe đón tại sân bay hơi cập rập nhưng đã được công ty hỗ trợ kịp thời.",
+    createdAt: "2026-10-09",
+    agencyReply:
+      "Hà Giang Discovery Travel xin ghi nhận phản hồi và đã tăng cường phương án điều phối xe trung chuyển để phục vụ chu đáo hơn.",
   },
 ];
 
 export function MyReviewsPage() {
-  const [reviews, setReviews] = useState<Review[]>(mockReviews);
-  const [editingId, setEditingId] = useState<string | null>(
-    null,
-  );
-  const [editRating, setEditRating] = useState(0);
-  const [editComment, setEditComment] = useState("");
-  const [hoverRating, setHoverRating] = useState(0);
-  const [showDeleteModal, setShowDeleteModal] = useState<
-    string | null
-  >(null);
+  const [reviews, setReviews] = useState<SubmittedReview[]>(initialSubmittedReviews);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(5);
+  const [commentText, setCommentText] = useState("");
+  const [selectedBookingName, setSelectedBookingName] = useState("Tour Tây Bắc Mùa Hoa Mận Trắng 3N2Đ");
 
-  const handleEdit = (review: Review) => {
-    setEditingId(review.id);
-    setEditRating(review.rating);
-    setEditComment(review.comment);
-  };
+  const handleAddReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
 
-  const handleSave = (reviewId: string) => {
-    setReviews(
-      reviews.map((review) =>
-        review.id === reviewId
-          ? {
-              ...review,
-              rating: editRating,
-              comment: editComment,
-            }
-          : review,
-      ),
-    );
-    setEditingId(null);
-    // In real app, call API to update review
-  };
+    const newRev: SubmittedReview = {
+      id: `rev-${Date.now()}`,
+      bookingId: `BK-${Date.now().toString().slice(-4)}`,
+      tourName: selectedBookingName,
+      destination: "Tây Bắc",
+      agencyName: "Hà Giang Discovery Travel",
+      departureDate: "2026-09-15",
+      rating: selectedRating,
+      comment: commentText.trim(),
+      createdAt: new Date().toISOString().split("T")[0],
+    };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditRating(0);
-    setEditComment("");
-  };
-
-  const handleDelete = (reviewId: string) => {
-    setReviews(
-      reviews.filter((review) => review.id !== reviewId),
-    );
-    setShowDeleteModal(null);
-    // In real app, call API to delete review
-  };
-
-  const renderStars = (
-    rating: number,
-    interactive = false,
-    onRate?: (rating: number) => void,
-  ) => {
-    return (
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`w-6 h-6 ${
-              interactive
-                ? "cursor-pointer transition-colors"
-                : ""
-            } ${
-              star <=
-              (interactive ? hoverRating || rating : rating)
-                ? "text-yellow-500 fill-current"
-                : "text-gray-300"
-            }`}
-            onClick={() =>
-              interactive && onRate && onRate(star)
-            }
-            onMouseEnter={() =>
-              interactive && setHoverRating(star)
-            }
-            onMouseLeave={() =>
-              interactive && setHoverRating(0)
-            }
-          />
-        ))}
-      </div>
-    );
+    setReviews([newRev, ...reviews]);
+    setShowReviewModal(false);
+    setCommentText("");
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center">
-              <Star className="w-6 h-6 text-white fill-current" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Nhận xét của tôi
-              </h1>
-              <p className="text-gray-600">
-                Các đánh giá bạn đã viết ({reviews.length})
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6 pb-16 font-sans">
+      <PageHeader
+        title="Đánh giá &amp; Nhận xét của tôi"
+        subtitle="Chia sẻ trải nghiệm thực tế về chất lượng phục vụ của Travel Agency và hướng dẫn viên sau chuyến đi"
+        actions={
+          <Button
+            type="button"
+            onClick={() => setShowReviewModal(true)}
+            className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-medium flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Viết đánh giá mới</span>
+          </Button>
+        }
+      />
 
-        {/* Reviews List */}
-        <div className="space-y-6">
-          {reviews.map((review) => (
+      {reviews.length > 0 ? (
+        <div className="space-y-4">
+          {reviews.map((rev) => (
             <div
-              key={review.id}
-              className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden"
+              key={rev.id}
+              className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 space-y-3"
             >
-              {/* Tour Info Header */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 border-b-2 border-gray-200">
-                <div className="flex flex-col lg:flex-row gap-6">
-                  {/* Tour Image */}
-                  <div className="lg:w-48 flex-shrink-0">
-                    <img
-                      src={review.tourImage}
-                      alt={review.tourName}
-                      className="w-full h-32 lg:h-full object-cover rounded-xl"
-                    />
+              {/* Tour and rating header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F1F5F9] pb-3">
+                <div className="space-y-0.5">
+                  <h3 className="text-base font-bold text-[#0F172A]">{rev.tourName}</h3>
+                  <div className="flex items-center gap-3 text-xs text-[#475569]">
+                    <span className="flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-[#075985]" />
+                      <strong>{rev.agencyName}</strong>
+                    </span>
+                    <span>• Khởi hành: {rev.departureDate}</span>
                   </div>
+                </div>
 
-                  {/* Tour Details */}
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                      {review.tourName}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin className="w-4 h-4 text-[#075985]" />
-                        <span>{review.tourDestination}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Calendar className="w-4 h-4 text-[#075985]" />
-                        <span>
-                          {review.tourStartDate} -{" "}
-                          {review.tourEndDate}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <User className="w-4 h-4 text-[#075985]" />
-                        <span>HDV: {review.guideName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="w-4 h-4 text-[#075985]" />
-                        <span>{review.guidePhone}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <User className="w-4 h-4 text-[#075985]" />
-                        <span>
-                          {review.numberOfGuests} người
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <span className="font-semibold text-[#075985]">
-                          {review.totalPrice.toLocaleString(
-                            "vi-VN",
-                          )}
-                          đ
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-1 bg-[#FFFBEB] border border-[#FDE68A] px-2.5 py-1 rounded-[4px] self-start sm:self-auto">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-3.5 h-3.5 ${
+                        i < rev.rating
+                          ? "fill-[#B45309] text-[#B45309]"
+                          : "text-[#CBD5E1]"
+                      }`}
+                    />
+                  ))}
+                  <span className="text-xs font-bold text-[#B45309] ml-1">
+                    {rev.rating}/5
+                  </span>
                 </div>
               </div>
 
-              {/* Review Content */}
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-sm text-gray-600">
-                        Đánh giá ngày {review.reviewDate}
-                      </span>
-                    </div>
+              {/* Review Comment */}
+              <p className="text-xs text-[#0F172A] leading-relaxed bg-[#F8FAFC] p-3 rounded-[4px] border border-[#F1F5F9]">
+                "{rev.comment}"
+              </p>
 
-                    {editingId === review.id ? (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Đánh giá của bạn
-                          </label>
-                          {renderStars(
-                            editRating,
-                            true,
-                            setEditRating,
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Nhận xét chi tiết
-                          </label>
-                          <textarea
-                            value={editComment}
-                            onChange={(e) =>
-                              setEditComment(e.target.value)
-                            }
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                            rows={4}
-                            placeholder="Chia sẻ trải nghiệm của bạn..."
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        {renderStars(review.rating)}
-                        <p className="text-gray-700 leading-relaxed mt-3">
-                          {review.comment}
-                        </p>
-                      </div>
-                    )}
+              {/* Agency Reply if present */}
+              {rev.agencyReply && (
+                <div className="p-3 bg-[#F0F9FF] border border-[#BAE6FD] rounded-[4px] text-xs text-[#075985] space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-[#075985]" />
+                    <span>Phản hồi từ {rev.agencyName}:</span>
                   </div>
-
-                  {/* Action Buttons */}
-                  {editingId !== review.id && (
-                    <div className="flex gap-2 ml-4">
-                      <button
-                        onClick={() => handleEdit(review)}
-                        className="p-2 hover:bg-[#F0F9FF] rounded-lg transition-colors"
-                      >
-                        <Edit className="w-5 h-5 text-[#075985]" />
-                      </button>
-                      <button
-                        onClick={() =>
-                          setShowDeleteModal(review.id)
-                        }
-                        className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5 text-red-600" />
-                      </button>
-                    </div>
-                  )}
+                  <p className="leading-relaxed pl-5">{rev.agencyReply}</p>
                 </div>
+              )}
 
-                {/* Edit Actions */}
-                {editingId === review.id && (
-                  <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
-                    <button
-                      onClick={handleCancel}
-                      className="flex-1 px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold flex items-center justify-center gap-2"
-                    >
-                      <X className="w-5 h-5" />
-                      Hủy
-                    </button>
-                    <button
-                      onClick={() => handleSave(review.id)}
-                      className="flex-1 px-6 py-2 bg-[#075985] text-white rounded-lg hover:bg-[#F97316] transition-colors font-semibold flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-5 h-5" />
-                      Lưu thay đổi
-                    </button>
-                  </div>
-                )}
+              <div className="text-[11px] text-[#94A3B8]">
+                Đã gửi ngày: {rev.createdAt}
               </div>
             </div>
           ))}
         </div>
+      ) : (
+        <EmptyState
+          icon={Star}
+          title="Bạn chưa có đánh giá nào"
+          description="Sau khi hoàn thành chuyến đi, bạn có thể gửi phản hồi để giúp các đơn vị lữ hành cải thiện chất lượng phục vụ."
+        />
+      )}
 
-        {/* Empty State */}
-        {reviews.length === 0 && (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-lg">
-            <Star className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Chưa có đánh giá nào
-            </h3>
-            <p className="text-gray-600">
-              Hãy đi tour và chia sẻ trải nghiệm của bạn!
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
-              <Trash2 className="w-8 h-8 text-red-600" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
-              Xóa đánh giá
-            </h3>
-            <p className="text-gray-600 text-center mb-6">
-              Bạn có chắc chắn muốn xóa đánh giá này? Hành động
-              này không thể hoàn tác.
-            </p>
-            <div className="flex gap-3">
+      {/* Review Dialog */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#CBD5E1] rounded-[6px] max-w-md w-full p-6 space-y-4 shadow-sm animate-in fade-in-50 duration-100">
+            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+              <h3 className="text-base font-bold text-[#0F172A]">
+                Viết đánh giá chuyến đi
+              </h3>
               <button
-                onClick={() => setShowDeleteModal(null)}
-                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold"
+                onClick={() => setShowReviewModal(false)}
+                className="text-[#94A3B8] hover:text-[#0F172A] p-1"
               >
-                Hủy
-              </button>
-              <button
-                onClick={() => handleDelete(showDeleteModal)}
-                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-              >
-                Xóa
+                ✕
               </button>
             </div>
+
+            <form onSubmit={handleAddReview} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[#0F172A]">Chuyến đi cần đánh giá:</label>
+                <input
+                  type="text"
+                  value={selectedBookingName}
+                  onChange={(e) => setSelectedBookingName(e.target.value)}
+                  className="w-full h-9 px-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none"
+                />
+              </div>
+
+              {/* Star selector */}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[#0F172A]">Mức độ hài lòng:</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSelectedRating(s)}
+                      className="p-1 hover:scale-110 transition-transform"
+                    >
+                      <Star
+                        className={`w-6 h-6 ${
+                          s <= selectedRating
+                            ? "fill-[#B45309] text-[#B45309]"
+                            : "text-[#CBD5E1]"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-[#B45309] ml-2">
+                    {selectedRating === 5 ? "Rất hài lòng" : selectedRating === 4 ? "Hài lòng" : selectedRating === 3 ? "Bình thường" : "Chưa hài lòng"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Comment text */}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[#0F172A]">Nhận xét chi tiết:</label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Chia sẻ về khách sạn, chất lượng bữa ăn, thái độ của hướng dẫn viên..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="w-full p-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F5F9]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowReviewModal(false)}
+                  className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold"
+                >
+                  Gửi đánh giá
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

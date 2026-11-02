@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -39,9 +40,10 @@ public sealed class AccountsFlowTests
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
+                ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
             }));
             builder.ConfigureServices(services => {
+                services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
                 services.AddDbContext<TripOpsDbContext>(options => options.UseSqlite(connection));
@@ -135,6 +137,31 @@ public sealed class AccountsFlowTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/register") { Content = JsonContent.Create(Registration()) };
         request.Headers.Add("Origin", "https://attacker.invalid");
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(request)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("", "https://tripops-demo.example", "same-origin", HttpStatusCode.Unauthorized)]
+    [InlineData("", "https://attacker.invalid", "same-origin", HttpStatusCode.Forbidden)]
+    [InlineData("", "https://tripops-demo.example", "cross-site", HttpStatusCode.Forbidden)]
+    [InlineData("/sync", "https://tripops-demo.example", "same-origin", HttpStatusCode.Unauthorized)]
+    [InlineData("/sync", "https://attacker.invalid", "same-origin", HttpStatusCode.Forbidden)]
+    [InlineData("/sync", "https://tripops-demo.example", "cross-site", HttpStatusCode.Forbidden)]
+    public async Task Payment_origin_guard_allows_only_configured_frontend_without_bypassing_authentication(
+        string suffix, string origin, string fetchSite, HttpStatusCode expected)
+    {
+        await using var app = new App();
+        using var configured = app.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Cors:AllowedOrigins:4"] = "https://tripops-demo.example"
+            })));
+        using var client = configured.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/bookings/27/payments/payos{suffix}");
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("Sec-Fetch-Site", fetchSite);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Forbidden)
+            Assert.Contains("untrusted_request_origin", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

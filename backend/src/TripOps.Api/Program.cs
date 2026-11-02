@@ -32,6 +32,10 @@ builder.Services.AddRateLimiter(options => {
     options.RejectionStatusCode = 429;
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Tra cứu trạng thái payOS: giới hạn theo IP + đơn để polling của FE không làm quá tải payOS.
+    options.AddPolicy("payment-sync", context => RateLimitPartition.GetFixedWindowLimiter(
+        $"{context.Connection.RemoteIpAddress}:{context.Request.RouteValues["id"]}",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 12, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
@@ -46,7 +50,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
     context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-builder.Services.AddOpenApi();
+builder.Services.AddTripOpsOpenApi();
 builder.Services.AddHealthChecks();
 if (builder.Environment.IsDevelopment())
 {
@@ -56,6 +60,12 @@ if (builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+if (builder.Configuration.GetValue<bool>("SeedDemo"))
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo seed is only available in Development.");
+    await DemoSeed.Run(app.Services, builder.Configuration.GetValue<bool>("ClearDemoData"));
+    return;
+}
 if (builder.Configuration.GetValue<bool>("CreateAdmin"))
 {
     await AdminBootstrap.Run(app.Services, builder.Configuration);
@@ -65,12 +75,19 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.Use(async (context, next) => {
     // Browser mutations must originate from this app or an explicitly allowed frontend.
-    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
+    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
         var origin = context.Request.Headers.Origin.ToString();
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (context.Request.Headers["Sec-Fetch-Site"] == "cross-site" ||
-            (!string.IsNullOrEmpty(origin) && origin != $"{context.Request.Scheme}://{context.Request.Host}" && !allowed.Contains(origin))) {
-            context.Response.StatusCode = 403; return;
+        var crossSite = context.Request.Headers["Sec-Fetch-Site"] == "cross-site";
+        var untrustedOrigin = !string.IsNullOrEmpty(origin) &&
+            origin != $"{context.Request.Scheme}://{context.Request.Host}" && !allowed.Contains(origin);
+        if (crossSite || untrustedOrigin) {
+            app.Logger.LogWarning("Browser mutation rejected: {Method} {Path}; crossSite={CrossSite}; untrustedOrigin={UntrustedOrigin}",
+                context.Request.Method, context.Request.Path, crossSite, untrustedOrigin);
+            await Results.Problem(statusCode: StatusCodes.Status403Forbidden,
+                title: "Nguồn truy cập chưa được cho phép. Hãy kiểm tra cấu hình tên miền của ứng dụng.",
+                extensions: new Dictionary<string, object?> { ["code"] = "untrusted_request_origin" }).ExecuteAsync(context);
+            return;
         }
     }
     try { await next(); }
@@ -83,7 +100,14 @@ if (app.Environment.IsDevelopment())
 {
     app.UseCors("Development");
     app.MapOpenApi();
-    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "TripOps v1"));
+    app.UseSwaggerUI(options => {
+        options.SwaggerEndpoint("/openapi/v1.json", "TripOps WF01 & WF02 v1");
+        options.DocumentTitle = "TripOps API testing";
+        options.EnableFilter();
+        options.EnableDeepLinking();
+        options.DisplayRequestDuration();
+        options.ConfigObject.AdditionalItems["withCredentials"] = true;
+    });
 }
 // Liveness only: neither endpoint asserts database or external integrations are ready.
 app.UseRateLimiter();

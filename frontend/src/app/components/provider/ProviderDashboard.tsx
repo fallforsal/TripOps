@@ -1,5 +1,7 @@
+import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
 import { useState } from "react";
-import { Service, User } from "@/app/types";
+import { toast } from "sonner";
+import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
 import { ServicePostManagement } from "./ServicePostManagement";
 import { ProviderServiceDetailPage } from "./ProviderServiceDetailPage";
@@ -7,41 +9,106 @@ import { ProviderOverview } from "./ProviderOverview";
 import { ProviderCreateServicePage } from "./ProviderCreateServicePage";
 import { ProviderProfilePage } from "./ProviderProfilePage";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
+import { ProviderGroupBookingRequests } from "./ProviderGroupBookingRequests";
+import { mockProviderGroupRequests } from "@/app/data/mockProviderGroupRequests";
 
 interface ProviderDashboardProps {
+  groupRequests?: ProviderGroupReservationRequest[];
+  onApproveAndQuote?: (
+    requestId: string,
+    quotedTotalPrice: number,
+    providerNote: string
+  ) => void;
+  onRejectRequest?: (requestId: string, rejectionReason: string) => void;
   currentUser: User;
   services: Service[];
   onCreateService?: () => void;
   onEditService?: (service: Service) => void;
-  onDeleteService: (serviceId: string) => void;
+  onDeleteService: (serviceId: string) => void | Promise<void>;
+  onSetAvailability?: (serviceId: string, isPaused: boolean) => Promise<void>;
   onSubmitService?: (
     serviceData: Omit<Service, "id" | "status" | "createdAt">
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateService?: (
     serviceId: string,
     serviceData: Omit<Service, "id">
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateProfile?: (updatedUser: Partial<User>) => void;
   onLogout?: () => void;
 }
 
 export function ProviderDashboard({
+  groupRequests: externalGroupRequests,
+  onApproveAndQuote: externalApproveAndQuote,
+  onRejectRequest: externalRejectRequest,
   currentUser,
   services,
   onCreateService,
   onEditService,
   onDeleteService,
+  onSetAvailability,
   onSubmitService,
   onUpdateService,
   onUpdateProfile,
   onLogout,
 }: ProviderDashboardProps) {
   const [activeSection, setActiveSection] = useState<
-    "overview" | "services" | "create" | "detail" | "profile"
+    "overview" | "services" | "create" | "detail" | "profile" | "room-requests"
   >("overview");
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
+
+  // Quản lý Yêu cầu Dịch vụ Đoàn từ các Agency (Chỉ lấy yêu cầu thuộc Provider đăng nhập, không fallback sang người khác)
+  const [internalRequests, setInternalRequests] = useState<ProviderGroupReservationRequest[]>(() => {
+    return mockProviderGroupRequests.filter((r) => r.providerId === currentUser.id);
+  });
+
+  const activeRequestsList = (externalGroupRequests && externalGroupRequests.length > 0 ? externalGroupRequests : internalRequests)
+    .filter((r) => r.providerId === currentUser.id);
+
+  const pendingGroupCount = activeRequestsList.filter((r) => r.status === "pending").length;
+
+  const handleApproveAndQuote = (
+    requestId: string,
+    quotedTotalPrice: number,
+    providerNote: string
+  ) => {
+    if (externalApproveAndQuote) {
+      externalApproveAndQuote(requestId, quotedTotalPrice, providerNote);
+    }
+    setInternalRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: "confirmed" as const,
+              quotedTotalPrice,
+              providerNote,
+              respondedAt: new Date().toISOString(),
+            }
+          : r
+      )
+    );
+  };
+
+  const handleRejectRequest = (requestId: string, rejectionReason: string) => {
+    if (externalRejectRequest) {
+      externalRejectRequest(requestId, rejectionReason);
+    }
+    setInternalRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: "rejected" as const,
+              rejectionReason,
+              respondedAt: new Date().toISOString(),
+            }
+          : r
+      )
+    );
+  };
 
   // Find currently selected service for detail view
   const selectedService = selectedServiceId
@@ -57,7 +124,7 @@ export function ProviderDashboard({
       setSelectedServiceId(null);
       setEditingService(null);
       setActiveSection(
-        section as "overview" | "services" | "create" | "detail" | "profile"
+        section as "overview" | "services" | "create" | "detail" | "profile" | "room-requests"
       );
     }
   };
@@ -69,6 +136,10 @@ export function ProviderDashboard({
   };
 
   const handleStartEditService = (service: Service) => {
+    if (service.status === "hidden") {
+      toast.error("Bài đăng đã bị Admin ẩn. Vui lòng tạo bài đăng mới để gửi duyệt.");
+      return;
+    }
     setEditingService(service);
     setSelectedServiceId(null);
     setActiveSection("create");
@@ -80,18 +151,18 @@ export function ProviderDashboard({
     setActiveSection("detail");
   };
 
-  const handleSaveServiceFromPage = (serviceData: Omit<Service, "id">) => {
+  const handleSaveServiceFromPage = async (serviceData: Omit<Service, "id">) => {
     if (editingService) {
       // Editing existing service
       if (onUpdateService) {
-        onUpdateService(editingService.id, serviceData);
+        await onUpdateService(editingService.id, serviceData);
       } else if (onEditService) {
         onEditService({ ...serviceData, id: editingService.id });
       }
     } else {
       // Creating new service
       if (onSubmitService) {
-        onSubmitService(serviceData);
+        await onSubmitService(serviceData);
       } else if (onCreateService) {
         onCreateService();
       }
@@ -119,6 +190,7 @@ export function ProviderDashboard({
       currentUser={currentUser}
       onLogout={onLogout}
       onCreateService={handleStartCreateService}
+      pendingRequestsCount={pendingGroupCount}
     >
       {/* 1. Dedicated Service Detail Page */}
       {activeSection === "detail" && selectedService ? (
@@ -129,8 +201,9 @@ export function ProviderDashboard({
             setActiveSection("services");
           }}
           onEdit={(svc) => handleStartEditService(svc)}
-          onDelete={(id) => {
-            onDeleteService(id);
+          onSetAvailability={onSetAvailability}
+          onDelete={async (id) => {
+            await onDeleteService(id);
             setSelectedServiceId(null);
             setActiveSection("services");
           }}
@@ -152,6 +225,16 @@ export function ProviderDashboard({
           currentUser={currentUser}
           onUpdateProfile={onUpdateProfile}
         />
+      ) : activeSection === "room-requests" ? (
+        <ErrorBoundary fallbackTitle="Không thể tải trang Yêu cầu dịch vụ">
+          <ProviderGroupBookingRequests
+            requests={activeRequestsList}
+            providerServices={services.filter((s) => s.providerId === currentUser.id)}
+            currentProviderId={currentUser.id}
+            onApproveAndQuote={handleApproveAndQuote}
+            onRejectRequest={handleRejectRequest}
+          />
+        </ErrorBoundary>
       ) : activeSection === "services" ? (
         /* 4. Services Management - Table View */
         <ServicePostManagement
@@ -161,6 +244,7 @@ export function ProviderDashboard({
           onEditService={handleStartEditService}
           onDeleteService={onDeleteService}
           onViewDetail={handleViewDetail}
+          onSetAvailability={onSetAvailability}
         />
       ) : (
         /* 5. Provider Overview Dashboard (KPIs, Charts, Recent items) */
@@ -173,6 +257,12 @@ export function ProviderDashboard({
             setActiveSection("services");
           }}
           onViewDetail={handleViewDetail}
+          pendingGroupRequestsCount={pendingGroupCount}
+          onNavigateToRoomRequests={() => {
+            setSelectedServiceId(null);
+            setEditingService(null);
+            setActiveSection("room-requests");
+          }}
         />
       )}
     </ProviderLayout>

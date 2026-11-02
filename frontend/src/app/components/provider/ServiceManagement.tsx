@@ -1,4 +1,4 @@
-﻿import { Service } from "@/app/types";
+import { Service } from "@/app/types";
 import {
   Plus,
   Edit,
@@ -40,6 +40,8 @@ export function ServiceManagement({
 
   const categoryLabels = {
     hotel: "Khách sạn",
+    fnb: "Ẩm thực",
+    attraction: "Điểm tham quan",
     restaurant: "Nhà hàng",
     transportation: "Vận chuyển",
     activity: "Hoạt động",
@@ -47,6 +49,8 @@ export function ServiceManagement({
 
   const categoryColors = {
     hotel: "bg-[#E0F2FE] text-blue-800",
+    fnb: "bg-orange-100 text-orange-800",
+    attraction: "bg-purple-100 text-purple-800",
     restaurant: "bg-orange-100 text-orange-800",
     transportation: "bg-green-100 text-green-800",
     activity: "bg-[#F97316]/15 text-purple-800",

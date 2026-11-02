@@ -1,50 +1,51 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Calendar,
   MapPin,
   Clock,
-  XCircle,
-  Eye,
   Search,
-  Filter,
   Users,
   CreditCard,
   Building2,
-  Sparkles,
-  CheckCircle,
-  Handshake,
+  Eye,
+  XCircle,
+  X,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
+import { Booking } from "@/app/types";
+import { PageHeader } from "@/app/components/customer/PageHeader";
+import { StatusBadge } from "@/app/components/customer/StatusBadge";
+import { EmptyState } from "@/app/components/customer/EmptyState";
 import { CancelTourModal } from "./CancelTourModal";
-import type { Booking } from "@/app/types";
 
 interface MyBookingsProps {
   bookings: Booking[];
   onCancelBooking: (bookingId: string, reason: string) => void;
   onViewBookingDetail: (booking: Booking) => void;
-}
-
-function formatVND(n: number) {
-  return n.toLocaleString("vi-VN") + "đ";
+  onSubmitRefundRequest?: (data: any) => void;
+  onNavigateToExplore?: () => void;
 }
 
 export function MyBookings({
   bookings,
   onCancelBooking,
   onViewBookingDetail,
+  onSubmitRefundRequest,
+  onNavigateToExplore,
 }: MyBookingsProps) {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [showCancelModal, setShowCancelModal] = useState<string | null>(null);
+  const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
 
   const filterTabs = [
-    { id: "all", label: "Tất cả" },
-    { id: "pending", label: "Chờ xác nhận" },
-    { id: "confirmed", label: "Đã xác nhận" },
+    { id: "all", label: "Tất cả booking" },
+    { id: "pending", label: "Chờ xử lý / Cọc" },
+    { id: "deposited", label: "Đã cọc" },
+    { id: "confirmed", label: "Đã chốt đoàn" },
+    { id: "paid", label: "Đã thanh toán đủ" },
     { id: "completed", label: "Hoàn thành" },
     { id: "cancelled", label: "Đã hủy" },
-    { id: "rejected", label: "Đã từ chối" },
   ];
 
   const filteredBookings = useMemo(() => {
@@ -63,311 +64,228 @@ export function MyBookings({
     });
   }, [bookings, filterStatus, searchTerm]);
 
-  const handleConfirmCancel = (reason: string) => {
-    if (showCancelModal) {
-      onCancelBooking(showCancelModal, reason);
-      setShowCancelModal(null);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return (
-          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
-            Đã xác nhận
-          </span>
-        );
-      case "completed":
-        return (
-          <span className="px-2.5 py-1 bg-[#E0F2FE] text-blue-800 border border-blue-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
-            Hoàn thành
-          </span>
-        );
-      case "cancelled":
-        return (
-          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <XCircle className="w-3 h-3" />
-            Đã hủy
-          </span>
-        );
-      case "rejected":
-        return (
-          <span className="px-2.5 py-1 bg-gray-100 text-gray-700 border border-gray-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            Đã từ chối
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            Chờ xác nhận &amp; chốt giá
-          </span>
-        );
-    }
-  };
-
-  const getPaymentStatusBadge = (paymentStatus?: string) => {
-    switch (paymentStatus) {
-      case "paid":
-        return (
-          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
-            Đã thanh toán
-          </span>
-        );
-      case "refunded":
-        return (
-          <span className="px-2.5 py-1 bg-[#F0F9FF] text-[#EA580C] border border-[#F97316]/30 rounded-full text-xs font-bold">
-            Đã hoàn tiền
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold">
-            Chưa thanh toán
-          </span>
-        );
-    }
+  const formatVND = (n: number) => {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(n);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Lịch sử đặt tour
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Quản lý và theo dõi toàn bộ các tour du lịch của bạn theo danh sách bảng
-            </p>
-          </div>
-          <div className="text-xs font-semibold bg-white border border-gray-200 px-3 py-2 rounded-xl text-gray-700 shadow-2xs self-start sm:self-auto">
-            Tổng cộng: <strong className="text-teal-700 text-sm">{bookings.length}</strong> đơn đặt tour
-          </div>
-        </div>
+    <div className="space-y-6 pb-16 font-sans">
+      <PageHeader
+        title="Danh sách booking của tôi"
+        subtitle="Theo dõi tiến độ duyệt tour, trạng thái chốt dịch vụ và các đợt thanh toán"
+      />
 
-        {/* Filter and Search Bar */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-xs space-y-4">
-          {/* Filter Tabs */}
-          <div className="flex flex-wrap gap-2">
-            {filterTabs.map((tab) => {
-              const count =
-                tab.id === "all"
-                  ? bookings.length
-                  : bookings.filter((b) => b.status === tab.id).length;
-              const isActive = filterStatus === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setFilterStatus(tab.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    isActive
-                      ? "bg-teal-600 text-white shadow-2xs"
-                      : "bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <Input
-              type="text"
-              placeholder="Tìm kiếm theo tên tour, mã tour hoặc mã đơn booking..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 text-xs sm:text-sm bg-gray-50/50 border-gray-200 rounded-xl focus:bg-white"
-            />
-          </div>
-        </div>
-
-        {/* Bookings Table */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-          {filteredBookings.length === 0 ? (
-            <div className="p-12 text-center space-y-3">
-              <Calendar className="w-12 h-12 text-gray-300 mx-auto" />
-              <h3 className="text-base font-bold text-gray-800">Không tìm thấy tour nào</h3>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                Không có dữ liệu phù hợp với trạng thái hoặc từ khóa tìm kiếm bạn đã chọn.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="py-3.5 px-4">Mã đơn</th>
-                    <th className="py-3.5 px-4 min-w-[240px]">Tour du lịch</th>
-                    <th className="py-3.5 px-4">Khởi hành</th>
-                    <th className="py-3.5 px-4 text-center">Số khách</th>
-                    <th className="py-3.5 px-4 text-right">Tổng tiền</th>
-                    <th className="py-3.5 px-4 text-center">Trạng thái đơn</th>
-                    <th className="py-3.5 px-4 text-center">Thanh toán</th>
-                    <th className="py-3.5 px-4 text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredBookings.map((b) => {
-                    const canCancel = b.status === "pending" || b.status === "confirmed";
-
-                    return (
-                      <tr key={b.id} className="hover:bg-teal-50/20 transition-colors group">
-                        {/* 1. Mã đơn */}
-                        <td className="py-4 px-4 font-mono text-gray-500 font-bold whitespace-nowrap">
-                          #{b.id.replace("booking-", "")}
-                        </td>
-
-                        {/* 2. Tour du lịch */}
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={b.tour?.image || ""}
-                              alt={b.tour?.name || "Tour"}
-                              className="w-14 h-11 rounded-lg object-cover flex-shrink-0 shadow-2xs border border-gray-100"
-                            />
-                            <div className="min-w-0">
-                              <p className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 group-hover:text-teal-700 transition-colors">
-                                {b.tour?.name || "Tour du lịch"}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="font-mono text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded font-semibold">
-                                  {b.tour?.tourCode}
-                                </span>
-                                <span className="text-[11px] text-gray-500 flex items-center gap-0.5">
-                                  <MapPin className="w-3 h-3 text-gray-400" />
-                                  {b.tour?.destination}
-                                </span>
-                                {b.hasLocationCustomization && (
-                                  <span className="text-[10px] text-[#EA580C] font-bold bg-[#F97316]/15 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                    <Sparkles className="w-2.5 h-2.5 text-[#F97316]" />
-                                    Tùy chỉnh
-                                  </span>
-                                )}
-                                {(b.customHotelChanges?.some((h) => h.mode === "provider" || h.isProviderService) ||
-                                  b.customMealChanges?.some((m) => m.mode === "provider" || m.isProviderService)) && (
-                                  <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                    🌟 Đối tác Nền tảng
-                                  </span>
-                                )}
-                                {(b.isCoHosted || b.tour?.isCoHosted) && (
-                                  <span className="text-[10px] text-amber-900 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded flex items-center gap-1 shadow-2xs">
-                                    <Handshake className="w-2.5 h-2.5 text-amber-700" />
-                                    Liên minh 2 công ty
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 3. Khởi hành */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="space-y-0.5">
-                            <p className="font-bold text-gray-800 flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-teal-600" />
-                              {b.tourStartDate || "Chưa chọn"}
-                            </p>
-                            <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-gray-400" />
-                              {b.tour?.duration}
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* 4. Số khách */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-lg">
-                            <Users className="w-3.5 h-3.5 text-gray-500" />
-                            {b.numberOfGuests} khách
-                          </span>
-                        </td>
-
-                        {/* 5. Tổng tiền */}
-                        <td className="py-4 px-4 text-right whitespace-nowrap">
-                          <p className="font-bold text-[#075985] text-sm">
-                            {formatVND(b.totalPrice)}
-                          </p>
-                          <p className="text-[10px] text-gray-400">
-                            {Math.round(b.totalPrice / (b.numberOfGuests || 1)).toLocaleString("vi-VN")}đ/khách
-                          </p>
-                        </td>
-
-                        {/* 6. Trạng thái đơn */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          {getStatusBadge(b.status)}
-                        </td>
-
-                        {/* 7. Trạng thái thanh toán */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          {getPaymentStatusBadge(b.paymentStatus)}
-                        </td>
-
-                        {/* 8. Thao tác */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <Button
-                              type="button"
-                              onClick={() => onViewBookingDetail(b)}
-                              className="h-8 px-3 text-xs bg-teal-600 hover:bg-teal-700 text-white font-semibold gap-1 shadow-2xs rounded-lg"
-                              title="Xem chi tiết đơn đặt tour này"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              Xem chi tiết
-                            </Button>
-
-                            {canCancel && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setShowCancelModal(b.id)}
-                                className="h-8 px-2 text-xs border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg"
-                                title="Yêu cầu hủy tour"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+      {/* Filter and Search Container */}
+      <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-4 space-y-4">
+        {/* Search */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Tìm theo mã booking, tên tour, điểm đến..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-10 pl-10 pr-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A]"
+            >
+              <X className="w-4 h-4" />
+            </button>
           )}
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-t border-[#F1F5F9] pt-3">
+          {filterTabs.map((tab) => {
+            const isActive = filterStatus === tab.id;
+            const count = tab.id === "all" ? bookings.length : bookings.filter((b) => b.status === tab.id).length;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilterStatus(tab.id)}
+                className={`px-3 py-1.5 rounded-[4px] text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  isActive
+                    ? "bg-[#075985] text-white"
+                    : "bg-[#F8FAFC] text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  isActive ? "bg-white/20 text-white" : "bg-[#CBD5E1] text-[#0F172A]"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Cancel Modal */}
-      {showCancelModal &&
-        (() => {
-          const booking = bookings.find((b) => b.id === showCancelModal);
-          if (!booking) return null;
+      {/* Bookings List */}
+      {filteredBookings.length > 0 ? (
+        <div className="space-y-4">
+          {filteredBookings.map((booking) => {
+            const tour = booking.tour;
+            return (
+              <div
+                key={booking.id}
+                className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors space-y-4"
+              >
+                {/* Header row: Booking ID, Tour Company & Status Badges */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F1F5F9]">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono font-bold text-[#075985] bg-[#F0F9FF] px-2.5 py-1 rounded-[4px] border border-[#BAE6FD]">
+                      {booking.id}
+                    </span>
+                    <span className="text-xs text-[#475569] flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-[#075985]" />
+                      <strong>{booking.companyName || tour?.companyName || "Travel Agency"}</strong>
+                    </span>
+                    <span className="text-xs text-[#94A3B8]">
+                      • Ngày tạo: {booking.bookingDate}
+                    </span>
+                  </div>
 
-          return (
-            <CancelTourModal
-              bookingId={showCancelModal}
-              tourName={booking.tour?.name || "Tour"}
-              onCancel={() => setShowCancelModal(null)}
-              onConfirm={handleConfirmCancel}
-            />
-          );
-        })()}
+                  {/* Two distinct status badges: Booking Status & Payment Status */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-[#475569]">Tiến trình:</span>
+                      <StatusBadge type="booking" status={booking.status} size="sm" />
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-[#475569]">Thanh toán:</span>
+                      <StatusBadge
+                        type="payment"
+                        status={booking.paymentStatus || (booking.depositPaid ? "partially_paid" : "unpaid")}
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tour Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                  <div className="md:col-span-8 space-y-2">
+                    <h3
+                      onClick={() => onViewBookingDetail(booking)}
+                      className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors leading-snug"
+                    >
+                      {tour?.name || "Chương trình tour theo đoàn"}
+                    </h3>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#075985]" />
+                        <span>{tour?.destination || "Điểm đến thỏa thuận"}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-[#075985]" />
+                        <span>Khởi hành: <strong>{booking.tourStartDate}</strong></span>
+                      </span>
+
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-[#075985]" />
+                        <span>{booking.numberOfGuests} khách</span>
+                      </span>
+
+                      {tour?.duration && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-[#075985]" />
+                          <span>{tour.duration}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Price & Action */}
+                  <div className="md:col-span-4 flex flex-col md:items-end justify-between gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
+                    <div className="md:text-right">
+                      <span className="text-[11px] text-[#475569] block">Tổng tiền booking:</span>
+                      <span className="text-lg font-bold text-[#075985]">
+                        {formatVND(booking.totalPrice)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Chỉ tự hủy được đơn chưa có tiền (đơn đã có tiền: hủy kèm hoàn tiền do Admin xem xét). */}
+                      {(booking.status === "pending" || booking.status === "confirmed") &&
+                        (booking.paidAmount ?? 0) === 0 &&
+                        !(booking.paymentTransactions ?? []).some((t) => t.status === "pending") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCancelModalBooking(booking)}
+                          className="border-[#CBD5E1] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs h-8 px-3 rounded-[6px]"
+                        >
+                          Hủy tour
+                        </Button>
+                      )}
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => onViewBookingDetail(booking)}
+                        className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-medium"
+                      >
+                        Xem chi tiết
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          icon={Calendar}
+          title="Không tìm thấy booking nào"
+          description={
+            searchTerm || filterStatus !== "all"
+              ? "Không có booking nào thỏa mãn bộ lọc hiện tại. Bạn vui lòng thử tìm kiếm lại."
+              : "Bạn chưa có booking nào trong hệ thống. Hãy khám phá danh sách tour để lên kế hoạch cho đoàn ngay hôm nay."
+          }
+          actionText={!searchTerm && filterStatus === "all" ? "Khám phá tour ngay" : "Xem tất cả booking"}
+          onAction={() => {
+            if (!searchTerm && filterStatus === "all") {
+              if (onNavigateToExplore) onNavigateToExplore();
+            } else {
+              setSearchTerm("");
+              setFilterStatus("all");
+            }
+          }}
+        />
+      )}
+
+      {/* Cancel Modal */}
+      {cancelModalBooking && (
+        <CancelTourModal
+          bookingId={cancelModalBooking.id}
+          booking={cancelModalBooking}
+          tourName={cancelModalBooking.tour?.name}
+          onCancel={() => setCancelModalBooking(null)}
+          onImmediateCancel={(id, reason) => {
+            onCancelBooking(id, reason);
+            setCancelModalBooking(null);
+          }}
+          onSubmitRefundRequest={(data) => {
+            if (onSubmitRefundRequest) {
+              onSubmitRefundRequest(data);
+            }
+            onCancelBooking(cancelModalBooking.id, data.reasonDetail);
+            setCancelModalBooking(null);
+          }}
+        />
+      )}
     </div>
   );
 }

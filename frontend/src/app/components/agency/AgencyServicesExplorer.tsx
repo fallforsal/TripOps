@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Service } from "@/app/types";
@@ -214,9 +214,9 @@ function ServiceDetailOsmMap({
     const pinHtml = `
       <div class="osm-price-pin-wrapper group select-none" style="transform: translate(-50%, -100%); cursor: pointer;">
         <div class="relative flex flex-col items-center">
-          <div style="border-color: ${meta.pinBorder};" 
+          <div style="border-color: ${meta.pinBorder};"
                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-gray-900 shadow-md border-2 ring-2 ring-black/5">
-            <div style="background-color: ${meta.pinBg};" 
+            <div style="background-color: ${meta.pinBg};"
                  class="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-2xs">
               ${getCategoryIconSvg(category, 12)}
             </div>
@@ -395,13 +395,13 @@ function ExplorerOsmMap({
       const mapPrice = formatMapPrice(service);
 
       const customPinHtml = `
-        <div class="osm-price-pin-wrapper group select-none" 
+        <div class="osm-price-pin-wrapper group select-none"
              title="${service.name} (${formatPriceSummary(service)})"
              style="transform: translate(-50%, -100%); cursor: pointer;">
           <div class="relative flex flex-col items-center">
-            <div style="border-color: ${meta.pinBorder};" 
+            <div style="border-color: ${meta.pinBorder};"
                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-gray-900 shadow-md border-2 group-hover:border-[#075985] group-hover:shadow-xl transition-all duration-150 ring-2 ring-black/5">
-              <div style="background-color: ${meta.pinBg};" 
+              <div style="background-color: ${meta.pinBg};"
                    class="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-2xs">
                 ${iconSvg}
               </div>
@@ -409,7 +409,7 @@ function ExplorerOsmMap({
                 ${mapPrice}
               </span>
             </div>
-            <div style="border-color: ${meta.pinBorder};" 
+            <div style="border-color: ${meta.pinBorder};"
                  class="w-2.5 h-2.5 bg-white border-r-2 border-b-2 rotate-45 -mt-1 shadow-xs group-hover:border-[#075985] transition-colors"></div>
           </div>
         </div>
@@ -431,9 +431,6 @@ function ExplorerOsmMap({
           <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-xs" style="background-color: ${meta.pinBg}">
             ${meta.shortLabel}
           </span>
-          <span class="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[11px] font-semibold">
-            ★ ${service.rating || "4.8"}
-          </span>
         </div>
         <div class="p-3 space-y-2">
           <h4 class="font-bold text-gray-900 text-sm leading-snug line-clamp-2">${service.name}</h4>
@@ -445,7 +442,7 @@ function ExplorerOsmMap({
             <span class="font-bold text-[#075985] text-xs">${formatPriceSummary(service)} ${meta.unit}</span>
           </div>
           <div class="pt-2 flex gap-1.5">
-            <button id="view-detail-btn-${service.id}" 
+            <button id="view-detail-btn-${service.id}"
               class="w-full py-1.5 px-2 bg-[#075985] hover:bg-[#F97316] text-white rounded-lg font-semibold text-center text-xs transition-colors flex items-center justify-center gap-1 shadow-xs">
               Xem bài đăng chi tiết →
             </button>
@@ -578,7 +575,7 @@ export function AgencyServicesExplorer({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedProvince, setSelectedProvince] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"split" | "map" | "grid">("split");
+  const [viewMode, setViewMode] = useState<"split" | "grid">("split");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
@@ -1247,19 +1244,6 @@ export function AgencyServicesExplorer({
               </button>
 
               <button
-                onClick={() => setViewMode("map")}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                  viewMode === "map"
-                    ? "bg-white text-[#075985] shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-                title="Bản đồ OpenStreetMap toàn cảnh"
-              >
-                <MapIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Bản đồ</span>
-              </button>
-
-              <button
                 onClick={() => setViewMode("grid")}
                 className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                   viewMode === "grid"
@@ -1365,7 +1349,7 @@ export function AgencyServicesExplorer({
       {viewMode === "split" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left / Top: Interactive OpenStreetMap (7 cols on desktop) */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden sticky top-24">
+          <div className="lg:col-span-8 xl:col-span-8 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden sticky top-24">
             <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
@@ -1398,7 +1382,7 @@ export function AgencyServicesExplorer({
           </div>
 
           {/* Right: Service Cards List (5 cols on desktop) */}
-          <div className="lg:col-span-5 space-y-4 max-h-[700px] overflow-y-auto pr-1">
+          <div className="lg:col-span-4 xl:col-span-4 space-y-3 max-h-[720px] overflow-y-auto pr-1">
             <div className="flex items-center justify-between text-xs text-gray-500 pb-1">
               <span>Tìm thấy <strong>{filteredServices.length}</strong> bài đăng phù hợp</span>
               {selectedProvince !== "all" && (
@@ -1419,7 +1403,7 @@ export function AgencyServicesExplorer({
                   }}
                   className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden hover:shadow-md hover:border-blue-400 transition-all flex flex-col sm:flex-row group cursor-pointer"
                 >
-                  <div className="sm:w-44 h-36 sm:h-auto relative overflow-hidden bg-gray-100 flex-shrink-0">
+                  <div className="w-full sm:w-32 lg:w-28 xl:w-36 h-32 sm:h-auto relative overflow-hidden bg-gray-100 flex-shrink-0">
                     <img
                       src={service.image}
                       alt={service.name}
@@ -1442,10 +1426,7 @@ export function AgencyServicesExplorer({
                         >
                           {service.province || "Việt Nam"} • {service.providerName}
                         </span>
-                        <span className="font-bold text-amber-600 flex items-center gap-1 flex-shrink-0">
-                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                          {service.rating || "4.8"}
-                        </span>
+                        
                       </div>
 
                       <h4
@@ -1481,7 +1462,7 @@ export function AgencyServicesExplorer({
                           setSelectedService(service);
                           setActiveImageIndex(0);
                         }}
-                        className="rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#075985] hover:text-white border border-[#CBD5E1] text-xs px-2.5 py-1 transition-all flex-shrink-0 font-medium"
+                        className="rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#075985] hover:text-white border border-[#CBD5E1] text-[11px] px-2 py-1 transition-all flex-shrink-0 font-medium h-7"
                       >
                         Xem bài đăng
                         <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
@@ -1516,32 +1497,6 @@ export function AgencyServicesExplorer({
         </div>
       )}
 
-      {viewMode === "map" && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden relative">
-          <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="w-4 h-4 text-emerald-600" />
-              <span className="font-bold text-gray-900 text-sm">
-                Bản đồ toàn cảnh — {filteredServices.length} bài đăng dịch vụ (Kèm nhãn giá trực tiếp)
-              </span>
-            </div>
-            <span className="text-xs text-gray-500">
-              Nhấp vào nhãn giá bất kỳ để xem nhanh thông tin dịch vụ
-            </span>
-          </div>
-
-          <ExplorerOsmMap
-            services={filteredServices}
-            selectedProvince={selectedProvince}
-            onSelectService={(service) => {
-              setSelectedService(service);
-              setActiveImageIndex(0);
-            }}
-            height="650px"
-          />
-        </div>
-      )}
-
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredServices.map((service) => {
@@ -1569,10 +1524,7 @@ export function AgencyServicesExplorer({
                     <CatIcon className="w-3 h-3" />
                     {meta.shortLabel}
                   </span>
-                  <span className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-xs text-white px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    {service.rating || "4.8"}
-                  </span>
+                  
                 </div>
 
                 <div className="p-4 flex-1 flex flex-col justify-between">

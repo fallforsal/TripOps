@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Tour } from "@/app/types";
 import {
   Sparkles,
@@ -325,7 +325,21 @@ export function AITourRecommenderModal({
                 {results.map(({ tour, matchScore, matchReasons, aiSummary }) => (
                   <div
                     key={tour.id}
-                    className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
+                    onClick={() => {
+                      onClose();
+                      onSelectTour(tour);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onClose();
+                        onSelectTour(tour);
+                      }
+                    }}
+                    aria-label={`Xem chi tiết tour ${tour.name}`}
+                    className="bg-white rounded-xl border border-slate-200 hover:border-indigo-400 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     <div>
                       {/* Image & Match Score Badge */}
@@ -396,7 +410,8 @@ export function AITourRecommenderModal({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               onClose();
                               onSelectTour(tour);
                             }}
@@ -407,7 +422,8 @@ export function AITourRecommenderModal({
                           {onBookTour && (
                             <Button
                               size="sm"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 onClose();
                                 onBookTour(tour);
                               }}
