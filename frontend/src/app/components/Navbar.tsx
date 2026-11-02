@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import {
   User,
   LogOut,
@@ -9,7 +9,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { User as UserType } from "@/app/types";
-import { TRIPOPS_LOGO } from "@/app/constants/logo";
 
 interface NavbarProps {
   currentUser: UserType;
@@ -34,8 +33,6 @@ export function Navbar({
     guide: "Hướng dẫn viên",
     admin: "Quản lý",
     provider: "Nhà cung cấp",
-    agency: "Công ty lữ hành",
-    company_admin: "Quản trị công ty",
   };
 
   // Close dropdown when clicking outside
@@ -87,11 +84,10 @@ export function Navbar({
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center gap-2 cursor-pointer">
-            <img
-              src={TRIPOPS_LOGO}
-              alt="TripOps Logo"
-              className="h-9 w-auto object-contain"
-            />
+            <MapPin className="w-8 h-8 text-[#075985]" />
+            <span className="text-2xl font-bold bg-[#075985] bg-clip-text text-transparent">
+              TripOps
+            </span>
           </div>
 
           {/* Navigation - Hidden on mobile */}

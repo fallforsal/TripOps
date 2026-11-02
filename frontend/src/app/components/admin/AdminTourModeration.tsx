@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Tour, Service } from "@/app/types";
 import {
   Compass,
@@ -146,6 +146,9 @@ export function AdminTourModeration({
       message: `Đã xóa vĩnh viễn tour "${deletingTour.name}" khỏi hệ thống!`,
     });
     setDeletingTour(null);
+    if (selectedTourForDetail?.id === deletingTour.id) {
+      setSelectedTourForDetail(null);
+    }
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -472,7 +475,262 @@ export function AdminTourModeration({
         )}
       </div>
 
+      {/* ========================================================================= */}
+      {/* MODAL 1: XEM CHI TIẾT TOÀN DIỆN TOUR DU LỊCH */}
+      {/* ========================================================================= */}
+      <Dialog open={false} onOpenChange={() => setSelectedTourForDetail(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl">
+          {selectedTourForDetail && (
+            <div>
+              {/* Header Image Cover */}
+              <div className="relative h-64 sm:h-72 w-full bg-gray-900">
+                <img
+                  src={selectedTourForDetail.image}
+                  alt={selectedTourForDetail.name}
+                  className="w-full h-full object-cover opacity-85"
+                />
+                <button
+                  onClick={() => setSelectedTourForDetail(null)}
+                  className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/90 text-white rounded-full transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
 
+                <div className="absolute bottom-4 left-6 right-6 text-white space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className="bg-[#075985] text-white border-none font-bold">
+                      {selectedTourForDetail.tourCode || `TOUR-${selectedTourForDetail.id.substring(0, 5)}`}
+                    </Badge>
+                    <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 font-medium">
+                      {selectedTourForDetail.duration}
+                    </Badge>
+                    {selectedTourForDetail.status === "hidden" ? (
+                      <Badge className="bg-amber-500 text-white border-none font-bold">
+                        Đang tạm ẩn trên sàn
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-600 text-white border-none font-bold">
+                        Đang mở bán công khai
+                      </Badge>
+                    )}
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold leading-tight drop-shadow-md">
+                    {selectedTourForDetail.name}
+                  </h2>
+                  <p className="text-xs text-gray-200 flex items-center gap-2">
+                    <span>📍 {selectedTourForDetail.destination}</span>
+                    <span>•</span>
+                    <span>🏢 {selectedTourForDetail.companyName}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-6 text-gray-800 text-xs">
+                {/* Hidden Notice if tour is currently hidden */}
+                {selectedTourForDetail.status === "hidden" && (
+                  <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-sm text-amber-800">
+                      <ShieldAlert className="w-4 h-4" />
+                      Lý do tour đang bị tạm ẩn trên hệ thống:
+                    </div>
+                    <p className="text-xs leading-relaxed italic">
+                      "{selectedTourForDetail.hiddenReason || "Nội dung tour bị tạm ẩn do thông tin không chính xác hoặc không phù hợp."}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Key Overview Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-400 block mb-0.5">Giá cơ sở / khách:</span>
+                    <strong className="text-[#075985] text-sm font-extrabold">
+                      {formatPrice(selectedTourForDetail.price)}
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-400 block mb-0.5">Số lượng khách:</span>
+                    <strong className="text-gray-900 text-sm">
+                      {selectedTourForDetail.minGuests || 1} - {selectedTourForDetail.maxGuests || 40} khách
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-400 block mb-0.5">Đơn vị tổ chức:</span>
+                    <strong className="text-gray-900 text-sm truncate block" title={selectedTourForDetail.companyName}>
+                      {selectedTourForDetail.companyName || "Chưa cập nhật"}
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-400 block mb-0.5">Mã Tour:</span>
+                    <strong className="font-mono text-gray-900 text-sm">
+                      {selectedTourForDetail.tourCode || selectedTourForDetail.id}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-[#075985]" />
+                    Mô tả giới thiệu Tour
+                  </h4>
+                  <p className="text-gray-700 leading-relaxed bg-gray-50/70 p-3.5 rounded-xl border border-gray-100 whitespace-pre-line">
+                    {selectedTourForDetail.description || "Chưa có mô tả chi tiết."}
+                  </p>
+                </div>
+
+                {/* Daily Itinerary Detail */}
+                <div className="space-y-3">
+                  <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#075985]" />
+                    Lịch trình chi tiết từng ngày ({selectedTourForDetail.itinerary?.length || 0} ngày)
+                  </h4>
+
+                  <div className="space-y-3">
+                    {selectedTourForDetail.itinerary?.map((day, idx) => (
+                      <div key={day.id || idx} className="p-4 bg-gray-50/70 border border-gray-200 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                          <span className="font-bold text-[#075985] text-sm flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-[#075985] text-white flex items-center justify-center text-xs">
+                              {day.day || idx + 1}
+                            </span>
+                            {day.title || `Ngày ${idx + 1}`}
+                          </span>
+                          {day.destinationCity && (
+                            <Badge variant="outline" className="text-[10px]">
+                              📍 {day.destinationCity}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {day.description && (
+                          <p className="text-gray-600 leading-relaxed text-xs">
+                            {day.description}
+                          </p>
+                        )}
+
+                        {/* Locations */}
+                        {day.locations && day.locations.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <span className="text-[11px] font-semibold text-gray-500">Điểm tham quan trong ngày:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {day.locations.map((loc, lIdx) => (
+                                <span key={lIdx} className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-800 text-[11px] flex items-center gap-1">
+                                  📍 {loc.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Hotel & Meals */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-200 text-[11px]">
+                          <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100">
+                            <Hotel className="w-3.5 h-3.5 text-[#075985] shrink-0" />
+                            <span className="truncate">
+                              Khách sạn: <strong>{day.hotel?.name || "Theo tiêu chuẩn tour"}</strong>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100">
+                            <Utensils className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="truncate">
+                              Bữa ăn: <strong>{day.meals?.map((m) => m.restaurantName || m.type).join(", ") || "Bao gồm theo tour"}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Price Table if available */}
+                {selectedTourForDetail.priceTable && selectedTourForDetail.priceTable.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      Bảng giá theo độ tuổi khách hàng
+                    </h4>
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-100 text-gray-700">
+                          <tr>
+                            <th className="py-2.5 px-3">Phân nhóm</th>
+                            <th className="py-2.5 px-3">Độ tuổi áp dụng</th>
+                            <th className="py-2.5 px-3 text-right">Đơn giá niêm yết</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {selectedTourForDetail.priceTable.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              <td className="py-2 px-3 font-semibold text-gray-900">{row.ageGroupLabel}</td>
+                              <td className="py-2 px-3 text-gray-500">{row.ageRange || "—"}</td>
+                              <td className="py-2 px-3 text-right font-bold text-[#075985]">
+                                {formatPrice(row.price)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Dialog Footer Actions */}
+              <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTourForDetail(null)}
+                  className="rounded-xl text-xs"
+                >
+                  Đóng cửa sổ
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  {selectedTourForDetail.status === "hidden" ? (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        handleRestoreTour(selectedTourForDetail);
+                        setSelectedTourForDetail({ ...selectedTourForDetail, status: "published" });
+                      }}
+                      className="rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Mở hiển thị lại tour
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setHidingTour(selectedTourForDetail);
+                        setHideReason("");
+                      }}
+                      className="rounded-xl text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Tạm ẩn tour này
+                    </Button>
+                  )}
+
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      setDeletingTour(selectedTourForDetail);
+                    }}
+                    className="rounded-xl text-xs gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Xóa tour
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ========================================================================= */}
       {/* MODAL 2: TẠM ẨN TOUR (KÈM LÝ DO THÔNG TIN XÀM / SAI LỆCH) */}

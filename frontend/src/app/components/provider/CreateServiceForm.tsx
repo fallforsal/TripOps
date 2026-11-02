@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   X,
   Upload,
@@ -127,7 +127,7 @@ export function CreateServiceForm({
       providerId: currentProvider.id,
       providerName: currentProvider.name,
       name,
-      category: category === "eatery" ? "fnb" as const : category!,
+      category: category!,
       description,
       price: parseFloat(price),
       location,

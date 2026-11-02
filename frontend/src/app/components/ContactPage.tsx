@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { MapPin, Phone, Mail, Clock, Send, Compass } from "lucide-react";
 
 interface ContactPageProps {
@@ -58,7 +58,7 @@ export function ContactPage({ onShowLogin }: ContactPageProps) {
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-
+            
             {/* Form Column */}
             <div className="lg:col-span-7 bg-white p-8 sm:p-10 rounded-2xl border border-[#CBD5E1] shadow-sm space-y-6">
               <div className="space-y-1">

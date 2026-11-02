@@ -1,12 +1,11 @@
-# TripOps frontend
 
-UI từ TripOps_FE_new, dùng API thật của backend cho các luồng đã triển khai. Hướng dẫn và tài khoản test tại `../README.md`.
+  # SWD figma (copie)
 
-```powershell
-npm ci
-npm run dev
-```
+  This is a code bundle for SWD figma (copie). The original project is available at https://www.figma.com/design/3knIVY3EJRhEZN7KppyPsE/SWD-figma--copie-.
 
-FE chạy ở http://localhost:5174; `/api` proxy tới http://localhost:5080. Chạy `npm run typecheck`, `npm test`, `npm run build` để kiểm tra.
+  ## Running the code
 
-Các thao tác ngoài phạm vi hiện tại báo chưa hỗ trợ, không báo lưu thành công với mockdata.
+  Run `npm i` to install the dependencies.
+
+  Run `npm run dev` to start the development server.
+  "# TripOps" 

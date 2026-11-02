@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
-    resolveId(id: string) {
+    resolveId(id) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
         return path.resolve(__dirname, 'src/assets', filename)
@@ -18,7 +18,7 @@ function figmaAssetResolver() {
 
 export default defineConfig({
   base: './',
-  server: { port: 5174, strictPort: true, proxy: { '/api': { target: 'http://localhost:5080', changeOrigin: false } } },
+  server: { port: 5173, strictPort: true, proxy: { '/api': { target: 'http://localhost:5080', changeOrigin: false } } },
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if

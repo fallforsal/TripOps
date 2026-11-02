@@ -10,10 +10,9 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     public static string RoleName(UserRole role) => role switch {
         UserRole.Admin => "admin", UserRole.TravelAgency => "agency", UserRole.Provider => "provider",
         UserRole.TourGuide => "guide", _ => "user" };
-    private ProfileDto Profile(BusinessProfile p) => new(p.Id, p.UserId ?? "", p.BusinessName, p.TaxCode,
+    private ProfileDto Profile(BusinessProfile p) => new(p.Id, p.UserId, p.BusinessName, p.TaxCode,
         p.BusinessAddress, storage.DeliveryUrl(p.BusinessLicenseUrl), p.Description,
-        p.Status?.ToString().ToLowerInvariant() ?? "pending", p.RejectionReason, p.ApprovedAt,
-        p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch);
+        p.Status.ToString().ToLowerInvariant(), p.RejectionReason, p.ApprovedAt, p.CreatedAt, p.UpdatedAt);
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
         u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
@@ -46,22 +45,6 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     public async Task<User> Current(string id, CancellationToken ct) =>
         await db.Users.Include(u => u.BusinessProfile).SingleOrDefaultAsync(u => u.Id == id && u.Status == UserStatus.Active, ct)
         ?? throw new AccountException(401, "Phiên đăng nhập không còn hợp lệ.");
-    public async Task ChangeGuidePassword(string agencyId, string guideId, ChangeGuidePasswordRequest request, CancellationToken ct)
-    {
-        var agency = await Current(agencyId, ct);
-        if (agency.Role != UserRole.TravelAgency)
-            throw new AccountException(403, "Chỉ Agency được đổi mật khẩu cho HDV.");
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length is < 8 or > 16)
-            throw new AccountException(400, "Mật khẩu mới phải từ 8 đến 16 ký tự và không chỉ gồm khoảng trắng.");
-        if (request.NewPassword != request.ConfirmPassword)
-            throw new AccountException(400, "Xác nhận mật khẩu không khớp.");
-        var guide = await db.Users.SingleOrDefaultAsync(u => u.Id == guideId &&
-            u.Role == UserRole.TourGuide && u.AgencyId == agencyId, ct)
-            ?? throw new AccountException(404, "Không tìm thấy tài khoản HDV thuộc Agency của bạn. Hồ sơ mẫu chưa có trong database không thể đổi mật khẩu.");
-        guide.PasswordHash = hasher.HashPassword(guide, request.NewPassword);
-        guide.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-    }
     public async Task<ProfileDto> Submit(string id, ProfileRequest request, byte[]? image, string? mime, CancellationToken ct)
     {
         var user = await Current(id, ct);
@@ -86,11 +69,10 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         { throw new AccountException(409, "Hồ sơ đã được nộp. Vui lòng tải lại trạng thái."); }
         return Profile(profile);
     }
-    public async Task<object> Partners(string? status, string? role, string? search, int page, int pageSize, CancellationToken ct, string? userId = null)
+    public async Task<object> Partners(string? status, string? role, string? search, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.BusinessProfiles.AsNoTracking().Where(p =>
+        var query = db.BusinessProfiles.AsNoTracking().Where(p => !p.User.IsDeleted &&
             (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider));
-        if (!string.IsNullOrWhiteSpace(userId)) query = query.Where(p => p.UserId == userId);
         if (!string.IsNullOrWhiteSpace(status)) {
             if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state)) throw new AccountException(400, "Trạng thái không hợp lệ.");
             query = query.Where(p => p.Status == state);
@@ -107,7 +89,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         if (!approve && string.IsNullOrWhiteSpace(reason)) throw new AccountException(400, "Vui lòng nhập lý do từ chối.");
         var now = DateTime.UtcNow;
         var count = await db.BusinessProfiles.Where(p => p.Id == id && p.Status == BusinessProfileStatus.Pending &&
-            (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider))
+            !p.User.IsDeleted && (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider))
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, approve ? BusinessProfileStatus.Approved : BusinessProfileStatus.Rejected)
                 .SetProperty(p => p.RejectionReason, approve ? null : reason!.Trim())
                 .SetProperty(p => p.ApprovedAt, approve ? (DateTime?)now : null).SetProperty(p => p.UpdatedAt, now), ct);

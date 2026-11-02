@@ -13,7 +13,6 @@ public class TripOpsDbContext : DbContext
 
     // 1. Identity & Profile
     public DbSet<User> Users => Set<User>();
-    public DbSet<GuideProfile> GuideProfiles => Set<GuideProfile>();
     public DbSet<BusinessProfile> BusinessProfiles => Set<BusinessProfile>();
 
     // 2. Services
@@ -27,10 +26,8 @@ public class TripOpsDbContext : DbContext
     public DbSet<TourMeal> TourMeals => Set<TourMeal>();
     public DbSet<TourAccommodation> TourAccommodations => Set<TourAccommodation>();
     public DbSet<TourVersion> TourVersions => Set<TourVersion>();
-    public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
-    public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
-    public DbSet<TourDesignRequest> TourDesignRequests => Set<TourDesignRequest>();
-    public DbSet<TourDesignRequestAgency> TourDesignRequestAgencies => Set<TourDesignRequestAgency>();
+    public DbSet<TourCustomRequest> TourCustomRequests => Set<TourCustomRequest>();
+    public DbSet<TourCustomRequestAgency> TourCustomRequestAgencies => Set<TourCustomRequestAgency>();
 
     // 4. Bookings & Operations
     public DbSet<Booking> Bookings => Set<Booking>();
@@ -44,8 +41,6 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingIncident> BookingIncidents => Set<BookingIncident>();
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
-    public DbSet<BookingSnapshot> BookingSnapshots => Set<BookingSnapshot>();
-    public DbSet<BookingProposalEvent> BookingProposalEvents => Set<BookingProposalEvent>();
 
     // 5. Finance
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();
@@ -66,116 +61,638 @@ public class TripOpsDbContext : DbContext
     public DbSet<AgencySubscription> AgencySubscriptions => Set<AgencySubscription>();
     public DbSet<SubscriptionPaymentHistory> SubscriptionPaymentHistories => Set<SubscriptionPaymentHistory>();
 
-    private void PrepareForSave()
+    private void NormalizeTourStates()
     {
-        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Tour history is immutable.");
-        if (ChangeTracker.Entries<BookingSnapshot>().Any(e => e.State == EntityState.Deleted))
-            throw new InvalidOperationException("Booking snapshot history is immutable.");
-        foreach (var entry in ChangeTracker.Entries<BookingSnapshot>().Where(e => e.State == EntityState.Modified))
-        {
-            if (entry.Property(e => e.SnapshotData).IsModified ||
-                entry.Property(e => e.Version).IsModified ||
-                entry.Property(e => e.BookingId).IsModified ||
-                entry.Property(e => e.CreatedBy).IsModified ||
-                entry.Property(e => e.CreatedAt).IsModified ||
-                entry.Property(e => e.SourceTourVersion).IsModified)
-            {
-                throw new InvalidOperationException("Booking snapshot data is immutable.");
-            }
-            var originalType = entry.Property(e => e.SnapshotType).OriginalValue?.ToString();
-            var currentType = entry.Property(e => e.SnapshotType).CurrentValue?.ToString();
-            if (originalType != "proposal" || currentType != "agreed")
-                throw new InvalidOperationException("Only pending proposals can transition to agreed.");
-            if (entry.Property(e => e.AcceptedAt).CurrentValue is null || entry.Property(e => e.AcceptedBy).CurrentValue is null)
-                throw new InvalidOperationException("Agreed snapshot requires acceptance metadata.");
-        }
-        foreach (var entry in ChangeTracker.Entries<Tour>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        foreach (var entry in ChangeTracker.Entries<Tour>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             var tour = entry.Entity;
             if (entry.State == EntityState.Deleted)
-            {
                 entry.State = EntityState.Modified;
-                tour.Status = TourStatus.Deleted;
+            else if (!tour.IsDeleted && tour.Status != TourStatus.Deleted)
+            {
+                if (!Enum.IsDefined(tour.Status) || !Enum.IsDefined(tour.Visibility))
+                    throw new InvalidOperationException("Invalid tour status or visibility.");
+                if (tour.Status == TourStatus.Draft || tour.IsRequest)
+                    tour.Visibility = TourVisibility.Hidden;
+                continue;
             }
-            if (tour.Status == TourStatus.Deleted || tour.Status == TourStatus.Draft || tour.IsRequest == true)
-                tour.Visibility = TourVisibility.Hidden;
-        }
-        foreach (var entry in ChangeTracker.Entries<TourPricingTier>().Where(e => e.State == EntityState.Added))
-            if (string.IsNullOrEmpty(entry.Entity.AgencyId) && entry.Entity.Tour is not null)
-                entry.Entity.AgencyId = entry.Entity.Tour.AgencyId ?? throw new InvalidOperationException("The tour requires an Agency.");
-        foreach (var entry in ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified))
-        {
-            var now = DateTime.UtcNow;
-            if (entry.Metadata.FindProperty("CreatedAt") is not null && entry.State == EntityState.Added && entry.Property("CreatedAt").CurrentValue is null)
-                entry.Property("CreatedAt").CurrentValue = now;
-            if (entry.Metadata.FindProperty("UpdatedAt") is not null)
-                entry.Property("UpdatedAt").CurrentValue = now;
+
+            tour.Status = TourStatus.Deleted;
+            tour.Visibility = TourVisibility.Hidden;
+            tour.IsDeleted = true;
+            tour.DeletedAt ??= DateTime.UtcNow;
         }
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        PrepareForSave();
+        NormalizeTourStates();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
-        PrepareForSave();
+        NormalizeTourStates();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => SaveChangesAsync(true, cancellationToken);
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.Entity is IBaseEntity<string> || e.Entity is IBaseEntity<int>);
+
+        foreach (var entry in entries)
+        {
+            var now = DateTime.UtcNow;
+            if (entry.State == EntityState.Added)
+            {
+                entry.Property("CreatedAt").CurrentValue = now;
+                entry.Property("UpdatedAt").CurrentValue = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Property("UpdatedAt").CurrentValue = now;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.Entity<AgencySubscription>().ToTable("agency_subscriptions");
-        modelBuilder.Entity<Booking>().ToTable("bookings");
-        modelBuilder.Entity<BookingSnapshot>().ToTable("booking_snapshots");
-        modelBuilder.Entity<BookingAccommodation>().ToTable("booking_hotels");
-        modelBuilder.Entity<BookingAgency>().ToTable("booking_agencies");
-        modelBuilder.Entity<BookingAssignedGuide>().ToTable("booking_assigned_guides");
-        modelBuilder.Entity<BookingAttractionCheckin>().ToTable("booking_attraction_checkins");
-        modelBuilder.Entity<BookingIncident>().ToTable("booking_incidents");
-        modelBuilder.Entity<BookingParticipant>().ToTable("booking_participants");
-        modelBuilder.Entity<BookingPriceAdjustment>().ToTable("booking_price_adjustments");
-        modelBuilder.Entity<BookingTimeline>().ToTable("booking_timelines");
-        modelBuilder.Entity<BookingTimelineAttraction>().ToTable("booking_locations");
-        modelBuilder.Entity<BookingTimelineMeal>().ToTable("booking_restaurants");
-        modelBuilder.Entity<BusinessProfile>().ToTable("business_profiles");
-        modelBuilder.Entity<ChatAttachment>().ToTable("chat_attachments");
-        modelBuilder.Entity<ChatConversation>().ToTable("chat_conversations");
-        modelBuilder.Entity<ChatMessage>().ToTable("chat_messages");
-        modelBuilder.Entity<Complaint>().ToTable("complaints");
-        modelBuilder.Entity<Feedback>().ToTable("feedbacks");
-        modelBuilder.Entity<PaymentRequest>().ToTable("payment_requests");
-        modelBuilder.Entity<PaymentTransaction>().ToTable("payment_transactions");
-        modelBuilder.Entity<RefundRequest>().ToTable("refund_requests");
-        modelBuilder.Entity<Service>().ToTable("services");
-        modelBuilder.Entity<SubscriptionPaymentHistory>().ToTable("subscription_payment_history");
-        modelBuilder.Entity<SubscriptionPlan>().ToTable("subscription_plans");
-        modelBuilder.Entity<SystemBankAccount>().ToTable("system_bank_accounts");
-        modelBuilder.Entity<SystemCommissionConfig>().ToTable("system_commission_configs");
-        modelBuilder.Entity<Tour>().ToTable("tours");
-        modelBuilder.Entity<TourAccommodation>().ToTable("tour_hotels");
-        modelBuilder.Entity<TourDesignRequest>().ToTable("tour_design_requests");
-        modelBuilder.Entity<TourDesignRequestAgency>().ToTable("tour_design_request_agencies");
-        modelBuilder.Entity<TourMeal>().ToTable("tour_restaurants");
-        modelBuilder.Entity<TourPricingTier>().ToTable("tour_pricing_tiers");
-        modelBuilder.Entity<TourTimeline>().ToTable("tour_timeline");
-        modelBuilder.Entity<TourVersion>().ToTable("tour_versions");
-        modelBuilder.Entity<TouristAttraction>().ToTable("tourist_locations");
-        modelBuilder.Entity<User>().ToTable("users");
-        DatabaseDesignConfiguration.Configure(modelBuilder);
-        DatabaseDesignDefaults.Configure(modelBuilder, Database.IsSqlServer());
-        if (!Database.IsSqlServer())
-            foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetProperties()))
-                property.SetColumnType(null);
-        if (!Database.IsSqlServer())
-            foreach (var entity in modelBuilder.Model.GetEntityTypes())
-                foreach (var check in entity.GetCheckConstraints().Where(c => c.Sql.Contains("ISJSON", StringComparison.OrdinalIgnoreCase)).ToList())
-                    entity.RemoveCheckConstraint(check.ModelName);
+
+        // 1. User
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("users");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.Name).HasMaxLength(150).IsRequired();
+            entity.Property(e => e.Email).HasMaxLength(191).IsRequired();
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.Property(e => e.Phone).HasMaxLength(30);
+            entity.Property(e => e.PasswordHash).HasMaxLength(255);
+            entity.Property(e => e.Role).HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.Property(e => e.Avatar).HasMaxLength(500);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // 2. BusinessProfile
+        modelBuilder.Entity<BusinessProfile>(entity =>
+        {
+            entity.ToTable("business_profiles");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(36).IsRequired();
+            entity.HasIndex(e => e.UserId).IsUnique();
+            entity.Property(e => e.BusinessName).HasMaxLength(255);
+            entity.Property(e => e.TaxCode).HasMaxLength(50);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.HasOne(e => e.User)
+                .WithOne(u => u.BusinessProfile)
+                .HasForeignKey<BusinessProfile>(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 3. Service
+        modelBuilder.Entity<Service>(entity =>
+        {
+            entity.ToTable("services");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProviderId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Category).HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.Property(e => e.SubCategory).HasMaxLength(100);
+            entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Price).HasPrecision(12, 2);
+            entity.Property(e => e.PriceFrom).HasPrecision(12, 2);
+            entity.Property(e => e.PriceTo).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Provider)
+                .WithMany()
+                .HasForeignKey(e => e.ProviderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // 4. Tour
+        modelBuilder.Entity<Tour>(entity =>
+        {
+            entity.ToTable("tours");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Code).HasMaxLength(50);
+            entity.Property(e => e.BasePrice).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion(
+                value => value.ToString().ToLowerInvariant(),
+                value => Enum.Parse<TourStatus>(value, true)).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Visibility).HasConversion(
+                value => value.ToString().ToLowerInvariant(),
+                value => Enum.Parse<TourVisibility>(value, true)).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.IsRequest).HasColumnName("is_request").HasDefaultValue(false);
+            entity.HasOne(e => e.Agency)
+                .WithMany()
+                .HasForeignKey(e => e.AgencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<TourPricingTier>(entity =>
+        {
+            entity.ToTable("tour_pricing_tiers");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.PricePerGuest).HasPrecision(12, 2);
+            entity.HasOne(e => e.Tour)
+                .WithMany(t => t.PricingTiers)
+                .HasForeignKey(e => e.TourId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TourTimeline>(entity =>
+        {
+            entity.ToTable("tour_timeline");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).HasMaxLength(255);
+            entity.HasOne(e => e.Tour)
+                .WithMany(t => t.Timelines)
+                .HasForeignKey(e => e.TourId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TouristAttraction>(entity =>
+        {
+            entity.ToTable("tourist_attractions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+            entity.HasOne(e => e.TourTimeline)
+                .WithMany(t => t.Attractions)
+                .HasForeignKey(e => e.TourTimelineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TourMeal>(entity =>
+        {
+            entity.ToTable("tour_meals");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MealType).HasMaxLength(50).IsRequired();
+            entity.HasOne(e => e.TourTimeline)
+                .WithMany(t => t.Meals)
+                .HasForeignKey(e => e.TourTimelineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TourAccommodation>(entity =>
+        {
+            entity.ToTable("tour_accommodations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.HotelName).HasMaxLength(255);
+            entity.Property(e => e.RoomType).HasMaxLength(100);
+            entity.HasOne(e => e.TourTimeline)
+                .WithMany(t => t.Accommodations)
+                .HasForeignKey(e => e.TourTimelineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TourVersion>(entity =>
+        {
+            entity.ToTable("tour_versions");
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Tour)
+                .WithMany(t => t.Versions)
+                .HasForeignKey(e => e.TourId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TourCustomRequest>(entity =>
+        {
+            entity.ToTable("tour_custom_requests");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CustomerId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ExpectedBudget).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.HasOne(e => e.Customer)
+                .WithMany()
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<TourCustomRequestAgency>(entity =>
+        {
+            entity.ToTable("tour_custom_request_agencies");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.QuotedPrice).HasPrecision(12, 2);
+            entity.HasOne(e => e.TourCustomRequest)
+                .WithMany(r => r.RequestAgencies)
+                .HasForeignKey(e => e.TourCustomRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Agency)
+                .WithMany()
+                .HasForeignKey(e => e.AgencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // 5. Booking
+        modelBuilder.Entity<Booking>(entity =>
+        {
+            entity.ToTable("bookings");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CustomerId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.BookingCode).HasMaxLength(50).IsRequired();
+            entity.HasIndex(e => e.BookingCode).IsUnique();
+            entity.Property(e => e.TotalAmount).HasPrecision(12, 2);
+            entity.Property(e => e.DepositAmount).HasPrecision(12, 2);
+            entity.Property(e => e.PaidAmount).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.Property(e => e.PaymentStatus).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Customer)
+                .WithMany()
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Tour)
+                .WithMany()
+                .HasForeignKey(e => e.TourId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<BookingParticipant>(entity =>
+        {
+            entity.ToTable("booking_participants");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FullName).HasMaxLength(150).IsRequired();
+            entity.Property(e => e.AttendanceStatus).HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.Participants)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.AssignedGuide)
+                .WithMany(g => g.Participants)
+                .HasForeignKey(e => e.AssignedGuideId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<BookingAssignedGuide>(entity =>
+        {
+            entity.ToTable("booking_assigned_guides");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.GuideId).HasMaxLength(36).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.AssignedGuides)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Guide)
+                .WithMany()
+                .HasForeignKey(e => e.GuideId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BookingTimeline>(entity =>
+        {
+            entity.ToTable("booking_timelines");
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.Timelines)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BookingTimelineAttraction>(entity =>
+        {
+            entity.ToTable("booking_timeline_attractions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+            entity.HasOne(e => e.BookingTimeline)
+                .WithMany(t => t.Attractions)
+                .HasForeignKey(e => e.BookingTimelineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BookingTimelineMeal>(entity =>
+        {
+            entity.ToTable("booking_timeline_meals");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MealType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Cost).HasPrecision(12, 2);
+            entity.HasOne(e => e.BookingTimeline)
+                .WithMany(t => t.Meals)
+                .HasForeignKey(e => e.BookingTimelineId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BookingAccommodation>(entity =>
+        {
+            entity.ToTable("booking_accommodations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.HotelName).HasMaxLength(255);
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.Accommodations)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BookingAttractionCheckin>(entity =>
+        {
+            entity.ToTable("booking_attraction_checkins");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.GuideId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Latitude).HasPrecision(10, 7);
+            entity.Property(e => e.Longitude).HasPrecision(10, 7);
+            entity.Property(e => e.AttendanceStatus).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.BookingTimelineAttraction)
+                .WithMany(a => a.Checkins)
+                .HasForeignKey(e => e.BookingTimelineAttractionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Guide)
+                .WithMany()
+                .HasForeignKey(e => e.GuideId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BookingIncident>(entity =>
+        {
+            entity.ToTable("booking_incidents");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ReportedBy).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Title).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.Incidents)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Reporter)
+                .WithMany()
+                .HasForeignKey(e => e.ReportedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BookingPriceAdjustment>(entity =>
+        {
+            entity.ToTable("booking_price_adjustments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AdjustedBy).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.PriceAdjustments)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Adjuster)
+                .WithMany()
+                .HasForeignKey(e => e.AdjustedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BookingAgency>(entity =>
+        {
+            entity.ToTable("booking_agencies");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.AgreedAmount).HasPrecision(12, 2);
+            entity.Property(e => e.PlatformFee).HasPrecision(12, 2);
+            entity.Property(e => e.NetPayout).HasPrecision(12, 2);
+            entity.Property(e => e.SettlementStatus).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany(b => b.BookingAgencies)
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Agency)
+                .WithMany()
+                .HasForeignKey(e => e.AgencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // 6. Finance
+        modelBuilder.Entity<PaymentRequest>(entity =>
+        {
+            entity.ToTable("payment_requests");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany()
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.ToTable("payment_transactions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TransactionCode).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.Property(e => e.ConfirmedBy).HasMaxLength(36);
+            entity.HasOne(e => e.Booking)
+                .WithMany()
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.PaymentRequest)
+                .WithMany(p => p.Transactions)
+                .HasForeignKey(e => e.PaymentRequestId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.Confirmer)
+                .WithMany()
+                .HasForeignKey(e => e.ConfirmedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<RefundRequest>(entity =>
+        {
+            entity.ToTable("refund_requests");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RequestedBy).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ReviewedBy).HasMaxLength(36);
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany()
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Requester)
+                .WithMany()
+                .HasForeignKey(e => e.RequestedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Reviewer)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<SystemBankAccount>(entity =>
+        {
+            entity.ToTable("system_bank_accounts");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.BankName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.AccountNumber).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.AccountHolderName).HasMaxLength(150).IsRequired();
+        });
+
+        modelBuilder.Entity<SystemCommissionConfig>(entity =>
+        {
+            entity.ToTable("system_commission_configs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Percentage).HasPrecision(5, 2);
+        });
+
+        // 7. Interaction
+        modelBuilder.Entity<Feedback>(entity =>
+        {
+            entity.ToTable("feedbacks");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CustomerId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany()
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Customer)
+                .WithMany()
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Agency)
+                .WithMany()
+                .HasForeignKey(e => e.AgencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<Complaint>(entity =>
+        {
+            entity.ToTable("complaints");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ComplainantId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.TargetId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.AdminId).HasMaxLength(36);
+            entity.Property(e => e.Title).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Booking)
+                .WithMany()
+                .HasForeignKey(e => e.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Complainant)
+                .WithMany()
+                .HasForeignKey(e => e.ComplainantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Target)
+                .WithMany()
+                .HasForeignKey(e => e.TargetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Admin)
+                .WithMany()
+                .HasForeignKey(e => e.AdminId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // 8. Chat
+        modelBuilder.Entity<ChatConversation>(entity =>
+        {
+            entity.ToTable("chat_conversations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserOneId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.UserTwoId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.HasOne(e => e.UserOne)
+                .WithMany()
+                .HasForeignKey(e => e.UserOneId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.UserTwo)
+                .WithMany()
+                .HasForeignKey(e => e.UserTwoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.ToTable("chat_messages");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SenderId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(20).IsRequired();
+            entity.HasOne(e => e.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(e => e.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Sender)
+                .WithMany()
+                .HasForeignKey(e => e.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ChatAttachment>(entity =>
+        {
+            entity.ToTable("chat_attachments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FileUrl).HasMaxLength(500).IsRequired();
+            entity.HasOne(e => e.Message)
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 9. Subscription
+        modelBuilder.Entity<SubscriptionPlan>(entity =>
+        {
+            entity.ToTable("subscription_plans");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Price).HasPrecision(12, 2);
+        });
+
+        modelBuilder.Entity<AgencySubscription>(entity =>
+        {
+            entity.ToTable("agency_subscriptions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AgencyId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.HasOne(e => e.Agency)
+                .WithMany()
+                .HasForeignKey(e => e.AgencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.SubscriptionPlan)
+                .WithMany()
+                .HasForeignKey(e => e.SubscriptionPlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SubscriptionPaymentHistory>(entity =>
+        {
+            entity.ToTable("subscription_payment_history");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.HasOne(e => e.AgencySubscription)
+                .WithMany()
+                .HasForeignKey(e => e.AgencySubscriptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

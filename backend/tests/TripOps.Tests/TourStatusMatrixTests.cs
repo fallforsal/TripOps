@@ -31,7 +31,7 @@ public class TourStatusMatrixTests
         context.Add(tour);
         Assert.Throws<OperationCanceledException>(() => context.SaveChanges());
         Assert.Equal(expected, tour.Visibility);
-        Assert.Equal(status, tour.Status);
+        Assert.Equal(status == TourStatus.Deleted, tour.IsDeleted);
     }
 
     [Fact]
@@ -44,8 +44,8 @@ public class TourStatusMatrixTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => context.SaveChangesAsync());
         Assert.Equal(TourStatus.Deleted, tour.Status);
         Assert.Equal(TourVisibility.Hidden, tour.Visibility);
-        Assert.Null(context.Model.FindEntityType(typeof(Tour))!.FindProperty("IsDeleted"));
-        Assert.Null(context.Model.FindEntityType(typeof(Tour))!.FindProperty("DeletedAt"));
+        Assert.True(tour.IsDeleted);
+        Assert.NotNull(tour.DeletedAt);
     }
 
     [Fact]

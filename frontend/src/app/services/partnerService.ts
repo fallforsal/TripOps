@@ -21,13 +21,6 @@ export const partnerService = {
     }),
   list: (query: URLSearchParams, signal?: AbortSignal) =>
     http<PartnerPage>(`/admin/partner-applications?${query}`, { signal }),
-  byUserId: async (userId: string, signal?: AbortSignal): Promise<PartnerApplication> => {
-    const query = new URLSearchParams({ userId, role: "provider", page: "1", pageSize: "1" });
-    const result = await http<PartnerPage>(`/admin/partner-applications?${query}`, { signal });
-    const partner = result.items.find(item => item.profile.userId === userId);
-    if (!partner) throw new Error("Nhà cung cấp chưa có hồ sơ doanh nghiệp trên hệ thống.");
-    return partner;
-  },
   approve: (id: number) =>
     http<BusinessProfile>(`/admin/partner-applications/${id}/approve`, {
       method: "POST",

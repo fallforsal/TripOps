@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   LayoutDashboard,
   Layers,
@@ -10,8 +10,6 @@ import {
   Building2,
   Plus,
   PlusCircle,
-  BedDouble,
-  ClipboardList,
 } from "lucide-react";
 import { User } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
@@ -23,7 +21,6 @@ interface ProviderLayoutProps {
   currentUser: User;
   onLogout?: () => void;
   onCreateService?: () => void;
-  pendingRequestsCount?: number;
 }
 
 export function ProviderLayout({
@@ -33,7 +30,6 @@ export function ProviderLayout({
   currentUser,
   onLogout,
   onCreateService,
-  pendingRequestsCount = 0,
 }: ProviderLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -41,12 +37,6 @@ export function ProviderLayout({
   const menuItems = [
     { id: "overview", label: "Tổng quan Hoạt động", icon: LayoutDashboard },
     { id: "services", label: "Quản lý Dịch vụ", icon: Layers },
-    {
-      id: "room-requests",
-      label: "Yêu cầu Dịch vụ",
-      icon: ClipboardList,
-      badge: pendingRequestsCount,
-    },
     { id: "create", label: "Đăng Dịch vụ Mới", icon: PlusCircle },
     { id: "profile", label: "Hồ sơ Doanh nghiệp", icon: Building2 },
   ];
@@ -148,19 +138,8 @@ export function ProviderLayout({
                 }`}
               />
               {!collapsed && (
-                <span className="text-sm flex-1 text-left truncate">
+                <span className="text-sm">
                   {item.label}
-                </span>
-              )}
-              {!collapsed && (item as any).badge !== undefined && (item as any).badge > 0 && (
-                <span
-                  className={`text-[10px] font-black px-2 py-0.5 rounded-full ml-auto ${
-                    isActive
-                      ? "bg-white text-[#F97316]"
-                      : "bg-amber-500 text-white animate-pulse"
-                  }`}
-                >
-                  {(item as any).badge}
                 </span>
               )}
             </button>

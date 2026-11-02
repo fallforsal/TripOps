@@ -112,15 +112,6 @@ export function AgencyCustomRequests({
   if (designingRequest) {
     return (
       <TourFormPage
-        company={company}
-        tour={editingTourForRequest || null}
-        onBack={() => {
-          setDesigningRequest(null);
-          setEditingTourForRequest(null);
-        }}
-        onSubmit={handleSaveTourFromRequest}
-        customRequest={designingRequest}
-        isCustomTour={true}
         companyId={company.id}
         companyName={company.name}
         companyLogo={company.logo}
@@ -139,7 +130,7 @@ export function AgencyCustomRequests({
           budgetPerPerson: designingRequest.budgetPerPerson,
           contactName: designingRequest.contactName,
           businessName: designingRequest.businessName,
-          specialRequirements: designingRequest.additionalInfo,
+          specialRequirements: designingRequest.specialRequirements,
           version: editingTourForRequest ? (editingTourForRequest.version || 1) + 1 : 1,
         }}
         initialTour={editingTourForRequest || undefined}
@@ -217,11 +208,11 @@ export function AgencyCustomRequests({
       {/* Modals */}
       {versionHistoryTour && (
         <TourVersionHistoryModal
-          isOpen={Boolean(versionHistoryTour)}
+          open={Boolean(versionHistoryTour)}
           onClose={() => setVersionHistoryTour(null)}
           tour={versionHistoryTour}
-          onRestoreVersion={(tourId, verNum) => {
-            onRestoreTourVersion?.(tourId, verNum);
+          onRestoreVersion={(verNum) => {
+            onRestoreTourVersion?.(versionHistoryTour.id, verNum);
             setVersionHistoryTour(null);
           }}
         />
@@ -360,13 +351,13 @@ function RequestGroupSection({
               {/* Collapsible Details */}
               {isExp && (
                 <div className="p-6 bg-[#F0F9FF] border-t border-[#CBD5E1] space-y-6">
-                  {req.additionalInfo && (
+                  {req.specialRequirements && (
                     <div className="space-y-1 bg-white p-4 rounded-xl border border-[#CBD5E1]">
                       <span className="text-xs uppercase font-semibold tracking-wider text-[#F97316]">
                         Yêu cầu & Ghi chú từ khách hàng:
                       </span>
                       <p className="text-xs text-[#0F172A]/80 font-light leading-relaxed">
-                        {req.additionalInfo}
+                        {req.specialRequirements}
                       </p>
                     </div>
                   )}

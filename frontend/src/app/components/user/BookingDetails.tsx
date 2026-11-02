@@ -1,4 +1,4 @@
-import { Booking, Location } from "@/app/types";
+﻿import { Booking, Location } from "@/app/types";
 import {
   X,
   Calendar,
@@ -239,7 +239,7 @@ export function BookingDetails({
                             {day.description}
                           </p>
                           <p className="text-sm text-gray-500 mt-1">
-                            {day.date ? formatDate(day.date) : "Chưa xác định ngày"}
+                            {formatDate(day.date)}
                           </p>
                         </div>
                       </div>

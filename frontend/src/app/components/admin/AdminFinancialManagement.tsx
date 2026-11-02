@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Booking, SystemBankAccount } from "@/app/types";
 import {
   Landmark,
@@ -648,8 +648,8 @@ export function AdminFinancialManagement({
                     finalAmount: a.finalAmount,
                     platformFee: fee,
                     netPayout: net,
-                    settlementStatus: a.settlementStatus === "paid" ? "settled" : a.settlementStatus || "ready",
-                    bankReferenceCode: a.bankReferenceCode,
+                    settlementStatus: a.settlementStatus || "ready",
+                    bankReference: a.bankReference,
                   };
                 })
               : coHosts.map((host) => {
@@ -673,7 +673,7 @@ export function AdminFinancialManagement({
                     platformFee: fee,
                     netPayout: amount - fee,
                     settlementStatus: host.settlementStatus || "ready",
-                    bankReferenceCode: undefined,
+                    bankReference: undefined,
                   };
                 });
 
@@ -781,7 +781,7 @@ export function AdminFinancialManagement({
                               {isAgencySettled ? (
                                 <span className="inline-flex items-center justify-center w-full gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Đã quyết toán ({agency.bankReferenceCode || settlementTransactionCode})
+                                  Đã quyết toán ({agency.bankReference || settlementTransactionCode})
                                 </span>
                               ) : (
                                 <Button

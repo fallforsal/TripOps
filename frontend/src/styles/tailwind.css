@@ -4,15 +4,15 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-brand-primary: #075985;
-  --color-brand-primary-hover: #0C4A6E;
-  --color-brand-primary-dark: #082F49;
-  --color-brand-primary-light: #F0F9FF;
+  --color-brand-primary: #0EA5E9;
+  --color-brand-primary-hover: #0284C7;
+  --color-brand-primary-dark: #075985;
+  --color-brand-primary-light: #E0F2FE;
+  
+  --color-brand-accent: #F97316;
+  --color-brand-accent-hover: #EA580C;
 
-  --color-brand-accent: #0369A1;
-  --color-brand-accent-hover: #0284C7;
-
-  --color-surface-canvas: #F8FAFC;
+  --color-surface-canvas: #F0F9FF;
   --color-surface-card: #FFFFFF;
   --color-surface-text: #0F172A;
   --color-surface-muted: #475569;

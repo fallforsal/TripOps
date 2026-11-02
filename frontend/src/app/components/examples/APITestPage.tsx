@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Test Page
  * Trang demo các API calls để test functionality
  */
@@ -191,14 +191,14 @@ import { getAllTours } from '@/app/services';
 
 function TourList() {
   const { data: tours, loading, error, execute } = useApi(getAllTours);
-
+  
   useEffect(() => {
     execute();
   }, []);
-
+  
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
-
+  
   return (
     <div>
       {tours?.map(tour => <TourCard key={tour.id} tour={tour} />)}

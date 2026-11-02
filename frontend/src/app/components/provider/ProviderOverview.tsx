@@ -1,4 +1,4 @@
-import { Service, User } from "@/app/types";
+﻿import { Service, User } from "@/app/types";
 import {
   Layers,
   Clock,
@@ -15,7 +15,6 @@ import {
   TrendingUp,
   MapPin,
   Building2,
-  BedDouble,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -26,8 +25,6 @@ interface ProviderOverviewProps {
   onCreateService: () => void;
   onNavigateToServices: () => void;
   onViewDetail: (service: Service) => void;
-  pendingGroupRequestsCount?: number;
-  onNavigateToRoomRequests?: () => void;
 }
 
 export function ProviderOverview({
@@ -36,14 +33,12 @@ export function ProviderOverview({
   onCreateService,
   onNavigateToServices,
   onViewDetail,
-  pendingGroupRequestsCount = 0,
-  onNavigateToRoomRequests,
 }: ProviderOverviewProps) {
   const providerServices = services.filter((s) => s.providerId === currentUser.id);
 
   const stats = {
     total: providerServices.length,
-    approved: providerServices.filter((s) => s.status === "approved" && !s.isPaused).length,
+    approved: providerServices.filter((s) => s.status === "approved").length,
     pending: providerServices.filter((s) => s.status === "pending").length,
     rejected: providerServices.filter((s) => s.status === "rejected").length,
     avgRating:
@@ -105,37 +100,6 @@ export function ProviderOverview({
         <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
         <div className="absolute right-32 -bottom-20 w-80 h-80 rounded-full bg-[#F97316]/20 blur-3xl pointer-events-none"></div>
       </div>
-
-      {/* New Group Reservation Requests Alert Banner */}
-      {pendingGroupRequestsCount > 0 && onNavigateToRoomRequests && (
-        <div className="bg-gradient-to-r from-amber-500 via-[#F97316] to-amber-600 rounded-3xl p-5 text-white shadow-lg shadow-orange-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 border border-amber-400/40">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 shadow-inner">
-              <BedDouble className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-black text-base sm:text-lg">
-                  Bạn có {pendingGroupRequestsCount} yêu cầu giữ phòng đoàn mới từ các Công ty Lữ hành!
-                </h4>
-                <span className="px-2 py-0.5 rounded-full bg-white text-amber-950 font-black text-[10px] uppercase tracking-wider shadow-xs animate-pulse">
-                  Cần báo giá
-                </span>
-              </div>
-              <p className="text-xs text-amber-100 mt-0.5 leading-relaxed">
-                Agency đang chờ xác nhận số phòng và báo giá tổng trọn gói cho toàn bộ đoàn khách.
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={onNavigateToRoomRequests}
-            className="bg-white text-amber-950 hover:bg-amber-50 font-black text-xs rounded-xl shadow-md px-5 py-2.5 h-auto flex-shrink-0 transition-transform active:scale-95"
-          >
-            Xem & Báo giá ngay
-            <ArrowRight className="w-4 h-4 ml-1.5" />
-          </Button>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -348,6 +312,9 @@ export function ProviderOverview({
                     <div className="font-bold text-sm text-gray-900">
                       {service.price?.toLocaleString("vi-VN")}đ
                     </div>
+                    <span className="text-[11px] text-gray-400 font-mono">
+                      Mã: {service.id}
+                    </span>
                   </div>
 
                   <div>
@@ -355,8 +322,6 @@ export function ProviderOverview({
                       <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
                         Đã duyệt
                       </Badge>
-                    ) : service.status === "hidden" ? (
-                      <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-xs">Admin đã ẩn</Badge>
                     ) : service.status === "rejected" ? (
                       <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-xs">
                         Từ chối
