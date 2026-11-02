@@ -16,7 +16,6 @@ import {
   Compass,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
-import { BookingNotificationBell } from "@/app/components/booking/BookingNotificationBell";
 
 interface AgencyLayoutProps {
   children: React.ReactNode;
@@ -26,7 +25,6 @@ interface AgencyLayoutProps {
   currentUser: User;
   coHostingBadgeCount?: number;
   onLogout?: () => void;
-  onOpenBooking?: (id: number) => void;
 }
 
 export function AgencyLayout({
@@ -37,7 +35,6 @@ export function AgencyLayout({
   currentUser,
   coHostingBadgeCount,
   onLogout,
-  onOpenBooking,
 }: AgencyLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -205,7 +202,6 @@ export function AgencyLayout({
         </div>
 
         {/* Dynamic Page Content */}
-        {onOpenBooking && <div className="flex justify-end items-center gap-2 px-6 pt-4 text-sm text-slate-600"><span>Thông báo đặt tour</span><BookingNotificationBell key={currentUser.id} onOpenBooking={onOpenBooking} /></div>}
         <main className="flex-1 p-6 sm:p-8 w-full space-y-6">
           <AnimatePresence mode="wait">
             <motion.div

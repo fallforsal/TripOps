@@ -16,7 +16,6 @@ import {
 import type { User } from "@/app/types";
 import { TRIPOPS_LOGO } from "@/app/constants/logo";
 import { Button } from "@/app/components/ui/button";
-import { BookingNotificationBell } from "@/app/components/booking/BookingNotificationBell";
 import { Avatar, AvatarImage, AvatarFallback } from "@/app/components/ui/avatar";
 import {
   DropdownMenu,
@@ -76,7 +75,6 @@ interface CustomerHeaderProps {
   onShowLogin: () => void;
   onLogout: () => void;
   onOpenAIAdvisor?: () => void;
-  onOpenBooking?: (id: number) => void;
 }
 
 export function CustomerHeader({
@@ -86,7 +84,6 @@ export function CustomerHeader({
   onShowLogin,
   onLogout,
   onOpenAIAdvisor,
-  onOpenBooking,
 }: CustomerHeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const links = [
@@ -153,7 +150,6 @@ export function CustomerHeader({
           </nav>
         )}
         <div className="trip-header-actions">
-          {currentUser?.role === "user" && onOpenBooking && <BookingNotificationBell key={currentUser.id} viewer="customer" onOpenBooking={onOpenBooking} />}
           {onOpenAIAdvisor && (
             <button
               className="trip-ai-trigger"

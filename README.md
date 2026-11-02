@@ -49,9 +49,17 @@ Chỉ giữ 4 tài khoản trên; Agency và Provider đã duyệt. Có 1 dịch
 - Tour: tạo/sửa nháp, hoàn tất giữ ẩn, công khai/tạm ẩn, lưu trữ, clone, lịch sử/khôi phục và kiểm tra xung đột phiên bản.
 - Chọn ăn/ở từ dịch vụ Provider đã duyệt; giữ `service_id`, mặc định/thay thế, phụ thu và giờ bữa ăn khi lưu/đọc lại.
 - Tìm kiếm/lọc/phân trang, chi tiết tour công khai.
-- Booking, tính giá ở BE, hành khách/ghi chú xếp phòng và ăn uống, lựa chọn dịch vụ đã cấu hình, lưu snapshot lịch trình/dịch vụ đã chốt.
+- Booking, tính giá ở BE, hành khách/ghi chú xếp phòng và ăn uống, lựa chọn dịch vụ đã cấu hình, lưu bản sao lịch trình/dịch vụ lúc đặt.
 - Khách xem/hủy booking; Agency xác nhận/từ chối và gán/gỡ HDV.
 - HDV chỉ xem/thao tác booking được giao; điểm danh có người thực hiện/thời gian, check-in điểm tham quan, báo sự cố, bắt đầu/hoàn tất tour.
+
+### Tạm gỡ luồng phương án và snapshot hợp đồng (02/11/2026)
+
+Đã gỡ chức năng gửi/chấp nhận/yêu cầu sửa phương án, lịch sử phiên bản hợp đồng, hợp đồng từ bản đã chốt và thông báo phương án ở Customer/Agency. Booking và duyệt đơn trở về luồng trước PR #15; không tự chốt yêu cầu ban đầu thành phiên bản hợp đồng như PR #17. Các ghi chú hành khách, bản sao lịch trình/dịch vụ của booking, header và sửa lỗi điều hướng vẫn được giữ.
+
+Hai bảng `booking_snapshots`, `booking_proposal_events` cùng mapping và các migration đã phát hành được giữ để bảo toàn dữ liệu cũ và tính nhất quán EF. Luồng booking hiện tại không đọc/ghi chúng và không còn các API phương án/thông báo. Không cần chạy migration mới, rollback database hoặc xóa bảng khi dùng bản hoàn tác này.
+
+Code đầy đủ vẫn nằm trên nhánh `feat/customer-payment` và các nhánh snapshot. Khi muốn đưa trở lại, hoàn tác commit gỡ tính năng hoặc tạo commit áp dụng lại rõ ràng; chỉ merge nhánh cũ có thể không khôi phục các thay đổi đã bị revert. Phần lịch thanh toán mới trên nhánh payment chưa được đưa vào bản hoàn tác này.
 
 ## Upload và thanh toán Development
 

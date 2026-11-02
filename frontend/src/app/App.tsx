@@ -427,13 +427,6 @@ function Application() {
     });
   };
 
-  const handleSnapshotUpdated = (dto: BookingDto) => {
-    const updated = fromApiBooking(dto, tours, currentUser);
-    setBookings(prev => prev.some(b => b.id === updated.id)
-      ? prev.map(b => b.id === updated.id ? updated : b) : [updated, ...prev]);
-    setSelectedUserBooking(prev => prev?.id === updated.id ? updated : prev);
-  };
-
   const handleViewUserBookingDetail = async (booking: Booking) => {
     const detailHash = `#/my-bookings/${encodeURIComponent(booking.id)}`;
     navigateForward(() => {
@@ -446,7 +439,7 @@ function Application() {
       try {
         const detail = await getBookingDetail(numericId);
         const converted = fromApiBooking(detail, tours, currentUser);
-        // The user may have returned to the list while this request was running.
+        // Do not reopen the detail if the user returned to the list meanwhile.
         if (window.location.hash === detailHash) setSelectedUserBooking(converted);
         setBookings((prev) =>
           prev.map((b) => (b.id === booking.id ? converted : b)),
@@ -641,16 +634,6 @@ function Application() {
 
   // Admin / Company actions
   const handleApproveBooking = async (bookingId: string) => {
-    const target = bookings.find((b) => b.id === bookingId);
-    // Phương án A: chưa có bản chốt và không có phương án đang chờ -> Duyệt = chốt yêu cầu ban đầu.
-    const willAgreeOnRequest = !target?.agreedSnapshot && !target?.latestProposal;
-    if (
-      willAgreeOnRequest &&
-      !window.confirm(
-        "Duyệt đơn nghĩa là đồng ý theo đúng yêu cầu đặt tour ban đầu của khách. Hệ thống sẽ lưu thành phương án đã thống nhất và báo cho khách.\n\nNếu cần đổi giá hoặc dịch vụ, hãy chọn Hủy và gửi phương án mới. Tiếp tục duyệt?",
-      )
-    )
-      return false;
     try {
       const updated = fromApiBooking(
         await decideBooking(Number(bookingId), "approve"),
@@ -658,12 +641,7 @@ function Application() {
         currentUser,
       );
       setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
-      window.dispatchEvent(new Event("booking-proposal-updated"));
-      toast.success(
-        willAgreeOnRequest && updated.agreedSnapshot
-          ? `Đã xác nhận đơn và chốt yêu cầu ban đầu thành phương án ${updated.agreedSnapshot.version}.`
-          : "Đã xác nhận đơn đặt tour trên máy chủ.",
-      );
+      toast.success("Đã xác nhận đơn đặt tour trên máy chủ.");
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không duyệt được đơn. Vui lòng thử lại.");
@@ -1230,7 +1208,6 @@ function Application() {
               onUpdateGuide={handleUpdateGuide}
               onRemoveGuide={handleRemoveGuide}
               onApproveBooking={handleApproveBooking}
-              onSnapshotUpdated={handleSnapshotUpdated}
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
               onUpdateAssignedGuides={handleUpdateAssignedGuides}
@@ -1359,14 +1336,6 @@ function Application() {
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] font-sans antialiased text-[#0F172A]">
       <CustomerHeader
         currentUser={currentUser}
-        onOpenBooking={async id => {
-          try {
-            const dto = await getBookingDetail(id);
-            handleSnapshotUpdated(dto);
-            const booking = fromApiBooking(dto, tours, currentUser);
-            await handleViewUserBookingDetail(booking);
-          } catch (error: any) { toast.error(error.message || "Không tải được đơn đặt tour."); }
-        }}
         currentPage={currentPage}
         onNavigate={handleNavigate}
         onShowLogin={() => setShowLogin(true)}
@@ -1486,7 +1455,6 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
-              onSnapshotUpdated={handleSnapshotUpdated}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking

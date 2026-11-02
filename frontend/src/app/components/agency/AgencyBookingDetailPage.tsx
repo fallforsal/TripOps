@@ -92,11 +92,8 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
-import type { BookingDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
-  onSnapshotUpdated?: (updated: BookingDto) => void;
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -195,7 +192,6 @@ export function AgencyBookingDetailPage({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
-  onSnapshotUpdated,
 }: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -1105,8 +1101,6 @@ export function AgencyBookingDetailPage({
   };
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
-  // Duyệt qua API thật. Kết quả (thành công/lỗi) được App báo bằng toast; chỉ cập nhật giao diện khi máy chủ xác nhận.
-  // Chưa gọi onUpdateBookingAgencies vì API đồng tổ chức chưa có (chỉ báo "chưa triển khai").
   const handleApproveHappyCase = async () => {
     const approved = await onApproveBooking(booking.id);
     if (approved === false) return;
@@ -1762,13 +1756,6 @@ export function AgencyBookingDetailPage({
         </div>
       </div>
 
-      {/* Booking Snapshot & Versioning Panel */}
-      <BookingSnapshotPanel
-        booking={booking}
-        currentUserRole="agency"
-        onSnapshotUpdated={onSnapshotUpdated}
-      />
-
       {/* Provider Price Verification Notice for Pending Bookings */}
       {booking.status === "pending" && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 mb-6 flex items-start gap-3.5 shadow-2xs">
@@ -2283,7 +2270,7 @@ export function AgencyBookingDetailPage({
                       Quy trình duyệt booking &amp; Thỏa thuận liên minh
                     </p>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      Duyệt booking khi chưa gửi phương án nghĩa là đồng ý theo đúng yêu cầu đặt tour ban đầu: hệ thống lưu thành phương án đã thống nhất và báo cho khách. Nếu cần đổi giá hoặc dịch vụ, hãy gửi phương án mới thay vì duyệt; khi có phương án đang chờ khách phản hồi thì chưa duyệt được.
+                      Công ty chủ trì duyệt booking khi xác nhận cty và đối tác có thể dẫn dắt đoàn. Sau khi duyệt, Chủ trì có thể chủ động tạo các đợt yêu cầu thanh toán (chia đợt đặt cọc hoặc thanh toán toàn bộ tùy thỏa thuận với khách hàng).
                     </p>
                   </div>
                   {isCurrentCompanyLead && (

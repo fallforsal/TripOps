@@ -349,6 +349,7 @@ Table bookings {
 // DANH SÁCH HÀNH KHÁCH THEO TỪNG CHẶNG VÀ CÔNG TY
 // ============================================================================
 Table booking_snapshots {
+  // Retained schema after feature rollback (02/11/2026); no active proposal API or booking-flow writes.
   id int [pk, increment]
   booking_id int [not null, note: 'FK trỏ tới bookings.id']
   version int [not null]
@@ -993,6 +994,7 @@ Ref: tourist_locations.tour_timeline_id > tour_timeline.id
 Ref: tour_restaurants.tour_timeline_id > tour_timeline.id
 
 Table booking_proposal_events {
+  // Retained schema after feature rollback (02/11/2026); existing records are preserved.
   id int [pk, increment]
   snapshot_id int [not null]
   actor_id varchar(36) [not null]
