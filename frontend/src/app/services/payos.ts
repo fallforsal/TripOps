@@ -32,5 +32,17 @@ export function formatVietnamDateTime(iso?: string | null): string {
   return `${part("hour")}:${part("minute")} ${part("day")}/${part("month")}/${part("year")}`;
 }
 
+/**
+ * Hiển thị hạn thanh toán theo giờ Việt Nam. Hạn đúng 00:00 (ví dụ Đợt 2: trước 00:00 ngày 23/11)
+ * được hiển thị là "23:59 22/11/2026" để khách hiểu là phải trả xong trong ngày 22/11.
+ */
+export function formatVietnamDeadline(iso?: string | null): string {
+  if (!iso) return "";
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return "";
+  const text = formatVietnamDateTime(iso);
+  return text.startsWith("00:00 ") ? formatVietnamDateTime(new Date(time - 60_000).toISOString()) : text;
+}
+
 /** Kết quả tra cứu payOS do backend trả về. */
 export type PaymentOutcome = "paid" | "pending" | "cancelled" | "expired" | "review" | "failed" | "none";

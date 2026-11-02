@@ -243,7 +243,8 @@ public sealed partial class BookingFlowTests
             {
                 Assert.Equal("balance", balance.Stage);
                 Assert.Equal(2500000, balance.Amount);
-                Assert.Equal("Scheduled", balance.Status);
+                Assert.Equal("Scheduled", balance.Status); // mở thu sau khi đủ cọc
+                Assert.Equal(TripOps.Service.Payments.PaymentRules.BalanceDeadline(createRequest.StartDate), balance.DueAt!.Value.ToUniversalTime());
             });
 
         // 5. Customer đặt cọc (mô phỏng Development) đúng số tiền của đợt cọc

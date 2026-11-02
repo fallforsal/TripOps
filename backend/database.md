@@ -592,11 +592,11 @@ Ref: booking_incidents.reported_by > users.id
 Table payment_requests {
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
-  stage varchar(20) [note: 'Đợt thu: deposit (cọc, mở khi Agency duyệt đơn) | balance (phần còn lại sau tour). NULL = khoản cũ trước khi có lịch thanh toán. CHECK CK_payment_requests_stage']
+  stage varchar(20) [note: 'Đợt thu: deposit (cọc 50%, mở khi Agency duyệt đơn) | balance (phần còn lại, tạo cùng lúc duyệt, thu sau khi đủ cọc, hạn trước khởi hành 1 tuần). NULL = khoản cũ trước khi có lịch thanh toán. CHECK CK_payment_requests_stage']
   description varchar(255) [not null, note: 'Khớp 100% với ô nhập "Nội dung yêu cầu" trên Modal (công ty có thể gõ tự do: "Cọc đợt 1 (50%)", "Thanh toán đợt 2", "Phụ thu đổi khách sạn"...).']
   amount decimal(12, 2) [not null, note: 'Số tiền cần thu']
   due_date date [note: 'Ngày hạn thanh toán (theo giờ Việt Nam). Khoản cũ chỉ có cột này']
-  due_at timestamp [note: 'Hạn thanh toán chính xác, lưu UTC. Đợt cọc: thời điểm Agency duyệt + 24 giờ (backend tính, không gia hạn khi duyệt lặp)']
+  due_at timestamp [note: 'Hạn thanh toán chính xác, lưu UTC. Đợt cọc: thời điểm Agency duyệt + 24 giờ (backend tính, không gia hạn khi duyệt lặp). Đợt 2: 00:00 ngày khởi hành (giờ VN) − 7 ngày, ví dụ khởi hành 30/11 thì hạn hết ngày 22/11']
   status varchar(30) [default: 'PENDING', note: 'PENDING, PAID, OVERDUE, CANCELLED']
   created_by varchar(36) [note: 'FK tới users.id']
   created_at timestamp [default: `now()`]

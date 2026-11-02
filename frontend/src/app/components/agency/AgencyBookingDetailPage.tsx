@@ -20,7 +20,7 @@ import {
   IncidentStatus,
   Location,
 } from "@/app/types";
-import { formatVietnamDateTime } from "@/app/services/payos";
+import { formatVietnamDeadline } from "@/app/services/payos";
 import {
   ArrowLeft,
   Calendar,
@@ -4225,7 +4225,8 @@ export function AgencyBookingDetailPage({
               </div>
               <p className="mt-0.5">
                 Khi công ty <strong>duyệt đơn</strong>, hệ thống mở Đợt 1 – đặt cọc <strong>50%</strong> tổng giá trị, hạn <strong>24 giờ</strong> kể từ lúc duyệt.
-                Phần còn lại thu sau khi tour kết thúc. Khách thanh toán qua payOS; đơn chỉ hiện "đã cọc" sau khi máy chủ xác minh với payOS.
+                Đợt 2 (phần còn lại) mở sau khi đủ cọc, hạn chót trước ngày khởi hành 1 tuần (ví dụ khởi hành 30/11 thì hạn hết ngày 22/11).
+                Khách thanh toán qua payOS; đơn chỉ cập nhật sau khi máy chủ xác minh với payOS.
               </p>
             </div>
 
@@ -4251,15 +4252,15 @@ export function AgencyBookingDetailPage({
                             ? "bg-gray-100 text-gray-700 border-gray-200"
                             : "bg-amber-100 text-amber-800 border-amber-200"
                         }`}>
-                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Thu sau tour" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
+                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Mở sau khi đủ cọc" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-gray-500 pt-1">
-                        <span>Hạn: {pr.dueAt ? `${formatVietnamDateTime(pr.dueAt)} (giờ VN)` : pr.dueDate || "—"}</span>
+                        <span>Hạn: {pr.dueAt ? `${formatVietnamDeadline(pr.dueAt)} (giờ VN)` : pr.dueDate || "—"}</span>
                         <span className="font-bold text-[#075985] text-sm">{formatVND(pr.amount)}</span>
                       </div>
-                      {pr.dueAfterDeparture && pr.status !== "paid" && (
-                        <p className="text-[10px] text-amber-700">Hạn cọc rơi sau ngày khởi hành.</p>
+                      {pr.warning && pr.status !== "paid" && (
+                        <p className="text-[10px] text-amber-700">{pr.warning}</p>
                       )}
                       {pr.paidAt && (
                         <p className="text-[10px] text-emerald-600 font-medium">

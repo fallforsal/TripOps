@@ -385,7 +385,7 @@ export interface PaymentRequest {
   /** Số tiền còn phải trả của đợt (đợt đã trả: tổng tiền đợt). */
   amount: number;
   description?: string;
-  /** "" khi đợt chưa có hạn (ví dụ phần còn lại thu sau tour). */
+  /** Ngày hạn (yyyy-MM-dd); "" khi đợt chưa có hạn. */
   dueDate: string;
   status: "pending" | "paid" | "overdue" | "cancelled" | "scheduled" | "not_issued";
   createdAt: string;
@@ -396,8 +396,8 @@ export interface PaymentRequest {
   totalAmount?: number;
   /** Hạn chính xác (ISO UTC) do backend tính. */
   dueAt?: string;
-  /** Hạn cọc rơi sau thời điểm khởi hành. */
-  dueAfterDeparture?: boolean;
+  /** Cảnh báo hạn bất thường do backend trả về. */
+  warning?: string;
 }
 
 export interface PaymentTransactionView {

@@ -5,12 +5,17 @@ namespace TripOps.Service.Payments;
 /// <summary>
 /// Quy tắc thanh toán hai đợt đã chốt (không phải cấu hình, không cho Customer/Agency chọn khác):
 /// Đợt 1 – đặt cọc 50% tổng giá trị booking, hạn = thời điểm Agency duyệt + 24 giờ.
-/// Đợt 2 – phần còn lại, thu sau khi tour kết thúc.
+/// Đợt 2 – phần còn lại, phải thanh toán xong trước ngày khởi hành 1 tuần
+/// (khởi hành 30/11 → hạn chót hết ngày 22/11, tức trước 00:00 ngày 23/11 giờ Việt Nam).
 /// </summary>
 public static class PaymentRules
 {
     public const decimal DepositPercent = 50m;
     public static readonly TimeSpan DepositWindow = TimeSpan.FromHours(24);
+    public static readonly TimeSpan BalanceLeadTime = TimeSpan.FromDays(7);
+
+    /// <summary>Hạn Đợt 2 (UTC): 00:00 ngày khởi hành (giờ VN) lùi 7 ngày = hết ngày (khởi hành − 8).</summary>
+    public static DateTime BalanceDeadline(DateTime startDate) => VietnamMidnightUtc(startDate) - BalanceLeadTime;
 
     /// <summary>Việt Nam dùng GMT+7 cố định (không có giờ mùa hè).</summary>
     public static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);

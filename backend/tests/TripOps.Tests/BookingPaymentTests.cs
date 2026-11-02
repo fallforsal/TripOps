@@ -215,10 +215,18 @@ public sealed partial class BookingFlowTests
         Assert.Equal("Confirmed", paid.Status);
         Assert.Equal("PartiallyPaid", paid.PaymentStatus);
         Assert.Equal(1500000, paid.PaymentSchedule![1].Outstanding);
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
-            new BookingDepositRequest(1500000, "AGAIN", null))).StatusCode);
+        Assert.Equal("Pending", paid.PaymentSchedule[1].Status); // đủ cọc thì Đợt 2 mở thu
+        // Mã giao dịch đã dùng cho số tiền khác bị từ chối.
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
             new BookingDepositRequest(500000, "FULL", null))).StatusCode);
+        // Lần trả tiếp theo là Đợt 2 (đúng phần còn lại) → đơn đã thanh toán đủ.
+        var full = (await (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "BALANCE", null))).Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal("Paid", full.Status);
+        Assert.Equal("Paid", full.PaymentStatus);
+        Assert.All(full.PaymentSchedule!, item => Assert.Equal("Paid", item.Status));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "AGAIN", null))).StatusCode);
     }
 
     [Fact]
@@ -253,8 +261,43 @@ public sealed partial class BookingFlowTests
         using var check = app.Services.CreateScope();
         var requests = await check.ServiceProvider.GetRequiredService<TripOpsDbContext>().PaymentRequests.AsNoTracking()
             .Where(r => r.BookingId == booking.Id).ToListAsync();
-        Assert.Equal(2, requests.Count); // khoản cũ được giữ lại, không xóa
+        Assert.Equal(3, requests.Count); // khoản cũ được giữ lại (không xóa) + Đợt 1 + Đợt 2
         Assert.Equal(PaymentRequestStatus.Cancelled, requests.Single(r => r.Stage == null).Status);
+    }
+
+    [Fact]
+    public async Task Balance_is_due_one_week_before_departure_and_cannot_be_paid_after_that()
+    {
+        // Khởi hành 30/11 → hạn Đợt 2 hết ngày 22/11 (00:00 23/11 giờ VN = 17:00 22/11 UTC).
+        Assert.Equal(new DateTime(2026, 11, 22, 17, 0, 0, DateTimeKind.Utc), PaymentRules.BalanceDeadline(new DateTime(2026, 11, 30)));
+        Assert.Equal(new DateTime(2026, 11, 22), PaymentRules.VietnamDate(PaymentRules.BalanceDeadline(new DateTime(2026, 11, 30)).AddTicks(-1)));
+
+        var clock = new TestClock();
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var start = DateTime.UtcNow.Date.AddDays(20);
+        var (customer, _, booking) = await ApprovedBooking(app, Sample() with { StartDate = start });
+        var balance = booking.PaymentSchedule![1];
+        Assert.Equal("balance", balance.Stage);
+        Assert.Equal("Scheduled", balance.Status); // chờ đủ cọc
+        Assert.Equal(PaymentRules.BalanceDeadline(start), balance.DueAt!.Value.ToUniversalTime());
+        Assert.Equal(start.AddDays(-8), balance.DueDate!.Value.Date);
+        Assert.Null(balance.Warning);
+
+        (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "DEP", null))).EnsureSuccessStatusCode();
+        clock.Fixed = PaymentRules.BalanceDeadline(start).AddMinutes(1);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "LATE-BALANCE", null))).StatusCode);
+        Assert.Equal(0, payOs.CreateCalls);
+        var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal("Overdue", current.PaymentSchedule![1].Status);
+        Assert.Equal("Confirmed", current.Status); // không tự hủy
+
+        // Duyệt quá sát ngày khởi hành: hạn Đợt 2 không sau hạn cọc → có cảnh báo để chốt quy tắc.
+        clock.Fixed = null;
+        var (_, _, late) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(5) });
+        Assert.NotNull(late.PaymentSchedule![1].Warning);
     }
 
     // ------------------------------------------------------------- payOS
@@ -325,7 +368,10 @@ public sealed partial class BookingFlowTests
         Assert.Equal("FT26110200001", transaction.GatewayTransactionNo);
 
         Assert.Equal(5000000, (await Sync(customer, booking.Id)).Booking.PaidAmount); // tra cứu lặp: không cộng thêm
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).StatusCode);
+        // Đủ cọc: lần thanh toán tiếp theo là Đợt 2 với đúng phần còn lại.
+        var balance = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        Assert.Equal(5000000, balance.Amount);
+        Assert.Equal($"TT{booking.Id}", payOs.Links[OrderCode(balance.TransactionCode)].Description);
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
             new BookingCancellationRequest("Thử hủy"))).StatusCode);
     }
@@ -420,7 +466,9 @@ public sealed partial class BookingFlowTests
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            Assert.Equal(PaymentRequestStatus.Cancelled, (await db.PaymentRequests.AsNoTracking().SingleAsync(r => r.BookingId == booking.Id)).Status);
+            var closed = await db.PaymentRequests.AsNoTracking().Where(r => r.BookingId == booking.Id).ToListAsync();
+            Assert.Equal(2, closed.Count);
+            Assert.All(closed, r => Assert.Equal(PaymentRequestStatus.Cancelled, r.Status));
         }
 
         var (customer2, _, paidBooking) = await ApprovedBooking(app);

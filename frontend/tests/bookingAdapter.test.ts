@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fromApiBooking } from "../src/app/services/bookingAdapter.ts";
-import { formatVietnamDateTime, isPayOsUrl } from "../src/app/services/payos.ts";
+import { formatVietnamDateTime, formatVietnamDeadline, isPayOsUrl } from "../src/app/services/payos.ts";
 import type { BookingDto } from "../src/app/services/wf05Bookings.ts";
 
 const dto: BookingDto = {
@@ -133,7 +133,7 @@ test("server deadline, overdue and not-issued deposit states are mapped without 
   const booking = fromApiBooking({
     ...dto, status: "Confirmed",
     paymentSchedule: [
-      { id: 9, stage: "deposit", description: "Đặt cọc 50%", amount: 5000000, outstanding: 5000000, dueDate: "2026-11-03T00:00:00", dueAt: "2026-11-03T07:30:00Z", status: "Overdue", dueAfterDeparture: true },
+      { id: 9, stage: "deposit", description: "Đặt cọc 50%", amount: 5000000, outstanding: 5000000, dueDate: "2026-11-03T00:00:00", dueAt: "2026-11-03T07:30:00Z", status: "Overdue", warning: "Hạn cọc rơi sau thời điểm khởi hành." },
       { id: null, stage: "balance", description: "Phần còn lại", amount: 5000000, outstanding: 5000000, status: "Scheduled" },
     ],
     paymentTransactions: [
@@ -143,11 +143,17 @@ test("server deadline, overdue and not-issued deposit states are mapped without 
   const [deposit] = booking.paymentRequests!;
   assert.equal(deposit.status, "overdue");
   assert.equal(deposit.dueAt, "2026-11-03T07:30:00Z");
-  assert.equal(deposit.dueAfterDeparture, true);
+  assert.equal(deposit.warning, "Hạn cọc rơi sau thời điểm khởi hành.");
   assert.equal(booking.paymentTransactions?.[0].status, "needsreview");
   assert.equal(booking.paymentTransactions?.[0].reviewNote, "Trả thiếu");
   const legacy = fromApiBooking({ ...dto, status: "Confirmed", paymentSchedule: [
     { id: null, stage: "deposit", description: "Đặt cọc 50%", amount: 5000000, outstanding: 5000000, status: "NotIssued" },
   ] });
   assert.equal(legacy.paymentRequests?.[0].status, "not_issued");
+});
+
+test("balance deadline at 00:00 is shown as the end of the previous day", () => {
+  // Khởi hành 30/11 → backend trả hạn 17:00Z 22/11 (= 00:00 23/11 giờ VN) → hiển thị "23:59 22/11/2026".
+  assert.equal(formatVietnamDeadline("2026-11-22T17:00:00Z"), "23:59 22/11/2026");
+  assert.equal(formatVietnamDeadline("2026-11-03T07:30:00Z"), "14:30 03/11/2026");
 });

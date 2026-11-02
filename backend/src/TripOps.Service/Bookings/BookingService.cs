@@ -237,8 +237,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (request.Decision == "approve")
         {
             booking.Status = BookingStatus.Confirmed;
-            // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ (backend quyết định).
+            // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ; Đợt 2 – phần còn lại, hạn = trước khởi hành 1 tuần.
             EnsureDepositRequest(booking, agencyId, UtcNow);
+            EnsureBalanceRequest(booking, agencyId, UtcNow);
         }
         else if (request.Decision == "reject")
         {

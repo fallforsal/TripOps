@@ -87,7 +87,7 @@ export function fromApiBooking(
         description: item.description,
         dueDate: item.dueDate ? item.dueDate.slice(0, 10) : "",
         dueAt: item.dueAt || undefined,
-        dueAfterDeparture: item.dueAfterDeparture || undefined,
+        warning: item.warning || undefined,
         status,
         paidAt: item.paidAt ? item.paidAt.slice(0, 10) : undefined,
         createdAt: dto.createdAt.split("T")[0],

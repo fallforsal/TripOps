@@ -51,7 +51,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
-import { formatVietnamDateTime, type PaymentOutcome } from "@/app/services/payos";
+import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
@@ -360,12 +360,13 @@ export function UserBookingDetailPage({
         : null;
   /** Hạn hiển thị theo giờ Việt Nam (ngày + giờ) từ giá trị backend trả về. */
   const deadlineText = (pr: PaymentRequest) =>
-    pr.dueAt ? formatVietnamDateTime(pr.dueAt) : pr.dueDate ? `hết ngày ${pr.dueDate.split("-").reverse().join("/")}` : "—";
+    pr.dueAt ? formatVietnamDeadline(pr.dueAt) : pr.dueDate ? `hết ngày ${pr.dueDate.split("-").reverse().join("/")}` : "—";
   const stageLabel = (pr: PaymentRequest) =>
     pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán";
   const canPayRequest = (pr: PaymentRequest) =>
     // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
-    pr.stage === "deposit" && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
+    // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
+    (pr.stage === "deposit" || pr.stage === "balance") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
   const transactionStatusLabel: Record<string, { label: string; color: string }> = {
     success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -1703,7 +1704,7 @@ export function UserBookingDetailPage({
 
                 {booking.status === "pending" && (
                   <div className="bg-teal-50 p-3 rounded-xl border border-teal-200 text-teal-900 text-xs leading-relaxed">
-                    💡 <strong>Chưa cần thanh toán:</strong> Đơn đang chờ công ty lữ hành duyệt. Sau khi duyệt, hệ thống mở <strong>Đợt 1 – đặt cọc</strong> (có hạn thanh toán); phần còn lại thanh toán sau khi tour kết thúc.
+                    💡 <strong>Chưa cần thanh toán:</strong> Đơn đang chờ công ty lữ hành duyệt. Sau khi duyệt, hệ thống mở <strong>Đợt 1 – đặt cọc 50%</strong> (hạn 24 giờ); <strong>Đợt 2 – phần còn lại</strong> phải thanh toán xong trước ngày khởi hành 1 tuần.
                   </div>
                 )}
 
@@ -1739,7 +1740,7 @@ export function UserBookingDetailPage({
                                 ? "bg-gray-100 text-gray-700 border-gray-200"
                                 : "bg-amber-100 text-amber-800 border-amber-200"
                             }`}>
-                              {isPaid ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Thu sau khi kết thúc tour" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ thanh toán"}
+                              {isPaid ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Mở sau khi đủ cọc" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ thanh toán"}
                             </span>
                           </div>
 
@@ -1757,8 +1758,8 @@ export function UserBookingDetailPage({
                           {pr.status === "not_issued" && (
                             <p className="text-[10px] text-gray-600">Đơn được duyệt trước khi áp dụng lịch thanh toán mới nên chưa có đợt cọc. Công ty lữ hành sẽ xử lý.</p>
                           )}
-                          {pr.dueAfterDeparture && !isPaid && (
-                            <p className="text-[10px] text-amber-700">Lưu ý: hạn cọc này rơi sau ngày khởi hành.</p>
+                          {pr.warning && !isPaid && (
+                            <p className="text-[10px] text-amber-700">Lưu ý: {pr.warning}</p>
                           )}
                           {isPaid ? (
                             <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1 pt-1 border-t border-gray-200/60">
@@ -1772,7 +1773,7 @@ export function UserBookingDetailPage({
                               className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs h-8 gap-1.5 shadow-xs"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
-                              Thanh toán cọc ({formatVND(pr.amount)})
+                              {pr.stage === "balance" ? "Thanh toán đợt 2" : "Thanh toán cọc"} ({formatVND(pr.amount)})
                             </Button>
                           ) : null}
                         </div>
@@ -2110,7 +2111,7 @@ export function UserBookingDetailPage({
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
                   <CreditCard className="w-5 h-5 text-[#075985]" />
-                  Thanh toán đặt cọc
+                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại" : "Thanh toán đặt cọc"}
                 </DialogTitle>
               </DialogHeader>
 
@@ -2138,7 +2139,7 @@ export function UserBookingDetailPage({
                   <p className="font-bold text-amber-900">Giao dịch tiền thật qua payOS</p>
                   <p>
                     Bạn sẽ được chuyển sang trang payOS để chuyển khoản/quét VietQR. payOS không có môi trường thử nghiệm,
-                    nên đây là giao dịch thật. Đơn chỉ được ghi nhận đã cọc khi máy chủ xác minh kết quả trực tiếp với payOS.
+                    nên đây là giao dịch thật. Khoản này chỉ được ghi nhận khi máy chủ xác minh kết quả trực tiếp với payOS.
                     Đóng trang hoặc quay lại không có nghĩa là giao dịch đã bị hủy.
                   </p>
                 </div>

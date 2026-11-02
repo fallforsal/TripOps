@@ -144,8 +144,8 @@ export interface PaymentScheduleItemDto {
   dueAt?: string | null;
   status: "Pending" | "Overdue" | "Paid" | "Scheduled" | "NotIssued";
   paidAt?: string | null;
-  /** Hạn cọc rơi sau thời điểm khởi hành (chờ chốt quy tắc). */
-  dueAfterDeparture?: boolean;
+  /** Cảnh báo hạn bất thường (hạn cọc sau khởi hành, hạn đợt 2 không sau hạn cọc). */
+  warning?: string | null;
 }
 
 export interface PaymentTransactionDto {

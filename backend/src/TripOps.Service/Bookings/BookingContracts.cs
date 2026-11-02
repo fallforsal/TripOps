@@ -85,12 +85,13 @@ public sealed record BookingDto(
 
 /// <summary>
 /// Một đợt trong lịch thanh toán (backend tính, frontend chỉ hiển thị). Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).
-/// Status: Pending | Overdue | Paid | Scheduled (chưa mở thu) | NotIssued (đơn duyệt trước khi có lịch, chưa phát hành đợt cọc).
-/// DueAt: hạn chính xác (UTC, hiển thị theo giờ Việt Nam). DueAfterDeparture: hạn cọc rơi sau thời điểm khởi hành.
+/// Status: Pending | Overdue | Paid | Scheduled (Đợt 2 chờ đủ cọc mới mở) | NotIssued (đơn duyệt trước khi có lịch, chưa phát hành đợt cọc).
+/// DueAt: hạn chính xác (UTC, hiển thị theo giờ Việt Nam). Đợt 1: duyệt + 24 giờ; Đợt 2: hết ngày (khởi hành − 8).
+/// Warning: hạn bất thường cần chốt quy tắc (hạn cọc sau khởi hành, hạn đợt 2 không sau hạn cọc).
 /// </summary>
 public sealed record PaymentScheduleItemDto(
     int? Id, string Stage, string Description, decimal Amount, decimal Outstanding,
-    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, bool DueAfterDeparture);
+    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, string? Warning);
 
 /// <summary>
 /// Giao dịch tiền. Method: PAYOS | DEMO (mô phỏng Development) | VNPAY (lịch sử cũ).
