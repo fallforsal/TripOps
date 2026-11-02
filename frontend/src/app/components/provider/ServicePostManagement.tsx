@@ -288,7 +288,7 @@ export function ServicePostManagement({
                 onClick={() => setFilter("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   filter === "all"
-                    ? "bg-white text-gray-900 shadow-sm font-semibold"
+                    ? "bg-[#075985] text-white shadow-sm font-semibold"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
@@ -298,7 +298,7 @@ export function ServicePostManagement({
                 onClick={() => setFilter("pending")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   filter === "pending"
-                    ? "bg-amber-500 text-white shadow-sm font-semibold"
+                    ? "bg-[#075985] text-white shadow-sm font-semibold"
                     : "text-gray-600 hover:text-amber-700"
                 }`}
               >
@@ -308,7 +308,7 @@ export function ServicePostManagement({
                 onClick={() => setFilter("approved")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   filter === "approved"
-                    ? "bg-emerald-600 text-white shadow-sm font-semibold"
+                    ? "bg-[#075985] text-white shadow-sm font-semibold"
                     : "text-gray-600 hover:text-emerald-700"
                 }`}
               >
@@ -318,14 +318,14 @@ export function ServicePostManagement({
                 onClick={() => setFilter("rejected")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   filter === "rejected"
-                    ? "bg-rose-600 text-white shadow-sm font-semibold"
+                    ? "bg-[#075985] text-white shadow-sm font-semibold"
                     : "text-gray-600 hover:text-rose-700"
                 }`}
               >
                 Từ chối ({stats.rejected})
               </button>
-              <button onClick={() => setFilter("paused")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "paused" ? "bg-amber-600 text-white" : "text-gray-600 hover:text-amber-700"}`}>Tạm ngừng ({stats.paused})</button>
-              <button onClick={() => setFilter("hidden")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "hidden" ? "bg-rose-600 text-white" : "text-gray-600 hover:text-rose-700"}`}>Admin đã ẩn ({stats.hidden})</button>
+              <button onClick={() => setFilter("paused")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "paused" ? "bg-[#075985] text-white" : "text-gray-600 hover:text-amber-700"}`}>Tạm ngừng ({stats.paused})</button>
+              <button onClick={() => setFilter("hidden")} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${filter === "hidden" ? "bg-[#075985] text-white" : "text-gray-600 hover:text-rose-700"}`}>Admin đã ẩn ({stats.hidden})</button>
             </div>
           </div>
 
@@ -397,7 +397,7 @@ export function ServicePostManagement({
                       <Button
                         onClick={onCreateService}
                         size="sm"
-                        className="mt-2 bg-[#075985] hover:bg-[#F97316] text-white"
+                        className="mt-2 bg-[#075985] hover:bg-[#0C4A6E] text-white"
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Đăng dịch vụ mới
@@ -853,7 +853,7 @@ export function ServicePostManagement({
                   Đóng
                 </Button>
                 {selectedService.status !== "hidden" && <Button
-                  className="bg-[#075985] hover:bg-[#F97316] text-white"
+                  className="bg-[#075985] hover:bg-[#0C4A6E] text-white"
                   onClick={() => {
                     const svc = selectedService;
                     setSelectedService(null);
