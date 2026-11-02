@@ -100,8 +100,12 @@ public sealed class TourRepository(TripOpsDbContext db)
         db.AgencySuppliers.AsNoTracking().Where(s => s.AgencyId == actor && ids.Contains(s.Id)).ToListAsync(ct);
     public Task<List<AgencySupplier>> SupplierDirectory(string actor, string? type, string? search, CancellationToken ct) =>
         db.AgencySuppliers.AsNoTracking().Where(s => s.AgencyId == actor && s.Status == AgencySupplier.Active &&
-            (type == null || s.SupplierType == type) && (search == null || s.Name.Contains(search)))
-            .OrderBy(s => s.Name).Take(100).ToListAsync(ct);
+            (type == null || s.SupplierType == type) && (search == null || s.Name.Contains(search) ||
+                (s.Area != null && s.Area.Contains(search)) || (s.Address != null && s.Address.Contains(search)) ||
+                (s.ContactName != null && s.ContactName.Contains(search)) ||
+                (s.ContactPhone != null && s.ContactPhone.Contains(search)) ||
+                (s.ContactEmail != null && s.ContactEmail.Contains(search))))
+            .OrderBy(s => s.Name).ThenBy(s => s.Id).ToListAsync(ct);
     public Task<AgencySupplier?> Supplier(string actor, int id, CancellationToken ct) =>
         db.AgencySuppliers.SingleOrDefaultAsync(s => s.AgencyId == actor && s.Id == id, ct);
     public void AddSupplier(AgencySupplier supplier) => db.AgencySuppliers.Add(supplier);

@@ -24,6 +24,7 @@ import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
 import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
+import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 
 interface AgencyDashboardProps {
@@ -315,6 +316,10 @@ export function AgencyDashboard({
             services={services}
             companyName={company.name}
           />
+        );
+      case "supplier-directory":
+        return (
+          <AgencySupplierDirectory key={company.id} />
         );
       case "guides":
         return (

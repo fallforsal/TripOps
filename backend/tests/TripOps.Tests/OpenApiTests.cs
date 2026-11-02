@@ -46,6 +46,8 @@ public sealed class OpenApiTests
         Assert.Contains(operations, o => o.Path == "/api/v1/provider/services" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/admin/services/{id}/approve" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers" && o.Method == "get");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers/{id}" && o.Method == "get");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers/{id}" && o.Method == "delete");
         Assert.DoesNotContain(operations, o => o.Path.Contains("WeatherForecast"));
         Assert.DoesNotContain(operations, o => o.Path.Contains("/snapshots") ||
             o.Path.EndsWith("/proposals") || o.Path.Contains("/booking-notifications"));
@@ -80,7 +82,8 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(72, protectedCount);
+        Assert.Equal(descriptions.Count(d => d.ActionDescriptor.EndpointMetadata.OfType<IAuthorizeData>().Any() &&
+            !d.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any()), protectedCount);
     }
 
     [Fact]

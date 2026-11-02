@@ -136,8 +136,12 @@ export type AgencySupplier = {
   status: string;
 };
 export type SupplierInput = Omit<AgencySupplier, "id" | "status">;
-export const agencySuppliers = (type: "HOTEL" | "RESTAURANT", search = "") =>
-  http<AgencySupplier[]>(`/agency/suppliers?type=${type}&search=${encodeURIComponent(search)}`);
+export const agencySuppliers = (type?: "HOTEL" | "RESTAURANT", search = "", signal?: AbortSignal) =>
+  http<AgencySupplier[]>(`/agency/suppliers?${type ? `type=${type}&` : ""}search=${encodeURIComponent(search)}`, { signal });
+export const getAgencySupplier = (id: number) =>
+  http<AgencySupplier>(`/agency/suppliers/${id}`);
+export const deleteAgencySupplier = (id: number) =>
+  http<void>(`/agency/suppliers/${id}`, { method: "DELETE" });
 export const createAgencySupplier = (data: SupplierInput) =>
   http<AgencySupplier>("/agency/suppliers", { method: "POST", body: JSON.stringify(data) });
 export const updateAgencySupplier = (id: number, data: SupplierInput) =>

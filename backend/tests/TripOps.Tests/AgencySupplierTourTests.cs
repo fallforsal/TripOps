@@ -1,11 +1,98 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using TripOps.Data.Entities;
 using TripOps.Service.Tours;
 
 namespace TripOps.Tests;
 
 public sealed partial class TourFlowTests
 {
+    [Fact]
+    public async Task Supplier_archive_removes_directory_choices_and_preserves_hotel_and_meal_snapshots()
+    {
+        await using var app = new App(); await app.Initialize();
+        await SupplierArchiveScenario(app);
+    }
+
+    private static async Task SupplierArchiveScenario(App app)
+    {
+        const string directory = "/api/v1/agency/suppliers";
+        using var agency = await app.Login("agency");
+        var hotel = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory,
+            new SupplierRequest("HOTEL", "Archive hotel", "Hotel address", "Da Lat", ContactName: "Hotel contact", ContactPhone: "0901000001", ReferencePrice: 650000)));
+        var restaurant = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory,
+            new SupplierRequest("RESTAURANT", "Archive restaurant", "Meal address", "Da Lat", ReferencePrice: 150000)));
+        Assert.Equal(hotel, await Read<SupplierDto>(await agency.GetAsync($"{directory}/{hotel.Id}")));
+        Assert.Equal(hotel.Id, Assert.Single(await Read<SupplierDto[]>(await agency.GetAsync($"{directory}?type=HOTEL&search=0901000001"))).Id);
+        var config = Complete();
+        config = config with { Timelines = [config.Timelines![0] with {
+            Accommodations = [new AccommodationInput(hotel.Name, "Da Lat", SupplierSource: "AGENCY_SUPPLIER", AgencySupplierId: hotel.Id,
+                Supplier: new SupplierSnapshotInput(hotel.Address, hotel.Area, ReferencePrice: hotel.ReferencePrice))],
+            Meals = [new MealInput("lunch", restaurant.Name, SupplierSource: "AGENCY_SUPPLIER", AgencySupplierId: restaurant.Id,
+                Supplier: new SupplierSnapshotInput(restaurant.Address, restaurant.Area, ReferencePrice: restaurant.ReferencePrice))]
+        }, config.Timelines[1]] };
+        var tour = await Create(agency, config);
+        var published = await Command(agency, tour, "publish");
+        foreach (var supplier in new[] { hotel, restaurant })
+        {
+            Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await agency.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await agency.PutAsJsonAsync($"{directory}/{supplier.Id}", new SupplierRequest(supplier.Type, "Cannot reactivate"))).StatusCode);
+            Assert.DoesNotContain(await Read<SupplierDto[]>(await agency.GetAsync($"{directory}?type={supplier.Type}")), s => s.Id == supplier.Id);
+        }
+        Assert.Empty(await Read<SupplierDto[]>(await agency.GetAsync(directory)));
+        await app.Inspect(async db => {
+            Assert.Equal(2, await db.AgencySuppliers.CountAsync(s => s.Status == AgencySupplier.Archived));
+            Assert.True(await db.TourAccommodations.AnyAsync(a => a.AgencySupplierId == hotel.Id));
+            Assert.True(await db.TourMeals.AnyAsync(m => m.AgencySupplierId == restaurant.Id));
+        });
+        var loaded = await Read<TourDto>(await agency.GetAsync($"{Root}/{tour.Id}"));
+        Assert.Equal("Hotel address", loaded.Configuration.Timelines![0].Accommodations![0].Supplier!.Address);
+        Assert.Equal(150000, loaded.Configuration.Timelines[0].Meals![0].Supplier!.ReferencePrice);
+        var version = await Read<TourVersionDto>(await agency.GetAsync($"{Root}/{tour.Id}/versions/{published.Version}"));
+        Assert.Contains("Hotel address", version.SnapshotData);
+        // Existing tours remain editable even though their saved supplier links are archived.
+        await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(loaded.Version, loaded.Configuration, "Keep historical suppliers")));
+    }
+
+    [Fact]
+    public async Task Supplier_details_and_delete_enforce_agency_role_and_ownership()
+    {
+        const string directory = "/api/v1/agency/suppliers";
+        await using var app = new App(); await app.Initialize();
+        using var agency = await app.Login("agency");
+        var supplier = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Owned supplier")));
+        using var anonymous = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
+        foreach (var role in new[] { "customer", "provider", "admin", "pending" })
+        {
+            using var client = await app.Login(role);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
+        }
+        using var other = await app.Login("other");
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await agency.GetAsync($"{directory}/999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await agency.DeleteAsync($"{directory}/999999")).StatusCode);
+        Assert.Single(await Read<SupplierDto[]>(await agency.GetAsync(directory)));
+    }
+
+    [Fact]
+    public async Task Supplier_directory_does_not_silently_drop_entries_after_first_hundred()
+    {
+        await using var app = new App(); await app.Initialize();
+        await app.Inspect(async db => {
+            db.AgencySuppliers.AddRange(Enumerable.Range(1, 105).Select(i => new AgencySupplier { AgencyId = "agency", Name = $"Supplier {i:D3}" }));
+            await db.SaveChangesAsync();
+        });
+        using var agency = await app.Login("agency");
+        Assert.Equal(105, (await Read<SupplierDto[]>(await agency.GetAsync("/api/v1/agency/suppliers"))).Length);
+    }
+
     [Fact]
     public async Task Agency_directory_is_private_and_tour_keeps_its_snapshot()
     {
