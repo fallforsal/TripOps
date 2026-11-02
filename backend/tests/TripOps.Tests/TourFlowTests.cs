@@ -90,7 +90,16 @@ public sealed partial class TourFlowTests
                 new Data.Entities.Service { Id = 106, ProviderId = "provider", Name = "Hidden", Category = ServiceCategory.Attraction, Status = ServiceStatus.Hidden },
                 new Data.Entities.Service { Id = 107, ProviderId = "provider", Name = "Suspended", Category = ServiceCategory.Attraction, Status = ServiceStatus.Suspended },
                 new Data.Entities.Service { Id = 108, ProviderId = "provider", Name = "Draft", Category = ServiceCategory.Attraction, Status = ServiceStatus.Draft });
-            await db.SaveChangesAsync();
+            if (sqlServer is null) await db.SaveChangesAsync();
+            else
+            {
+                // These fixed fixture IDs are referenced by the tour scenarios.
+                // SQL Server requires IDENTITY_INSERT on the same open connection.
+                await db.Database.OpenConnectionAsync();
+                await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[services] ON");
+                try { await db.SaveChangesAsync(); }
+                finally { await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[services] OFF"); }
+            }
         }
         public async Task<HttpClient> Login(string id)
         {
@@ -690,6 +699,8 @@ public sealed partial class TourFlowTests
             await app.Inspect(async db => {
                 Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", db.Database.ProviderName);
                 Assert.Contains("20261101130000_AddTourProvinces", await db.Database.GetAppliedMigrationsAsync());
+                Assert.Contains("20261102085451_RemoveBookingSnapshotsAndProposalEvents", await db.Database.GetAppliedMigrationsAsync());
+                Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.tables WHERE name IN ('booking_snapshots', 'booking_proposal_events')").SingleAsync());
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='tour_provinces' AND COLUMN_NAME='province_code' AND DATA_TYPE='nvarchar' AND CHARACTER_MAXIMUM_LENGTH=32 AND IS_NULLABLE='NO'").SingleAsync());
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.foreign_keys WHERE name='FK_tour_provinces_tours_tour_id' AND parent_object_id=OBJECT_ID('tour_provinces') AND referenced_object_id=OBJECT_ID('tours')").SingleAsync());
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.indexes WHERE name='IX_tour_provinces_tour_id_province_code' AND is_unique=1 AND object_id=OBJECT_ID('tour_provinces')").SingleAsync());
