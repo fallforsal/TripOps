@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Service } from "@/app/types";
 import {
   ArrowLeft,
@@ -38,74 +38,34 @@ import {
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ImageUploadManager } from "../ImageUploadManager";
-import { mockServices } from "@/app/data/mockData";
-import { toast } from "sonner";
-import { RejectServiceModal } from "../admin/RejectServiceModal";
-import { ProviderProfileLink } from "../admin/ProviderProfileLink";
 
-export interface ProviderServiceDetailPageProps {
-  service?: Service;
-  serviceId?: string;
+interface ProviderServiceDetailPageProps {
+  service: Service;
   onBack: () => void;
   onEdit?: (service: Service) => void;
-  onDelete?: (serviceId: string) => void | Promise<void>;
-  onSetAvailability?: (serviceId: string, isPaused: boolean) => Promise<void>;
+  onDelete: (serviceId: string) => void;
   onUpdateServiceImages?: (serviceId: string, images: string[], thumbnail: string) => void;
   isAdmin?: boolean;
-  isAgencyView?: boolean;
-  onToggleHide?: (serviceId: string, reason?: string) => void | Promise<void>;
-  onApprove?: (serviceId: string) => void | Promise<void>;
-  onReject?: (serviceId: string, reason: string) => void | Promise<void>;
-  backTitle?: string;
+  onToggleHide?: (serviceId: string, reason?: string) => void;
 }
 
 export function ProviderServiceDetailPage({
-  service: propService,
-  serviceId,
+  service,
   onBack,
   onEdit,
   onDelete,
-  onSetAvailability,
   onUpdateServiceImages,
   isAdmin = false,
-  isAgencyView = false,
   onToggleHide,
-  onApprove,
-  onReject,
-  backTitle,
 }: ProviderServiceDetailPageProps) {
-  const service = propService || (serviceId ? mockServices.find((s) => s.id === serviceId) : undefined);
-
-  if (!service) {
-    return (
-      <div className="p-8 text-center space-y-3">
-        <p className="text-sm font-semibold text-gray-700">Không tìm thấy thông tin chi tiết dịch vụ.</p>
-        <Button variant="outline" size="sm" onClick={onBack}>
-          Quay lại
-        </Button>
-      </div>
-    );
-  }
-
-  const primaryThumb = service.thumbnailUrl || service.image;
-  const rawImages = service.images || [];
-  const imagesList = primaryThumb
-    ? (rawImages.includes(primaryThumb) ? rawImages : [primaryThumb, ...rawImages])
-    : (rawImages.length > 0 ? rawImages : ["https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"]);
+  const imagesList = service.images && service.images.length > 0
+    ? service.images
+    : [service.image];
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showImageManager, setShowImageManager] = useState(false);
   const [showAdminHideModal, setShowAdminHideModal] = useState(false);
   const [adminHideReason, setAdminHideReason] = useState("");
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const toggleHide = async (reason?: string) => {
-    if (!onToggleHide || saving) return;
-    setSaving(true);
-    try { await onToggleHide(service.id, reason); setShowAdminHideModal(false); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể cập nhật bài đăng."); }
-    finally { setSaving(false); }
-  };
 
   const quickReasonSuggestions = [
     "Thông tin dịch vụ sai lệch, nhảm nhí không đúng thực tế.",
@@ -128,7 +88,7 @@ export function ProviderServiceDetailPage({
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            {service.isPaused ? "Đã duyệt · Provider tạm ngừng" : isAdmin ? "Đang hiển thị công khai trên sàn" : "Đã phê duyệt (Đang hoạt động)"}
+            {isAdmin ? "Đang hiển thị công khai trên sàn" : "Đã phê duyệt (Đang hoạt động)"}
           </span>
         );
       case "rejected":
@@ -143,7 +103,7 @@ export function ProviderServiceDetailPage({
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Đang chờ Admin phê duyệt
+            Đang hiển thị công khai
           </span>
         );
     }
@@ -197,7 +157,6 @@ export function ProviderServiceDetailPage({
   const Icon = meta.icon;
 
   const formatAddress = () => {
-    if (service.fullAddress) return service.fullAddress;
     // Strictly 2 levels: Ward and Province (NO district)
     const parts = [service.street, service.ward, service.province].filter(Boolean);
     if (parts.length > 0) return parts.join(", ");
@@ -216,7 +175,7 @@ export function ProviderServiceDetailPage({
             className="rounded-xl border-gray-200 hover:bg-gray-100 text-gray-700 font-medium text-xs sm:text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
-            {backTitle || (isAgencyView ? "Quay lại thiết kế tour" : isAdmin ? "Quay lại danh sách Quản lý Bài đăng" : "Quay lại bảng dịch vụ")}
+            {isAdmin ? "Quay lại danh sách Quản lý Bài đăng" : "Quay lại bảng dịch vụ"}
           </Button>
           <div className="hidden md:flex items-center gap-2 text-xs text-gray-400">
             <span>/</span>
@@ -230,87 +189,22 @@ export function ProviderServiceDetailPage({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {!isAdmin && !isAgencyView && service.status !== "hidden" && onSetAvailability && <Button variant="outline" disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try { await onSetAvailability(service.id, !service.isPaused); }
-              catch (error) { toast.error(error instanceof Error ? error.message : "Không thể thay đổi trạng thái cung cấp."); }
-              finally { setSaving(false); }
-            }} className="border-amber-300 text-amber-800">
-            {service.isPaused ? "Mở cung cấp lại" : "Tạm ngừng cung cấp"}
-          </Button>}
-          {isAgencyView ? (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#E0F2FE] text-[#075985] border border-[#CBD5E1] shadow-2xs">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Đối tác cung ứng dịch vụ
-              </span>
-            </div>
-          ) : isAdmin ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* If pending: show Approve & Reject buttons */}
-              {service.status === "pending" && onApprove && (
-                <>
-                  {onReject && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving}
-                      onClick={() => setShowRejectModal(true)}
-                      className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-semibold gap-1.5"
-                    >
-                      <XCircle className="w-4 h-4 text-rose-600" />
-                      Từ chối bài đăng
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    disabled={saving}
-                    onClick={async () => {
-                      setSaving(true);
-                      try {
-                        await onApprove(service.id);
-                        onBack();
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs text-xs font-semibold gap-1.5"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Phê duyệt bài đăng
-                  </Button>
-                </>
-              )}
-
-              {/* If rejected: show reason badge, NO APPROVE BUTTON */}
-              {service.status === "rejected" && (
-                <div className="text-xs bg-rose-50 text-rose-800 px-3 py-1.5 rounded-xl border border-rose-200 font-medium flex items-center gap-1.5">
-                  <XCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-                  <span>
-                    <strong>Đã từ chối:</strong> {service.rejectionReason || "Không đạt tiêu chuẩn kiểm duyệt"}
-                  </span>
-                </div>
-              )}
-
-              {/* If hidden: show Unhide button */}
-              {service.status === "hidden" && (
+          {isAdmin ? (
+            <>
+              {service.status === "hidden" ? (
                 <Button
                   size="sm"
-                  disabled={saving} onClick={() => toggleHide()}
+                  onClick={() => onToggleHide?.(service.id)}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs text-xs font-semibold gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Mở hiển thị lại bài đăng
                 </Button>
-              )}
-
-              {/* If approved: show Hide button */}
-              {service.status === "approved" && (
+              ) : (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={saving} onClick={() => setShowAdminHideModal(true)}
+                  onClick={() => setShowAdminHideModal(true)}
                   className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-xl text-xs font-semibold gap-1.5"
                 >
                   <EyeOff className="w-4 h-4 text-amber-600" />
@@ -318,7 +212,7 @@ export function ProviderServiceDetailPage({
                 </Button>
               )}
 
-              {onDelete && (<Button
+              <Button
                 variant="outline"
                 size="sm"
                 className="text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl text-xs font-semibold gap-1.5"
@@ -328,26 +222,35 @@ export function ProviderServiceDetailPage({
                       `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                     )
                   ) {
-                    Promise.resolve(onDelete?.(service.id)).then(() => onBack?.()).catch(error => toast.error(error instanceof Error ? error.message : "Không thể xóa bài đăng."));
+                    onDelete(service.id);
+                    onBack();
                   }
                 }}
               >
                 <Trash2 className="w-4 h-4" />
                 Xóa bài đăng
-              </Button>)}
-            </div>
+              </Button>
+            </>
           ) : (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-[#F97316] border-[#F97316]/30 hover:bg-[#F0F9FF] rounded-xl"
+                onClick={() => setShowImageManager(true)}
+              >
+                <ImageIcon className="w-4 h-4 mr-1.5" />
+                Quản lý ảnh ({imagesList.length})
+              </Button>
 
-
-              {service.status !== "hidden" && <Button
+              <Button
                 size="sm"
                 className="bg-[#075985] hover:bg-[#F97316] text-white rounded-xl shadow-xs"
                 onClick={() => onEdit?.(service)}
               >
                 <Edit className="w-4 h-4 mr-1.5" />
                 Chỉnh sửa
-              </Button>}
+              </Button>
 
               <Button
                 variant="outline"
@@ -359,7 +262,8 @@ export function ProviderServiceDetailPage({
                       `Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này không thể hoàn tác.`
                     )
                   ) {
-                    Promise.resolve(onDelete?.(service.id)).then(() => onBack?.()).catch(error => toast.error(error instanceof Error ? error.message : "Không thể xóa bài đăng."));
+                    onDelete(service.id);
+                    onBack();
                   }
                 }}
               >
@@ -371,10 +275,7 @@ export function ProviderServiceDetailPage({
       </div>
 
       {/* Admin Hidden Notice Banner */}
-      {service.isPaused && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm">
-        Nhà cung cấp đang tạm ngừng cung cấp dịch vụ này. Bài đăng không xuất hiện trên sàn cho đến khi Provider mở lại và trạng thái kiểm duyệt là đã duyệt.
-      </div>}
-      {service.status === "hidden" && (
+      {isAdmin && service.status === "hidden" && (
         <div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl flex items-start gap-3.5">
           <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -382,11 +283,8 @@ export function ProviderServiceDetailPage({
               Bài đăng dịch vụ đang bị tạm ẩn khỏi sàn
             </h4>
             <p className="text-xs text-rose-700 mt-1">
-              <strong>Lý do Admin ẩn:</strong> <span className="whitespace-pre-wrap break-words">{service.hiddenReason || "Admin chưa cung cấp lý do."}</span>
+              <strong>Lý do kiểm duyệt Admin:</strong> {service.hiddenReason || "Thông tin dịch vụ không chính xác, nhảm nhí hoặc không phù hợp với tiêu chuẩn sàn."}
             </p>
-            {!isAdmin && !isAgencyView && <p className="text-xs text-rose-700 mt-2">
-              Bài đăng này không thể chỉnh sửa. Nếu muốn tiếp tục cung cấp dịch vụ, vui lòng tạo bài đăng mới để Admin duyệt lại.
-            </p>}
             <p className="text-xs text-rose-600 mt-0.5">
               Các công ty du lịch hiện không thể tìm thấy hoặc gán dịch vụ này vào các tour mới trên sàn.
             </p>
@@ -411,7 +309,7 @@ export function ProviderServiceDetailPage({
           </div>
           <Button
             size="sm"
-            onClick={() => onEdit?.(service)}
+            onClick={() => onEdit(service)}
             className="bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-xl flex-shrink-0"
           >
             Sửa & Gửi lại
@@ -495,48 +393,37 @@ export function ProviderServiceDetailPage({
 
             {/* Price Box */}
             <div className="mt-5 p-4 rounded-xl bg-gradient-to-br from-blue-50/70 to-indigo-50/70 border border-blue-100">
-              {(() => {
-                const isHotel = service.category === "hotel";
-                const pFrom = service.priceFrom ?? (isHotel ? Math.round((service.price || 1500000) * 0.8 / 10000) * 10000 : undefined);
-                const pTo = service.priceTo ?? (isHotel ? Math.round((service.price || 1500000) * 1.2 / 10000) * 10000 : undefined);
-                const hasRange = pFrom !== undefined && pTo !== undefined;
-
-                return (
-                  <>
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                      {hasRange
-                        ? `Khoảng giá dự kiến / ${isHotel ? "phòng" : "người"}`
-                        : "Đơn giá niêm yết"}
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                {service.priceFrom && service.priceTo
+                  ? `Khoảng giá dự kiến / ${service.category === "hotel" ? "phòng" : "người"}`
+                  : "Đơn giá niêm yết"}
+              </span>
+              {service.priceFrom && service.priceTo ? (
+                <div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-[#075985]">
+                      {service.priceFrom.toLocaleString("vi-VN")}đ - {service.priceTo.toLocaleString("vi-VN")}đ
                     </span>
-                    {hasRange ? (
-                      <div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-2xl sm:text-3xl font-extrabold text-[#075985]">
-                            {pFrom.toLocaleString("vi-VN")}đ - {pTo.toLocaleString("vi-VN")}đ
-                          </span>
-                          <span className="text-xs font-semibold text-[#075985]">
-                            / {isHotel ? "phòng" : "người"}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-500 mt-1">
-                          {isHotel
-                            ? "Khoảng giá theo phòng/đêm giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."
-                            : "Khoảng giá theo đầu người giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl font-extrabold text-[#075985]">
-                          {service.price?.toLocaleString("vi-VN")}đ
-                        </span>
-                        <span className="text-xs font-medium text-gray-600">
-                          {meta.unit}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+                    <span className="text-xs font-semibold text-[#075985]">
+                      / {service.category === "hotel" ? "phòng" : "người"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {service.category === "hotel"
+                      ? "Khoảng giá theo phòng/đêm giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."
+                      : "Khoảng giá theo đầu người giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-[#075985]">
+                    {service.price?.toLocaleString("vi-VN")}đ
+                  </span>
+                  <span className="text-xs font-medium text-gray-600">
+                    {meta.unit}
+                  </span>
+                </div>
+              )}
 
               {service.pricePerPerson && !service.priceFrom && (
                 <div className="mt-2 pt-2 border-t border-[#CBD5E1]/50 flex justify-between text-xs text-gray-700">
@@ -578,7 +465,7 @@ export function ProviderServiceDetailPage({
             <div className="p-2.5 bg-gray-50 rounded-xl">
               <span className="text-gray-500 block">Ngày tạo bài:</span>
               <strong className="text-gray-900">
-                {service.createdAt ? new Date(service.createdAt).toLocaleDateString("vi-VN") : "Chưa có thông tin"}
+                {new Date(service.createdAt).toLocaleDateString("vi-VN")}
               </strong>
             </div>
 
@@ -720,19 +607,6 @@ export function ProviderServiceDetailPage({
 
         {/* Right Column (1 col): Address, Map & System Info */}
         <div className="space-y-6">
-          {/* Operating Hours Card if available */}
-          {service.operatingHours && (
-            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-2">
-              <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                {service.category === "hotel" ? "Khung giờ nhận / trả phòng" : "Khung giờ hoạt động & đón khách"}
-              </h3>
-              <p className="text-xs text-blue-900 font-semibold bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
-                {service.operatingHours}
-              </p>
-            </div>
-          )}
-
           {/* Address Details Card */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
             <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
@@ -809,7 +683,7 @@ export function ProviderServiceDetailPage({
             <div className="space-y-2 text-xs text-gray-600">
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span>Nhà cung cấp:</span>
-                {isAdmin ? <ProviderProfileLink providerId={service.providerId} name={service.providerName} /> : <strong>{service.providerName}</strong>}
+                <strong>{service.providerName}</strong>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span>Mã số định danh:</span>
@@ -817,7 +691,7 @@ export function ProviderServiceDetailPage({
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span>Ngày tạo bài:</span>
-                <span>{service.createdAt ? new Date(service.createdAt).toLocaleString("vi-VN") : "Chưa có thông tin"}</span>
+                <span>{new Date(service.createdAt).toLocaleString("vi-VN")}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span>Trạng thái:</span>
@@ -828,25 +702,7 @@ export function ProviderServiceDetailPage({
 
           {/* Quick Action Footer */}
           <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
-            {isAgencyView ? (
-              <div className="space-y-2">
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
-                  <p className="font-semibold flex items-center gap-1.5 text-emerald-950 mb-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Dịch vụ Đối tác Nền tảng TripOps
-                  </p>
-                  <p className="text-[11px] text-emerald-800 leading-relaxed">
-                    Bạn đang xem đầy đủ bài viết chi tiết, hình ảnh thực tế và tọa độ Google Maps của đối tác cung ứng.
-                  </p>
-                </div>
-                <Button
-                  onClick={onBack}
-                  className="w-full bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold shadow-xs"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-1.5" />
-                  Quay lại thiết kế tour
-                </Button>
-              </div>
-            ) : isAdmin ? (
+            {isAdmin ? (
               <div className="space-y-2">
                 <div className="p-2.5 bg-[#F0F9FF] border border-[#CBD5E1] rounded-xl text-xs text-blue-900">
                   <p className="font-semibold flex items-center gap-1.5 text-blue-950 mb-0.5">
@@ -859,7 +715,7 @@ export function ProviderServiceDetailPage({
 
                 {service.status === "hidden" ? (
                   <Button
-                    disabled={saving} onClick={() => toggleHide()}
+                    onClick={() => onToggleHide?.(service.id)}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs"
                   >
                     <CheckCircle2 className="w-4 h-4 mr-1.5" />
@@ -868,7 +724,7 @@ export function ProviderServiceDetailPage({
                 ) : (
                   <Button
                     variant="outline"
-                    disabled={saving || service.status !== "approved"} onClick={() => setShowAdminHideModal(true)}
+                    onClick={() => setShowAdminHideModal(true)}
                     className="w-full border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-xl text-xs font-semibold"
                   >
                     <EyeOff className="w-4 h-4 mr-1.5 text-amber-600" />
@@ -876,7 +732,7 @@ export function ProviderServiceDetailPage({
                   </Button>
                 )}
 
-                {onDelete && (<Button
+                <Button
                   variant="outline"
                   onClick={() => {
                     if (
@@ -884,26 +740,33 @@ export function ProviderServiceDetailPage({
                         `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                       )
                     ) {
-                      onDelete?.(service.id);
-                      onBack?.();
+                      onDelete(service.id);
+                      onBack();
                     }
                   }}
                   className="w-full border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold"
                 >
                   <Trash2 className="w-4 h-4 mr-1.5" />
                   Xóa bài đăng vĩnh viễn
-                </Button>)}
+                </Button>
               </div>
             ) : (
               <>
-                {service.status !== "hidden" && <Button
+                <Button
                   className="w-full bg-[#075985] hover:bg-[#F97316] text-white rounded-xl"
                   onClick={() => onEdit?.(service)}
                 >
                   <Edit className="w-4 h-4 mr-2" />
                   Chỉnh sửa thông tin
-                </Button>}
-
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full text-[#F97316] border-[#F97316]/30 hover:bg-[#F0F9FF] rounded-xl"
+                  onClick={() => setShowImageManager(true)}
+                >
+                  <ImageIcon className="w-4 h-4 mr-2" />
+                  Cập nhật ảnh bài đăng
+                </Button>
               </>
             )}
           </div>
@@ -911,7 +774,7 @@ export function ProviderServiceDetailPage({
       </div>
 
       {/* Image Upload Manager Modal */}
-      {showImageManager && service.status !== "hidden" && (
+      {showImageManager && (
         <ImageUploadManager
           isOpen={showImageManager}
           onClose={() => setShowImageManager(false)}
@@ -930,20 +793,6 @@ export function ProviderServiceDetailPage({
           initialImages={imagesList}
           initialThumbnailIndex={activeImageIndex}
           title={`Quản lý thư viện ảnh - ${service.name}`}
-        />
-      )}
-
-      {/* Reject Service Modal for Admin */}
-      {showRejectModal && onReject && (
-        <RejectServiceModal
-          isOpen={showRejectModal}
-          onClose={() => setShowRejectModal(false)}
-          onConfirm={async (reason) => {
-            await onReject(service.id, reason);
-            setShowRejectModal(false);
-            onBack();
-          }}
-          serviceName={service.name}
         />
       )}
 
@@ -1010,7 +859,8 @@ export function ProviderServiceDetailPage({
                   size="sm"
                   onClick={() => {
                     const reason = adminHideReason.trim() || "Thông tin dịch vụ bị tạm ẩn do không chính xác hoặc không phù hợp.";
-                    void toggleHide(reason);
+                    onToggleHide?.(service.id, reason);
+                    setShowAdminHideModal(false);
                   }}
                   className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold"
                 >

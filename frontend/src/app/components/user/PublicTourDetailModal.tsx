@@ -1,4 +1,4 @@
-import { Tour } from "@/app/types";
+﻿import { Tour } from "@/app/types";
 import {
   X,
   MapPin,
@@ -32,7 +32,7 @@ export function PublicTourDetailModal({
   return (
     <div className="fixed inset-0 bg-[#075985]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6 overflow-y-auto">
       <div className="bg-[#FFFFFF] rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto my-auto border border-[#CBD5E1] shadow-[0_20px_60px_rgb(0,0,0,0.15)] font-sans">
-
+        
         {/* Sticky Header */}
         <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export function PublicTourDetailModal({
 
         {/* Content Body */}
         <div className="p-6 sm:p-8 space-y-8">
-
+          
           {/* Main Visual */}
           <div className="relative aspect-[16/9] rounded-2xl overflow-hidden bg-[#F0F9FF] border border-[#CBD5E1]">
             <img

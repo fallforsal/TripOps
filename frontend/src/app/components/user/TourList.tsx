@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Tour } from "@/app/types";
 import {
   MapPin,
@@ -35,7 +35,7 @@ export function TourList({ tours, onBookTour, onViewTour }: TourListProps) {
     const matchesSearch =
       tour.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tour.destination.toLowerCase().includes(searchQuery.toLowerCase());
-
+    
     const matchesDest =
       selectedDestination === "all" || tour.destination === selectedDestination;
 

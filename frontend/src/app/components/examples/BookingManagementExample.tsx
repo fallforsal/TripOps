@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Example Component: Booking Management with API
  * Ví dụ quản lý bookings với API services
  */
@@ -382,9 +382,6 @@ function StatusBadge({
   const styles = {
     pending: "bg-yellow-100 text-yellow-800",
     confirmed: "bg-green-100 text-green-800",
-    deposited: "bg-sky-100 text-sky-800",
-    paid: "bg-emerald-100 text-emerald-800",
-    in_progress: "bg-indigo-100 text-indigo-800",
     cancelled: "bg-gray-100 text-gray-800",
     completed: "bg-[#E0F2FE] text-blue-800",
     rejected: "bg-red-100 text-red-800",
@@ -393,9 +390,6 @@ function StatusBadge({
   const icons = {
     pending: <Clock className="w-4 h-4" />,
     confirmed: <CheckCircle className="w-4 h-4" />,
-    deposited: <CheckCircle className="w-4 h-4" />,
-    paid: <CheckCircle className="w-4 h-4" />,
-    in_progress: <Clock className="w-4 h-4" />,
     cancelled: <XCircle className="w-4 h-4" />,
     completed: <CheckCircle className="w-4 h-4" />,
     rejected: <XCircle className="w-4 h-4" />,

@@ -1,6 +1,6 @@
 import { partnerService } from "@/app/services/partnerService";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Compass,
@@ -58,93 +58,121 @@ export function BusinessProfileOnboardingPage({
   onSubmitSuccess,
 }: BusinessProfileOnboardingPageProps) {
   const { refresh: refreshAccount } = useAuth();
-  const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const isAgency =
     currentUser.role === "agency" || currentUser.role === "company_admin";
   const isProvider = currentUser.role === "provider";
-
-  // Xác định trạng thái ban đầu:
-  // Nếu công ty hoặc user đã có status = "rejected" thì hiển thị màn hình rejected
-  // Nếu có status = "pending" và đã có taxCode thì hiển thị pending
-  // Nếu chưa có thông tin thì ở trạng thái "draft" (form nhập)
-  const initialStatus: VerificationStatus =
-    currentUser.businessProfile?.status === "rejected"
-      ? "rejected"
-      : currentUser.businessProfile?.status === "pending"
-        ? "pending"
-        : "draft";
-
+  const [profile, setProfile] = useState(currentUser.businessProfile);
   const [currentViewStatus, setCurrentViewStatus] =
-    useState<VerificationStatus>(initialStatus);
-
-  // Form state map CHÍNH XÁC theo các trường của bảng `business_profiles` & `users`:
-  // 1. business_name: string (Tên doanh nghiệp / Cơ sở)
-  // 2. tax_code: string (Mã số thuế)
-  // 3. phone: string (Số điện thoại liên hệ / hotline người đại diện - cập nhật users.phone)
-  // 4. business_address: string (Địa chỉ trụ sở đăng ký)
-  // 5. business_license_url: string (Tài liệu / File chụp GPKD)
-  // 6. description: string (Mô tả giới thiệu doanh nghiệp)
-  const [businessName, setBusinessName] = useState(
-    company?.name || currentUser.businessName || "",
+    useState<VerificationStatus>(
+      profile?.status === "rejected" || profile?.status === "suspended"
+        ? "rejected"
+        : profile
+          ? "pending"
+          : "draft",
+    );
+  const [businessName, setBusinessName] = useState(profile?.businessName || "");
+  const [taxCode, setTaxCode] = useState(profile?.taxCode || "");
+  const [phone, setPhone] = useState(currentUser.phone || "");
+  const [address, setAddress] = useState(profile?.businessAddress || "");
+  const [description, setDescription] = useState(profile?.description || "");
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const licenseFileUploaded = Boolean(
+    licenseFile || profile?.businessLicenseUrl,
   );
-  const [taxCode, setTaxCode] = useState(
-    company?.taxCode || currentUser.taxCode || "",
-  );
-  const [phone, setPhone] = useState(
-    currentUser.phone || company?.phone || currentUser.businessPhone || "",
-  );
-  const [address, setAddress] = useState(
-    company?.address || currentUser.businessAddress || "",
-  );
-  const [description, setDescription] = useState(
-    company?.description || currentUser.businessDescription || "",
-  );
-  const [licenseFileUploaded, setLicenseFileUploaded] = useState(
-    Boolean(currentUser.businessProfile?.businessLicenseUrl),
-  );
-  const [licenseFileName, setLicenseFileName] = useState(
-    licenseFileUploaded
-      ? isAgency
-        ? "Giay_Phep_Kinh_Doanh_Lu_Hanh.pdf"
-        : "Giay_Phep_Dang_Ky_Kinh_Doanh.pdf"
-      : "",
-  );
-
-  // Rejection data từ database:
-  // Cột: rejection_reason (TEXT), updated_at (TIMESTAMP)
-  const [rejectionReason, setRejectionReason] = useState(
-    company?.rejectionReason || currentUser.rejectionReason || "",
-  );
-  const [rejectedAt, setRejectedAt] = useState(
-    currentUser.businessProfile?.updatedAt || "",
-  );
-
-  // Submission state
+  const licenseFileName =
+    licenseFile?.name ||
+    (profile?.businessLicenseUrl ? "Ảnh giấy phép đã nộp" : "");
+  const rejectionReason =
+    profile?.rejectionReason ||
+    (profile?.status === "suspended"
+      ? "Hồ sơ đang bị đình chỉ. Vui lòng liên hệ hỗ trợ."
+      : "");
+  const rejectedAt = profile?.updatedAt
+    ? new Date(profile.updatedAt).toLocaleString("vi-VN")
+    : "";
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function refreshStatus() {
+    setIsRefreshing(true);
     setErrorMessage("");
+    try {
+      const user = await refreshAccount();
+      setProfile(user.businessProfile);
+      setCurrentViewStatus(
+        user.businessProfile?.status === "rejected" ||
+          user.businessProfile?.status === "suspended"
+          ? "rejected"
+          : user.businessProfile
+            ? "pending"
+            : "draft",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể kiểm tra trạng thái",
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+  function selectLicense(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (
+      !["image/png", "image/jpeg"].includes(file.type) ||
+      file.size > 5 * 1024 * 1024
+    ) {
+      setErrorMessage("Chỉ nhận ảnh PNG/JPEG tối đa 5 MB.");
+      event.target.value = "";
+      return;
+    }
+    setLicenseFile(file);
+    setErrorMessage("");
+  }
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setErrorMessage("");
+    if (
+      !businessName.trim() ||
+      !taxCode.trim() ||
+      !phone.trim() ||
+      !address.trim()
+    ) {
+      setErrorMessage(
+        "Vui lòng điền đầy đủ tên doanh nghiệp, mã số thuế, điện thoại và địa chỉ.",
+      );
+      return;
+    }
+    if (!licenseFileUploaded) {
+      setErrorMessage("Vui lòng chọn ảnh giấy phép kinh doanh.");
+      return;
+    }
+    const form = new FormData();
+    form.set("businessName", businessName.trim());
+    form.set("taxCode", taxCode.trim());
+    form.set("phone", phone.trim());
+    form.set("businessAddress", address.trim());
+    form.set("description", description.trim());
+    if (licenseFile) form.set("license", licenseFile);
     setIsSubmitting(true);
     try {
-      const form = new FormData();
-      form.set("businessName", businessName);
-      form.set("taxCode", taxCode);
-      form.set("phone", phone);
-      form.set("businessAddress", address);
-      form.set("description", description);
-      if (licenseFile) form.set("license", licenseFile);
-      const profile = await partnerService.submit(form);
-      await refreshAccount();
+      const saved = await partnerService.submit(form);
+      setProfile(saved);
+      setLicenseFile(null);
       setCurrentViewStatus("pending");
-      onSubmitSuccess?.(profile);
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Không thể gửi hồ sơ");
+      onSubmitSuccess?.(saved);
+      await refreshAccount();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Không thể nộp hồ sơ",
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F0F9FF] via-slate-50 to-white text-[#0F172A] font-sans antialiased flex flex-col justify-between">
@@ -171,6 +199,16 @@ export function BusinessProfileOnboardingPage({
 
           {/* User info, State Switcher Demo & Logout */}
           <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isRefreshing || isSubmitting}
+              onClick={refreshStatus}
+              className="h-8.5 rounded-xl text-xs gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {isRefreshing ? "Đang kiểm tra..." : "Kiểm tra trạng thái"}
+            </Button>
             <div className="text-right hidden sm:block">
               <div className="text-xs font-bold text-slate-900">
                 {cleanDisplayName(currentUser.name)}
@@ -195,16 +233,15 @@ export function BusinessProfileOnboardingPage({
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
       <main className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 flex-1">
-        <button
-          className="mb-4 text-sm text-blue-700"
-          onClick={() =>
-            refreshAccount().catch((e) => setErrorMessage(e.message))
-          }
-        >
-          Kiểm tra trạng thái hồ sơ
-        </button>
+        {currentViewStatus !== "draft" && errorMessage && (
+          <p
+            role="alert"
+            className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs"
+          >
+            {errorMessage}
+          </p>
+        )}
         <AnimatePresence mode="wait">
           {/* ========================================================================= */}
           {/* TRƯỜNG HỢP 1: FORM NHẬP / CHỈNH SỬA HỒ SƠ PHÁP NHÂN (DRAFT) */}
@@ -310,20 +347,6 @@ export function BusinessProfileOnboardingPage({
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  <input
-                    id="business-license-upload"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    hidden
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) {
-                        setLicenseFile(f);
-                        setLicenseFileUploaded(true);
-                        setLicenseFileName(f.name);
-                      }
-                    }}
-                  />
                   {/* Trường 1: business_name */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
@@ -415,6 +438,13 @@ export function BusinessProfileOnboardingPage({
                     />
                   </div>
 
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={selectLicense}
+                  />
                   {/* Trường 6: business_license_url (Tải tài liệu GPKD) */}
                   <div className="space-y-1.5 pt-1">
                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
@@ -425,11 +455,16 @@ export function BusinessProfileOnboardingPage({
                     </Label>
 
                     <div
-                      onClick={() =>
-                        document
-                          .getElementById("business-license-upload")
-                          ?.click()
-                      }
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Chọn ảnh giấy phép"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          fileInput.current?.click();
+                        }
+                      }}
+                      onClick={() => fileInput.current?.click()}
                       className={`p-4 rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
                         licenseFileUploaded
                           ? "border-emerald-400 bg-emerald-50/60"
@@ -441,12 +476,13 @@ export function BusinessProfileOnboardingPage({
                           <FileCheck className="w-8 h-8 text-emerald-600" />
                           <div className="text-center">
                             <div className="text-xs font-bold text-emerald-800">
-                              Đã đính kèm:{" "}
-                              {licenseFileName || "Giay_Phep_Kinh_Doanh.pdf"}
+                              Đã đính kèm: {licenseFileName || "Ảnh giấy phép"}
                             </div>
                             <div className="text-[10px] text-emerald-600">
-                              Dung lượng: 2.5 MB · Trạng thái: Sẵn sàng tải lên
-                              lưu trữ URL · Nhấp để gỡ
+                              {licenseFile
+                                ? `${(licenseFile.size / 1024 / 1024).toFixed(2)} MB · Sẵn sàng tải lên`
+                                : "Đã lưu trên Cloudinary"}{" "}
+                              · Nhấp để chọn ảnh khác
                             </div>
                           </div>
                         </>
@@ -459,8 +495,7 @@ export function BusinessProfileOnboardingPage({
                               Giấy phép lữ hành
                             </div>
                             <div className="text-[10px] text-slate-500">
-                              Hỗ trợ định dạng PDF, JPG, PNG dung lượng tối đa
-                              15MB
+                              Hỗ trợ ảnh JPG, PNG dung lượng tối đa 5 MB
                             </div>
                           </div>
                         </>
@@ -564,7 +599,7 @@ export function BusinessProfileOnboardingPage({
                         <span>Bước 3: Thẩm định</span>
                       </div>
                       <p className="text-[11px] text-amber-900 font-medium">
-                        Đang xử lý (Tối đa 24h làm việc)
+                        Đang chờ Quản trị viên xét duyệt
                       </p>
                     </div>
 
@@ -598,7 +633,7 @@ export function BusinessProfileOnboardingPage({
                         Tên doanh nghiệp
                       </span>
                       <span className="font-bold text-slate-900">
-                        {businessName || "Công ty Cổ phần Lữ hành Fiditour"}
+                        {businessName || "Chưa cập nhật"}
                       </span>
                     </div>
 
@@ -607,7 +642,7 @@ export function BusinessProfileOnboardingPage({
                         Mã số thuế (MST)
                       </span>
                       <span className="font-bold text-slate-900 font-mono">
-                        {taxCode || "0301012345"}
+                        {taxCode || "Chưa cập nhật"}
                       </span>
                     </div>
 
@@ -616,7 +651,7 @@ export function BusinessProfileOnboardingPage({
                         Số điện thoại liên hệ
                       </span>
                       <span className="font-bold text-slate-900 font-mono">
-                        {phone || currentUser.phone || "028 3930 9888"}
+                        {phone || currentUser.phone || "Chưa cập nhật"}
                       </span>
                     </div>
 
@@ -626,9 +661,14 @@ export function BusinessProfileOnboardingPage({
                       </span>
                       <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
                         <FileCheck className="w-4 h-4" />
-                        <span>
-                          {licenseFileName || "Giay_Phep_Kinh_Doanh.pdf"}
-                        </span>
+                        <a
+                          href={profile?.businessLicenseUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          {licenseFileName || "Ảnh giấy phép"}
+                        </a>
                       </span>
                     </div>
 
@@ -660,11 +700,12 @@ export function BusinessProfileOnboardingPage({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setCurrentViewStatus("draft")}
+                    onClick={refreshStatus}
+                    disabled={isRefreshing}
                     className="w-full sm:w-auto h-10 px-6 rounded-xl border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer gap-1.5 shadow-2xs"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Chỉnh sửa / Bổ sung lại hồ sơ</span>
+                    <span>Kiểm tra trạng thái hồ sơ</span>
                   </Button>
                 </div>
               </div>
@@ -741,7 +782,7 @@ export function BusinessProfileOnboardingPage({
                         Tên pháp nhân đã nộp:
                       </span>
                       <span className="font-semibold text-slate-900">
-                        {businessName || "Fiditour"}
+                        {businessName || "Chưa cập nhật"}
                       </span>
                     </div>
                     <div>
@@ -749,7 +790,7 @@ export function BusinessProfileOnboardingPage({
                         Mã số thuế đã nộp:
                       </span>
                       <span className="font-semibold text-slate-900 font-mono">
-                        {taxCode || "0301012345"}
+                        {taxCode || "Chưa cập nhật"}
                       </span>
                     </div>
                     <div className="sm:col-span-2">
@@ -757,7 +798,7 @@ export function BusinessProfileOnboardingPage({
                         Địa chỉ trụ sở kinh doanh đã nộp:
                       </span>
                       <span className="font-semibold text-slate-900">
-                        {address || "218/1 Nguyễn Đình Chiểu, Q.3, TP.HCM"}
+                        {address || "Chưa cập nhật"}
                       </span>
                     </div>
                   </div>
@@ -768,6 +809,7 @@ export function BusinessProfileOnboardingPage({
                   <Button
                     type="button"
                     onClick={() => setCurrentViewStatus("draft")}
+                    disabled={profile?.status === "suspended"}
                     className="w-full sm:w-auto h-11 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md gap-2 cursor-pointer transition-all"
                   >
                     <RotateCcw className="w-4 h-4" />

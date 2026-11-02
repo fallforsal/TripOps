@@ -8,9 +8,8 @@ public class TripOpsDbContextFactory : IDesignTimeDbContextFactory<TripOpsDbCont
     public TripOpsDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<TripOpsDbContext>();
-
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__TripOps")
-            ?? "Server=localhost;Database=TripOps;Trusted_Connection=True;TrustServerCertificate=True;";
+            ?? "Server=.\\SQLEXPRESS;Database=TripOps;Trusted_Connection=True;TrustServerCertificate=True;";
 
         optionsBuilder.UseSqlServer(connectionString);
 

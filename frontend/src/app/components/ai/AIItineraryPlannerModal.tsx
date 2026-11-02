@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { DailyItinerary, Location, TourMeal } from "@/app/types";
 import {
   Sparkles,
@@ -238,24 +238,23 @@ export function AIItineraryPlannerModal({
 
         const meals: TourMeal[] = [
           {
-            type: "breakfast",
-            serviceName: day === 1 ? "Ăn sáng tự túc / trên đường đi" : `Buffet sáng tại khách sạn`,
-            pricePerPerson: 50000,
+            mealType: "breakfast",
+            name: day === 1 ? "Ăn sáng tự túc / trên đường đi" : `Buffet sáng tại khách sạn`,
+            price: 50000,
           },
           {
-            type: "lunch",
-            serviceName: `Bữa trưa đặc sản vùng miền tại nhà hàng địa phương`,
-            pricePerPerson: 150000,
+            mealType: "lunch",
+            name: `Bữa trưa đặc sản vùng miền tại nhà hàng địa phương`,
+            price: 150000,
           },
           {
-            type: "dinner",
-            serviceName: day === daysCount - 1 ? `Tiệc tối Gala Dinner ấm cúng toàn đoàn` : `Bữa tối ẩm thực truyền thống`,
-            pricePerPerson: 200000,
+            mealType: "dinner",
+            name: day === daysCount - 1 ? `Tiệc tối Gala Dinner ấm cúng toàn đoàn` : `Bữa tối ẩm thực truyền thống`,
+            price: 200000,
           },
         ];
 
         itinerary.push({
-          id: `ai-day-${day}`,
           day,
           title: dayTitle,
           description: dayDesc,
@@ -300,12 +299,12 @@ export function AIItineraryPlannerModal({
                 </span>
                 <span className="text-xs text-white/80">· Dành cho Công ty Lữ hành</span>
               </div>
-              <DialogTitle className="text-xl font-extrabold mt-0.5">Lên Lịch Trình Tour Tự Động Bằng AI</DialogTitle>
+              <h2 className="text-xl font-extrabold mt-0.5">Lên Lịch Trình Tour Tự Động Bằng AI</h2>
             </div>
           </div>
-          <DialogDescription className="text-xs text-white/90 mt-2 max-w-2xl">
+          <p className="text-xs text-white/90 mt-2 max-w-2xl">
             Tự động khởi tạo cấu trúc lịch trình nhiều ngày chuyên nghiệp, tích hợp giờ giấc di chuyển hợp lý, gợi ý các bữa ăn và điểm tham quan phù hợp cho khách đoàn.
-          </DialogDescription>
+          </p>
         </div>
 
         <div className="p-6 space-y-6 bg-slate-50">
@@ -523,7 +522,7 @@ export function AIItineraryPlannerModal({
                         <Utensils className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="text-[11px]">
                           <strong>Bữa ăn đề xuất:</strong>{" "}
-                          {day.meals.map((m) => `${m.type === "breakfast" ? "Sáng" : m.type === "lunch" ? "Trưa" : "Tối"}: ${m.serviceName}`).join(" • ")}
+                          {day.meals.map((m) => `${m.mealType === "breakfast" ? "Sáng" : m.mealType === "lunch" ? "Trưa" : "Tối"}: ${m.name}`).join(" • ")}
                         </span>
                       </div>
                     )}

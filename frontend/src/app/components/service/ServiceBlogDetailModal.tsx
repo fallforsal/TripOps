@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { Service } from "@/app/types";
 import {
   X,
@@ -29,7 +29,6 @@ interface ServiceBlogDetailModalProps {
   onSelect?: (service: Service) => void;
   isSelected?: boolean;
   selectButtonText?: string;
-  hidePrice?: boolean;
 }
 
 function formatVND(n?: number) {
@@ -44,21 +43,9 @@ export function ServiceBlogDetailModal({
   onSelect,
   isSelected = false,
   selectButtonText = "Chọn dịch vụ này cho tour",
-  hidePrice = false,
 }: ServiceBlogDetailModalProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"blog" | "map" | "policies">("blog");
-
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen || !service) return null;
 
@@ -83,7 +70,7 @@ export function ServiceBlogDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
       <div
         className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col border border-gray-100"
         onClick={(e) => e.stopPropagation()}
@@ -188,45 +175,18 @@ export function ServiceBlogDetailModal({
                 </div>
               </div>
 
-              {/* Price card (Hidden for customers) */}
-              {!hidePrice && (
-                <div className="bg-[#F0F9FF] border border-[#CBD5E1] rounded-xl p-3.5 text-right flex-shrink-0 min-w-[220px]">
-                  {(() => {
-                    const pFrom = service.priceFrom ?? (isHotel && service.price ? Math.round(service.price * 0.8 / 10000) * 10000 : undefined);
-                    const pTo = service.priceTo ?? (isHotel && service.price ? Math.round(service.price * 1.2 / 10000) * 10000 : undefined);
-                    const hasRange = pFrom !== undefined && pTo !== undefined && pFrom !== pTo;
-
-                    return (
-                      <>
-                        <p className="text-xs font-semibold text-[#075985] uppercase tracking-wide">
-                          {hasRange
-                            ? `Khoảng giá dự kiến / ${isHotel ? "phòng" : "người"}`
-                            : (isHotel ? "Giá tham khảo / đêm" : "Đơn giá tham khảo / suất")}
-                        </p>
-                        {hasRange ? (
-                          <div className="mt-0.5">
-                            <span className="text-xl sm:text-2xl font-black text-blue-900">
-                              {formatVND(pFrom)} - {formatVND(pTo)}
-                            </span>
-                            <span className="text-xs font-semibold text-[#075985]">
-                              {" "}/ {isHotel ? "phòng" : "người"}
-                            </span>
-                          </div>
-                        ) : (
-                          <p className="text-xl sm:text-2xl font-black text-blue-900 mt-0.5">
-                            {formatVND(service.pricePerPerson || service.price)}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-gray-500 mt-1">
-                          {hasRange && isHotel
-                            ? "Khoảng giá theo phòng/đêm giúp công ty lữ hành dễ dàng ước tính chi phí khi thiết kế tour."
-                            : "* Công ty du lịch sẽ chốt giá B2B chính thức"}
-                        </p>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+              {/* Price card */}
+              <div className="bg-[#F0F9FF] border border-[#CBD5E1] rounded-xl p-3.5 text-right flex-shrink-0 min-w-[200px]">
+                <p className="text-xs font-semibold text-[#075985] uppercase tracking-wide">
+                  {isHotel ? "Giá tham khảo / đêm" : "Đơn giá tham khảo / suất"}
+                </p>
+                <p className="text-xl sm:text-2xl font-black text-blue-900 mt-0.5">
+                  {formatVND(service.pricePerPerson || service.price)}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  * Công ty du lịch sẽ chốt giá B2B chính thức
+                </p>
+              </div>
             </div>
 
             {/* Provider banner */}
@@ -427,17 +387,13 @@ export function ServiceBlogDetailModal({
         {/* Footer Actions */}
         <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/80 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-gray-500">
-            {onSelect ? (
-              isSelected ? (
-                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Dịch vụ này hiện đang được chọn làm phương án thay thế trong tour.
-                </span>
-              ) : (
-                <span>Bấm chọn dịch vụ nếu bạn muốn đưa vào chương trình tour tùy chỉnh của mình.</span>
-              )
+            {isSelected ? (
+              <span className="text-emerald-700 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Dịch vụ này hiện đang được chọn làm phương án thay thế trong tour.
+              </span>
             ) : (
-              <span className="text-gray-400 italic">Chi tiết bài viết & thông tin dịch vụ đối tác cung cấp</span>
+              <span>Bấm chọn dịch vụ nếu bạn muốn đưa vào chương trình tour tùy chỉnh của mình.</span>
             )}
           </div>
 

@@ -1,5 +1,4 @@
-import { Compass, Mail, Phone, MapPin, ArrowUpRight } from "lucide-react";
-import { TRIPOPS_LOGO_WHITE } from "@/app/constants/logo";
+﻿import { Compass, Mail, Phone, MapPin, ArrowUpRight } from "lucide-react";
 
 export function PublicFooter() {
   return (
@@ -9,11 +8,17 @@ export function PublicFooter() {
           {/* Brand Info */}
           <div className="md:col-span-4 space-y-4">
             <div className="flex items-center gap-3">
-              <img
-                src={TRIPOPS_LOGO_WHITE}
-                alt="TripOps Logo"
-                className="h-9 w-auto object-contain"
-              />
+              <div className="w-9 h-9 rounded-full bg-[#FFFFFF]/10 flex items-center justify-center text-[#CBD5E1]">
+                <Compass className="w-5 h-5 text-[#F97316]" />
+              </div>
+              <div>
+                <span className="text-xl font-serif font-medium text-white tracking-tight">
+                  TripOps
+                </span>
+                <span className="text-[10px] tracking-widest uppercase block text-[#F0F9FF]/60">
+                  Curated Travel Platform
+                </span>
+              </div>
             </div>
             <p className="text-sm text-[#F0F9FF]/70 max-w-sm font-light leading-relaxed">
               Nền tảng đặt tour du lịch cao cấp, cá nhân hoá lịch trình với triết lý trải nghiệm văn hóa bản địa sâu sắc và an tâm tuyệt đối cho khách hàng trưởng thành.

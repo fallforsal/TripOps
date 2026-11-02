@@ -1,4 +1,4 @@
-import { Tour } from "@/app/types";
+﻿import { Tour } from "@/app/types";
 import {
   X,
   MapPin,

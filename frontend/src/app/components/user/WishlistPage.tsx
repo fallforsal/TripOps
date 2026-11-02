@@ -1,4 +1,4 @@
-import {
+﻿import {
   Heart,
   MapPin,
   Star,
@@ -9,7 +9,7 @@ import {
 import { useState } from "react";
 import { Tour } from "@/app/types";
 
-interface WishlistTour extends Pick<Tour, "id" | "name" | "destination" | "duration" | "price" | "description" | "image" | "rating" | "maxGuests" | "highlights" | "itinerary"> {
+interface WishlistTour extends Tour {
   addedDate: string;
 }
 

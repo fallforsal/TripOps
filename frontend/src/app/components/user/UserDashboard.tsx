@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Tour, Booking, CustomTourRequest } from "@/app/types";
 import { TourList } from "./TourList";
 import { MyBookings } from "./MyBookings";
@@ -12,7 +12,6 @@ interface UserDashboardProps {
   initialTab?: "explore" | "mybookings" | "custom-requests";
   onBookTour: (tour: Tour) => void;
   onCancelBooking: (bookingId: string, reason: string) => void;
-  onSubmitRefundRequest?: (data: any) => void;
   onViewTour?: (tour: Tour) => void;
   onCancelCustomRequest?: (id: string) => void;
   onNavigateToCustomTourForm?: () => void;
@@ -26,7 +25,6 @@ export function UserDashboard({
   initialTab,
   onBookTour,
   onCancelBooking,
-  onSubmitRefundRequest,
   onViewTour,
   onCancelCustomRequest,
   onNavigateToCustomTourForm,
@@ -83,7 +81,6 @@ export function UserDashboard({
         <MyBookings
           bookings={userBookings}
           onCancelBooking={onCancelBooking}
-          onSubmitRefundRequest={onSubmitRefundRequest}
           onViewBookingDetail={(booking) => {
             if (onViewBookingDetail) {
               onViewBookingDetail(booking);

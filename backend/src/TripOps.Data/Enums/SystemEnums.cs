@@ -38,13 +38,8 @@ public enum ServiceStatus
     Active,
     Draft,
     Hidden,
-    Suspended,
-    Approved,
-    Pending,
-    Rejected
+    Suspended
 }
-
-public enum TourApprovalStatus { NotSubmitted, Pending, Approved, Rejected }
 
 public enum TourStatus
 {
@@ -71,9 +66,7 @@ public enum CustomRequestStatus
 public enum BookingStatus
 {
     Pending,
-    Deposited,
     Confirmed,
-    Paid,
     InProgress,
     Completed,
     Cancelled,
@@ -122,13 +115,7 @@ public enum PaymentTransactionStatus
     Pending,
     Success,
     Failed,
-    Refunded,
-    /// <summary>Khách hủy trên trang cổng thanh toán.</summary>
-    Cancelled,
-    /// <summary>Link thanh toán hết hạn mà chưa nhận tiền.</summary>
-    Expired,
-    /// <summary>Cổng báo có tiền nhưng không khớp (thiếu/dư/sai số tiền): chưa cộng vào đơn, chờ đối soát.</summary>
-    NeedsReview
+    Refunded
 }
 
 public enum SettlementStatus
