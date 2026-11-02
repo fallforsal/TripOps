@@ -28,8 +28,8 @@ public sealed class OpenApiTests
         var descriptions = app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items.SelectMany(g => g.Items).ToArray();
         var expected = descriptions.Select(d => $"{d.HttpMethod!.ToLowerInvariant()} /{d.RelativePath}").Order().ToArray();
         Assert.Equal(expected, operations.Select(o => $"{o.Method} {o.Path}").Order().ToArray());
-        Assert.Equal(71, operations.Length);
-        Assert.Equal(61, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
+        Assert.Equal(80, operations.Length);
+        Assert.Equal(70, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
             !o.Path.StartsWith("/api/v1/admin/partner-applications") && o.Path != "/api/v1/health"));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/images" && o.Method == "post");
@@ -76,7 +76,7 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(62, protectedCount);
+        Assert.Equal(70, protectedCount);
     }
 
     [Fact]

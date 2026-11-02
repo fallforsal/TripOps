@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddTripOpsData(configuration);
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddScoped<Accounts.AccountService>();
+        services.AddScoped<Guides.AgencyGuideService>();
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
         services.AddScoped<TripOps.Data.Repositories.BookingRepository>();
         services.AddScoped<Tours.TourService>();

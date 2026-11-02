@@ -51,6 +51,15 @@ test("guide schedule data retains persisted incidents and actual trip duration",
   assert.equal(booking.tour.images?.length, 0);
 });
 
+test("guide roles survive reloading and the lead guide is selected independently of row order", () => {
+  const roles = ["support_guide", "lead_guide", "stage_guide", "logistics", "Lead"];
+  const booking = fromApiBooking({ ...dto, assignedGuides: roles.map((role, id) => ({
+    id, guideId: `guide-${id}`, guideName: `Guide ${id}`, role, status: "ASSIGNED",
+  })) });
+  assert.deepEqual(booking.assignedGuides?.map(g => g.role), ["support_guide", "lead_guide", "stage_guide", "logistics", "lead_guide"]);
+  assert.equal(booking.guideId, "guide-1");
+});
+
 test("passenger snapshot prices retain different age prices and a free infant", () => {
   const booking = fromApiBooking({ ...dto, totalGuests: 3, totalAmount: 5000000,
     participants: [

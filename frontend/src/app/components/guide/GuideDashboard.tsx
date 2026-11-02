@@ -65,6 +65,9 @@ interface GuideDashboardProps {
   ) => void;
 }
 
+const localDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
 export function GuideDashboard({
   schedules,
   onCheckIn,
@@ -101,11 +104,11 @@ export function GuideDashboard({
       const parsed = new Date(currentSchedule.booking.tourStartDate);
       if (!isNaN(parsed.getTime())) return parsed;
     }
-    return new Date(2026, 9, 15); // Month is 0-indexed: 9 = October
+    return new Date();
   });
 
   const [selectedCalendarDateStr, setSelectedCalendarDateStr] =
-    useState<string>("2026-10-15");
+    useState<string>(() => localDateKey(calendarDate));
 
   // Local state for passengers of current schedule
   const [passengers, setPassengers] = useState<BookingPassenger[]>(() => {
@@ -775,9 +778,7 @@ export function GuideDashboard({
                       const hasTour = item.schedules.length > 0;
                       const isSelected =
                         selectedCalendarDateStr === item.dateKey;
-                      const isToday =
-                        item.dateKey === "2026-10-15" ||
-                        item.dateKey === new Date().toISOString().split("T")[0];
+                      const isToday = item.dateKey === localDateKey(new Date());
 
                       return (
                         <button

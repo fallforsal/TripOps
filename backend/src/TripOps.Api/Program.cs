@@ -71,7 +71,7 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.Use(async (context, next) => {
     // Browser mutations must originate from this app or an explicitly allowed frontend.
-    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
+    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
         var origin = context.Request.Headers.Origin.ToString();
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (context.Request.Headers["Sec-Fetch-Site"] == "cross-site" ||

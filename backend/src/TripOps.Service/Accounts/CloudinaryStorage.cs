@@ -19,16 +19,23 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IH
     public async Task<string> UploadServiceImage(string providerId, byte[] bytes, string mime, CancellationToken ct)
         => await UploadImage(providerId, bytes, mime, "services", authenticated: false, ct);
 
-    private async Task<string> UploadImage(string userId, byte[] bytes, string mime, string folder, bool authenticated, CancellationToken ct)
+    public async Task<string> UploadGuideImage(string guideId, byte[] bytes, string mime, CancellationToken ct)
+    {
+        if (bytes.Length is <= 0 or > 2 * 1024 * 1024) throw new AccountException(400, "Ảnh chân dung tối đa 2 MB.");
+        return await UploadImage(guideId, bytes, mime, "guides", authenticated: false, ct, allowWebp: true);
+    }
+
+    private async Task<string> UploadImage(string userId, byte[] bytes, string mime, string folder, bool authenticated, CancellationToken ct, bool allowWebp = false)
     {
         var png = bytes.Length >= 8 && bytes.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10});
         var jpg = bytes.Length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
-        if (bytes.Length > 5 * 1024 * 1024 || !(png && mime == "image/png" || jpg && mime == "image/jpeg"))
+        var webp = allowWebp && bytes.Length >= 12 && Encoding.ASCII.GetString(bytes, 0, 4) == "RIFF" && Encoding.ASCII.GetString(bytes, 8, 4) == "WEBP";
+        if (bytes.Length > 5 * 1024 * 1024 || !(png && mime == "image/png" || jpg && mime == "image/jpeg" || webp && mime == "image/webp"))
             throw new AccountException(400, "Chỉ nhận ảnh PNG/JPEG tối đa 5 MB.");
         if (environment.IsDevelopment() && config.GetValue<bool>("Storage:UseLocal"))
         {
             if (!Regex.IsMatch(userId, @"^[a-zA-Z0-9-]{1,36}$")) throw new AccountException(400,"Invalid owner.");
-            var name = Guid.NewGuid().ToString("N") + (png ? ".png" : ".jpg");
+            var name = Guid.NewGuid().ToString("N") + (png ? ".png" : webp ? ".webp" : ".jpg");
             var directory = Path.Combine(environment.ContentRootPath,"App_Data","uploads",folder,userId);
             Directory.CreateDirectory(directory);
             await File.WriteAllBytesAsync(Path.Combine(directory,name),bytes,ct);
@@ -37,7 +44,7 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IH
         var cloud = Setting("CloudName"); var key = Setting("ApiKey"); var secret = Setting("ApiSecret");
         using var body = new MultipartFormDataContent();
         var file = new ByteArrayContent(bytes); file.Headers.ContentType = new MediaTypeHeaderValue(mime);
-        body.Add(file, "file", png ? (authenticated ? "license.png" : "tour.png") : (authenticated ? "license.jpg" : "tour.jpg"));
+        body.Add(file, "file", "image" + (png ? ".png" : webp ? ".webp" : ".jpg"));
         body.Add(new StringContent($"tripops/{folder}/{userId}/{Guid.NewGuid():N}"), "public_id");
         if (authenticated) body.Add(new StringContent("authenticated"), "type");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(cloud)}/image/upload") { Content = body };

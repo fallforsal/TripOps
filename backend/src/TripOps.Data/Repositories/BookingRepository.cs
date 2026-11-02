@@ -6,6 +6,18 @@ namespace TripOps.Data.Repositories;
 
 public sealed class BookingRepository(TripOpsDbContext db)
 {
+    public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
+    public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
+        .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);
+    public async Task<bool> GuideHasConflict(string guideId, int bookingId, DateTime start, DateTime end, CancellationToken ct)
+    {
+        var trips = await db.Bookings.AsNoTracking().IgnoreQueryFilters().Include(b => b.Timelines).Include(b => b.Tour)
+            .Where(b => b.Id != bookingId && b.AssignedGuides.Any(g => g.GuideId == guideId)
+                && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected && b.Status != BookingStatus.Completed)
+            .ToListAsync(ct);
+        return trips.Any(b => b.StartDate.Date <= end.Date &&
+            b.StartDate.Date.AddDays(Math.Max(1, b.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(b.Tour?.DurationDays ?? 1).Max()) - 1) >= start.Date);
+    }
     private IQueryable<Booking> Details() => db.Bookings
         .Include(b => b.Customer)
         .Include(b => b.Tour!).ThenInclude(t => t.Agency)

@@ -26,6 +26,20 @@ Table users {
   updated_at timestamp [not null, default: `now()` ]
 }
 
+// Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.
+Table guide_profiles {
+  user_id varchar(36) [pk, ref: - users.id]
+  experience_years int [not null, note: 'Từ 0 đến 50 năm']
+  languages json [not null, note: 'Danh sách ngôn ngữ']
+  routes json [not null, note: 'Địa bàn/tuyến hoạt động, cho phép tag tự nhập']
+  specialties json [not null, note: 'Kỹ năng và thế mạnh']
+  bio text
+  suspended_at timestamp
+  suspended_reason varchar(2000)
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
 Table business_profiles {
   id int [pk, increment]
   user_id varchar(36) [unique, not null]

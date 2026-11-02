@@ -46,6 +46,22 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     public async Task<User> Current(string id, CancellationToken ct) =>
         await db.Users.Include(u => u.BusinessProfile).SingleOrDefaultAsync(u => u.Id == id && u.Status == UserStatus.Active, ct)
         ?? throw new AccountException(401, "Phiên đăng nhập không còn hợp lệ.");
+    public async Task ChangeGuidePassword(string agencyId, string guideId, ChangeGuidePasswordRequest request, CancellationToken ct)
+    {
+        var agency = await Current(agencyId, ct);
+        if (agency.Role != UserRole.TravelAgency)
+            throw new AccountException(403, "Chỉ Agency được đổi mật khẩu cho HDV.");
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length is < 8 or > 16)
+            throw new AccountException(400, "Mật khẩu mới phải từ 8 đến 16 ký tự và không chỉ gồm khoảng trắng.");
+        if (request.NewPassword != request.ConfirmPassword)
+            throw new AccountException(400, "Xác nhận mật khẩu không khớp.");
+        var guide = await db.Users.SingleOrDefaultAsync(u => u.Id == guideId &&
+            u.Role == UserRole.TourGuide && u.AgencyId == agencyId, ct)
+            ?? throw new AccountException(404, "Không tìm thấy tài khoản HDV thuộc Agency của bạn. Hồ sơ mẫu chưa có trong database không thể đổi mật khẩu.");
+        guide.PasswordHash = hasher.HashPassword(guide, request.NewPassword);
+        guide.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
     public async Task<ProfileDto> Submit(string id, ProfileRequest request, byte[]? image, string? mime, CancellationToken ct)
     {
         var user = await Current(id, ct);
