@@ -696,6 +696,7 @@ public sealed partial class TourFlowTests
         {
             await using var app = new App(sqlServer: connectionString);
             await ProvincePersistenceScenario(app);
+            await SupplierArchiveScenario(app);
             await app.Inspect(async db => {
                 Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", db.Database.ProviderName);
                 Assert.Contains("20261101130000_AddTourProvinces", await db.Database.GetAppliedMigrationsAsync());

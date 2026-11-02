@@ -8,6 +8,12 @@ Bản dựng lại ngày 01/11/2026 sử dụng UI từ `D:/SEP/TripOps_FE_new`.
 
 Chạy **run.bat** tại thư mục gốc để mở BE và FE trong hai cửa sổ riêng.
 
+Trước lần chạy đầu tiên, tự tạo `backend/src/TripOps.Api/appsettings.Development.json` trên máy và cấu hình `ConnectionStrings:TripOps`, các khóa Cloudinary, `Cors:AllowedOrigins` và `Storage:UseLocal=false`. Cấu hình CORS cần cho phép origin FE đang dùng, ví dụ `http://localhost:5174`.
+
+File này được `.gitignore` loại khỏi Git. Khởi động lại BE sau khi thay cấu hình. User Secrets/biến môi trường vẫn được ưu tiên nếu đã cấu hình cùng khóa.
+
+**Team đã có file được Git theo dõi:** sao lưu cấu hình riêng trước khi pull commit chuyển sang file local, vì commit này bỏ file cấu hình khỏi repository. Sau khi pull, chép lại bản sao hoặc tự tạo file cấu hình riêng. Không dùng `git add -f` với file cấu hình riêng.
+
 - FE: http://localhost:5174
 - BE: http://localhost:5080
 - Swagger: http://localhost:5080/swagger
@@ -65,9 +71,9 @@ Code đầy đủ vẫn nằm trên nhánh `feat/customer-payment` và các nhá
 
 `Storage:UseLocal=false` trong `appsettings.Development.json`: ảnh mới được lưu trên Cloudinary. Khi chọn file ở form dịch vụ/tour, FE tạo preview local trong trình duyệt; chỉ khi bấm Lưu/Gửi duyệt mới upload qua BE rồi ghi URL Cloudinary vào SQL. Nếu lưu lỗi, form giữ nguyên nội dung và tái sử dụng các ảnh đã upload thành công khi thử lại.
 
-Đặt `Cloudinary:CloudName`, `Cloudinary:ApiKey`, `Cloudinary:ApiSecret` bằng user secrets/biến môi trường rồi khởi động lại BE. Không đưa khóa vào Git hoặc FE. Từ thư mục gốc:
+Đặt `Cloudinary:CloudName`, `Cloudinary:ApiKey`, `Cloudinary:ApiSecret` trong file Development riêng đã được ignore, hoặc bằng User Secrets/biến môi trường, rồi khởi động lại BE. Không đưa khóa vào Git hoặc FE.
 
-Các giá trị Cloudinary trong `appsettings.Development.json` được để trống. Mỗi thành viên cấu hình User Secrets trên máy mình; User Secrets không được đồng bộ khi pull code. Khi khóa đã bị lộ, người quản lý Cloudinary cần thu hồi/đổi khóa và cấp lại qua kênh riêng.
+Mỗi thành viên cấu hình riêng trên máy mình; file Development local và User Secrets không được đồng bộ khi pull code. Nếu dùng User Secrets, chạy từ thư mục gốc:
 
 ```powershell
 dotnet user-secrets set "Cloudinary:CloudName" "<cloud-name>" --project backend/src/TripOps.Api

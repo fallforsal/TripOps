@@ -108,6 +108,21 @@ public sealed class AgencySuppliersController(TourService tours) : ControllerBas
     [ProducesResponseType<IReadOnlyList<SupplierDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct, string? type = null, string? search = null) =>
         Ok(await tours.Suppliers(Actor, type, search, ct));
+    [HttpGet("{id:int}")]
+    [EndpointSummary("Get an active supplier owned by the authenticated Agency")]
+    [ProducesResponseType<SupplierDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get(int id, CancellationToken ct) =>
+        Ok(await tours.GetSupplier(Actor, id, ct));
+    [HttpDelete("{id:int}")]
+    [EndpointSummary("Archive an Agency supplier, removing it from the directory while preserving existing tours")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        await tours.DeleteSupplier(Actor, id, ct);
+        return NoContent();
+    }
     [HttpPost]
     [EndpointSummary("Save a hotel or restaurant in the Agency's private directory")]
     [ProducesResponseType<SupplierDto>(StatusCodes.Status200OK)]

@@ -443,6 +443,7 @@ FodyWeavers.xsd
 *.pyc
 **/appsettings.Local.json
 /backend/appsettings.Development.json
+/backend/src/TripOps.Api/appsettings.Development.json
 **/local.properties
 **/Generated.xcconfig
 **/flutter_export_environment.sh

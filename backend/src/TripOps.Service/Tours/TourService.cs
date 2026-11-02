@@ -56,10 +56,31 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         repository.AddSupplier(supplier); await repository.Save(ct);
         return SupplierDto(supplier);
     }
+    public async Task<SupplierDto> GetSupplier(string actor, int id, CancellationToken ct)
+    {
+        await Agency(actor, ct);
+        var supplier = await repository.Supplier(actor, id, ct);
+        if (supplier is null || supplier.Status != AgencySupplier.Active)
+            throw new TourException(404, "Nhà cung cấp không còn trong danh bạ.");
+        return SupplierDto(supplier);
+    }
+    public async Task DeleteSupplier(string actor, int id, CancellationToken ct)
+    {
+        await Agency(actor, ct);
+        var supplier = await repository.Supplier(actor, id, ct)
+            ?? throw new TourException(404, "Nhà cung cấp không có trong danh bạ.");
+        if (supplier.Status == AgencySupplier.Archived) return;
+        // Keep FK references and per-tour snapshots intact; only remove from future directory choices.
+        supplier.Status = AgencySupplier.Archived;
+        supplier.UpdatedAt = DateTime.UtcNow;
+        await repository.Save(ct);
+    }
     public async Task<SupplierDto> UpdateSupplier(string actor, int id, SupplierRequest request, CancellationToken ct)
     {
         await Agency(actor, ct); ValidateObject(request);
         var supplier = await repository.Supplier(actor, id, ct) ?? throw new TourException(404, "Supplier not found.");
+        if (supplier.Status != AgencySupplier.Active)
+            throw new TourException(404, "Nhà cung cấp không còn trong danh bạ.");
         Require(supplier.SupplierType == request.Type, "Supplier type cannot be changed.");
         AssignSupplier(supplier, request); await repository.Save(ct);
         return SupplierDto(supplier);

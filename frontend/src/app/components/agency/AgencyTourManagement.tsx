@@ -1692,8 +1692,22 @@ export function TourFormPage(props: TourFormPageProps) {
   const [selectedHotelSupplierId, setSelectedHotelSupplierId] = useState<number | undefined>();
   const [selectedMealSupplierIds, setSelectedMealSupplierIds] = useState<Record<string, number>>({});
   useEffect(() => {
-    agencySuppliers("HOTEL").then(setSavedHotels).catch(() => {});
-    agencySuppliers("RESTAURANT").then(setSavedRestaurants).catch(() => {});
+    let controller: AbortController;
+    const refreshDirectory = () => {
+      controller?.abort();
+      const request = new AbortController();
+      controller = request;
+      Promise.all([agencySuppliers("HOTEL", "", request.signal), agencySuppliers("RESTAURANT", "", request.signal)])
+        .then(([hotels, restaurants]) => {
+          if (!request.signal.aborted) { setSavedHotels(hotels); setSavedRestaurants(restaurants); }
+        })
+        .catch((error: unknown) => {
+          if (!request.signal.aborted) setSaveError(error instanceof Error ? error.message : "Không thể tải danh bạ nhà cung cấp.");
+        });
+    };
+    refreshDirectory();
+    window.addEventListener("focus", refreshDirectory);
+    return () => { controller?.abort(); window.removeEventListener("focus", refreshDirectory); };
   }, []);
   const [customHotelInputs, setCustomHotelInputs] = useState({
     name: "",
