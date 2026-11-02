@@ -1,5 +1,21 @@
 # Chia sẻ dữ liệu dịch vụ cho team
 
+## Thêm 5 HDV mẫu cho Agency
+
+Chạy khi BE đã hoạt động, có Agency `agency@tripops.test`:
+
+```powershell
+pwsh -File backend/scripts/seed-agency-guides.ps1
+```
+
+Tạo qua API để BE băm mật khẩu và lưu đồng thời `users` + `guide_profiles`. Có 5 tài khoản `guide01@tripops.test` đến `guide05@tripops.test`, mật khẩu mẫu `12345678`; toàn bộ hồ sơ và điện thoại là dữ liệu giả lập. Các tài khoản mới hoạt động và chưa có lịch phân công. Giữ nguyên HDV cũ, bỏ qua email đã có trong danh sách của Agency khi chạy lại; không reset mật khẩu hay sửa hồ sơ cũ. Có thể truyền `-ApiBaseUrl`, `-AgencyEmail`, `-AgencyPassword`, `-GuidePassword` cho môi trường khác. Không cần migration.
+
+## Danh bạ riêng của Agency: 30 cơ sở Đà Lạt
+
+`seed-dalat-agency-suppliers-30.sql` thêm **15 khách sạn và 15 nhà hàng** vào `agency_suppliers` của Agency `agency@tripops.test`. Đây là danh bạ riêng, không thêm bài vào `services`. Xem [nguồn từng cơ sở và cách chạy](dalat-agency-suppliers-30.sources.md).
+
+Tên, địa chỉ và liên hệ tham khảo nguồn công khai; giá là **giá mẫu giả lập để kiểm thử**, lưu trú theo người/đêm, nhà hàng theo người/bữa, có ghi chú rõ trong từng mục. Khi dùng thực tế cần thay bằng báo giá đã xác nhận. Script không tạo trùng khi chạy lại, chỉ bổ sung giá còn NULL của các mục ACTIVE thuộc bộ dữ liệu này; giữ giá đã có và mục ARCHIVED. Không cần migration mới.
+
 ## Bộ bổ sung 50 dịch vụ Đà Lạt
 
 `seed-dalat-50-services.sql` thêm **22 lưu trú, 22 ẩm thực, 3 phương tiện và 3 điểm tham quan** vào Provider demo. Xem [nguồn tham khảo và cách chạy](dalat-50-services.sources.md). Tên/địa chỉ tham khảo web; giá và sức chứa giả lập để test; ảnh clone từ một dịch vụ hiện có của Provider. Bài được tạo ở trạng thái `Approved`, `is_paused = 0` để thử tìm kiếm và ráp tour. Chạy lại không tạo bài trùng, không sửa bài đang có.

@@ -9,7 +9,6 @@ import {
   X,
   Building2,
   Plus,
-  PlusCircle,
   BedDouble,
   ClipboardList,
 } from "lucide-react";
@@ -47,7 +46,6 @@ export function ProviderLayout({
       icon: ClipboardList,
       badge: pendingRequestsCount,
     },
-    { id: "create", label: "Đăng Dịch vụ Mới", icon: PlusCircle },
     { id: "profile", label: "Hồ sơ Doanh nghiệp", icon: Building2 },
   ];
 
