@@ -81,6 +81,10 @@ export interface SnapshotPassenger {
   identityNumber?: string;
   tierName?: string;
   price: number;
+  /** schemaVersion >= 2 */
+  note?: string | null;
+  roommateNote?: string | null;
+  restaurantNote?: string | null;
 }
 
 export interface SnapshotDay {
@@ -146,6 +150,8 @@ export interface BookingSnapshotPayload {
   cancellationPolicy?: string;
   paymentConditions?: SnapshotPaymentCondition[];
   customerNotes?: string;
+  /** schemaVersion >= 2: ghi chú của công ty lữ hành, tách khỏi customerNotes */
+  agencyNote?: string | null;
   generatedAt: string;
 }
 
