@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Booking,
   User,
@@ -11,6 +11,7 @@ import {
   TourCoHost,
   BookingPriceAdjustment,
   BookingAgencyShare,
+  BookingProviderConfirmation,
   BookingAssignedGuide,
   BookingAttractionCheckin,
   BookingIncident,
@@ -19,6 +20,7 @@ import {
   IncidentStatus,
   Location,
 } from "@/app/types";
+import { formatVietnamDeadline } from "@/app/services/payos";
 import {
   ArrowLeft,
   Calendar,
@@ -79,7 +81,8 @@ import {
 import * as XLSX from "xlsx";
 import { Button } from "@/app/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/app/components/ui/popover";
-import { mockUsers } from "@/app/data/mockData";
+import { mockUsers, mockServices } from "@/app/data/mockData";
+import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { ProviderProfileModal } from "./ProviderProfileModal";
 import {
   Dialog,
@@ -97,7 +100,7 @@ interface AgencyBookingDetailPageProps {
   companyName: string;
   companyId?: string;
   onBack: () => void;
-  onApproveBooking: (bookingId: string) => void;
+  onApproveBooking: (bookingId: string) => void | Promise<boolean | void>;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
@@ -119,8 +122,9 @@ const statusMap: Record<string, { label: string; color: string }> = {
   rejected: { label: "Từ chối", color: "bg-gray-100 text-gray-800 border-gray-200" },
 };
 
-const paymentStatusMap: Record<string, { label: string; color: string }> = {
+const paymentStatusMap: Record<NonNullable<Booking["paymentStatus"]>, { label: string; color: string }> = {
   unpaid: { label: "Chưa thanh toán", color: "bg-red-50 text-red-700 border-red-200" },
+  partially_paid: { label: "Đã thanh toán một phần", color: "bg-sky-50 text-sky-800 border-sky-200" },
   paid: { label: "Đã thanh toán", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "bg-[#F0F9FF] text-[#EA580C] border-[#F97316]/30" },
 };
@@ -134,6 +138,17 @@ const MEAL_LABELS: Record<string, { label: string; icon: React.ElementType; colo
 function formatVND(n: number) {
   return n.toLocaleString("vi-VN") + "đ";
 }
+
+function parseTimeToMinutes(timeStr?: string): number {
+  if (!timeStr) return 9999;
+  const clean = timeStr.trim().toLowerCase();
+  const match = clean.match(/(\d{1,2})(?:[:h](\d{0,2}))?/i);
+  if (!match) return 9999;
+  const hours = parseInt(match[1], 10);
+  const mins = match[2] ? parseInt(match[2], 10) : 0;
+  return hours * 60 + mins;
+}
+
 
 function calculateAge(dobStr?: string, refDateStr?: string): number | null {
   if (!dobStr) return null;
@@ -281,8 +296,8 @@ export function AgencyBookingDetailPage({
       {
         id: `ba-${booking.id}-main`,
         bookingId: booking.id,
-        agencyId: booking.companyId,
-        agencyName: booking.companyName,
+        agencyId: booking.companyId ?? companyId ?? "",
+        agencyName: booking.companyName ?? companyName ?? "",
         isHost: true,
         role: "lead" as const,
         originalAmount: booking.totalPrice,
@@ -466,14 +481,14 @@ export function AgencyBookingDetailPage({
         const updatedAssigned = [...assignedGuides, newAssignedGuide];
         setAssignedGuides(updatedAssigned);
         if (onUpdateAssignedGuides) {
-          onUpdateAssignedGuides(updatedAssigned);
+          onUpdateAssignedGuides(booking.id, updatedAssigned);
         }
       }
     }
 
     setAttractionCheckins(updatedCheckins);
     if (onUpdateAttractionCheckins) {
-      onUpdateAttractionCheckins(updatedCheckins);
+      onUpdateAttractionCheckins(booking.id, updatedCheckins);
     }
   };
 
@@ -767,6 +782,8 @@ export function AgencyBookingDetailPage({
   const [passengerIdNumber, setPassengerIdNumber] = useState("");
   const [passengerPhone, setPassengerPhone] = useState("");
   const [passengerNotes, setPassengerNotes] = useState("");
+  const [passengerRoommateNote, setPassengerRoommateNote] = useState("");
+  const [passengerDietaryNote, setPassengerDietaryNote] = useState("");
   const [passengerSelectedAgencyId, setPassengerSelectedAgencyId] = useState<string>("all");
 
   // Simultaneous price sync state when adding passenger
@@ -779,6 +796,143 @@ export function AgencyBookingDetailPage({
   const [hotelChanges, setHotelChanges] = useState<CustomHotelChange[]>(() => booking.customHotelChanges || []);
   const [locChanges, setLocChanges] = useState<CustomLocationChange[]>(() => booking.locationChanges || []);
   const [mealChangesList, setMealChangesList] = useState<CustomMealChange[]>(() => booking.customMealChanges || []);
+
+  // Viewing Provider Service Detail Modal (Xem bài viết & Bản đồ)
+  const [viewingServiceId, setViewingServiceId] = useState<string | null>(null);
+
+  // ----------------------------------------------------
+  // PROVIDER CONFIRMATIONS & APPROVAL MATRIX (HOTEL & MEALS)
+  // ----------------------------------------------------
+  const providerItems: BookingProviderConfirmation[] = useMemo(() => {
+    if (booking.providerConfirmations && booking.providerConfirmations.length > 0) {
+      return booking.providerConfirmations;
+    }
+
+    const items: BookingProviderConfirmation[] = [];
+    const tour = booking.tour;
+
+    // 1. Hotel items
+    const customHotelChanges = booking.customHotelChanges || [];
+    if (customHotelChanges.length > 0) {
+      customHotelChanges.forEach((hc, idx) => {
+        const isCustom = hc.isCustom || hc.mode === "custom" || (!hc.serviceId && hc.mode !== "system");
+        items.push({
+          id: `p-hotel-${idx}`,
+          type: "hotel",
+          title: `Khách sạn lưu trú (${hc.destination})`,
+          destination: hc.destination,
+          originalName: hc.originalHotelName,
+          selectedName: hc.newHotelName,
+          isCustom,
+          serviceId: hc.serviceId,
+          providerId: hc.providerId,
+          providerName: hc.providerName || (isCustom ? undefined : "Đối tác Khách sạn Nền tảng"),
+          providerPhone: hc.providerPhone || (isCustom ? undefined : "0263 3825 444"),
+          providerAddress: hc.providerAddress || hc.address,
+          status: hc.providerStatus || (isCustom ? "confirmed" : "pending"),
+          confirmedAt: hc.providerConfirmedAt,
+          rejectionReason: hc.providerRejectionReason,
+          priceDifference: hc.priceDifference,
+          address: hc.address,
+          image: hc.serviceImage,
+          stars: hc.stars || 4,
+          notes: hc.note,
+        });
+      });
+    } else if (tour?.hotels && tour.hotels.length > 0) {
+      tour.hotels.forEach((h, idx) => {
+        items.push({
+          id: `p-tour-hotel-${idx}`,
+          type: "hotel",
+          title: `Khách sạn tiêu chuẩn tour (${h.destination || tour.destination})`,
+          destination: h.destination || tour.destination,
+          selectedName: h.name,
+          isCustom: false,
+          serviceId: "service-1",
+          providerName: "Đối tác Nền tảng theo Tour",
+          providerPhone: "0263 3825 444",
+          status: "confirmed",
+          confirmedAt: booking.bookingDate,
+          address: h.address || h.description,
+          stars: h.stars || 4,
+        });
+      });
+    } else if (tour?.itinerary?.[0]?.hotel) {
+      const defHotel = tour.itinerary[0].hotel;
+      items.push({
+        id: `p-tour-hotel-def`,
+        type: "hotel",
+        title: `Khách sạn tiêu chuẩn tour (${tour.destination})`,
+        destination: tour.destination,
+        selectedName: defHotel.name,
+        isCustom: false,
+        serviceId: "service-1",
+        providerName: "Đối tác Nền tảng theo Tour",
+        providerPhone: "0263 3825 444",
+        status: "confirmed",
+        confirmedAt: booking.bookingDate,
+        address: defHotel.description,
+      });
+    }
+
+    // 2. Meal items
+    const customMealChanges = booking.customMealChanges || [];
+    if (customMealChanges.length > 0) {
+      customMealChanges.forEach((mc, idx) => {
+        const isCustom = mc.isCustom || mc.mode === "custom" || (!mc.serviceId && mc.mode !== "system");
+        const mealLabel = mc.mealType === "breakfast" ? "Ăn sáng" : mc.mealType === "lunch" ? "Ăn trưa" : "Ăn tối";
+        const defaultTime = mc.time || (mc.mealType === "breakfast" ? "07:30" : mc.mealType === "lunch" ? "12:00" : "18:30");
+        items.push({
+          id: `p-meal-${idx}`,
+          type: "meal",
+          title: `Ngày ${mc.dayNumber} • ${mealLabel} (${defaultTime})`,
+          dayNumber: mc.dayNumber,
+          time: defaultTime,
+          mealType: mc.mealType,
+          originalName: mc.originalMealName,
+          selectedName: mc.newMealName,
+          isCustom,
+          serviceId: mc.serviceId,
+          providerId: mc.providerId,
+          providerName: mc.providerName || (isCustom ? undefined : "Đối tác Ẩm thực Nền tảng"),
+          providerPhone: mc.providerPhone || (isCustom ? undefined : "0263 3825 444"),
+          providerAddress: mc.providerAddress,
+          status: mc.providerStatus || (isCustom ? "confirmed" : "pending"),
+          confirmedAt: mc.providerConfirmedAt,
+          rejectionReason: mc.providerRejectionReason,
+          priceDifference: mc.priceDifference,
+          image: mc.serviceImage,
+          notes: mc.note,
+        });
+      });
+    }
+
+    return items;
+  }, [booking]);
+
+  const platformProviderItems = useMemo(
+    () => providerItems.filter((i) => !i.isCustom),
+    [providerItems]
+  );
+  const customProviderItems = useMemo(
+    () => providerItems.filter((i) => i.isCustom),
+    [providerItems]
+  );
+  const pendingProviders = useMemo(
+    () => platformProviderItems.filter((i) => i.status === "pending"),
+    [platformProviderItems]
+  );
+  const rejectedProviders = useMemo(
+    () => platformProviderItems.filter((i) => i.status === "rejected"),
+    [platformProviderItems]
+  );
+  const confirmedProviders = useMemo(
+    () => platformProviderItems.filter((i) => i.status === "confirmed"),
+    [platformProviderItems]
+  );
+  const isAllProvidersApproved =
+    platformProviderItems.length === 0 ||
+    (pendingProviders.length === 0 && rejectedProviders.length === 0);
 
   // Quick Service Edit Modal State
   const [serviceEditModalOpen, setServiceEditModalOpen] = useState(false);
@@ -949,19 +1103,16 @@ export function AgencyBookingDetailPage({
   };
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
-  const handleApproveHappyCase = () => {
-    const updatedAgencies: BookingAgencyShare[] = agenciesList.map((a) => ({
+  const handleApproveHappyCase = async () => {
+    const approved = await onApproveBooking(booking.id);
+    if (approved === false) return;
+    setAgenciesList((current) => current.map((a) => ({
       ...a,
       confirmationStatus: "confirmed" as const,
       quoteConfirmed: true,
       confirmedAt: a.confirmedAt || new Date().toISOString(),
-    }));
-    setAgenciesList(updatedAgencies);
-    onUpdateBookingAgencies?.(booking.id, updatedAgencies);
-
-    onApproveBooking(booking.id);
+    })));
     setHappyCaseModalOpen(false);
-    alert(`✓ Đã duyệt booking thành công!\n\n🏢 Đơn vị chủ trì đã xác nhận công ty và các bên liên minh có thể tham gia dẫn dắt đoàn theo đúng lịch trình.\n\n👉 Bước tiếp theo: Quý công ty vui lòng sử dụng nút "Tạo yêu cầu thanh toán" trên thanh công cụ để tạo các đợt thu (đặt cọc đợt 1, thanh toán đợt 2, v.v.) theo thỏa thuận với khách hàng.`);
   };
 
   // Multi-Guide Management Handlers
@@ -1262,6 +1413,8 @@ export function AgencyBookingDetailPage({
     setPassengerGender(p.gender || "male");
     setPassengerIdNumber(p.idNumber || "");
     setPassengerPhone(p.phone || "");
+    setPassengerRoommateNote(p.roommateNote || "");
+    setPassengerDietaryNote(p.dietaryNote || "");
     setPassengerNotes(p.notes || "");
     setPassengerSelectedAgencyId(p.agencyId || "all");
     const initialPrice = p.price !== undefined ? p.price : calculatePassengerPrice(p.ageGroup || "adult", p.agencyId || "all");
@@ -1453,7 +1606,9 @@ export function AgencyBookingDetailPage({
   };
 
   const st = statusMap[booking.status] ?? { label: booking.status, color: "bg-gray-100 text-gray-700" };
-  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"];
+  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
+    label: "Chưa xác định", color: "bg-gray-100 text-gray-700 border-gray-200",
+  };
 
   // Default contract number
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
@@ -1499,14 +1654,40 @@ export function AgencyBookingDetailPage({
             {booking.status === "pending" && (
               <>
                 {isCurrentCompanyLead ? (
-                  <Button
-                    onClick={handleApproveHappyCase}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm text-sm font-bold"
-                    title="Xác nhận cty có thể tham gia dẫn dắt đoàn này theo đúng lịch trình thỏa thuận"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Duyệt Booking
-                  </Button>
+                  isAllProvidersApproved ? (
+                    <Button
+                      onClick={handleApproveHappyCase}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm text-sm font-bold ring-2 ring-emerald-400 ring-offset-1 cursor-pointer"
+                      title="Tất cả nhà cung cấp trên sàn đã duyệt xác nhận dịch vụ. Sẵn sàng duyệt booking!"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Duyệt Booking (Đủ điều kiện)
+                    </Button>
+                  ) : rejectedProviders.length > 0 ? (
+                    <Button
+                      disabled
+                      className="bg-red-50 text-red-500 border border-red-300 cursor-not-allowed gap-1.5 text-sm font-bold shadow-none opacity-80"
+                      title={`Có ${rejectedProviders.length} dịch vụ bị nhà cung cấp từ chối. Vui lòng liên hệ khách hoặc đổi dịch vụ trước khi duyệt.`}
+                    >
+                      <XCircle className="w-4 h-4 text-red-500" />
+                      Duyệt Booking (Bị từ chối)
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        disabled
+                        className="bg-gray-100 text-gray-400 border border-gray-300 cursor-not-allowed gap-1.5 text-sm font-semibold shadow-none"
+                        title={`Chưa thể duyệt: Đang chờ ${pendingProviders.length} nhà cung cấp xác nhận phòng/bàn.`}
+                      >
+                        <Lock className="w-4 h-4 text-gray-400" />
+                        Duyệt Booking
+                      </Button>
+                      <span className="text-xs px-2.5 py-1.5 rounded-xl font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                        Chờ {pendingProviders.length} Provider duyệt ({confirmedProviders.length}/{platformProviderItems.length})
+                      </span>
+                    </div>
+                  )
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F0F9FF] text-purple-800 border border-[#F97316]/30">
                     <Handshake className="w-4 h-4 text-[#F97316]" />
@@ -1599,6 +1780,270 @@ export function AgencyBookingDetailPage({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* BẢNG TIẾN TRÌNH XÁC NHẬN DỊCH VỤ TỪ CÁC NHÀ CUNG CẤP (PROVIDER STATUS) */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#075985]" />
+                Tiến trình Phê duyệt Dịch vụ từ Nhà cung cấp (Providers)
+              </h3>
+              {isAllProvidersApproved ? (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  Đã đủ điều kiện duyệt booking
+                </span>
+              ) : rejectedProviders.length > 0 ? (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
+                  <XCircle className="w-3.5 h-3.5 text-red-600" />
+                  Có đối tác từ chối
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                  Chờ {pendingProviders.length} nhà cung cấp duyệt
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">
+              Quy tắc hệ thống: Agency chỉ được bấm <strong className="text-emerald-700">"Duyệt Booking"</strong> khi toàn bộ khách sạn và nhà hàng đối tác trên sàn đã xác nhận phòng/bàn.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+              Đã duyệt: {confirmedProviders.length}/{platformProviderItems.length}
+            </span>
+            {pendingProviders.length > 0 && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+                Chờ duyệt: {pendingProviders.length}
+              </span>
+            )}
+            {customProviderItems.length > 0 && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200">
+                Tự nhập ngoài sàn: {customProviderItems.length}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Status Callout Banner */}
+        {booking.status === "pending" && (
+          <div>
+            {!isAllProvidersApproved && pendingProviders.length > 0 ? (
+              <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-amber-950">
+                    Chờ {pendingProviders.length} nhà cung cấp xác nhận dịch vụ trước khi có thể duyệt đơn:
+                  </p>
+                  <p className="text-amber-800 text-[11px] leading-relaxed">
+                    Hệ thống đã tự động gửi thông báo booking đến đối tác. Nút <strong>"Duyệt Booking"</strong> tạm thời bị khóa cho tới khi các đơn vị dưới đây bấm xác nhận còn phòng/bàn.
+                  </p>
+                </div>
+              </div>
+            ) : rejectedProviders.length > 0 ? (
+              <div className="p-3.5 rounded-xl bg-red-50/90 border border-red-300 text-xs text-red-900 flex items-start gap-2.5 shadow-2xs">
+                <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-red-950">
+                    Có {rejectedProviders.length} dịch vụ bị nhà cung cấp từ chối!
+                  </p>
+                  <p className="text-red-800 text-[11px] leading-relaxed">
+                    Vui lòng bấm nút <strong>"Cập nhật / Đổi dịch vụ"</strong> để chọn nhà hàng/khách sạn thay thế khác cho khách hàng.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5 shadow-2xs">
+                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-emerald-950">
+                    Tất cả nhà cung cấp trên sàn đã xác nhận dịch vụ thành công!
+                  </p>
+                  <p className="text-emerald-800 text-[11px] leading-relaxed">
+                    Bạn có thể kiểm tra lại thông tin bên dưới và bấm nút <strong className="text-emerald-700">"Duyệt Booking"</strong> ở góc trên bên phải để kích hoạt đơn và gửi yêu cầu thanh toán cho khách.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Provider Cards List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+          {providerItems.map((item) => {
+            const isHotel = item.type === "hotel";
+
+            return (
+              <div
+                key={item.id}
+                className={`p-4 rounded-xl border transition-all space-y-3 shadow-2xs ${
+                  item.isCustom
+                    ? "border-purple-300 bg-purple-50/30 hover:bg-purple-50/50"
+                    : item.status === "confirmed"
+                    ? "border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40"
+                    : item.status === "rejected"
+                    ? "border-red-200 bg-red-50/20 hover:bg-red-50/40"
+                    : "border-amber-200 bg-amber-50/20 hover:bg-amber-50/40"
+                }`}
+              >
+                {/* Header: Category Badge + Status Badge */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide border flex items-center gap-1 ${
+                      isHotel
+                        ? "bg-blue-100 text-blue-800 border-blue-200"
+                        : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                    }`}
+                  >
+                    {isHotel ? <Building2 className="w-3 h-3" /> : <Utensils className="w-3 h-3" />}
+                    {item.title}
+                  </span>
+
+                  {item.isCustom ? (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
+                      <Sparkles className="w-3 h-3 text-purple-600" />
+                      Khách tự điền ngoài sàn
+                    </span>
+                  ) : item.status === "confirmed" ? (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                      <CheckCircle className="w-3 h-3 text-emerald-600" />
+                      Đã xác nhận giữ chỗ
+                    </span>
+                  ) : item.status === "rejected" ? (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-2xs">
+                      <XCircle className="w-3 h-3 text-red-600" />
+                      Từ chối giữ chỗ
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                      Chờ Provider phê duyệt
+                    </span>
+                  )}
+                </div>
+
+                {/* Service Details */}
+                <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="font-extrabold text-sm text-gray-900">
+                      {item.selectedName} {item.stars ? `(${item.stars}★)` : ""}
+                    </h4>
+                    {item.priceDifference !== undefined && item.priceDifference !== 0 && (
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                        item.priceDifference > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {item.priceDifference > 0 ? `+${formatVND(item.priceDifference)}` : formatVND(item.priceDifference)}
+                      </span>
+                    )}
+                  </div>
+
+                  {item.originalName && item.originalName !== item.selectedName && (
+                    <p className="text-[11px] text-gray-400">
+                      Tiêu chuẩn tour: <span className="line-through">{item.originalName}</span>
+                    </p>
+                  )}
+
+                  {/* Provider Info */}
+                  <div className="text-xs text-gray-600 pt-1 space-y-0.5">
+                    {item.isCustom ? (
+                      <div className="p-2 rounded-lg bg-purple-100/60 border border-purple-200 text-purple-950 text-[11px] space-y-1">
+                        <p className="font-semibold flex items-center gap-1 text-purple-900">
+                          <Info className="w-3.5 h-3.5 text-purple-700 flex-shrink-0" />
+                          Dịch vụ khách tự đề xuất ngoài hệ thống:
+                        </p>
+                        <p className="text-purple-800 leading-relaxed text-[11px]">
+                          Không có tài khoản Provider trên sàn để duyệt tự động. Agency tự liên hệ xác nhận trực tiếp qua điện thoại hoặc địa chỉ (không chặn tiến trình duyệt booking).
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[11px]">
+                          <strong className="text-gray-700">Đơn vị cung ứng:</strong>{" "}
+                          <span className="font-semibold text-gray-900">{item.providerName || "Đối tác Nền tảng"}</span>
+                          {item.providerPhone && (
+                            <span className="text-gray-500 ml-1.5">({item.providerPhone})</span>
+                          )}
+                        </p>
+                        {item.address && (
+                          <p className="text-[11px] text-gray-500 flex items-start gap-1">
+                            <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <span className="line-clamp-1">{item.address}</span>
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {/* Status note / time */}
+                    {item.status === "confirmed" && item.confirmedAt && (
+                      <p className="text-[11px] text-emerald-700 font-medium pt-0.5 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        Xác nhận lúc: <strong>{item.confirmedAt}</strong>
+                      </p>
+                    )}
+                    {item.status === "rejected" && item.rejectionReason && (
+                      <p className="text-[11px] text-red-700 font-medium pt-0.5 flex items-start gap-1">
+                        <XCircle className="w-3 h-3 text-red-600 flex-shrink-0 mt-0.5" />
+                        Lý do từ chối: <strong>{item.rejectionReason}</strong>
+                      </p>
+                    )}
+                    {item.status === "pending" && !item.isCustom && (
+                      <p className="text-[11px] text-amber-700 font-medium pt-0.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        Đã gửi yêu cầu giữ chỗ. Đang chờ đối tác duyệt xác nhận.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Action Buttons */}
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+                  {item.isCustom ? (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        item.selectedName + " " + (item.destination || "")
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-semibold bg-white hover:bg-purple-100/70 border border-purple-300 px-3 py-1.5 rounded-lg shadow-2xs transition-colors"
+                      title="Tìm kiếm địa chỉ và đánh giá của khách sạn / quán ăn này trên Google Maps"
+                    >
+                      <Navigation className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Tìm trên Google Maps</span>
+                      <ExternalLink className="w-3 h-3 text-purple-400" />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setViewingServiceId(item.serviceId || "service-1")}
+                      className="inline-flex items-center gap-1.5 text-xs text-indigo-700 hover:text-indigo-900 font-semibold bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                      title="Xem bài viết giới thiệu, hình ảnh, tiện nghi và bản đồ của dịch vụ này"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Xem bài viết &amp; Bản đồ</span>
+                    </button>
+                  )}
+
+                  {!item.isCustom && item.providerPhone && (
+                    <a
+                      href={`tel:${item.providerPhone.replace(/\s+/g, "")}`}
+                      className="text-[11px] text-gray-500 hover:text-[#075985] flex items-center gap-1"
+                    >
+                      <Phone className="w-3 h-3 text-gray-400" />
+                      Gọi điện: {item.providerPhone}
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1990,12 +2435,29 @@ export function AgencyBookingDetailPage({
                                 "Phân loại": p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)",
                                 "Trạng thái chặng": p.status === "INACTIVE" ? `Đã rút (${p.statusNote || ""})` : "Đang tham gia chặng",
                                 "Số điện thoại": p.phone || "",
+                                "Nguyện vọng xếp phòng": p.roommateNote || "",
+                                "Yêu cầu ăn uống / Dị ứng": p.dietaryNote || "",
                                 "Ghi chú riêng": p.notes || "",
                                 "Giá vé (VNĐ)": p.status === "INACTIVE" ? 0 : p.price,
                               };
                             });
 
                             const ws = XLSX.utils.json_to_sheet(exportRows);
+                            ws["!cols"] = [
+                              { wch: 6 },
+                              { wch: 25 },
+                              { wch: 20 },
+                              { wch: 15 },
+                              { wch: 12 },
+                              { wch: 10 },
+                              { wch: 18 },
+                              { wch: 22 },
+                              { wch: 16 },
+                              { wch: 40 },
+                              { wch: 35 },
+                              { wch: 30 },
+                              { wch: 16 },
+                            ];
                             const wb = XLSX.utils.book_new();
                             XLSX.utils.book_append_sheet(wb, ws, "Danh_Sach");
                             XLSX.writeFile(wb, fileName);
@@ -2096,6 +2558,23 @@ export function AgencyBookingDetailPage({
                                     {p.fullName}
                                   </span>
                                   {p.phone && <span className="block text-[11px] font-normal text-[#075985]">{p.phone}</span>}
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {p.roommateNote && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded font-medium">
+                                        🛏️ {p.roommateNote}
+                                      </span>
+                                    )}
+                                    {p.dietaryNote && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-950 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
+                                        🍽️ {p.dietaryNote}
+                                      </span>
+                                    )}
+                                    {p.notes && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded">
+                                        📝 {p.notes}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2.5">
                                   {p.idNumber ? (
@@ -2109,7 +2588,7 @@ export function AgencyBookingDetailPage({
                                 <td className="px-3 py-2.5 text-gray-600">
                                   <span>{p.dateOfBirth || "—"}</span>
                                   {(() => {
-                                    const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.createdAt);
+                                    const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
                                     return age !== null ? (
                                       <span className="ml-1.5 text-xs text-teal-700 font-semibold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
                                         {age} tuổi
@@ -2405,21 +2884,51 @@ export function AgencyBookingDetailPage({
                           </div>
                         )}
                         {acc.isChanged && (acc.mode === "provider" || acc.providerId) && (
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
                             <span className="text-gray-500">Thông tin đối tác cung cấp:</span>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenProviderProfile(acc.providerId, {
-                                serviceName: acc.hotelName,
-                                category: "hotel",
-                                destination: acc.destination,
-                              })}
-                              className="inline-flex items-center gap-1.5 text-indigo-700 hover:text-indigo-900 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg border border-indigo-200 transition-colors"
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setViewingServiceId(acc.providerId || "service-1")}
+                                className="inline-flex items-center gap-1.5 text-indigo-700 hover:text-indigo-900 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
+                                title="Xem bài viết, hình ảnh và vị trí bản đồ của khách sạn này"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                                Xem bài viết &amp; Bản đồ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProviderProfile(acc.providerId, {
+                                  serviceName: acc.hotelName,
+                                  category: "hotel",
+                                  destination: acc.destination,
+                                })}
+                                className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 text-xs bg-white hover:bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
+                              >
+                                Hồ sơ đối tác
+                                <ExternalLink className="w-3 h-3 text-gray-400" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {acc.mode === "custom" && (
+                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                            <div className="text-xs text-purple-900 flex items-center gap-1.5 font-medium">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Khách tự đề xuất ngoài hệ thống (Không có Provider duyệt tự động)</span>
+                            </div>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                acc.hotelName + " " + acc.destination
+                              )}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-semibold bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-lg border border-purple-300 transition-colors shadow-2xs"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                              Xem hồ sơ đối tác
-                              <ExternalLink className="w-3 h-3 text-indigo-500" />
-                            </button>
+                              <Navigation className="w-3.5 h-3.5 text-purple-600" />
+                              Tìm trên Google Maps
+                              <ExternalLink className="w-3 h-3 text-purple-400" />
+                            </a>
                           </div>
                         )}
                       </div>
@@ -3196,207 +3705,325 @@ export function AgencyBookingDetailPage({
                           </p>
                         )}
 
-                        {/* Locations timeline */}
-                        <div className="relative pl-1">
-                          <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-gray-200" />
+                        {/* Unified Locations & Meals Timeline */}
+                        {(() => {
+                          type UnifiedItem =
+                            | {
+                                kind: "location";
+                                key: string;
+                                time: string;
+                                minutes: number;
+                                loc: any;
+                              }
+                            | {
+                                kind: "meal";
+                                key: string;
+                                time: string;
+                                minutes: number;
+                                meal: any;
+                              };
 
-                          <div className="space-y-2.5">
-                            {day.locations && day.locations.length > 0 ? (
-                              day.locations.map((loc, lIdx) => {
-                                const locChange = locChanges.find(
-                                  (lc) =>
-                                    (lc.dayId === day.id || lc.dayNumber === day.day) &&
-                                    (lc.locationId === loc.id ||
-                                      (lc.originalLocationName && lc.originalLocationName.toLowerCase() === loc.name.toLowerCase()) ||
-                                      (lc.originalLocations && lc.originalLocations.some((orig) => orig.toLowerCase() === loc.name.toLowerCase())))
-                                );
-                                const isLocChanged = Boolean(locChange);
+                          const timelineItems: UnifiedItem[] = [
+                            ...(day.locations || []).map((loc, lIdx) => {
+                              const time = loc.time || "08:30";
+                              return {
+                                kind: "location" as const,
+                                key: loc.id || `loc-${lIdx}`,
+                                time,
+                                minutes: parseTimeToMinutes(time),
+                                loc,
+                              };
+                            }),
+                            ...(day.meals || []).map((meal, mIdx) => {
+                              const defTime = meal.type === "breakfast" ? "07:30" : meal.type === "lunch" ? "12:00" : "18:30";
+                              const time = meal.time || defTime;
+                              return {
+                                kind: "meal" as const,
+                                key: meal.id || `meal-${mIdx}`,
+                                time,
+                                minutes: parseTimeToMinutes(time),
+                                meal,
+                              };
+                            }),
+                          ];
 
-                                return (
-                                  <div key={loc.id || lIdx} className="relative flex items-center gap-3">
-                                    {/* Dot */}
-                                    <div
-                                      className={`relative z-10 flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border-2 ${
-                                        isLocChanged
-                                          ? "bg-amber-400 border-amber-400 text-white"
-                                          : "bg-white border-blue-400 text-blue-500"
-                                      }`}
-                                    >
-                                      <MapPin className="w-3.5 h-3.5" />
-                                    </div>
+                          timelineItems.sort((a, b) => a.minutes - b.minutes);
 
-                                    {/* Content card */}
-                                    <div
-                                      className={`flex-1 rounded-xl border p-3 ${
-                                        isLocChanged ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex-1 min-w-0">
-                                          {isLocChanged ? (
-                                            <>
-                                              <p className="text-xs text-gray-400 line-through">{loc.name}</p>
-                                              <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                                → {locChange?.requestedLocations}
-                                              </p>
-                                              {locChange?.note && (
-                                                <p className="text-xs text-amber-700 italic mt-0.5">
-                                                  Ghi chú: {locChange.note}
-                                                </p>
-                                              )}
-                                            </>
-                                          ) : (
-                                            <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setServiceEditType("location");
-                                              setEditTargetDay(day.day);
-                                              setEditTargetKey(loc.id || loc.name);
-                                              setEditOldName(loc.name);
-                                              setEditNewName(isLocChanged ? locChange?.requestedLocations || loc.name : loc.name);
-                                              setEditPriceDiff("0");
-                                              setEditReason(locChange?.note || "Đã liên hệ thống nhất với khách đổi điểm tham quan");
-                                              setEditAddressOrNote("");
-                                              setServiceEditModalOpen(true);
-                                            }}
-                                            className="text-xs text-amber-700 hover:text-amber-900 bg-white hover:bg-amber-100/70 border border-amber-300 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                                            title="Điều chỉnh hoặc đổi điểm đến này"
-                                          >
-                                            <Edit className="w-3 h-3 text-amber-600" />
-                                            <span>Đổi điểm</span>
-                                          </button>
-                                          <span
-                                            className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                                              isLocChanged
-                                                ? "bg-amber-100 text-amber-700 border border-amber-300"
-                                                : "bg-gray-100 text-gray-600"
-                                            }`}
-                                          >
-                                            {isLocChanged ? "Đã đổi" : "Theo tour"}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <p className="text-xs text-gray-500 italic pl-8">
+                          if (timelineItems.length === 0) {
+                            return (
+                              <p className="text-xs text-gray-500 italic pl-4 py-2">
                                 Hoạt động tự do hoặc di chuyển theo lịch trình tour.
                               </p>
-                            )}
-                          </div>
-                        </div>
+                            );
+                          }
 
-                        {/* Day Meals Section */}
-                        {day.meals && day.meals.length > 0 && (
-                          <div className="pt-3 border-t border-gray-100 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                                <Utensils className="w-3.5 h-3.5 text-emerald-600" />
-                                Chế độ ẩm thực &amp; Bữa ăn Ngày {day.day}
-                              </span>
-                              <span className="text-[11px] text-gray-400">
-                                (Thực đơn &amp; nhà hàng phục vụ)
-                              </span>
-                            </div>
+                          return (
+                            <div className="relative pl-1">
+                              {/* Continuous vertical timeline axis */}
+                              <div className="absolute left-[95px] top-3 bottom-3 w-0.5 bg-gray-200" />
 
-                            <div className="space-y-2">
-                              {day.meals.map((defaultMeal, mIdx) => {
-                                const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
-                                const mealChange = dayMealChanges?.find((mc) => mc.mealType === mealType);
-                                const isChanged = Boolean(mealChange);
-                                const mealLabel =
-                                  mealType === "breakfast" ? "Bữa sáng" : mealType === "lunch" ? "Bữa trưa" : "Bữa tối";
+                              <div className="space-y-3">
+                                {timelineItems.map((item) => {
+                                  if (item.kind === "location") {
+                                    const { loc, time } = item;
+                                    const locChange = locChanges.find(
+                                      (lc) =>
+                                        (lc.dayId === day.id || lc.dayNumber === day.day) &&
+                                        (lc.locationId === loc.id ||
+                                          (lc.originalLocationName && lc.originalLocationName.toLowerCase() === loc.name.toLowerCase()) ||
+                                          (lc.originalLocations && lc.originalLocations.some((orig) => orig.toLowerCase() === loc.name.toLowerCase())))
+                                    );
+                                    const isLocChanged = Boolean(locChange);
 
-                                return (
-                                  <div
-                                    key={mIdx}
-                                    className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs"
-                                  >
-                                    <div
-                                      className={`w-full flex items-center justify-between px-3.5 py-2.5 transition-colors text-left ${
-                                        mealType === "breakfast"
-                                          ? "bg-amber-50/60"
-                                          : mealType === "lunch"
-                                          ? "bg-emerald-50/60"
-                                          : "bg-[#F0F9FF]/60"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2.5 min-w-0">
+                                    return (
+                                      <div key={item.key} className="relative flex items-start gap-2.5">
+                                        {/* Time pill */}
+                                        <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                                            <Clock className="w-3 h-3 text-blue-500" />
+                                            {time}
+                                          </span>
+                                        </div>
+
+                                        {/* Dot */}
                                         <div
-                                          className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                          className={`relative z-10 flex-shrink-0 mt-1.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
+                                            isLocChanged
+                                              ? "bg-amber-400 border-amber-400 text-white"
+                                              : "bg-white border-blue-400 text-blue-500"
+                                          }`}
+                                        >
+                                          <MapPin className="w-3.5 h-3.5" />
+                                        </div>
+
+                                        {/* Content card */}
+                                        <div
+                                          className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${
+                                            isLocChanged ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
+                                                  Tham quan
+                                                </span>
+                                              </div>
+                                              {isLocChanged ? (
+                                                <>
+                                                  <p className="text-xs text-gray-400 line-through">{loc.name}</p>
+                                                  <p className="text-sm font-medium text-amber-800 mt-0.5">
+                                                    → {locChange?.requestedLocations}
+                                                  </p>
+                                                  {locChange?.note && (
+                                                    <p className="text-xs text-amber-700 italic mt-0.5">
+                                                      Ghi chú: {locChange.note}
+                                                    </p>
+                                                  )}
+                                                </>
+                                              ) : (
+                                                <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setServiceEditType("location");
+                                                  setEditTargetDay(day.day);
+                                                  setEditTargetKey(loc.id || loc.name);
+                                                  setEditOldName(loc.name);
+                                                  setEditNewName(isLocChanged ? locChange?.requestedLocations || loc.name : loc.name);
+                                                  setEditPriceDiff("0");
+                                                  setEditReason(locChange?.note || "Đã liên hệ thống nhất với khách đổi điểm tham quan");
+                                                  setEditAddressOrNote("");
+                                                  setServiceEditModalOpen(true);
+                                                }}
+                                                className="text-xs text-amber-700 hover:text-amber-900 bg-white hover:bg-amber-100/70 border border-amber-300 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                title="Điều chỉnh hoặc đổi điểm đến này"
+                                              >
+                                                <Edit className="w-3 h-3 text-amber-600" />
+                                                <span>Đổi điểm</span>
+                                              </button>
+                                              <span
+                                                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                                                  isLocChanged
+                                                    ? "bg-amber-100 text-amber-700 border border-amber-300"
+                                                    : "bg-gray-100 text-gray-600"
+                                                }`}
+                                              >
+                                                {isLocChanged ? "Đã đổi" : "Theo tour"}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    const defaultMeal = item.meal;
+                                    const { time } = item;
+                                    const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
+                                    const mealChange = dayMealChanges?.find((mc) => mc.mealType === mealType);
+                                    const isChanged = Boolean(mealChange);
+                                    const mealLabel =
+                                      mealType === "breakfast" ? "Bữa sáng" : mealType === "lunch" ? "Bữa trưa" : "Bữa tối";
+
+                                    return (
+                                      <div key={item.key} className="relative flex items-start gap-2.5">
+                                        {/* Time pill */}
+                                        <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${
                                             mealType === "breakfast"
-                                              ? "bg-amber-100 text-amber-700"
+                                              ? "bg-amber-50 text-amber-800 border-amber-200"
                                               : mealType === "lunch"
-                                              ? "bg-emerald-100 text-emerald-700"
-                                              : "bg-[#F97316]/15 text-[#EA580C]"
+                                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                              : "bg-purple-50 text-[#EA580C] border-purple-200"
+                                          }`}>
+                                            <Clock className={`w-3 h-3 ${
+                                              mealType === "breakfast" ? "text-amber-600" : mealType === "lunch" ? "text-emerald-600" : "text-[#F97316]"
+                                            }`} />
+                                            {time}
+                                          </span>
+                                        </div>
+
+                                        {/* Dot */}
+                                        <div
+                                          className={`relative z-10 flex-shrink-0 mt-1.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
+                                            mealType === "breakfast"
+                                              ? "bg-amber-100 border-amber-400 text-amber-700"
+                                              : mealType === "lunch"
+                                              ? "bg-emerald-100 border-emerald-500 text-emerald-700"
+                                              : "bg-[#F97316]/15 border-purple-500 text-[#EA580C]"
                                           }`}
                                         >
                                           {mealType === "breakfast" ? (
-                                            <Sun className="w-4 h-4" />
+                                            <Sun className="w-3.5 h-3.5" />
                                           ) : mealType === "dinner" ? (
-                                            <UtensilsCrossed className="w-4 h-4" />
+                                            <UtensilsCrossed className="w-3.5 h-3.5" />
                                           ) : (
-                                            <Utensils className="w-4 h-4" />
+                                            <Utensils className="w-3.5 h-3.5" />
                                           )}
                                         </div>
-                                        <div className="min-w-0">
-                                          <p className="text-xs sm:text-sm font-semibold text-gray-900">
-                                            {mealLabel}:{" "}
-                                            <span className="font-bold text-gray-900">
-                                              {isChanged
-                                                ? mealChange?.newMealName
-                                                : defaultMeal.serviceName || "Nhà hàng theo tour"}
-                                            </span>
-                                          </p>
-                                          <p className="text-[11px] text-gray-500">
-                                            Mặc định: {defaultMeal.serviceName || "Nhà hàng địa phương"}
-                                          </p>
-                                        </div>
-                                      </div>
 
-                                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setServiceEditType("meal");
-                                            setEditTargetDay(day.day);
-                                            setEditTargetKey(mealType);
-                                            setEditOldName(defaultMeal.serviceName || "Nhà hàng theo tour");
-                                            setEditNewName(isChanged ? mealChange?.newMealName || defaultMeal.serviceName || "" : defaultMeal.serviceName || "");
-                                            setEditPriceDiff(mealChange?.priceDifference ? mealChange.priceDifference.toString() : "0");
-                                            setEditReason(mealChange?.note || "Đã liên hệ thống nhất với khách đổi nhà hàng / bữa ăn");
-                                            setEditAddressOrNote("");
-                                            setServiceEditModalOpen(true);
-                                          }}
-                                          className="text-xs text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                                          title="Điều chỉnh bữa ăn & nhà hàng này"
+                                        {/* Meal card */}
+                                        <div
+                                          className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${
+                                            isChanged
+                                              ? "border-emerald-300 bg-emerald-50/30"
+                                              : mealType === "breakfast"
+                                              ? "border-amber-200 bg-amber-50/30"
+                                              : mealType === "lunch"
+                                              ? "border-emerald-200 bg-emerald-50/30"
+                                              : "border-purple-200 bg-[#F0F9FF]/40"
+                                          }`}
                                         >
-                                          <Edit className="w-3 h-3 text-emerald-600" />
-                                          <span>Đổi bữa ăn</span>
-                                        </button>
-                                        <div className="border border-gray-200 bg-white px-2.5 py-1 rounded-md text-xs text-gray-500 flex items-center gap-1 shadow-2xs">
-                                          {isChanged ? (
-                                            <span className="text-[10px] text-emerald-800 font-bold">
-                                              Đã đổi {mealChange?.priceDifference ? `(+${formatVND(mealChange.priceDifference)})` : ""}
-                                            </span>
-                                          ) : (
-                                            <span>Theo tour (0đ)</span>
-                                          )}
+                                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div
+                                                className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                                  mealType === "breakfast"
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : mealType === "lunch"
+                                                    ? "bg-emerald-100 text-emerald-700"
+                                                    : "bg-[#F97316]/15 text-[#EA580C]"
+                                                }`}
+                                              >
+                                                {mealType === "breakfast" ? (
+                                                  <Sun className="w-4 h-4" />
+                                                ) : mealType === "dinner" ? (
+                                                  <UtensilsCrossed className="w-4 h-4" />
+                                                ) : (
+                                                  <Utensils className="w-4 h-4" />
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${
+                                                    mealType === "breakfast"
+                                                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                                                      : mealType === "lunch"
+                                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                      : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
+                                                  }`}>
+                                                    {mealLabel}
+                                                  </span>
+                                                  <span className="text-xs sm:text-sm font-bold text-gray-900 truncate">
+                                                    {isChanged
+                                                      ? mealChange?.newMealName
+                                                      : defaultMeal.serviceName || "Nhà hàng theo tour"}
+                                                  </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500">
+                                                  Mặc định: {defaultMeal.serviceName || "Nhà hàng địa phương"}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                              {isChanged && (mealChange?.isCustom || mealChange?.mode === "custom") ? (
+                                                <a
+                                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                                    mealChange?.newMealName || "Nhà hàng"
+                                                  )}`}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="text-xs text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs"
+                                                  title="Tìm quán ăn này trên Google Maps"
+                                                >
+                                                  <Navigation className="w-3 h-3 text-purple-600" />
+                                                  <span>Google Maps</span>
+                                                  <ExternalLink className="w-2.5 h-2.5 text-purple-400" />
+                                                </a>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setViewingServiceId(mealChange?.serviceId || defaultMeal.serviceId || "service-fnb-dalat-1")}
+                                                  className="text-xs text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                  title="Xem bài viết & bản đồ quán ăn này"
+                                                >
+                                                  <Eye className="w-3 h-3 text-indigo-600" />
+                                                  <span>Xem bài viết</span>
+                                                </button>
+                                              )}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setServiceEditType("meal");
+                                                  setEditTargetDay(day.day);
+                                                  setEditTargetKey(mealType);
+                                                  setEditOldName(defaultMeal.serviceName || "Nhà hàng theo tour");
+                                                  setEditNewName(isChanged ? mealChange?.newMealName || defaultMeal.serviceName || "" : defaultMeal.serviceName || "");
+                                                  setEditPriceDiff(mealChange?.priceDifference ? mealChange.priceDifference.toString() : "0");
+                                                  setEditReason(mealChange?.note || "Đã liên hệ thống nhất với khách đổi nhà hàng / bữa ăn");
+                                                  setEditAddressOrNote("");
+                                                  setServiceEditModalOpen(true);
+                                                }}
+                                                className="text-xs text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                title="Điều chỉnh bữa ăn & nhà hàng này"
+                                              >
+                                                <Edit className="w-3 h-3 text-emerald-600" />
+                                                <span>Đổi bữa ăn</span>
+                                              </button>
+                                              <div className="border border-gray-200 bg-white px-2.5 py-1 rounded-md text-xs text-gray-500 flex items-center gap-1 shadow-2xs">
+                                                {isChanged ? (
+                                                  <span className="text-[10px] text-emerald-800 font-bold">
+                                                    Đã đổi {mealChange?.priceDifference ? `(+${formatVND(mealChange.priceDifference)})` : ""}
+                                                  </span>
+                                                ) : (
+                                                  <span>Theo tour (0đ)</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                    );
+                                  }
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -3541,33 +4168,25 @@ export function AgencyBookingDetailPage({
                     ? "Đã thanh toán"
                     : booking.paymentStatus === "refunded"
                     ? "Đã hoàn tiền"
-                    : "Chưa thanh toán (Thanh toán sau)"}
+                    : booking.paymentStatus === "partially_paid"
+                    ? "Đã thanh toán một phần"
+                    : "Chưa thanh toán"}
                 </span>
               </div>
 
               {/* Progress breakdown */}
               {(() => {
-                const totalPaidIntoSystem = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status === "paid")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const totalRequested = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status !== "cancelled")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const remainingToRequest = Math.max(0, booking.totalPrice - totalRequested);
-
+                const paid = booking.paidAmount ?? 0;
+                const remaining = Math.max(0, booking.totalPrice - paid);
                 return (
                   <div className="space-y-1.5 py-1">
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Khách đã nộp vào TK Hệ thống:</span>
-                      <span className="font-bold text-emerald-700">{formatVND(totalPaidIntoSystem)}</span>
+                      <span className="text-gray-500">Khách đã thanh toán:</span>
+                      <span className="font-bold text-emerald-700">{formatVND(paid)}</span>
                     </div>
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Tổng tiền đã tạo yêu cầu:</span>
-                      <span className="font-bold text-[#075985]">{formatVND(totalRequested)} / {formatVND(booking.totalPrice)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Còn lại có thể yêu cầu thu:</span>
-                      <span className="font-bold text-amber-700">{formatVND(remainingToRequest)}</span>
+                      <span className="text-gray-500">Còn lại phải thu:</span>
+                      <span className="font-bold text-amber-700">{formatVND(remaining)} / {formatVND(booking.totalPrice)}</span>
                     </div>
                   </div>
                 );
@@ -3598,86 +4217,71 @@ export function AgencyBookingDetailPage({
               )}
             </div>
 
-            {/* Quick Payment Action Buttons */}
-            {isCurrentCompanyLead ? (
-              (() => {
-                const totalRequested = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status !== "cancelled")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const remainingToRequest = Math.max(0, booking.totalPrice - totalRequested);
-
-                return (
-                  <div className="space-y-2 pt-2">
-                    <Button
-                      variant="outline"
-                      disabled={remainingToRequest <= 0}
-                      onClick={() => {
-                        setPaymentAmount(remainingToRequest.toString());
-                        setPaymentDescription(
-                          totalRequested === 0
-                            ? "Đặt cọc đợt 1 (50%)"
-                            : remainingToRequest === booking.totalPrice - totalRequested
-                            ? "Thanh toán phần còn lại trước khởi hành"
-                            : "Thanh toán đợt tiếp theo"
-                        );
-                        setPaymentDueDate("");
-                        setPaymentModalOpen(true);
-                      }}
-                      className={`w-full text-xs h-9 gap-1.5 font-bold ${
-                        remainingToRequest <= 0
-                          ? "border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed"
-                          : "border-blue-500 text-[#075985] hover:bg-[#F0F9FF]"
-                      }`}
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      {remainingToRequest <= 0
-                        ? "Đã tạo đủ yêu cầu cho 100% giá trị tour"
-                        : `Tạo yêu cầu thanh toán (Còn ${formatVND(remainingToRequest)})`}
-                    </Button>
-                  </div>
-                );
-              })()
-            ) : (
-              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  Quyền tạo yêu cầu thanh toán
-                </div>
-                <p className="text-amber-700 leading-relaxed">
-                  Đơn hàng này do <strong>{leadAgency?.agencyName || booking.companyName || "Công ty Chủ trì"}</strong> đại diện liên minh ký hợp đồng và quản lý thu tiền từ khách hàng. Đối tác liên minh không tạo yêu cầu thanh toán trực tiếp với khách.
-                </p>
+            {/* Lịch thanh toán: hệ thống tự tạo khi duyệt đơn — công ty chỉ xem (không tạo yêu cầu thu thủ công) */}
+            <div className="p-3 bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl text-[11px] text-blue-900 leading-relaxed">
+              <div className="font-bold flex items-center gap-1.5 text-blue-900">
+                <Lock className="w-3.5 h-3.5 text-[#075985]" />
+                Lịch thanh toán do hệ thống tạo
               </div>
-            )}
+              <p className="mt-0.5">
+                Khi công ty <strong>duyệt đơn</strong>, hệ thống mở Đợt 1 – đặt cọc <strong>50%</strong> tổng giá trị, hạn <strong>24 giờ</strong> kể từ lúc duyệt.
+                Đợt 2 (phần còn lại) mở sau khi đủ cọc, hạn chót trước ngày khởi hành 1 tuần (ví dụ khởi hành 30/11 thì hạn hết ngày 22/11).
+                Khách thanh toán qua payOS; đơn chỉ cập nhật sau khi máy chủ xác minh với payOS.
+              </p>
+            </div>
 
-            {/* Existing Payment Requests List */}
             {booking.paymentRequests && booking.paymentRequests.length > 0 && (
               <div className="pt-3 border-t border-gray-100 space-y-2">
-                <span className="text-xs font-bold text-gray-700 block">Các yêu cầu thanh toán đã tạo:</span>
+                <span className="text-xs font-bold text-gray-700 block">Lịch thanh toán của khách:</span>
                 <div className="space-y-2">
                   {booking.paymentRequests.map((pr) => (
                     <div key={pr.id} className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs space-y-1">
-                      <div className="flex justify-between items-start">
-                        <p className="font-semibold text-gray-800">{pr.description}</p>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">
+                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán"}
+                          </span>
+                          <p className="font-semibold text-gray-800">{pr.description}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${
                           pr.status === "paid"
-                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                            : "bg-amber-100 text-amber-800 border border-amber-200"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : pr.status === "overdue"
+                            ? "bg-red-100 text-red-800 border-red-200"
+                            : pr.status === "scheduled"
+                            ? "bg-gray-100 text-gray-700 border-gray-200"
+                            : "bg-amber-100 text-amber-800 border-amber-200"
                         }`}>
-                          {pr.status === "paid" ? "Tiền đã vào TK Hệ thống" : "Chờ khách thanh toán"}
+                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Mở sau khi đủ cọc" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-gray-500 pt-1">
-                        <span>Hạn: {pr.dueDate}</span>
+                        <span>Hạn: {pr.dueAt ? `${formatVietnamDeadline(pr.dueAt)} (giờ VN)` : pr.dueDate || "—"}</span>
                         <span className="font-bold text-[#075985] text-sm">{formatVND(pr.amount)}</span>
                       </div>
+                      {pr.warning && pr.status !== "paid" && (
+                        <p className="text-[10px] text-amber-700">{pr.warning}</p>
+                      )}
                       {pr.paidAt && (
                         <p className="text-[10px] text-emerald-600 font-medium">
-                          Khách đã nộp ngày: {pr.paidAt}
+                          Khách đã thanh toán ngày: {pr.paidAt}
                         </p>
                       )}
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {booking.paymentTransactions && booking.paymentTransactions.some((t) => t.status === "success") && (
+              <div className="pt-3 border-t border-gray-100 space-y-1.5">
+                <span className="text-xs font-bold text-gray-700 block">Giao dịch đã ghi nhận:</span>
+                {booking.paymentTransactions.filter((t) => t.status === "success").map((t) => (
+                  <div key={t.id} className="flex justify-between text-[11px] text-gray-600">
+                    <span className="font-mono truncate">{t.method === "PAYOS" ? "payOS" : t.method === "VNPAY" ? "VNPAY (cũ)" : t.method} · {t.code}</span>
+                    <span className="font-bold text-emerald-700 flex-shrink-0 ml-2">{formatVND(t.amount)}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -4400,7 +5004,7 @@ export function AgencyBookingDetailPage({
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN</p>
               <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.totalPrice)}</strong></p>
-              <p>Trạng thái thanh toán: <strong>{booking.paymentStatus === "paid" ? "Đã thanh toán" : booking.paymentStatus === "refunded" ? "Đã hoàn tiền" : "Chưa thanh toán"}</strong></p>
+              <p>Trạng thái thanh toán: <strong>{pst.label}</strong></p>
               {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
                 <p>Số tiền còn lại: <strong className="text-amber-700">{formatVND(booking.remainingAmount)}</strong></p>
               )}
@@ -5369,6 +5973,22 @@ export function AgencyBookingDetailPage({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: XEM BÀI VIẾT CHI TIẾT & BẢN ĐỒ DỊCH VỤ PROVIDER */}
+      {viewingServiceId && (() => {
+        const targetService =
+          mockServices.find((s) => s.id === viewingServiceId || s.providerId === viewingServiceId) ||
+          mockServices.find((s) => (s.name.toLowerCase().includes(viewingServiceId.toLowerCase()) || viewingServiceId.toLowerCase().includes(s.name.toLowerCase()))) ||
+          mockServices[0];
+
+        return (
+          <ServiceBlogDetailModal
+            service={targetService}
+            isOpen={Boolean(viewingServiceId)}
+            onClose={() => setViewingServiceId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

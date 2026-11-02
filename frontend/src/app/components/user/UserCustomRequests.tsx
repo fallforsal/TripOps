@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { CustomTourRequest, Tour } from "@/app/types";
 import { mockTours } from "@/app/data/mockData";
 import {
@@ -423,7 +423,7 @@ export function UserCustomRequests({
                     </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      {(matchingTour?.coHosts || req.coHosts)?.map((ch) => (
+                      {req.coHosts?.map((ch) => (
                         <div
                           key={ch.id}
                           className="bg-white rounded-lg p-3 border border-purple-100 shadow-2xs space-y-1"

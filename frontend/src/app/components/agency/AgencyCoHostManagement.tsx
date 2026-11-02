@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { TourCompany, Tour, CustomTourRequest, Booking, TourCoHost } from "@/app/types";
 import {
   Handshake,
@@ -539,15 +539,7 @@ export function AgencyCoHostManagement({
                         </p>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-[11px] text-gray-400 block">Doanh thu tour</span>
-                        <span className="text-base font-extrabold text-emerald-600">
-                          {formatVND(
-                            (req.quotedPricePerPerson || Number(req.budgetPerPerson) || 0) *
-                              Number(req.numberOfPeople || 1)
-                          )}
-                        </span>
-                      </div>
+
                     </div>
 
                     {/* All hosts representation */}
@@ -584,9 +576,6 @@ export function AgencyCoHostManagement({
                                   </span>
                                 </div>
                               </div>
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${isLead ? "text-blue-800 bg-blue-200/80" : "text-purple-900 bg-purple-200/80"}`}>
-                                {host.revenueSharePercentage}% doanh thu
-                              </span>
                             </div>
                             <p className="text-[11px] text-gray-700">
                               <strong>Phụ trách:</strong> {host.assignedSegments || "Dịch vụ chặng đảm nhiệm"}
@@ -689,13 +678,8 @@ export function AgencyCoHostManagement({
                               isLead ? "bg-[#F0F9FF]/70 border-[#CBD5E1]" : "bg-[#F0F9FF]/70 border-[#F97316]/30"
                             }`}
                           >
-                            <p className="font-bold text-gray-900 text-xs flex items-center justify-between">
-                              <span>
-                                {host.companyName} {isMe ? "(Bạn)" : ""}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${isLead ? "text-[#075985] bg-[#E0F2FE]" : "text-[#EA580C] bg-[#F97316]/15"}`}>
-                                {host.revenueSharePercentage ?? Math.round(100 / (t.coHosts?.length || 1))}% chia
-                              </span>
+                            <p className="font-bold text-gray-900 text-xs">
+                              {host.companyName} {isMe ? "(Bạn)" : ""}
                             </p>
                             <p className="text-[11px] text-gray-600 line-clamp-1">
                               <strong>Phụ trách:</strong> {host.assignedSegments || (isLead ? "Đơn vị điều phối chính" : "Đối tác địa phương")}

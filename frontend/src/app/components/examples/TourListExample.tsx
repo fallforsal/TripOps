@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Example Component: Tour List with API
  * Ví dụ sử dụng API services để fetch và hiển thị tours
  */

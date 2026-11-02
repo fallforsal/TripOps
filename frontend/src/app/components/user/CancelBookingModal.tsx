@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { Booking } from "@/app/types";
 

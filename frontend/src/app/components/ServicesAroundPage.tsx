@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Service } from "@/app/types";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
@@ -54,8 +54,7 @@ export function ServicesAroundPage({
         service.name
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
-        service.description
-          .toLowerCase()
+        (service.description ?? "").toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
         service.location
           .toLowerCase()
@@ -95,6 +94,8 @@ export function ServicesAroundPage({
     const labels = {
       hotel: "Khách sạn",
       restaurant: "Nhà hàng",
+      fnb: "Ẩm thực",
+      attraction: "Điểm tham quan",
       eatery: "Quán ăn",
       transportation: "Vận chuyển",
       activity: "Hoạt động",
@@ -190,7 +191,7 @@ export function ServicesAroundPage({
                     <div className="space-y-2">
                       <Slider
                         value={priceRange}
-                        onValueChange={setPriceRange}
+                        onValueChange={(values) => { if (values.length === 2) setPriceRange([values[0], values[1]]); }}
                         max={10000000}
                         step={100000}
                       />

@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+import { useState } from "react";
+import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
   LayoutDashboard,
   Package,
@@ -16,6 +17,8 @@ import {
   Landmark,
   Compass,
   FileText,
+  RotateCcw,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -24,6 +27,8 @@ interface AdminLayoutProps {
   onNavigate: (section: string) => void;
   onLogout?: () => void;
   pendingToursCount?: number;
+  pendingRefundsCount?: number;
+  pendingServicesCount?: number;
 }
 
 export function AdminLayout({
@@ -32,6 +37,8 @@ export function AdminLayout({
   onNavigate,
   onLogout,
   pendingToursCount = 0,
+  pendingRefundsCount = 0,
+  pendingServicesCount = 0,
 }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -48,14 +55,27 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
+      id: "service-approvals",
+      label: "Phê duyệt Bài đăng",
+      icon: ClipboardCheck,
+      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
+    },
+    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
+      badge: pendingToursCount > 0 ? pendingToursCount : undefined,
     },
     {
       id: "approve-posts",
       label: "Quản lý Bài đăng",
       icon: FileText,
+    },
+    {
+      id: "refund-requests",
+      label: "Xử lý Hoàn tiền",
+      icon: RotateCcw,
+      badge: pendingRefundsCount > 0 ? pendingRefundsCount : undefined,
     },
     {
       id: "finance",
@@ -79,15 +99,23 @@ export function AdminLayout({
       {/* Logo/Header */}
       <div className="p-6 border-b border-[#CBD5E1]">
         <div className="flex items-center justify-between">
-          {!collapsed && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                Platform Admin
-              </h2>
-              <p className="text-sm text-gray-500">
-                Quản lý nền tảng
-              </p>
+          {!collapsed ? (
+            <div className="flex items-center gap-2.5">
+              <img
+                src={TRIPOPS_LOGO}
+                alt="TripOps Logo"
+                className="h-7 w-auto object-contain"
+              />
+              <span className="text-[10px] uppercase tracking-wider font-extrabold bg-sky-100 text-[#075985] px-2 py-0.5 rounded-md">
+                Admin
+              </span>
             </div>
+          ) : (
+            <img
+              src={TRIPOPS_ICON}
+              alt="TripOps"
+              className="h-7 w-7 object-contain mx-auto"
+            />
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}

@@ -1,46 +1,41 @@
-﻿import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Service } from "@/app/types";
+import { Badge } from "@/app/components/ui/badge";
+import { Button } from "@/app/components/ui/button";
 import {
   FileText,
-  Eye,
-  EyeOff,
-  Trash2,
   Search,
-  CheckCircle2,
-  AlertTriangle,
-  X,
   MapPin,
-  Building2,
-  DollarSign,
-  Layers,
-  ShieldAlert,
   Hotel,
   Utensils,
   Car,
   Compass,
-  Star,
-  ShieldCheck,
-  ExternalLink,
-  ChevronRight,
+  Eye,
+  EyeOff,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Image as ImageIcon,
+  Filter,
 } from "lucide-react";
-import { Button } from "@/app/components/ui/button";
-import { Badge } from "@/app/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
+  DialogFooter,
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ProviderServiceDetailPage } from "@/app/components/provider/ProviderServiceDetailPage";
+import { toast } from "sonner";
+import { ProviderProfileLink } from "./ProviderProfileLink";
+import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
 
 interface ServicePostApprovalProps {
   services: Service[];
-  onToggleHideService?: (serviceId: string, reason?: string) => void;
-  onDeleteService?: (serviceId: string) => void;
-  onApproveService?: (serviceId: string) => void;
-  onRejectService?: (serviceId: string, reason: string) => void;
+  onToggleHideService?: (serviceId: string, reason?: string) => void | Promise<void>;
+  onDeleteService?: (serviceId: string) => void | Promise<void>;
 }
 
 export function ServicePostApproval({
@@ -48,820 +43,493 @@ export function ServicePostApproval({
   onToggleHideService,
   onDeleteService,
 }: ServicePostApprovalProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "approved" | "hidden">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceForDetail, setSelectedServiceForDetail] = useState<Service | null>(null);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [hidingService, setHidingService] = useState<Service | null>(null);
-  const [deletingService, setDeletingService] = useState<Service | null>(null);
-  const [hideReason, setHideReason] = useState("");
-  const [notification, setNotification] = useState<{ type: "success" | "info"; message: string } | null>(null);
 
-  // If Admin clicked view detail, render full dedicated page (trang riêng luôn)
+  // Modals state
+  const [hidingService, setHidingService] = useState<Service | null>(null);
+  const [hideReason, setHideReason] = useState("");
+  const [deletingService, setDeletingService] = useState<Service | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Only manage approved and hidden services on marketplace
+  const marketServices = useMemo(() => {
+    return services.filter((s) => s.status === "approved" || s.status === "hidden");
+  }, [services]);
+
+  const activeCount = useMemo(() => {
+    return services.filter((s) => s.status === "approved" && !s.isPaused).length;
+  }, [services]);
+
+  const hiddenCount = useMemo(() => {
+    return services.filter((s) => s.status === "hidden").length;
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    return marketServices.filter((service) => {
+      // Status filter
+      if (selectedStatus === "approved" && (service.status !== "approved" || service.isPaused)) return false;
+      if (selectedStatus === "hidden" && service.status !== "hidden") return false;
+
+      // Category filter
+      if (selectedCategory !== "all") {
+        if (selectedCategory === "fnb") {
+          if (service.category !== "fnb" && service.category !== "restaurant") return false;
+        } else if (service.category !== selectedCategory) {
+          return false;
+        }
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const matchName = service.name.toLowerCase().includes(query);
+        const matchProvider = (service.providerName || "").toLowerCase().includes(query);
+        const matchLoc = (service.province || service.location || "").toLowerCase().includes(query);
+        const matchId = service.id.toLowerCase().includes(query);
+        if (!matchName && !matchProvider && !matchLoc && !matchId) return false;
+      }
+
+      return true;
+    });
+  }, [marketServices, selectedStatus, selectedCategory, searchQuery]);
+
+  const handleConfirmHide = async () => {
+    if (!hidingService) return;
+    const sId = hidingService.id;
+    const reason = hideReason.trim() || "Nội dung bài đăng bị tạm ẩn do vi phạm quy chế hoặc thông tin chưa chính xác.";
+    setBusyId(sId);
+    try {
+      await onToggleHideService?.(sId, reason);
+      toast.info(`Đã tạm ẩn bài đăng "${hidingService.name}". Dịch vụ này sẽ không xuất hiện trên sàn.`);
+      setHidingService(null);
+      setHideReason("");
+      if (selectedServiceForDetail?.id === sId) {
+        setSelectedServiceForDetail(null);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Thao tác tạm ẩn thất bại.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleUnhide = async (service: Service) => {
+    setBusyId(service.id);
+    try {
+      await onToggleHideService?.(service.id, "");
+      toast.success(`Đã mở lại bài đăng "${service.name}". Dịch vụ đã hiển thị công khai trên sàn.`);
+      if (selectedServiceForDetail?.id === service.id) {
+        setSelectedServiceForDetail(null);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Mở lại bài đăng thất bại.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingService) return;
+    const sId = deletingService.id;
+    setBusyId(sId);
+    try {
+      await onDeleteService?.(sId);
+      toast.success(`Đã xóa hoàn toàn bài đăng "${deletingService.name}".`);
+      setDeletingService(null);
+      if (selectedServiceForDetail?.id === sId) {
+        setSelectedServiceForDetail(null);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Xóa bài đăng thất bại.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const getCategoryBadge = (cat: string) => {
+    switch (cat) {
+      case "hotel":
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            <Hotel className="w-3.5 h-3.5" />
+            Lưu trú
+          </span>
+        );
+      case "fnb":
+      case "restaurant":
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+            <Utensils className="w-3.5 h-3.5" />
+            Ẩm thực
+          </span>
+        );
+      case "transportation":
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <Car className="w-3.5 h-3.5" />
+            Vận chuyển
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+            <Compass className="w-3.5 h-3.5" />
+            Tham quan
+          </span>
+        );
+    }
+  };
+
+  const formatPriceDisplay = (service: Service) => {
+    const isHotel = service.category === "hotel";
+    const unit = isHotel ? "/ phòng" : "/ người";
+    if (service.priceFrom && service.priceTo && service.priceTo > service.priceFrom) {
+      return (
+        <div>
+          <div className="font-bold text-gray-900 text-xs">
+            {service.priceFrom.toLocaleString("vi-VN")}đ - {service.priceTo.toLocaleString("vi-VN")}đ
+          </div>
+          <div className="text-[10px] text-gray-500">{unit} (ước lượng)</div>
+        </div>
+      );
+    }
+    return (
+      <div>
+        <div className="font-bold text-gray-900 text-xs">
+          {(service.price || service.priceFrom || 0).toLocaleString("vi-VN")}đ
+        </div>
+        <div className="text-[10px] text-gray-500">{unit}</div>
+      </div>
+    );
+  };
+
+  const formatAddress = (service: Service) => {
+    if (service.fullAddress) return service.fullAddress;
+    const parts = [service.ward, service.province].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : service.location || "Chưa cập nhật";
+  };
+
+  // If viewing detail of a service
   if (selectedServiceForDetail) {
-    const currentService = services.find((s) => s.id === selectedServiceForDetail.id) || selectedServiceForDetail;
     return (
       <ProviderServiceDetailPage
-        service={currentService}
+        service={selectedServiceForDetail}
         isAdmin={true}
         onBack={() => setSelectedServiceForDetail(null)}
-        onToggleHide={(id, reason) => {
-          onToggleHideService?.(id, reason);
-        }}
-        onDelete={(id) => {
-          onDeleteService?.(id);
+        backTitle="Quay lại danh sách quản lý"
+        onToggleHide={onToggleHideService}
+        onDelete={onDeleteService ? async (id) => {
+          await onDeleteService(id);
           setSelectedServiceForDetail(null);
-        }}
+        } : undefined}
       />
     );
   }
 
-  // Quick suggestions for Admin when hiding inappropriate/troll service posts
-  const quickReasonSuggestions = [
-    "Thông tin dịch vụ sai lệch, nhảm nhí không đúng thực tế.",
-    "Bảng giá ảo hoặc phụ thu bất hợp lý.",
-    "Hình ảnh bài đăng chất lượng kém hoặc sao chép trái phép.",
-    "Cơ sở dịch vụ đã tạm dừng hoạt động hoặc đổi địa chỉ.",
-    "Bài đăng trùng lặp hoặc spam trên sàn.",
-  ];
-
-  // Counts
-  const totalCount = services.length;
-  const hiddenCount = services.filter((s) => s.status === "hidden").length;
-  const activeCount = services.filter((s) => s.status !== "hidden").length;
-
-  const filteredServices = services.filter((service) => {
-    // Status filter
-    const isHidden = service.status === "hidden";
-    if (selectedStatus === "approved" && isHidden) return false;
-    if (selectedStatus === "hidden" && !isHidden) return false;
-
-    // Category filter
-    if (selectedCategory !== "all") {
-      if (selectedCategory === "hotel" && service.category !== "hotel") return false;
-      if (
-        (selectedCategory === "fnb" || selectedCategory === "restaurant") &&
-        service.category !== "fnb" &&
-        service.category !== "restaurant"
-      )
-        return false;
-      if (selectedCategory === "transportation" && service.category !== "transportation") return false;
-      if (
-        (selectedCategory === "attraction" || selectedCategory === "activity") &&
-        service.category !== "attraction" &&
-        service.category !== "activity"
-      )
-        return false;
-    }
-
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = service.name.toLowerCase().includes(q);
-      const matchProvider = (service.providerName || "").toLowerCase().includes(q);
-      const matchLoc = (service.location || "").toLowerCase().includes(q);
-      const matchProv = (service.province || "").toLowerCase().includes(q);
-      return matchName || matchProvider || matchLoc || matchProv;
-    }
-
-    return true;
-  });
-
-  const getCategoryMeta = (cat: Service["category"]) => {
-    switch (cat) {
-      case "hotel":
-        return {
-          label: "Lưu trú & Khách sạn",
-          shortLabel: "Khách sạn",
-          icon: Hotel,
-          badgeColor: "bg-[#F0F9FF] text-[#075985] border-[#CBD5E1]",
-        };
-      case "fnb":
-      case "restaurant":
-        return {
-          label: "Ẩm thực & Nhà hàng",
-          shortLabel: "Nhà hàng",
-          icon: Utensils,
-          badgeColor: "bg-orange-50 text-orange-700 border-orange-200",
-        };
-      case "transportation":
-        return {
-          label: "Vận chuyển & Xe tour",
-          shortLabel: "Vận chuyển",
-          icon: Car,
-          badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-200",
-        };
-      case "attraction":
-      case "activity":
-      default:
-        return {
-          label: "Điểm tham quan & Vé",
-          shortLabel: "Tham quan",
-          icon: Compass,
-          badgeColor: "bg-teal-50 text-teal-700 border-teal-200",
-        };
-    }
-  };
-
-  const handleConfirmHide = () => {
-    if (!hidingService) return;
-    const reason = hideReason.trim() || "Nội dung bài đăng bị tạm ẩn do thông tin không chính xác hoặc không phù hợp.";
-    if (onToggleHideService) {
-      onToggleHideService(hidingService.id, reason);
-    }
-    setNotification({
-      type: "info",
-      message: `Đã tạm ẩn bài đăng "${hidingService.name}". Dịch vụ này sẽ không xuất hiện trên sàn!`,
-    });
-    setHidingService(null);
-    setHideReason("");
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const handleRestoreService = (service: Service) => {
-    if (onToggleHideService) {
-      onToggleHideService(service.id);
-    }
-    setNotification({
-      type: "success",
-      message: `Đã mở hiển thị lại bài đăng "${service.name}" công khai trên sàn!`,
-    });
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const handleConfirmDelete = () => {
-    if (!deletingService) return;
-    if (onDeleteService) {
-      onDeleteService(deletingService.id);
-    }
-    setNotification({
-      type: "info",
-      message: `Đã xóa vĩnh viễn bài đăng "${deletingService.name}" khỏi hệ thống!`,
-    });
-    setDeletingService(null);
-    if (selectedServiceForDetail?.id === deletingService.id) {
-      setSelectedServiceForDetail(null);
-    }
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const formatPriceSummary = (service: Service) => {
-    if (service.priceFrom && service.priceTo) {
-      return `${service.priceFrom.toLocaleString("vi-VN")}đ - ${service.priceTo.toLocaleString("vi-VN")}đ`;
-    }
-    if (service.price) {
-      return `${service.price.toLocaleString("vi-VN")}đ`;
-    }
-    if (service.pricePerPerson) {
-      return `${service.pricePerPerson.toLocaleString("vi-VN")}đ/người`;
-    }
-    return "Liên hệ báo giá";
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="w-7 h-7 text-[#075985]" />
-            Quản Lý Bài Đăng Dịch Vụ
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Giám sát các bài đăng dịch vụ (khách sạn, ăn uống, xe tour, vé tham quan) do Nhà cung cấp đăng tải. Xem chi tiết, tạm ẩn nếu sai lệch / nhảm nhí hoặc xóa vi phạm.
-          </p>
-        </div>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Page Header - Tinh gọn, bỏ phần thống kê theo yêu cầu */}
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Quản Lý Bài Đăng Dịch Vụ
+        </h1>
+        <p className="text-xs text-gray-500">
+          Giám sát các bài đăng dịch vụ (khách sạn, ăn uống, xe tour, vé tham quan) do Nhà cung cấp đăng tải. Xem chi tiết, tạm ẩn nếu sai lệch hoặc xóa bài đăng vi phạm.
+        </p>
       </div>
 
-      {/* Notification Banner */}
-      {notification && (
-        <div
-          className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold animate-in fade-in ${
-            notification.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-amber-50 border-amber-200 text-amber-800"
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            {notification.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            )}
-            <span>{notification.message}</span>
-          </div>
-          <button onClick={() => setNotification(null)} className="opacity-70 hover:opacity-100">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div
-          onClick={() => {
-            setSelectedStatus("all");
-            setSelectedCategory("all");
-          }}
-          className={`cursor-pointer rounded-2xl p-5 border transition-all ${
-            selectedStatus === "all" && selectedCategory === "all"
-              ? "bg-[#F0F9FF]/70 border-blue-300 ring-2 ring-blue-500/20 shadow-xs"
-              : "bg-white border-gray-200 hover:border-[#CBD5E1]"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#075985] uppercase tracking-wider">Tổng bài đăng</span>
-            <Layers className="w-5 h-5 text-[#075985]" />
-          </div>
-          <p className="text-3xl font-extrabold text-[#075985] mt-3">{totalCount}</p>
-          <p className="text-[12px] text-gray-500 mt-1">Toàn bộ dịch vụ từ các đối tác cung ứng</p>
-        </div>
-
-        <div
-          onClick={() => setSelectedStatus("approved")}
-          className={`cursor-pointer rounded-2xl p-5 border transition-all ${
-            selectedStatus === "approved"
-              ? "bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-500/20 shadow-xs"
-              : "bg-white border-gray-200 hover:border-emerald-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Đang hiển thị công khai</span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-          </div>
-          <p className="text-3xl font-extrabold text-emerald-700 mt-3">{activeCount}</p>
-          <p className="text-[12px] text-gray-500 mt-1">Công ty lữ hành có thể tra cứu và chọn</p>
-        </div>
-
-        <div
-          onClick={() => setSelectedStatus("hidden")}
-          className={`cursor-pointer rounded-2xl p-5 border transition-all ${
-            selectedStatus === "hidden"
-              ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-500/20 shadow-xs"
-              : "bg-white border-gray-200 hover:border-amber-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Đã tạm ẩn (Vi phạm / xàm)</span>
-            <EyeOff className="w-5 h-5 text-amber-600" />
-          </div>
-          <p className="text-3xl font-extrabold text-amber-700 mt-3">{hiddenCount}</p>
-          <p className="text-[12px] text-gray-500 mt-1">Bị ẩn khỏi sàn do thông tin sai lệch</p>
-        </div>
-      </div>
-
-      {/* Toolbar: Category tabs + Search + Status */}
+      {/* Filter Toolbar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-xs space-y-3">
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-gray-100">
-          <button
-            onClick={() => setSelectedCategory("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-              selectedCategory === "all"
-                ? "bg-[#075985] text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            Tất cả danh mục ({services.length})
-          </button>
-          <button
-            onClick={() => setSelectedCategory("hotel")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              selectedCategory === "hotel"
-                ? "bg-[#075985] text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <Hotel className="w-3.5 h-3.5" />
-            Lưu trú & Khách sạn ({services.filter((s) => s.category === "hotel").length})
-          </button>
-          <button
-            onClick={() => setSelectedCategory("fnb")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              selectedCategory === "fnb" || selectedCategory === "restaurant"
-                ? "bg-[#075985] text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5" />
-            Ẩm thực & Nhà hàng ({services.filter((s) => s.category === "fnb" || s.category === "restaurant").length})
-          </button>
-          <button
-            onClick={() => setSelectedCategory("transportation")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              selectedCategory === "transportation"
-                ? "bg-[#075985] text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <Car className="w-3.5 h-3.5" />
-            Xe & Vận chuyển ({services.filter((s) => s.category === "transportation").length})
-          </button>
-          <button
-            onClick={() => setSelectedCategory("attraction")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              selectedCategory === "attraction" || selectedCategory === "activity"
-                ? "bg-[#075985] text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <Compass className="w-3.5 h-3.5" />
-            Tham quan & Trải nghiệm (
-            {services.filter((s) => s.category === "attraction" || s.category === "activity").length})
-          </button>
+        {/* Category Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-bold text-gray-500 mr-1 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5" /> Phân loại:
+          </span>
+          {[
+            { id: "all", label: "Tất cả loại" },
+            { id: "hotel", label: "Lưu trú & Khách sạn" },
+            { id: "fnb", label: "Ẩm thực & Nhà hàng" },
+            { id: "transportation", label: "Phương tiện" },
+            { id: "attraction", label: "Tham quan & Vé" },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedCategory === cat.id
+                  ? "bg-[#075985] text-white shadow-xs"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
         </div>
 
-        {/* Search & Status Pills Row */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-1">
-          {/* Search Input */}
+        {/* Search & Status Tabs Row */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-1 border-t border-gray-100">
           <div className="relative w-full md:w-96">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Tìm theo tên bài đăng, nhà cung cấp, địa chỉ..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#075985] focus:bg-white transition-all"
+              placeholder="Tìm theo tên dịch vụ, nhà cung cấp, địa bàn..."
+              className="w-full pl-9 pr-4 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
-          {/* Status Filter */}
           <div className="flex items-center gap-1.5 w-full md:w-auto">
             <button
               onClick={() => setSelectedStatus("all")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                 selectedStatus === "all"
-                  ? "bg-gray-900 text-white"
+                  ? "bg-gray-900 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Tất cả trạng thái
+              Tất cả ({marketServices.length})
             </button>
+
             <button
               onClick={() => setSelectedStatus("approved")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 selectedStatus === "approved"
                   ? "bg-emerald-600 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Đang hiển thị ({activeCount})
+              <span>Đang hiển thị</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedStatus === "approved" ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+                {activeCount}
+              </span>
             </button>
+
             <button
               onClick={() => setSelectedStatus("hidden")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 selectedStatus === "hidden"
                   ? "bg-amber-600 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Đã tạm ẩn ({hiddenCount})
+              <span>Đã tạm ẩn</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedStatus === "hidden" ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+                {hiddenCount}
+              </span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Services Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredServices.map((service) => {
-          const meta = getCategoryMeta(service.category);
-          const CatIcon = meta.icon;
-          const isHidden = service.status === "hidden";
-
-          return (
-            <div
-              key={service.id}
-              className={`bg-white rounded-2xl border transition-all flex flex-col justify-between overflow-hidden group shadow-2xs hover:shadow-md ${
-                isHidden ? "border-amber-300 bg-amber-50/20" : "border-gray-200 hover:border-blue-300"
-              }`}
-            >
-              <div>
-                {/* Image Banner */}
-                <div className="relative h-44 w-full bg-gray-100 overflow-hidden">
-                  <img
-                    src={service.image}
-                    alt={service.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-
-                  {/* Category Pill */}
-                  <div className="absolute top-3 left-3">
-                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white/95 backdrop-blur-xs text-gray-800 shadow-xs flex items-center gap-1">
-                      <CatIcon className="w-3.5 h-3.5 text-[#075985]" />
-                      {meta.shortLabel}
-                    </span>
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="absolute top-3 right-3">
-                    {isHidden ? (
-                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 text-white flex items-center gap-1 shadow-xs">
-                        <EyeOff className="w-3 h-3" />
-                        Đã tạm ẩn
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white flex items-center gap-1 shadow-xs">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Đang hiển thị
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Location & Price footer bar */}
-                  <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs font-medium bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-lg">
-                    <span className="flex items-center gap-1 truncate">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="truncate">{service.province || service.location || "Việt Nam"}</span>
-                    </span>
-                    <span className="font-bold text-amber-300 shrink-0 ml-2">
-                      {formatPriceSummary(service)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content Details */}
-                <div className="p-4 space-y-2.5">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-[#075985] transition-colors">
-                      {service.name}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5 truncate">
-                      <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                      <span className="font-medium text-gray-700">{service.providerName}</span>
-                    </p>
-                  </div>
-
-                  {/* Hidden reason banner */}
-                  {isHidden && (
-                    <div className="p-2.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1">
-                      <div className="flex items-center gap-1 font-bold">
-                        <ShieldAlert className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                        Lý do tạm ẩn bài đăng:
+      {/* TABLE VIEW (Standardized exactly like Image 5) */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1400px] table-fixed text-left border-collapse [&_td]:align-middle">
+            <colgroup>
+              <col className="w-[3%]" /><col className="w-[30%]" /><col className="w-[14%]" /><col className="w-[8%]" />
+              <col className="w-[10%]" /><col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[10%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50/70 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <th className="py-3 px-4 text-center w-12">#</th>
+                <th className="py-3 px-4 min-w-[260px]">Dịch vụ</th>
+                <th className="py-3 px-4 min-w-[140px]">Nhà cung cấp</th>
+                <th className="py-3 px-4 min-w-[120px]">Phân loại</th>
+                <th className="py-3 px-4 min-w-[140px]">Khu vực</th>
+                <th className="py-3 px-4 min-w-[130px]">Khoảng giá</th>
+                <th className="py-3 px-4 text-center min-w-[120px]">Trạng thái</th>
+                <th className="py-3 px-4 text-center min-w-[130px]">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs">
+              {filteredServices.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-gray-500">
+                    <div className="max-w-sm mx-auto flex flex-col items-center">
+                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
+                        <FileText className="w-6 h-6 text-gray-400" />
                       </div>
-                      <p className="text-[11px] text-amber-800 leading-relaxed italic">
-                        "{service.hiddenReason || "Thông tin dịch vụ bị tạm ẩn do không chính xác hoặc không phù hợp."}"
+                      <p className="font-bold text-gray-800 text-sm">Không tìm thấy bài đăng nào</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Không có dịch vụ nào phù hợp với bộ lọc hiện tại.
                       </p>
                     </div>
-                  )}
+                  </td>
+                </tr>
+              ) : (
+                filteredServices.map((service, index) => {
+                  const imageCount = service.images?.length || 1;
+                  const isHidden = service.status === "hidden";
 
-                  <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                    {service.description || "Chưa có mô tả chi tiết."}
-                  </p>
-                </div>
-              </div>
+                  return (
+                    <tr
+                      key={service.id}
+                      className="hover:bg-[#F0F9FF]/40 transition-colors group"
+                    >
+                      {/* # STT */}
+                      <td className="py-3.5 px-4 text-center text-xs text-gray-500 font-medium">
+                        {index + 1}
+                      </td>
 
-              {/* Action Buttons */}
-              <div className="p-4 pt-0 border-t border-gray-100 flex items-center gap-2 mt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedServiceForDetail(service);
-                    setActiveImageIndex(0);
-                  }}
-                  className="flex-1 rounded-xl text-xs font-semibold gap-1.5 hover:bg-[#F0F9FF] hover:text-[#075985] hover:border-[#CBD5E1]"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  Xem chi tiết
-                </Button>
+                      {/* Service Info */}
+                      <td className="py-3.5 px-4">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer group/item"
+                          onClick={() => setSelectedServiceForDetail(service)}
+                        >
+                          <div className="relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs">
+                            <img
+                              src={service.thumbnailUrl || service.image}
+                              alt={service.name}
+                              className="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300"
+                            />
+                            {imageCount > 1 && (
+                              <div
+                                className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-semibold px-1 rounded flex items-center gap-0.5"
+                                title={`${imageCount} hình ảnh`}
+                              >
+                                <ImageIcon className="w-2.5 h-2.5" />
+                                {imageCount}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 max-w-[400px] flex-1">
+                            <div title={service.name} className="truncate font-bold text-gray-900 group-hover/item:text-[#075985] transition-colors">
+                              {service.name}
+                            </div>
+                            <div title={service.description} className="mt-0.5 truncate text-xs text-gray-500">
+                              {service.description || "Chưa có mô tả chi tiết."}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
 
-                {isHidden ? (
-                  <Button
-                    size="sm"
-                    onClick={() => handleRestoreService(service)}
-                    className="rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                    title="Mở hiển thị lại bài đăng trên sàn"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Mở lại
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setHidingService(service);
-                      setHideReason("");
-                    }}
-                    className="rounded-xl text-xs font-semibold border-amber-300 text-amber-700 hover:bg-amber-100 gap-1"
-                    title="Tạm ẩn bài đăng nếu thông tin xàm hoặc sai lệch"
-                  >
-                    <EyeOff className="w-3.5 h-3.5" />
-                    Tạm ẩn
-                  </Button>
-                )}
+                      {/* Provider Name */}
+                      <td className="py-3.5 px-4">
+                        <ProviderProfileLink providerId={service.providerId} name={service.providerName} />
+                      </td>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDeletingService(service)}
-                  className="rounded-xl text-xs font-semibold border-red-200 text-red-600 hover:bg-red-50 p-2"
-                  title="Xóa vĩnh viễn bài đăng dịch vụ này"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          );
-        })}
+                      {/* Category Badge */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-1">
+                          {getCategoryBadge(service.category)}
+                        </div>
+                      </td>
 
-        {filteredServices.length === 0 && (
-          <div className="col-span-full bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-3">
-            <FileText className="w-12 h-12 text-gray-300 mx-auto" />
-            <h4 className="font-bold text-gray-800 text-base">Không tìm thấy bài đăng dịch vụ nào</h4>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              Không có bài đăng nào phù hợp với bộ lọc danh mục, trạng thái hoặc từ khóa tìm kiếm.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedCategory("all");
-                setSelectedStatus("all");
-              }}
-              className="rounded-xl text-xs"
-            >
-              Đặt lại bộ lọc
-            </Button>
-          </div>
-        )}
+                      {/* Area */}
+                      <td className="py-3.5 px-4 text-xs text-gray-700">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                          <span className="truncate" title={service.province}>{service.province || "Chưa cập nhật"}</span>
+                        </div>
+                      </td>
+
+                      {/* Price */}
+                      <td className="py-3.5 px-4">
+                        {formatPriceDisplay(service)}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          {isHidden ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <EyeOff className="w-3 h-3 text-amber-600" />
+                                Đã tạm ẩn
+                              </span>
+                              <ServiceModerationReason service={service} />
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              {service.isPaused ? "Provider tạm ngừng" : "Đang hiển thị"}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="inline-flex items-center gap-1.5 justify-center">
+                          {/* Xem chi tiết */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-gray-600 hover:text-[#075985] hover:bg-blue-50"
+                            onClick={() => setSelectedServiceForDetail(service)}
+                            title="Xem chi tiết bài đăng"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+
+                          {/* Tạm ẩn hoặc Mở lại */}
+                          {isHidden ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busyId === service.id}
+                              className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => handleUnhide(service)}
+                              title="Mở lại hiển thị công khai trên sàn"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                              onClick={() => setHidingService(service)}
+                              title="Tạm ẩn bài đăng (xàm / vi phạm)"
+                            >
+                              <EyeOff className="w-4 h-4" />
+                            </Button>
+                          )}
+
+                          {/* Xóa bài đăng */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            onClick={() => setDeletingService(service)}
+                            title="Xóa bài đăng vi phạm"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer info */}
+        <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500 gap-2">
+          <span>
+            Hiển thị <strong>{filteredServices.length}</strong> bài đăng trong danh sách quản lý
+          </span>
+          <span className="text-[11px] text-gray-400 font-medium">
+            Dạng hiển thị: Bảng dữ liệu (Table View)
+          </span>
+        </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: XEM CHI TIẾT BÀI ĐĂNG DỊCH VỤ */}
-      {/* ========================================================================= */}
-      <Dialog open={!!selectedServiceForDetail} onOpenChange={() => setSelectedServiceForDetail(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl">
-          {selectedServiceForDetail && (
-            <div>
-              {/* Photo Gallery Banner */}
-              <div className="relative h-64 sm:h-80 w-full bg-gray-900">
-                <img
-                  src={
-                    selectedServiceForDetail.images?.[activeImageIndex] ||
-                    selectedServiceForDetail.image
-                  }
-                  alt={selectedServiceForDetail.name}
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  onClick={() => setSelectedServiceForDetail(null)}
-                  className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/90 text-white rounded-full transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                <div className="absolute top-4 left-4 flex gap-2">
-                  <Badge className="bg-[#075985] text-white border-none font-bold">
-                    {getCategoryMeta(selectedServiceForDetail.category).label}
-                  </Badge>
-                  {selectedServiceForDetail.status === "hidden" ? (
-                    <Badge className="bg-amber-500 text-white border-none font-bold">
-                      Đang tạm ẩn trên sàn
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-emerald-600 text-white border-none font-bold">
-                      Đang hiển thị công khai
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="absolute bottom-4 left-6 right-6 text-white space-y-1">
-                  <h2 className="text-xl sm:text-2xl font-bold leading-tight drop-shadow-md">
-                    {selectedServiceForDetail.name}
-                  </h2>
-                  <p className="text-xs text-gray-200">
-                    📍 {selectedServiceForDetail.street || ""}, {selectedServiceForDetail.ward || ""},{" "}
-                    {selectedServiceForDetail.province || selectedServiceForDetail.location}
-                  </p>
-                </div>
-              </div>
-
-              {/* Thumbnails if multiple images */}
-              {selectedServiceForDetail.images && selectedServiceForDetail.images.length > 1 && (
-                <div className="flex gap-2 p-3 bg-gray-100 overflow-x-auto border-b border-gray-200">
-                  {selectedServiceForDetail.images.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 transition-all shrink-0 ${
-                        activeImageIndex === idx
-                          ? "border-[#075985] ring-2 ring-blue-500/30"
-                          : "border-transparent opacity-70 hover:opacity-100"
-                      }`}
-                    >
-                      <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Modal Body */}
-              <div className="p-6 space-y-6 text-gray-800 text-xs">
-                {/* Hidden Notice if hidden */}
-                {selectedServiceForDetail.status === "hidden" && (
-                  <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-sm text-amber-800">
-                      <ShieldAlert className="w-4 h-4" />
-                      Lý do bài đăng đang bị tạm ẩn trên sàn:
-                    </div>
-                    <p className="text-xs leading-relaxed italic">
-                      "{selectedServiceForDetail.hiddenReason || "Thông tin dịch vụ bị tạm ẩn do không chính xác hoặc không phù hợp."}"
-                    </p>
-                  </div>
-                )}
-
-                {/* Key Overview Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-gray-400 block mb-0.5">Khoảng giá tham khảo:</span>
-                    <strong className="text-[#075985] text-sm font-extrabold">
-                      {formatPriceSummary(selectedServiceForDetail)}
-                    </strong>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-gray-400 block mb-0.5">Quy mô / Sức chứa:</span>
-                    <strong className="text-gray-900 text-sm">
-                      {selectedServiceForDetail.capacity ||
-                        selectedServiceForDetail.totalRooms ||
-                        selectedServiceForDetail.seats ||
-                        "—"}{" "}
-                      {selectedServiceForDetail.category === "hotel"
-                        ? "phòng"
-                        : selectedServiceForDetail.category === "transportation"
-                        ? "ghế"
-                        : "khách"}
-                    </strong>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-gray-400 block mb-0.5">Nhà cung cấp:</span>
-                    <strong className="text-gray-900 text-sm truncate block" title={selectedServiceForDetail.providerName}>
-                      {selectedServiceForDetail.providerName}
-                    </strong>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-gray-400 block mb-0.5">Mã dịch vụ:</span>
-                    <strong className="font-mono text-gray-900 text-sm">
-                      {selectedServiceForDetail.id}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-sm text-gray-900">Mô tả chi tiết bài đăng</h4>
-                  <p className="text-gray-700 leading-relaxed bg-gray-50/70 p-3.5 rounded-xl border border-gray-100 whitespace-pre-line">
-                    {selectedServiceForDetail.description || "Chưa có mô tả chi tiết."}
-                  </p>
-                </div>
-
-                {/* Policies & Amenities */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Policies */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-sm text-gray-900">Chính sách & Quy định</h4>
-                    {selectedServiceForDetail.policies &&
-                    (Array.isArray(selectedServiceForDetail.policies)
-                      ? selectedServiceForDetail.policies.length > 0
-                      : Boolean(selectedServiceForDetail.policies)) ? (
-                      <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/60 space-y-1.5">
-                        {Array.isArray(selectedServiceForDetail.policies) ? (
-                          selectedServiceForDetail.policies.map((p, pIdx) => (
-                            <p key={pIdx} className="text-gray-800 text-xs flex items-start gap-1.5">
-                              <span className="font-bold text-amber-700">•</span> {p}
-                            </p>
-                          ))
-                        ) : (
-                          <p className="text-gray-800 text-xs leading-relaxed whitespace-pre-line">
-                            {selectedServiceForDetail.policies}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-gray-400 italic bg-gray-50 p-3 rounded-xl">Không có ghi chú chính sách đặc biệt.</p>
-                    )}
-                  </div>
-
-                  {/* Amenities */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-sm text-gray-900">Tiện nghi & Dịch vụ đi kèm</h4>
-                    {selectedServiceForDetail.amenities && selectedServiceForDetail.amenities.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5 p-3 bg-[#F0F9FF]/50 rounded-xl border border-[#CBD5E1]/60">
-                        {selectedServiceForDetail.amenities.map((am, aIdx) => (
-                          <span
-                            key={aIdx}
-                            className="px-2.5 py-1 bg-white text-blue-800 border border-[#CBD5E1] rounded-lg text-[11px] font-medium"
-                          >
-                            ✓ {am}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-400 italic bg-gray-50 p-3 rounded-xl">Chưa cập nhật tiện nghi.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Location & GPS */}
-                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
-                  <div>
-                    <span className="text-gray-400 block text-[11px]">Tọa độ định vị GPS:</span>
-                    <span className="font-mono font-bold text-gray-800 text-xs">
-                      {selectedServiceForDetail.latitude || 11.9404}, {selectedServiceForDetail.longitude || 108.4583}
-                    </span>
-                  </div>
-                  <a
-                    href={`https://www.google.com/maps?q=${selectedServiceForDetail.latitude || 11.9404},${
-                      selectedServiceForDetail.longitude || 108.4583
-                    }`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[#075985] hover:text-blue-800 font-semibold"
-                  >
-                    Xem vị trí trên Google Maps <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Dialog Footer Actions */}
-              <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedServiceForDetail(null)}
-                  className="rounded-xl text-xs"
-                >
-                  Đóng cửa sổ
-                </Button>
-
-                <div className="flex items-center gap-2">
-                  {selectedServiceForDetail.status === "hidden" ? (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        handleRestoreService(selectedServiceForDetail);
-                        setSelectedServiceForDetail({ ...selectedServiceForDetail, status: "approved" });
-                      }}
-                      className="rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Mở hiển thị lại bài đăng
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setHidingService(selectedServiceForDetail);
-                        setHideReason("");
-                      }}
-                      className="rounded-xl text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
-                    >
-                      <EyeOff className="w-3.5 h-3.5" />
-                      Tạm ẩn bài đăng này
-                    </Button>
-                  )}
-
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => {
-                      setDeletingService(selectedServiceForDetail);
-                    }}
-                    className="rounded-xl text-xs gap-1.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Xóa bài đăng
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ========================================================================= */}
-      {/* MODAL 2: TẠM ẨN BÀI ĐĂNG DỊCH VỤ (KÈM LÝ DO THÔNG TIN XÀM / SAI LỆCH) */}
-      {/* ========================================================================= */}
+      {/* Hide Modal - Solid Crisp styling */}
       <Dialog open={!!hidingService} onOpenChange={() => setHidingService(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6">
+        <DialogContent className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
               <EyeOff className="w-5 h-5 text-amber-600" />
               Tạm ẩn bài đăng dịch vụ
             </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500 mt-1">
-              Bài đăng bị tạm ẩn sẽ không còn hiển thị cho các công ty lữ hành tra cứu. Bạn có thể mở lại bất cứ lúc nào.
-            </DialogDescription>
           </DialogHeader>
 
           {hidingService && (
@@ -869,19 +537,26 @@ export function ServicePostApproval({
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
                 <span className="text-gray-400 block mb-0.5">Dịch vụ đang thao tác:</span>
                 <strong className="text-gray-900 font-bold block">{hidingService.name}</strong>
-                <span className="text-gray-500 text-[11px] mt-0.5 block">Nhà cung cấp: {hidingService.providerName}</span>
+                <span className="text-gray-500 text-[11px] mt-0.5 block">
+                  Nhà cung cấp: {hidingService.providerName}
+                </span>
               </div>
 
               {/* Quick suggestions */}
               <div className="space-y-1.5">
                 <span className="text-[11px] font-semibold text-gray-600">Gợi ý lý do nhanh:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {quickReasonSuggestions.map((sug, sIdx) => (
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    "Thông tin dịch vụ sai lệch hoặc không đúng thực tế.",
+                    "Bảng giá ảo hoặc phụ thu bất hợp lý.",
+                    "Hình ảnh chất lượng kém hoặc sao chép.",
+                    "Cơ sở tạm ngưng hoạt động hoặc đổi địa chỉ.",
+                  ].map((sug, sIdx) => (
                     <button
                       key={sIdx}
                       type="button"
                       onClick={() => setHideReason(sug)}
-                      className="px-2.5 py-1 rounded-lg text-[11px] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors text-left"
+                      className="px-2.5 py-1.5 rounded-lg text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors text-left font-medium"
                     >
                       {sug}
                     </button>
@@ -889,87 +564,77 @@ export function ServicePostApproval({
                 </div>
               </div>
 
-              {/* Reason textarea */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 block">
-                  Lý do tạm ẩn cụ thể (Gửi thông báo / lưu vết hệ thống):
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Nhập cụ thể lý do tạm ẩn *
                 </label>
                 <Textarea
                   value={hideReason}
                   onChange={(e) => setHideReason(e.target.value)}
-                  placeholder="Nhập lý do cụ thể (VD: Giá dịch vụ ảo, thông tin sai lệch so với thực tế...)"
+                  placeholder="Nhập lý do cụ thể..."
                   rows={3}
-                  className="text-xs rounded-xl"
+                  className="text-xs rounded-xl bg-white border-gray-300 focus:border-amber-500 text-gray-900"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <DialogFooter className="gap-2 pt-2 border-t border-gray-100">
                 <Button
-                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setHidingService(null)}
-                  className="rounded-xl text-xs"
+                  className="rounded-xl text-xs font-semibold"
                 >
                   Hủy bỏ
                 </Button>
                 <Button
-                  type="button"
                   size="sm"
                   onClick={handleConfirmHide}
-                  className="rounded-xl text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                  disabled={busyId === hidingService.id}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs"
                 >
-                  Xác nhận tạm ẩn dịch vụ
+                  {busyId === hidingService.id ? "Đang xử lý..." : "Xác nhận tạm ẩn bài đăng"}
                 </Button>
-              </div>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: XÁC NHẬN XÓA BÀI ĐĂNG DỊCH VỤ */}
-      {/* ========================================================================= */}
+      {/* Delete Confirmation Modal */}
       <Dialog open={!!deletingService} onOpenChange={() => setDeletingService(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6">
+        <DialogContent className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              Xác nhận xóa bài đăng dịch vụ
+            <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              Xóa bài đăng dịch vụ
             </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500 mt-1">
-              Hành động này sẽ xóa vĩnh viễn bài đăng dịch vụ khỏi hệ thống và không thể hoàn tác.
-            </DialogDescription>
           </DialogHeader>
 
           {deletingService && (
             <div className="space-y-4 pt-2">
-              <p className="text-xs text-gray-700 leading-relaxed">
-                Bạn có chắc chắn muốn xóa bài đăng{" "}
-                <strong className="text-gray-900 font-bold">"{deletingService.name}"</strong> của đối tác{" "}
-                <strong>{deletingService.providerName}</strong> không?
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Bạn có chắc chắn muốn xóa vĩnh viễn bài đăng{" "}
+                <strong className="text-gray-900 font-bold">"{deletingService.name}"</strong>? Hành động này sẽ gỡ bỏ hoàn toàn dịch vụ khỏi hệ thống và không thể hoàn tác.
               </p>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <DialogFooter className="gap-2 pt-2 border-t border-gray-100">
                 <Button
-                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setDeletingService(null)}
-                  className="rounded-xl text-xs"
+                  className="rounded-xl text-xs font-semibold"
                 >
                   Hủy bỏ
                 </Button>
                 <Button
-                  type="button"
                   size="sm"
-                  variant="destructive"
                   onClick={handleConfirmDelete}
-                  className="rounded-xl text-xs font-semibold"
+                  disabled={busyId === deletingService.id}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs"
                 >
-                  Đồng ý xóa vĩnh viễn
+                  {busyId === deletingService.id ? "Đang xóa..." : "Xác nhận xóa vĩnh viễn"}
                 </Button>
-              </div>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

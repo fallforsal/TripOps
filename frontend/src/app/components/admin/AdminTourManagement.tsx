@@ -1,4 +1,4 @@
-﻿import { Tour, Service } from "@/app/types";
+import { Tour, Service } from "@/app/types";
 import {
   Plus,
   Edit,

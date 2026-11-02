@@ -1,15 +1,18 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
-  User,
+  User as UserIcon,
   Mail,
   Phone,
   MapPin,
   Calendar,
-  Edit2,
+  Lock,
   Save,
-  X,
-  Camera,
+  CheckCircle2,
+  AlertCircle,
+  Building2,
 } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
+import { PageHeader } from "@/app/components/customer/PageHeader";
 
 interface UserProfileData {
   name: string;
@@ -17,347 +20,265 @@ interface UserProfileData {
   phone: string;
   dateOfBirth: string;
   gender: string;
+  companyName: string;
   address: string;
   city: string;
-  country: string;
-  avatar?: string;
 }
 
-const mockUserData: UserProfileData = {
-  name: "Nguyễn Văn An",
-  email: "customer@demo.com",
-  phone: "0987654321",
-  dateOfBirth: "1990-05-15",
-  gender: "Nam",
-  address: "123 Nguyễn Huệ",
-  city: "TP. Hồ Chí Minh",
-  country: "Việt Nam",
+const defaultProfile: UserProfileData = {
+  name: "Tập đoàn FPT",
+  email: "khachhang.fpt@gmail.com",
+  phone: "0933 888 999",
+  dateOfBirth: "1988-09-13",
+  gender: "Khác",
+  companyName: "Công ty Cổ phần FPT",
+  address: "Tòa nhà FPT, Phố Duy Tân, Cầu Giấy",
+  city: "Hà Nội",
 };
 
 export function UserProfile() {
+  const [profile, setProfile] = useState<UserProfileData>(defaultProfile);
   const [isEditing, setIsEditing] = useState(false);
-  const [profileData, setProfileData] =
-    useState<UserProfileData>(mockUserData);
-  const [editData, setEditData] =
-    useState<UserProfileData>(mockUserData);
+  const [formData, setFormData] = useState<UserProfileData>(defaultProfile);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const handleSave = () => {
-    setProfileData(editData);
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwMessage, setPwMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfile(formData);
     setIsEditing(false);
-    // In real app, call API to update profile
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const handleCancel = () => {
-    setEditData(profileData);
-    setIsEditing(false);
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwMessage(null);
+
+    if (!currentPassword) {
+      setPwMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwMessage({ type: "error", text: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwMessage({ type: "error", text: "Mật khẩu xác nhận không khớp" });
+      return;
+    }
+
+    setPwMessage({ type: "success", text: "Đổi mật khẩu thành công!" });
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setTimeout(() => setPwMessage(null), 3000);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Quản lý hồ sơ
-          </h1>
-          <p className="text-gray-600">
-            Quản lý thông tin cá nhân của bạn
-          </p>
+    <div className="max-w-4xl mx-auto space-y-6 pb-16 font-sans">
+      <PageHeader
+        title="Thông tin tài khoản"
+        subtitle="Quản lý hồ sơ khách hàng, thông tin doanh nghiệp và bảo mật tài khoản"
+      />
+
+      {saveSuccess && (
+        <div className="p-3.5 bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] text-xs text-[#15803D] flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Cập nhật thông tin cá nhân thành công!</span>
         </div>
+      )}
 
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Cover Image */}
-          <div className="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-
-          {/* Profile Content */}
-          <div className="px-8 pb-8">
-            {/* Avatar */}
-            <div className="relative -mt-16 mb-6">
-              <div className="w-32 h-32 bg-white rounded-full p-2 shadow-xl">
-                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-4xl font-bold">
-                  {profileData.name.charAt(0)}
-                </div>
-              </div>
-              {isEditing && (
-                <button className="absolute bottom-0 right-0 w-10 h-10 bg-[#075985] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#F97316] transition-colors">
-                  <Camera className="w-5 h-5" />
-                </button>
-              )}
+      {/* Main Profile Info Card */}
+      <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#F1F5F9] pb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-[6px] bg-[#075985] text-white flex items-center justify-center text-2xl font-bold">
+              {profile.name.charAt(0)}
             </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#0F172A]">{profile.name}</h2>
+              <p className="text-xs text-[#475569]">{profile.email}</p>
+              <span className="inline-block mt-1 text-[11px] font-semibold text-[#075985] bg-[#F0F9FF] border border-[#BAE6FD] px-2 py-0.5 rounded-[4px]">
+                Khách hàng doanh nghiệp (B2B)
+              </span>
+            </div>
+          </div>
 
-            {/* Edit Button */}
-            {!isEditing && (
-              <div className="mb-6 flex justify-end">
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-6 py-2 bg-[#075985] text-white rounded-lg hover:bg-[#F97316] transition-colors font-semibold flex items-center gap-2"
-                >
-                  <Edit2 className="w-5 h-5" />
-                  Chỉnh sửa hồ sơ
-                </button>
-              </div>
+          <div>
+            {!isEditing ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setFormData(profile);
+                  setIsEditing(true);
+                }}
+                className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px]"
+              >
+                Chỉnh sửa thông tin
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditing(false)}
+                className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
+              >
+                Hủy thay đổi
+              </Button>
             )}
+          </div>
+        </div>
 
-            {/* Profile Form */}
-            <div className="space-y-6">
-              {/* Personal Information Section */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2 border-gray-200">
-                  Thông tin cá nhân
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Full Name */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Họ và tên
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editData.name}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            name: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <User className="w-5 h-5 text-gray-400" />
-                        {profileData.name}
-                      </div>
-                    )}
-                  </div>
+        {/* Profile Form */}
+        <form onSubmit={handleProfileSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Họ và tên / Tên đại diện:</label>
+              <input
+                type="text"
+                disabled={!isEditing}
+                value={isEditing ? formData.name : profile.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
+            </div>
 
-                  {/* Email */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Email
-                    </label>
-                    <div className="flex items-center gap-2 text-gray-900">
-                      <Mail className="w-5 h-5 text-gray-400" />
-                      {profileData.email}
-                      <span className="ml-auto text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                        Không thể thay đổi
-                      </span>
-                    </div>
-                  </div>
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Tên cơ quan / Doanh nghiệp:</label>
+              <input
+                type="text"
+                disabled={!isEditing}
+                value={isEditing ? formData.companyName : profile.companyName}
+                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
+            </div>
 
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Số điện thoại
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="tel"
-                        value={editData.phone}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            phone: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <Phone className="w-5 h-5 text-gray-400" />
-                        {profileData.phone}
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Email:</label>
+              <input
+                type="email"
+                disabled
+                value={profile.email}
+                className="w-full h-9 px-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#64748B] cursor-not-allowed"
+              />
+            </div>
 
-                  {/* Date of Birth */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Ngày sinh
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="date"
-                        value={editData.dateOfBirth}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            dateOfBirth: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <Calendar className="w-5 h-5 text-gray-400" />
-                        {new Date(
-                          profileData.dateOfBirth,
-                        ).toLocaleDateString("vi-VN")}
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Số điện thoại liên hệ:</label>
+              <input
+                type="text"
+                disabled={!isEditing}
+                value={isEditing ? formData.phone : profile.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
+            </div>
 
-                  {/* Gender */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Giới tính
-                    </label>
-                    {isEditing ? (
-                      <select
-                        value={editData.gender}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            gender: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="Nam">Nam</option>
-                        <option value="Nữ">Nữ</option>
-                        <option value="Khác">Khác</option>
-                      </select>
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <User className="w-5 h-5 text-gray-400" />
-                        {profileData.gender}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Địa chỉ:</label>
+              <input
+                type="text"
+                disabled={!isEditing}
+                value={isEditing ? formData.address : profile.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
+            </div>
 
-              {/* Address Section */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2 border-gray-200">
-                  Địa chỉ
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Address */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Địa chỉ
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editData.address}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            address: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                        placeholder="Số nhà, tên đường"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <MapPin className="w-5 h-5 text-gray-400" />
-                        {profileData.address}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* City */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Thành phố
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editData.city}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            city: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <MapPin className="w-5 h-5 text-gray-400" />
-                        {profileData.city}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Country */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Quốc gia
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editData.country}
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            country: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <MapPin className="w-5 h-5 text-gray-400" />
-                        {profileData.country}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              {isEditing && (
-                <div className="flex gap-3 pt-6 border-t-2 border-gray-200">
-                  <button
-                    onClick={handleCancel}
-                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold flex items-center justify-center gap-2"
-                  >
-                    <X className="w-5 h-5" />
-                    Hủy
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="flex-1 px-6 py-3 bg-[#075985] text-white rounded-lg hover:bg-[#F97316] transition-colors font-semibold flex items-center justify-center gap-2"
-                  >
-                    <Save className="w-5 h-5" />
-                    Lưu thay đổi
-                  </button>
-                </div>
-              )}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[#0F172A]">Tỉnh / Thành phố:</label>
+              <input
+                type="text"
+                disabled={!isEditing}
+                value={isEditing ? formData.city : profile.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
             </div>
           </div>
+
+          {isEditing && (
+            <div className="flex justify-end pt-3 border-t border-[#F1F5F9]">
+              <Button
+                type="submit"
+                className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-5 rounded-[6px] font-semibold"
+              >
+                Lưu thay đổi
+              </Button>
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Password Change Card */}
+      <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
+        <div className="flex items-center gap-2 border-b border-[#F1F5F9] pb-3">
+          <Lock className="w-4 h-4 text-[#075985]" />
+          <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">
+            Đổi mật khẩu
+          </h3>
         </div>
 
-        {/* Account Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
-            <h3 className="text-sm font-semibold mb-2">
-              Thành viên từ
-            </h3>
-            <p className="text-2xl font-bold">Tháng 1, 2025</p>
+        {pwMessage && (
+          <div
+            className={`p-3 rounded-[6px] text-xs flex items-center gap-2 ${
+              pwMessage.type === "success"
+                ? "bg-[#F0FDF4] border border-[#BBF7D0] text-[#15803D]"
+                : "bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C]"
+            }`}
+          >
+            {pwMessage.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            <span>{pwMessage.text}</span>
+          </div>
+        )}
+
+        <form onSubmit={handlePasswordSubmit} className="space-y-3 max-w-md text-xs">
+          <div className="space-y-1.5">
+            <label className="font-semibold text-[#0F172A]">Mật khẩu hiện tại:</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            />
           </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
-            <h3 className="text-sm font-semibold mb-2">
-              Tổng tour đã đặt
-            </h3>
-            <p className="text-2xl font-bold">8 tour</p>
+          <div className="space-y-1.5">
+            <label className="font-semibold text-[#0F172A]">Mật khẩu mới:</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            />
           </div>
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
-            <h3 className="text-sm font-semibold mb-2">
-              Điểm tích lũy
-            </h3>
-            <p className="text-2xl font-bold">1,250 điểm</p>
+          <div className="space-y-1.5">
+            <label className="font-semibold text-[#0F172A]">Xác nhận mật khẩu mới:</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            />
           </div>
-        </div>
+
+          <div className="pt-2">
+            <Button
+              type="submit"
+              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold"
+            >
+              Cập nhật mật khẩu
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
