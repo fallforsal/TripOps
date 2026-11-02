@@ -57,9 +57,9 @@ Chỉ giữ 4 tài khoản trên; Agency và Provider đã duyệt. Có 1 dịch
 
 Đã gỡ chức năng gửi/chấp nhận/yêu cầu sửa phương án, lịch sử phiên bản hợp đồng, hợp đồng từ bản đã chốt và thông báo phương án ở Customer/Agency. Booking và duyệt đơn trở về luồng trước PR #15; không tự chốt yêu cầu ban đầu thành phiên bản hợp đồng như PR #17. Các ghi chú hành khách, bản sao lịch trình/dịch vụ của booking, header và sửa lỗi điều hướng vẫn được giữ.
 
-Hai bảng `booking_snapshots`, `booking_proposal_events` cùng mapping và các migration đã phát hành được giữ để bảo toàn dữ liệu cũ và tính nhất quán EF. Luồng booking hiện tại không đọc/ghi chúng và không còn các API phương án/thông báo. Không cần chạy migration mới, rollback database hoặc xóa bảng khi dùng bản hoàn tác này.
+Hai bảng `booking_snapshots`, `booking_proposal_events` đã được loại bỏ khỏi model và luồng booking. Migration `RemoveBookingSnapshotsAndProposalEvents` xóa hai bảng theo đúng thứ tự khóa ngoại; giữ nguyên các migration đã phát hành trước đó. Sau khi pull, team chạy `dotnet ef database update --project backend/src/TripOps.Data --startup-project backend/src/TripOps.Api`. Xem [hướng dẫn migration](backend/docs/REMOVE_BOOKING_HISTORY_TABLES.md).
 
-Code đầy đủ vẫn nằm trên nhánh `feat/customer-payment` và các nhánh snapshot. Khi muốn đưa trở lại, hoàn tác commit gỡ tính năng hoặc tạo commit áp dụng lại rõ ràng; chỉ merge nhánh cũ có thể không khôi phục các thay đổi đã bị revert. Phần lịch thanh toán mới trên nhánh payment chưa được đưa vào bản hoàn tác này.
+Code đầy đủ vẫn nằm trên nhánh `feat/customer-payment` và các nhánh snapshot. Nếu đưa tính năng trở lại, cần cập nhật code và tạo migration khôi phục schema tương ứng; chỉ merge nhánh cũ không khôi phục bảng hoặc dữ liệu đã xóa. Phần lịch thanh toán mới trên nhánh payment chưa được đưa vào bản hoàn tác này.
 
 ## Upload và thanh toán Development
 

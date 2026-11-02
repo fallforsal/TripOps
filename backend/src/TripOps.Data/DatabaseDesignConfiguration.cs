@@ -7,24 +7,7 @@ internal static class DatabaseDesignConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BookingProposalEvent>(entity =>
-        {
-            entity.ToTable("booking_proposal_events", t => t.HasCheckConstraint("CK_booking_proposal_events_type",
-                "[event_type] IN ('proposal_sent', 'proposal_accepted', 'changes_requested')"));
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.SnapshotId).HasColumnName("snapshot_id");
-            entity.Property(e => e.ActorId).HasColumnName("actor_id").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.RecipientId).HasColumnName("recipient_id").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.EventType).HasColumnName("event_type").HasMaxLength(30).IsRequired();
-            entity.Property(e => e.Message).HasColumnName("message").HasMaxLength(2000);
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-            entity.Property(e => e.ReadAt).HasColumnName("read_at").HasColumnType("datetime2");
-            entity.HasOne(e => e.Snapshot).WithMany(s => s.Events).HasForeignKey(e => e.SnapshotId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ActorId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RecipientId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasIndex(e => new { e.SnapshotId, e.EventType, e.RecipientId }).IsUnique();
-            entity.HasIndex(e => new { e.RecipientId, e.ReadAt, e.CreatedAt });
-        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("users");
@@ -329,28 +312,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
         });
-        modelBuilder.Entity<BookingSnapshot>(entity =>
-        {
-            entity.ToTable("booking_snapshots", t =>
-            {
-                t.HasCheckConstraint("CK_booking_snapshots_version", "[version] > 0");
-                t.HasCheckConstraint("CK_booking_snapshots_type", "[snapshot_type] IN ('initial_request', 'proposal', 'agreed')");
-                t.HasCheckConstraint("CK_booking_snapshots_accepted", "([snapshot_type] = 'agreed' AND [accepted_at] IS NOT NULL AND [accepted_by] IS NOT NULL) OR ([snapshot_type] IN ('initial_request', 'proposal') AND [accepted_at] IS NULL AND [accepted_by] IS NULL)");
-                t.HasCheckConstraint("CK_booking_snapshots_data_isjson", "ISJSON([snapshot_data]) = 1");
-            });
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.Version).HasColumnName("version").HasColumnType("int").IsRequired();
-            entity.Property(e => e.SnapshotType).HasColumnName("snapshot_type").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
-            entity.Property(e => e.SnapshotData).HasColumnName("snapshot_data").HasColumnType("nvarchar(max)").IsRequired();
-            entity.Property(e => e.SourceTourVersion).HasColumnName("source_tour_version").HasColumnType("int");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
-            entity.Property(e => e.CreatedBy).HasColumnName("created_by").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.AcceptedAt).HasColumnName("accepted_at").HasColumnType("datetime2");
-            entity.Property(e => e.AcceptedBy).HasColumnName("accepted_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
-            entity.HasIndex(e => new { e.BookingId, e.Version }).IsUnique();
-            entity.HasIndex(e => new { e.BookingId, e.SnapshotType, e.Version });
-        });
+
         modelBuilder.Entity<BookingParticipant>(entity =>
         {
             entity.ToTable("booking_participants");
@@ -749,9 +711,6 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<Booking>().HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Booking>().HasOne<TourDesignRequest>().WithMany().HasForeignKey(e => e.DesignRequestId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Booking>().HasOne(e => e.Tour).WithMany().HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<BookingSnapshot>().HasOne(e => e.Booking).WithMany(b => b.Snapshots).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<BookingSnapshot>().HasOne(e => e.Creator).WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<BookingSnapshot>().HasOne(e => e.Acceptor).WithMany().HasForeignKey(e => e.AcceptedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingAccommodation>().HasOne(e => e.Booking).WithMany(e => e.Accommodations).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingAgency>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingAgency>().HasOne(e => e.Booking).WithMany(e => e.BookingAgencies).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);

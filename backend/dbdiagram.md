@@ -362,6 +362,7 @@ Table bookings {
 // ============================================================================
 // DANH SÁCH HÀNH KHÁCH THEO TỪNG CHẶNG VÀ CÔNG TY
 // ============================================================================
+
 Table booking_participants {
   id int [pk, increment]
   booking_id int [not null, note: 'FK trỏ tới bookings.id']
@@ -991,6 +992,7 @@ Ref: tourist_locations.tour_timeline_id > tour_timeline.id
 
 // 4. Nhiều bữa ăn thuộc về 1 mốc timeline (tour_timeline -> tour_meals)
 Ref: tour_restaurants.tour_timeline_id > tour_timeline.id
+
 
 // 1. Một doanh nghiệp/agency tạo được nhiều tour (business_profiles -> tours)
 Ref: tours.agency_id > users.id

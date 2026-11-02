@@ -922,141 +922,6 @@ namespace TripOps.Data.Migrations
                     b.ToTable("booking_price_adjustments", (string)null);
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.BookingProposalEvent", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ActorId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("nvarchar(36)")
-                        .HasColumnName("actor_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasColumnName("event_type");
-
-                    b.Property<string>("Message")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)")
-                        .HasColumnName("message");
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("read_at");
-
-                    b.Property<string>("RecipientId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("nvarchar(36)")
-                        .HasColumnName("recipient_id");
-
-                    b.Property<int>("SnapshotId")
-                        .HasColumnType("int")
-                        .HasColumnName("snapshot_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorId");
-
-                    b.HasIndex("RecipientId", "ReadAt", "CreatedAt");
-
-                    b.HasIndex("SnapshotId", "EventType", "RecipientId")
-                        .IsUnique();
-
-                    b.ToTable("booking_proposal_events", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_booking_proposal_events_type", "[event_type] IN ('proposal_sent', 'proposal_accepted', 'changes_requested')");
-                        });
-                });
-
-            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("AcceptedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("accepted_at");
-
-                    b.Property<string>("AcceptedBy")
-                        .HasMaxLength(36)
-                        .HasColumnType("nvarchar(36)")
-                        .HasColumnName("accepted_by");
-
-                    b.Property<int>("BookingId")
-                        .HasColumnType("int")
-                        .HasColumnName("booking_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("SYSUTCDATETIME()");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("nvarchar(36)")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("SnapshotData")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("snapshot_data");
-
-                    b.Property<string>("SnapshotType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasColumnName("snapshot_type");
-
-                    b.Property<int?>("SourceTourVersion")
-                        .HasColumnType("int")
-                        .HasColumnName("source_tour_version");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("int")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcceptedBy");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("BookingId", "Version")
-                        .IsUnique();
-
-                    b.HasIndex("BookingId", "SnapshotType", "Version");
-
-                    b.ToTable("booking_snapshots", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_booking_snapshots_accepted", "([snapshot_type] = 'agreed' AND [accepted_at] IS NOT NULL AND [accepted_by] IS NOT NULL) OR ([snapshot_type] IN ('initial_request', 'proposal') AND [accepted_at] IS NULL AND [accepted_by] IS NULL)");
-
-                            t.HasCheckConstraint("CK_booking_snapshots_data_isjson", "ISJSON([snapshot_data]) = 1");
-
-                            t.HasCheckConstraint("CK_booking_snapshots_type", "[snapshot_type] IN ('initial_request', 'proposal', 'agreed')");
-
-                            t.HasCheckConstraint("CK_booking_snapshots_version", "[version] > 0");
-                        });
-                });
-
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>
                 {
                     b.Property<int>("Id")
@@ -3496,55 +3361,6 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Booking");
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.BookingProposalEvent", b =>
-                {
-                    b.HasOne("TripOps.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ActorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TripOps.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("RecipientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TripOps.Data.Entities.BookingSnapshot", "Snapshot")
-                        .WithMany("Events")
-                        .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Snapshot");
-                });
-
-            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
-                {
-                    b.HasOne("TripOps.Data.Entities.User", "Acceptor")
-                        .WithMany()
-                        .HasForeignKey("AcceptedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("TripOps.Data.Entities.Booking", "Booking")
-                        .WithMany("Snapshots")
-                        .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TripOps.Data.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Acceptor");
-
-                    b.Navigation("Booking");
-
-                    b.Navigation("Creator");
-                });
-
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.Booking", "Booking")
@@ -4051,14 +3867,7 @@ namespace TripOps.Data.Migrations
 
                     b.Navigation("PriceAdjustments");
 
-                    b.Navigation("Snapshots");
-
                     b.Navigation("Timelines");
-                });
-
-            modelBuilder.Entity("TripOps.Data.Entities.BookingSnapshot", b =>
-                {
-                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>

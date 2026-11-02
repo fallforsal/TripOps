@@ -234,13 +234,12 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.OK, decisionRes.StatusCode);
         Assert.Equal("Confirmed", (await decisionRes.Content.ReadFromJsonAsync<BookingDto>())!.Status);
 
-        // The rolled-back flow must not generate contract versions or proposal notifications.
-        // Their tables remain mapped so existing databases and migrations stay compatible.
+        // The current booking flow has no commercial snapshot/proposal-event tables.
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            Assert.False(await db.BookingSnapshots.AnyAsync(s => s.BookingId == bookingId));
-            Assert.False(await db.BookingProposalEvents.AnyAsync());
+            Assert.DoesNotContain(db.Model.GetEntityTypes(), e =>
+                e.GetTableName() is "booking_snapshots" or "booking_proposal_events");
         }
 
         // 5. Agency phân công Hướng dẫn viên
