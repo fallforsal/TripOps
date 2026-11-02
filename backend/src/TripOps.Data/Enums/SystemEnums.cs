@@ -122,7 +122,13 @@ public enum PaymentTransactionStatus
     Pending,
     Success,
     Failed,
-    Refunded
+    Refunded,
+    /// <summary>Khách hủy trên trang cổng thanh toán.</summary>
+    Cancelled,
+    /// <summary>Link thanh toán hết hạn mà chưa nhận tiền.</summary>
+    Expired,
+    /// <summary>Cổng báo có tiền nhưng không khớp (thiếu/dư/sai số tiền): chưa cộng vào đơn, chờ đối soát.</summary>
+    NeedsReview
 }
 
 public enum SettlementStatus

@@ -140,11 +140,14 @@ public sealed class AccountsFlowTests
     }
 
     [Theory]
-    [InlineData("https://tripops-demo.example", "same-origin", HttpStatusCode.Unauthorized)]
-    [InlineData("https://attacker.invalid", "same-origin", HttpStatusCode.Forbidden)]
-    [InlineData("https://tripops-demo.example", "cross-site", HttpStatusCode.Forbidden)]
+    [InlineData("", "https://tripops-demo.example", "same-origin", HttpStatusCode.Unauthorized)]
+    [InlineData("", "https://attacker.invalid", "same-origin", HttpStatusCode.Forbidden)]
+    [InlineData("", "https://tripops-demo.example", "cross-site", HttpStatusCode.Forbidden)]
+    [InlineData("/sync", "https://tripops-demo.example", "same-origin", HttpStatusCode.Unauthorized)]
+    [InlineData("/sync", "https://attacker.invalid", "same-origin", HttpStatusCode.Forbidden)]
+    [InlineData("/sync", "https://tripops-demo.example", "cross-site", HttpStatusCode.Forbidden)]
     public async Task Payment_origin_guard_allows_only_configured_frontend_without_bypassing_authentication(
-        string origin, string fetchSite, HttpStatusCode expected)
+        string suffix, string origin, string fetchSite, HttpStatusCode expected)
     {
         await using var app = new App();
         using var configured = app.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
@@ -152,7 +155,7 @@ public sealed class AccountsFlowTests
                 ["Cors:AllowedOrigins:4"] = "https://tripops-demo.example"
             })));
         using var client = configured.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/bookings/27/payments/vnpay");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/bookings/27/payments/payos{suffix}");
         request.Headers.Add("Origin", origin);
         request.Headers.Add("Sec-Fetch-Site", fetchSite);
         using var response = await client.SendAsync(request);

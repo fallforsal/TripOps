@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -13,27 +15,120 @@ using TripOps.Service.Payments;
 
 namespace TripOps.Tests;
 
-// Lịch thanh toán đợt cọc, giao dịch cọc (DEMO + VNPAY sandbox) và chặn hủy đơn đã có tiền.
+// Thanh toán hai đợt (cọc 50%, hạn duyệt + 24 giờ), cổng payOS (giả lập, không gọi payOS thật) và chặn hủy đơn đã có tiền.
 public sealed partial class BookingFlowTests
 {
-    // Giá trị giả chỉ dùng trong test, không phải khóa VNPAY thật.
-    private const string TestTmnCode = "TESTTMN1";
-    private const string TestHashKey = "unit-test-key";
+    // Giá trị giả chỉ dùng trong test, không phải khóa payOS thật.
+    private const string TestChecksum = "unit-test-key";
+    private static readonly DateTime ApprovedAtUtc = new(2026, 11, 2, 7, 30, 0, DateTimeKind.Utc); // 14:30 02/11 giờ Việt Nam
 
-    private static App VnPayApp() => new(builder =>
+    private sealed class TestClock : PaymentClock
+    {
+        public DateTime? Fixed { get; set; }
+        public override DateTime UtcNow => Fixed ?? DateTime.UtcNow;
+    }
+
+    /// <summary>Giả lập API payOS: kiểm tra header + chữ ký tạo link, trả dữ liệu có chữ ký như payOS.</summary>
+    private sealed class FakePayOs : HttpMessageHandler
+    {
+        public sealed class Link
+        {
+            public long Amount { get; set; }
+            public string Status { get; set; } = "PENDING";
+            public long AmountPaid { get; set; }
+            public string Description { get; set; } = "";
+            public long ExpiredAt { get; set; }
+        }
+        public Dictionary<long, Link> Links { get; } = new();
+        public int CreateCalls { get; private set; }
+        public int GetCalls { get; private set; }
+
+        public void Pay(long orderCode, long? amountPaid = null)
+        {
+            var link = Links[orderCode];
+            link.AmountPaid = amountPaid ?? link.Amount;
+            link.Status = link.AmountPaid >= link.Amount ? "PAID" : "UNDERPAID";
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.Headers.GetValues("x-client-id").Single() != "test-client" || request.Headers.GetValues("x-api-key").Single() != "test-api")
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path == "/v2/payment-requests")
+            {
+                CreateCalls++;
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+                var root = body.RootElement;
+                long orderCode = root.GetProperty("orderCode").GetInt64(), amount = root.GetProperty("amount").GetInt64();
+                var description = root.GetProperty("description").GetString()!;
+                var expected = PayOsGateway.SignPaymentRequest(amount, root.GetProperty("cancelUrl").GetString()!, description,
+                    orderCode, root.GetProperty("returnUrl").GetString()!, TestChecksum);
+                if (root.GetProperty("signature").GetString() != expected)
+                    return Reply(new { code = "20", desc = "Mã kiểm tra(signature) không hợp lệ", data = (object?)null });
+                Links[orderCode] = new Link { Amount = amount, Description = description, ExpiredAt = root.GetProperty("expiredAt").GetInt64() };
+                return Signed(new { bin = "970422", accountNumber = "0000", accountName = "TRIPOPS", amount, description, orderCode,
+                    currency = "VND", paymentLinkId = $"link{orderCode}", status = "PENDING", checkoutUrl = $"https://pay.payos.vn/web/link{orderCode}", qrCode = "qr" });
+            }
+            if (request.Method == HttpMethod.Get && path.StartsWith("/v2/payment-requests/"))
+            {
+                GetCalls++;
+                var orderCode = long.Parse(path["/v2/payment-requests/".Length..]);
+                if (!Links.TryGetValue(orderCode, out var link)) return new HttpResponseMessage(HttpStatusCode.NotFound);
+                var transactions = link.AmountPaid > 0
+                    ? new object[] { new { reference = "FT26110200001", amount = link.AmountPaid, accountNumber = "0000", description = link.Description,
+                        transactionDateTime = "2026-11-02 14:40:00", virtualAccountName = (string?)null, virtualAccountNumber = (string?)null,
+                        counterAccountBankId = (string?)null, counterAccountBankName = (string?)null, counterAccountName = (string?)null, counterAccountNumber = (string?)null } }
+                    : Array.Empty<object>();
+                return Signed(new { id = $"link{orderCode}", orderCode, amount = link.Amount, amountPaid = link.AmountPaid,
+                    amountRemaining = link.Amount - link.AmountPaid, status = link.Status, createdAt = "2026-11-02T14:30:00+07:00",
+                    transactions, cancellationReason = (string?)null, canceledAt = (string?)null });
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+
+        private static HttpResponseMessage Signed(object data)
+        {
+            var element = JsonSerializer.SerializeToElement(data);
+            return Reply(new { code = "00", desc = "success", data = element, signature = PayOsGateway.SignData(element, TestChecksum) });
+        }
+
+        private static HttpResponseMessage Reply(object payload) => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+    }
+
+    private static App PayOsApp(FakePayOs payOs, TestClock clock, bool configured = true) => new(builder =>
+    {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["VnPay:TmnCode"] = TestTmnCode,
-            ["VnPay:HashSecret"] = TestHashKey,
-            ["VnPay:ReturnUrl"] = "http://localhost:5174/api/v1/payments/vnpay/return",
-            ["VnPay:FrontendBaseUrl"] = "http://localhost:5174/",
-        })));
+            // Ghi đè cả khi chưa cấu hình để user-secrets trên máy dev không ảnh hưởng test.
+            ["PayOs:ClientId"] = configured ? "test-client" : "",
+            ["PayOs:ApiKey"] = configured ? "test-api" : "",
+            ["PayOs:ChecksumKey"] = configured ? TestChecksum : "",
+            ["PayOs:BaseUrl"] = "https://payos.test",
+            ["PayOs:ReturnUrl"] = "http://localhost:5174/api/v1/payments/payos/return",
+            ["PayOs:FrontendBaseUrl"] = "http://localhost:5174/",
+        }));
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<PaymentClock>(clock);
+            services.AddHttpClient<PayOsGateway>().ConfigurePrimaryHttpMessageHandler(() => payOs);
+        });
+    });
 
-    private static async Task<(HttpClient Customer, HttpClient Agency, BookingDto Booking)> ApprovedBooking(App app)
+    private static CreateBookingRequest TenMillion() => Sample(
+        new ParticipantInput("Adult 1", null, new DateTime(1990, 1, 1), "Nam", null, null),
+        new ParticipantInput("Adult 2", null, new DateTime(1991, 1, 1), "Nữ", null, null),
+        new ParticipantInput("Child 1", null, new DateTime(2018, 1, 1), "Nam", null, null),
+        new ParticipantInput("Child 2", null, new DateTime(2019, 1, 1), "Nữ", null, null));
+
+    private static async Task<(HttpClient Customer, HttpClient Agency, BookingDto Booking)> ApprovedBooking(App app, CreateBookingRequest? request = null)
     {
         var customer = await app.Client("customer1@example.test");
         var agency = await app.Client("agency1@example.test");
-        var created = await customer.PostAsJsonAsync("/api/v1/bookings", Sample());
+        var created = await customer.PostAsJsonAsync("/api/v1/bookings", request ?? Sample());
         created.EnsureSuccessStatusCode();
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         var decision = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
@@ -41,29 +136,96 @@ public sealed partial class BookingFlowTests
         return (customer, agency, (await decision.Content.ReadFromJsonAsync<BookingDto>())!);
     }
 
+    private static long OrderCode(string transactionCode) => long.Parse(transactionCode["PAYOS-".Length..]);
+
+    private static async Task<PaymentSyncResultDto> Sync(HttpClient customer, int bookingId)
+    {
+        var response = await customer.PostAsync($"/api/v1/bookings/{bookingId}/payments/payos/sync", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<PaymentSyncResultDto>())!;
+    }
+
+    // ------------------------------------------------------------- lịch cọc
+
+    [Fact]
+    public async Task Deposit_is_50_percent_due_24_hours_after_approval_and_never_extended()
+    {
+        var clock = new TestClock { Fixed = ApprovedAtUtc };
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var (customer, agency, booking) = await ApprovedBooking(app, TenMillion());
+
+        Assert.Equal(10000000, booking.TotalAmount);
+        var deposit = booking.PaymentSchedule![0];
+        Assert.Equal("deposit", deposit.Stage);
+        Assert.Equal(5000000, deposit.Amount);
+        Assert.Equal(5000000, deposit.Outstanding);
+        Assert.Equal(new DateTime(2026, 11, 3, 7, 30, 0, DateTimeKind.Utc), deposit.DueAt!.Value.ToUniversalTime()); // 14:30 03/11 giờ VN
+        Assert.Equal("Pending", deposit.Status);
+        Assert.Equal(5000000, booking.PaymentSchedule[1].Amount); // phần còn lại = 10tr − 5tr cọc
+
+        // Duyệt lặp, tải lại trang, bấm thanh toán sau 2 giờ: không tạo khoản mới, không đổi hạn.
+        clock.Fixed = ApprovedAtUtc.AddHours(2);
+        var again = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        var reloaded = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal(deposit.DueAt, reloaded.PaymentSchedule![0].DueAt);
+        (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).EnsureSuccessStatusCode();
+        Assert.Equal(deposit.DueAt, (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.PaymentSchedule![0].DueAt);
+
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+        var request = await db.PaymentRequests.AsNoTracking().SingleAsync(r => r.BookingId == booking.Id && r.Stage == "deposit");
+        Assert.Equal(ApprovedAtUtc.AddHours(24), request.DueAt);
+        Assert.Equal(new DateTime(2026, 11, 3), request.DueDate!.Value.Date);
+    }
+
+    [Fact]
+    public async Task Overdue_deposit_cannot_be_paid_and_booking_is_not_cancelled_automatically()
+    {
+        var clock = new TestClock { Fixed = ApprovedAtUtc };
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var (customer, _, booking) = await ApprovedBooking(app);
+
+        clock.Fixed = ApprovedAtUtc.AddHours(24).AddMinutes(1);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "LATE", null))).StatusCode);
+        Assert.Equal(0, payOs.CreateCalls);
+        var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal("Overdue", current.PaymentSchedule![0].Status);
+        Assert.Equal("Confirmed", current.Status);
+    }
+
     [Fact]
     public async Task Deposit_requires_reference_and_exact_outstanding_amount_and_is_paid_once()
     {
         using var app = new App(); await app.Initialize();
         var (customer, _, booking) = await ApprovedBooking(app);
-        Assert.Equal(900000, booking.PaymentSchedule![0].Outstanding); // 30% của 3.000.000
+        Assert.Equal(1500000, booking.PaymentSchedule![0].Outstanding); // 50% của 3.000.000
 
         Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
-            new BookingDepositRequest(900000, null, null))).StatusCode);
+            new BookingDepositRequest(1500000, null, null))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
             new BookingDepositRequest(100000, "PARTIAL", null))).StatusCode);
-        (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(900000, "FULL", null))).EnsureSuccessStatusCode();
+        var paid = (await (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "FULL", null))).Content.ReadFromJsonAsync<BookingDto>())!;
+        // Đủ cọc chưa phải đã thanh toán đủ booking.
+        Assert.Equal("Confirmed", paid.Status);
+        Assert.Equal("PartiallyPaid", paid.PaymentStatus);
+        Assert.Equal(1500000, paid.PaymentSchedule![1].Outstanding);
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
-            new BookingDepositRequest(900000, "AGAIN", null))).StatusCode);
-        // Mã giao dịch đã dùng cho số tiền khác bị từ chối.
+            new BookingDepositRequest(1500000, "AGAIN", null))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
             new BookingDepositRequest(500000, "FULL", null))).StatusCode);
     }
 
     [Fact]
-    public async Task Approval_cancels_legacy_unpaid_request_and_credits_money_already_recorded()
+    public async Task Approval_cancels_legacy_unpaid_request_and_only_the_missing_deposit_is_collected()
     {
-        using var app = new App(); await app.Initialize();
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, new TestClock()); await app.Initialize();
         var customer = await app.Client("customer1@example.test");
         var agency = await app.Client("agency1@example.test");
         var booking = (await (await customer.PostAsJsonAsync("/api/v1/bookings", Sample())).Content.ReadFromJsonAsync<BookingDto>())!;
@@ -81,24 +243,168 @@ public sealed partial class BookingFlowTests
 
         var approved = (await (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision",
             new BookingDecisionRequest("approve", null))).Content.ReadFromJsonAsync<BookingDto>())!;
-        var deposit = approved.PaymentSchedule![0];
-        Assert.Equal(900000, deposit.Amount);
-        Assert.Equal(800000, deposit.Outstanding);
+        Assert.Equal(1500000, approved.PaymentSchedule![0].Amount);
+        Assert.Equal(1400000, approved.PaymentSchedule[0].Outstanding);
 
+        var checkout = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        Assert.Equal(1400000, checkout.Amount);
+        Assert.Equal(1400000, payOs.Links[OrderCode(checkout.TransactionCode)].Amount);
+
+        using var check = app.Services.CreateScope();
+        var requests = await check.ServiceProvider.GetRequiredService<TripOpsDbContext>().PaymentRequests.AsNoTracking()
+            .Where(r => r.BookingId == booking.Id).ToListAsync();
+        Assert.Equal(2, requests.Count); // khoản cũ được giữ lại, không xóa
+        Assert.Equal(PaymentRequestStatus.Cancelled, requests.Single(r => r.Stage == null).Status);
+    }
+
+    // ------------------------------------------------------------- payOS
+
+    [Fact]
+    public async Task PayOs_requires_configuration_owner_and_approval()
+    {
+        var payOs = new FakePayOs();
+        using (var unconfigured = PayOsApp(payOs, new TestClock(), configured: false))
+        {
+            await unconfigured.Initialize();
+            var (customer, _, booking) = await ApprovedBooking(unconfigured);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).StatusCode);
+        }
+
+        using var app = PayOsApp(payOs, new TestClock()); await app.Initialize();
+        var (owner, _, approved) = await ApprovedBooking(app);
+        var other = await app.Client("customer2@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsync($"/api/v1/bookings/{approved.Id}/payments/payos", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsync($"/api/v1/bookings/{approved.Id}/payments/payos/sync", null)).StatusCode);
+        var pending = (await (await owner.PostAsJsonAsync("/api/v1/bookings", Sample())).Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync($"/api/v1/bookings/{pending.Id}/payments/payos", null)).StatusCode);
+        Assert.Equal(0, payOs.CreateCalls);
+    }
+
+    [Fact]
+    public async Task PayOs_link_is_reused_on_repeated_clicks_and_only_verified_payment_is_recorded_once()
+    {
+        var clock = new TestClock { Fixed = ApprovedAtUtc };
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var (customer, _, booking) = await ApprovedBooking(app, TenMillion());
+
+        var first = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        var second = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        Assert.Equal(1, payOs.CreateCalls);
+        Assert.True(second.Reused);
+        Assert.Equal(first.CheckoutUrl, second.CheckoutUrl);
+        Assert.Equal(5000000, first.Amount);
+        var link = payOs.Links[OrderCode(first.TransactionCode)];
+        Assert.Equal($"COC{booking.Id}", link.Description);
+        Assert.Equal(new DateTimeOffset(ApprovedAtUtc.AddMinutes(15)).ToUnixTimeSeconds(), link.ExpiredAt);
+
+        // Chưa trả: tra cứu báo đang chờ, không có tiền, chưa cho hủy.
+        var waiting = await Sync(customer, booking.Id);
+        Assert.Equal("pending", waiting.Outcome);
+        Assert.Equal(0, waiting.Booking.PaidAmount);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
+            new BookingCancellationRequest("Thử hủy"))).StatusCode);
+
+        // URL quay về có status=PAID cũng không phải bằng chứng: chỉ chuyển hướng.
+        using var browser = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var returned = await browser.GetAsync($"/api/v1/payments/payos/return?code=00&status=PAID&cancel=false&orderCode={OrderCode(first.TransactionCode)}");
+        Assert.Equal(HttpStatusCode.Redirect, returned.StatusCode);
+        Assert.Equal($"http://localhost:5174/#/my-bookings/{booking.Id}/payos", returned.Headers.Location!.ToString());
+        Assert.Equal(0, (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.PaidAmount);
+
+        payOs.Pay(OrderCode(first.TransactionCode));
+        var paid = await Sync(customer, booking.Id);
+        Assert.Equal("paid", paid.Outcome);
+        Assert.Equal(5000000, paid.Booking.PaidAmount);
+        Assert.Equal("Paid", paid.Booking.PaymentSchedule![0].Status);
+        Assert.Equal("PartiallyPaid", paid.Booking.PaymentStatus);
+        Assert.Equal("Confirmed", paid.Booking.Status); // đủ cọc ≠ đã thanh toán đủ
+        var transaction = Assert.Single(paid.Booking.PaymentTransactions!);
+        Assert.Equal("Success", transaction.Status);
+        Assert.Equal("PAYOS", transaction.PaymentMethod);
+        Assert.Equal("FT26110200001", transaction.GatewayTransactionNo);
+
+        Assert.Equal(5000000, (await Sync(customer, booking.Id)).Booking.PaidAmount); // tra cứu lặp: không cộng thêm
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
+            new BookingCancellationRequest("Thử hủy"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task PayOs_cancelled_expired_and_mismatched_results_are_kept_without_crediting_money()
+    {
+        var clock = new TestClock { Fixed = ApprovedAtUtc };
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var (customer, _, booking) = await ApprovedBooking(app);
+
+        var first = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        payOs.Links[OrderCode(first.TransactionCode)].Status = "CANCELLED";
+        Assert.Equal("cancelled", (await Sync(customer, booking.Id)).Outcome);
+
+        var second = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        Assert.NotEqual(first.TransactionCode, second.TransactionCode);
+        payOs.Links[OrderCode(second.TransactionCode)].Status = "EXPIRED";
+        Assert.Equal("expired", (await Sync(customer, booking.Id)).Outcome);
+
+        var third = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        payOs.Pay(OrderCode(third.TransactionCode), amountPaid: 1000000); // trả thiếu
+        var review = await Sync(customer, booking.Id);
+        Assert.Equal("review", review.Outcome);
+        Assert.Equal(0, review.Booking.PaidAmount);
+        Assert.Equal(new[] { "Cancelled", "Expired", "NeedsReview" }, review.Booking.PaymentTransactions!.Select(t => t.Status));
+        Assert.Contains("1.000.000", review.Booking.PaymentTransactions![2].ReviewNote);
+        Assert.Equal(3, payOs.CreateCalls);
+    }
+
+    [Fact]
+    public async Task PayOs_webhook_checks_signature_and_shares_idempotent_handling_with_lookup()
+    {
+        var clock = new TestClock { Fixed = ApprovedAtUtc };
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, clock); await app.Initialize();
+        var (customer, _, booking) = await ApprovedBooking(app);
+        var checkout = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        var orderCode = OrderCode(checkout.TransactionCode);
+        using var payOsServer = app.CreateClient();
+
+        var forged = Webhook(orderCode, 1500000, signWith: "wrong-key");
+        Assert.False((await PostWebhook(payOsServer, forged)).Success);
+        Assert.Equal(0, (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.PaidAmount);
+
+        Assert.Equal("ignored", (await PostWebhook(payOsServer, Webhook(123, 1500000))).Result); // dữ liệu thử khi đăng ký webhook
+
+        var genuine = Webhook(orderCode, 1500000);
+        Assert.Equal("paid", (await PostWebhook(payOsServer, genuine)).Result);
+        Assert.Equal("paid", (await PostWebhook(payOsServer, genuine)).Result); // payOS gửi lặp
+        payOs.Pay(orderCode);
+        var synced = await Sync(customer, booking.Id); // tra cứu sau webhook
+        Assert.Equal(1500000, synced.Booking.PaidAmount);
+        Assert.Single(synced.Booking.PaymentTransactions!, t => t.Status == "Success");
+
+        using var scope = app.Services.CreateScope();
+        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<TripOpsDbContext>().PaymentTransactions
+            .CountAsync(t => t.BookingId == booking.Id && t.Status == PaymentTransactionStatus.Success));
+    }
+
+    [Fact]
+    public async Task Legacy_vnpay_pending_is_shown_expired_not_paid_and_does_not_block_cancel()
+    {
+        using var app = PayOsApp(new FakePayOs(), new TestClock()); await app.Initialize();
+        var (customer, _, booking) = await ApprovedBooking(app);
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            var requests = await db.PaymentRequests.AsNoTracking().Where(r => r.BookingId == booking.Id).ToListAsync();
-            Assert.Equal(2, requests.Count); // khoản cũ được giữ lại, không xóa
-            Assert.Equal(PaymentRequestStatus.Cancelled, requests.Single(r => r.Stage == null).Status);
-            Assert.Equal(PaymentRequestStatus.Pending, requests.Single(r => r.Stage == "deposit").Status);
+            db.PaymentTransactions.Add(new PaymentTransaction { BookingId = booking.Id, TransactionCode = "VNP1T2611020000000001",
+                PaymentMethod = "VNPAY", Amount = 900000, Status = PaymentTransactionStatus.Pending, CreatedAt = DateTime.UtcNow.AddMinutes(-2) });
+            await db.SaveChangesAsync();
         }
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
-            new BookingDepositRequest(900000, "TOO-MUCH", null))).StatusCode);
-        var paid = (await (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
-            new BookingDepositRequest(800000, "REST", null))).Content.ReadFromJsonAsync<BookingDto>())!;
-        Assert.Equal(900000, paid.PaidAmount);
-        Assert.Equal("Paid", paid.PaymentSchedule![0].Status);
+        var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal(0, current.PaidAmount);
+        Assert.Equal("Expired", Assert.Single(current.PaymentTransactions!).Status);
+        Assert.Equal("none", (await Sync(customer, booking.Id)).Outcome); // VNPAY cũ không tra cứu qua payOS
+        Assert.Equal(HttpStatusCode.OK, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
+            new BookingCancellationRequest("Đổi kế hoạch"))).StatusCode);
     }
 
     [Fact]
@@ -118,141 +424,28 @@ public sealed partial class BookingFlowTests
         }
 
         var (customer2, _, paidBooking) = await ApprovedBooking(app);
-        (await customer2.PostAsJsonAsync($"/api/v1/bookings/{paidBooking.Id}/deposit", new BookingDepositRequest(900000, "PAID-1", null))).EnsureSuccessStatusCode();
-        var blocked = await customer2.PostAsJsonAsync($"/api/v1/bookings/{paidBooking.Id}/cancel", new BookingCancellationRequest("Muốn hủy"));
-        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        var still = (await customer2.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{paidBooking.Id}"))!;
-        Assert.Equal("Confirmed", still.Status);
+        (await customer2.PostAsJsonAsync($"/api/v1/bookings/{paidBooking.Id}/deposit", new BookingDepositRequest(1500000, "PAID-1", null))).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await customer2.PostAsJsonAsync($"/api/v1/bookings/{paidBooking.Id}/cancel",
+            new BookingCancellationRequest("Muốn hủy"))).StatusCode);
+        Assert.Equal("Confirmed", (await customer2.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{paidBooking.Id}"))!.Status);
     }
 
-    [Fact]
-    public async Task VnPay_is_unavailable_until_sandbox_credentials_are_configured()
+    private static JsonElement Webhook(long orderCode, long amount, string signWith = TestChecksum)
     {
-        // Ghi đè rỗng để user-secrets trên máy dev (nếu đã đặt khóa VNPAY) không ảnh hưởng test.
-        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["VnPay:TmnCode"] = "", ["VnPay:HashSecret"] = "" })));
-        await app.Initialize();
-        var (customer, _, booking) = await ApprovedBooking(app);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/vnpay", null)).StatusCode);
-    }
-
-    [Fact]
-    public async Task VnPay_checkout_url_is_signed_and_ipn_confirms_the_deposit_once()
-    {
-        using var app = VnPayApp(); await app.Initialize();
-        var (customer, _, booking) = await ApprovedBooking(app);
-        var gateway = app.Services.GetRequiredService<VnPayGateway>();
-
-        // Chưa được duyệt thì không tạo được phiên thanh toán.
-        var pending = (await (await customer.PostAsJsonAsync("/api/v1/bookings", Sample())).Content.ReadFromJsonAsync<BookingDto>())!;
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{pending.Id}/payments/vnpay", null)).StatusCode);
-
-        var start = await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/vnpay", null);
-        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
-        var checkout = (await start.Content.ReadFromJsonAsync<VnPayCheckoutDto>())!;
-        Assert.Equal(900000, checkout.Amount);
-        Assert.StartsWith(VnPayOptions.SandboxUrl + "?", checkout.PaymentUrl);
-        var urlQuery = ParseQuery(new Uri(checkout.PaymentUrl).Query);
-        Assert.Equal("90000000", urlQuery["vnp_Amount"]);
-        Assert.Equal(TestTmnCode, urlQuery["vnp_TmnCode"]);
-        Assert.Equal(checkout.TransactionCode, urlQuery["vnp_TxnRef"]);
-        Assert.True(gateway.Verify(urlQuery)); // chữ ký trong URL hợp lệ
-
-        // Giao dịch chờ cổng: chưa tính tiền, chưa cho hủy đơn.
-        var waiting = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(0, waiting.PaidAmount);
-        Assert.Equal("Pending", Assert.Single(waiting.PaymentTransactions!).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
-            new BookingCancellationRequest("Thử hủy"))).StatusCode);
-
-        using var anonymous = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        Assert.Equal("97", (await Ipn(anonymous, Tamper(VnPayResult(gateway, checkout.TransactionCode, 90000000, "00")))).RspCode);
-        Assert.Equal("01", (await Ipn(anonymous, VnPayResult(gateway, "UNKNOWN-REF", 90000000, "00"))).RspCode);
-        Assert.Equal("04", (await Ipn(anonymous, VnPayResult(gateway, checkout.TransactionCode, 1000, "00"))).RspCode);
-
-        var success = VnPayResult(gateway, checkout.TransactionCode, 90000000, "00");
-        Assert.Equal("00", (await Ipn(anonymous, success)).RspCode);
-        Assert.Equal("02", (await Ipn(anonymous, success)).RspCode); // VNPAY gọi lại: không ghi thêm tiền
-
-        var paid = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(900000, paid.PaidAmount);
-        Assert.Equal("PartiallyPaid", paid.PaymentStatus);
-        Assert.Equal("Paid", paid.PaymentSchedule![0].Status);
-        var transaction = Assert.Single(paid.PaymentTransactions!);
-        Assert.Equal("Success", transaction.Status);
-        Assert.Equal("VNPAY", transaction.PaymentMethod);
-        Assert.Equal("14000000", transaction.GatewayTransactionNo);
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/vnpay", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
-            new BookingCancellationRequest("Thử hủy"))).StatusCode);
-    }
-
-    [Fact]
-    public async Task VnPay_return_records_failure_then_success_and_redirects_to_the_booking_page()
-    {
-        using var app = VnPayApp(); await app.Initialize();
-        var (customer, _, booking) = await ApprovedBooking(app);
-        var gateway = app.Services.GetRequiredService<VnPayGateway>();
-        using var browser = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-
-        // Lần 1: khách hủy trên trang VNPAY (mã 24) → giao dịch Failed, không có tiền.
-        var first = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/vnpay", null)).Content.ReadFromJsonAsync<VnPayCheckoutDto>())!;
-        var failed = await browser.GetAsync("/api/v1/payments/vnpay/return?" + Query(VnPayResult(gateway, first.TransactionCode, 90000000, "24")));
-        Assert.Equal(HttpStatusCode.Redirect, failed.StatusCode);
-        Assert.Equal($"http://localhost:5174/#/my-bookings/{booking.Id}?payment=failed", failed.Headers.Location!.ToString());
-
-        // Lần 2: thanh toán thành công; IPN đến sau trang return vẫn không ghi trùng.
-        var second = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/vnpay", null)).Content.ReadFromJsonAsync<VnPayCheckoutDto>())!;
-        Assert.NotEqual(first.TransactionCode, second.TransactionCode);
-        var ok = VnPayResult(gateway, second.TransactionCode, 90000000, "00");
-        var returned = await browser.GetAsync("/api/v1/payments/vnpay/return?" + Query(ok));
-        Assert.Equal($"http://localhost:5174/#/my-bookings/{booking.Id}?payment=success", returned.Headers.Location!.ToString());
-        Assert.Equal("02", (await Ipn(browser, ok)).RspCode);
-
-        var invalid = await browser.GetAsync("/api/v1/payments/vnpay/return?" + Query(Tamper(ok)));
-        Assert.Equal("http://localhost:5174/#/my-bookings?payment=invalid", invalid.Headers.Location!.ToString());
-
-        var reloaded = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(900000, reloaded.PaidAmount);
-        Assert.Equal(new[] { "Failed", "Success" }, reloaded.PaymentTransactions!.Select(t => t.Status));
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-        Assert.Equal(2, await db.PaymentTransactions.CountAsync(t => t.BookingId == booking.Id));
-    }
-
-    // Dữ liệu VNPAY gửi về (đã ký bằng HashSecret test) cho một giao dịch.
-    private static Dictionary<string, string> VnPayResult(VnPayGateway gateway, string txnRef, long amount, string responseCode)
-    {
-        var data = new Dictionary<string, string>
+        var data = JsonSerializer.SerializeToElement(new
         {
-            ["vnp_TmnCode"] = TestTmnCode,
-            ["vnp_Amount"] = amount.ToString(),
-            ["vnp_BankCode"] = "NCB",
-            ["vnp_OrderInfo"] = "Thanh toan coc don test",
-            ["vnp_PayDate"] = "20261102103000",
-            ["vnp_ResponseCode"] = responseCode,
-            ["vnp_TransactionNo"] = "14000000",
-            ["vnp_TransactionStatus"] = responseCode == "00" ? "00" : "02",
-            ["vnp_TxnRef"] = txnRef,
-        };
-        data["vnp_SecureHash"] = gateway.Sign(data);
-        return data;
+            orderCode, amount, description = "COC1", accountNumber = "0000", reference = "FT26110200009",
+            transactionDateTime = "2026-11-02 14:45:00", currency = "VND", paymentLinkId = $"link{orderCode}", code = "00", desc = "success",
+            counterAccountBankId = "", counterAccountBankName = "", counterAccountName = (string?)null, counterAccountNumber = (string?)null,
+            virtualAccountName = "", virtualAccountNumber = ""
+        });
+        return JsonSerializer.SerializeToElement(new { code = "00", desc = "success", success = true, data, signature = PayOsGateway.SignData(data, signWith) });
     }
 
-    private static Dictionary<string, string> Tamper(Dictionary<string, string> data) =>
-        new(data) { ["vnp_Amount"] = "1" };
-
-    private static string Query(Dictionary<string, string> data) =>
-        string.Join("&", data.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
-
-    private static async Task<VnPayIpnResponse> Ipn(HttpClient client, Dictionary<string, string> data)
+    private static async Task<PayOsWebhookAckDto> PostWebhook(HttpClient client, JsonElement body)
     {
-        var response = await client.GetAsync("/api/v1/payments/vnpay/ipn?" + Query(data));
+        var response = await client.PostAsJsonAsync("/api/v1/payments/payos/webhook", body);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<VnPayIpnResponse>())!;
+        return (await response.Content.ReadFromJsonAsync<PayOsWebhookAckDto>())!;
     }
-
-    private static Dictionary<string, string> ParseQuery(string query) => query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
-        .Select(part => part.Split('=', 2))
-        .ToDictionary(kv => WebUtility.UrlDecode(kv[0]), kv => WebUtility.UrlDecode(kv.Length > 1 ? kv[1] : ""));
 }

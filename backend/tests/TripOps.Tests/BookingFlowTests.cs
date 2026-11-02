@@ -194,7 +194,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal(1, created.TourId);
         Assert.Equal(2, created.TotalGuests);
         Assert.Equal(5000000, created.TotalAmount);
-        Assert.Equal(1500000, created.DepositAmount); // 30% cọc (dự kiến, chưa mở thu)
+        Assert.Equal(2500000, created.DepositAmount); // 50% cọc (dự kiến, chưa mở thu)
         Assert.Equal("Pending", created.Status);
         Assert.Equal("Unpaid", created.PaymentStatus);
         Assert.Empty(created.PaymentSchedule!); // Chờ duyệt: chưa có lịch thanh toán
@@ -219,7 +219,7 @@ public sealed partial class BookingFlowTests
 
         // 3. Chưa được duyệt thì chưa cho trả cọc
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit",
-            new BookingDepositRequest(1500000, "VQR000", null))).StatusCode);
+            new BookingDepositRequest(2500000, "VQR000", null))).StatusCode);
 
         // 4. Agency xem danh sách booking và duyệt → mở đợt cọc
         var agencyListRes = await agency.GetFromJsonAsync<BookingPage<BookingListItem>>("/api/v1/agency/bookings");
@@ -234,24 +234,24 @@ public sealed partial class BookingFlowTests
             deposit =>
             {
                 Assert.Equal("deposit", deposit.Stage);
-                Assert.Equal(1500000, deposit.Amount);
-                Assert.Equal(1500000, deposit.Outstanding);
+                Assert.Equal(2500000, deposit.Amount);
+                Assert.Equal(2500000, deposit.Outstanding);
                 Assert.Equal("Pending", deposit.Status);
-                Assert.Equal(DateTime.UtcNow.Date.AddDays(3), deposit.DueDate!.Value.Date);
+                Assert.NotNull(deposit.DueAt); // hạn chính xác = lúc duyệt + 24 giờ (kiểm tra chi tiết ở BookingPaymentTests)
             },
             balance =>
             {
                 Assert.Equal("balance", balance.Stage);
-                Assert.Equal(3500000, balance.Amount);
+                Assert.Equal(2500000, balance.Amount);
                 Assert.Equal("Scheduled", balance.Status);
             });
 
         // 5. Customer đặt cọc (mô phỏng Development) đúng số tiền của đợt cọc
-        var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(1500000, "VQR001", null));
+        var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(2500000, "VQR001", null));
         Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
         var deposited = await depositRes.Content.ReadFromJsonAsync<BookingDto>();
         Assert.NotNull(deposited);
-        Assert.Equal(1500000, deposited.PaidAmount);
+        Assert.Equal(2500000, deposited.PaidAmount);
         Assert.Equal("PartiallyPaid", deposited.PaymentStatus);
         Assert.Equal("Confirmed", deposited.Status);
         Assert.Equal("Paid", deposited.PaymentSchedule![0].Status);
@@ -352,18 +352,18 @@ public sealed partial class BookingFlowTests
         created.EnsureSuccessStatusCode();
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).EnsureSuccessStatusCode();
-        var payment = new BookingDepositRequest(900000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
+        var payment = new BookingDepositRequest(1500000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var response = await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", payment);
             response.EnsureSuccessStatusCode();
-            Assert.Equal(900000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.PaidAmount);
+            Assert.Equal(1500000, (await response.Content.ReadFromJsonAsync<BookingDto>())!.PaidAmount);
         }
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             var transaction = await db.PaymentTransactions.AsNoTracking().SingleAsync(t => t.BookingId == booking.Id);
-            Assert.Equal(900000, transaction.Amount);
+            Assert.Equal(1500000, transaction.Amount);
             Assert.Equal(payment.PaymentProofUrl, transaction.ProofImageUrl);
             Assert.Equal("DEMO", transaction.PaymentMethod);
             Assert.Null(db.Model.FindEntityType(typeof(Booking))!.FindProperty("PaidAmount"));
@@ -372,7 +372,7 @@ public sealed partial class BookingFlowTests
             await db.SaveChangesAsync();
         }
         var reloaded = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(900000, reloaded.PaidAmount);
+        Assert.Equal(1500000, reloaded.PaidAmount);
         Assert.Equal(booking.EndDate, reloaded.EndDate);
         Assert.Equal(1, reloaded.TotalGuests);
     }

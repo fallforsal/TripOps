@@ -7,12 +7,13 @@ using TripOps.Service.Payments;
 namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
-    PaymentScheduleOptions paymentTerms, VnPayGateway vnPay)
+    PayOsGateway payOs, PaymentClock clock)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingRepository Repo => repository;
-    private PaymentScheduleOptions PaymentTerms => paymentTerms;
-    private VnPayGateway VnPay => vnPay;
+    private PayOsGateway PayOs => payOs;
+    /// <summary>Giờ hiện tại (UTC) cho nghiệp vụ thanh toán — test thay được để cố định thời điểm duyệt/quá hạn.</summary>
+    private DateTime UtcNow => clock.UtcNow;
 
     private static decimal Money(decimal value) => decimal.Round(value, 0, MidpointRounding.AwayFromZero);
 
@@ -223,14 +224,21 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (booking.Tour?.AgencyId != agencyId)
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền duyệt đơn này.");
 
+        // Duyệt lặp (bấm 2 lần, gửi lại request): trả kết quả hiện tại, không tạo khoản cọc mới, không gia hạn.
+        if (request.Decision == "approve" && booking.Status == BookingStatus.Confirmed && ActiveRequest(booking, DepositStage) is not null)
+        {
+            await transaction.CommitAsync(ct);
+            return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        }
+
         if (booking.Status is not (BookingStatus.Pending or BookingStatus.Deposited))
             throw new BookingException(422, $"Không thể duyệt đơn đặt đang ở trạng thái {booking.Status}.");
 
         if (request.Decision == "approve")
         {
             booking.Status = BookingStatus.Confirmed;
-            // Mở đợt cọc: hạn = ngày duyệt + N ngày (không quá ngày khởi hành).
-            EnsureDepositRequest(booking, agencyId, DateTime.UtcNow);
+            // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ (backend quyết định).
+            EnsureDepositRequest(booking, agencyId, UtcNow);
         }
         else if (request.Decision == "reject")
         {
@@ -260,8 +268,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
         // Đơn đã có tiền: không hủy thẳng. Hủy kèm hoàn tiền phải do Admin xem xét (quy trình hoàn tiền riêng).
         if (PaidAmount(booking) > 0)
             throw new BookingException(409, "Đơn đã có khoản thanh toán nên không thể tự hủy. Vui lòng gửi yêu cầu hoàn tiền/hủy để Admin xem xét.");
-        if (HasOpenGatewayPayment(booking, DateTime.UtcNow))
-            throw new BookingException(409, "Đơn đang có giao dịch VNPAY chưa có kết quả. Vui lòng chờ vài phút rồi thử lại.");
+        if (HasOpenGatewayPayment(booking, UtcNow))
+            throw new BookingException(409, "Đơn đang có link thanh toán payOS còn hiệu lực. Vui lòng chờ link hết hạn hoặc bấm \"Kiểm tra thanh toán\" trước khi hủy.");
 
         CloseOpenRequests(booking);
 

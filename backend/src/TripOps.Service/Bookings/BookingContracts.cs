@@ -84,25 +84,31 @@ public sealed record BookingDto(
     IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null);
 
 /// <summary>
-/// Một đợt trong lịch thanh toán. Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).
-/// Status: Pending | Overdue | Paid | Scheduled (chưa mở thu). Outstanding = số tiền còn phải trả của đợt.
+/// Một đợt trong lịch thanh toán (backend tính, frontend chỉ hiển thị). Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).
+/// Status: Pending | Overdue | Paid | Scheduled (chưa mở thu) | NotIssued (đơn duyệt trước khi có lịch, chưa phát hành đợt cọc).
+/// DueAt: hạn chính xác (UTC, hiển thị theo giờ Việt Nam). DueAfterDeparture: hạn cọc rơi sau thời điểm khởi hành.
 /// </summary>
 public sealed record PaymentScheduleItemDto(
     int? Id, string Stage, string Description, decimal Amount, decimal Outstanding,
-    DateTime? DueDate, string Status, DateTime? PaidAt);
+    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, bool DueAfterDeparture);
 
-/// <summary>Giao dịch tiền. Method: VNPAY (sandbox) | DEMO (mô phỏng Development). Status: Pending | Success | Failed | Expired | Refunded.</summary>
+/// <summary>
+/// Giao dịch tiền. Method: PAYOS | DEMO (mô phỏng Development) | VNPAY (lịch sử cũ).
+/// Status: Pending | Success | Failed | Cancelled | Expired | NeedsReview | Refunded.
+/// </summary>
 public sealed record PaymentTransactionDto(
     int Id, int? PaymentRequestId, string TransactionCode, string PaymentMethod, decimal Amount,
-    string Status, DateTime? PaidAt, DateTime? CreatedAt, string? GatewayTransactionNo);
+    string Status, DateTime? PaidAt, DateTime? CreatedAt, string? GatewayTransactionNo,
+    DateTime? ExpiresAt = null, string? ReviewNote = null);
 
-/// <summary>Kết quả tạo phiên thanh toán VNPAY: FE chuyển trình duyệt tới PaymentUrl.</summary>
-public sealed record VnPayCheckoutDto(string PaymentUrl, string TransactionCode, decimal Amount, DateTime ExpiresAt);
+/// <summary>Phiên thanh toán payOS: FE chuyển trình duyệt tới CheckoutUrl. Reused = dùng lại link còn hạn.</summary>
+public sealed record PayOsCheckoutDto(string CheckoutUrl, string TransactionCode, decimal Amount, DateTime ExpiresAt, bool Reused);
 
-/// <summary>Phản hồi IPN theo đặc tả VNPAY.</summary>
-public sealed record VnPayIpnResponse(
-    [property: System.Text.Json.Serialization.JsonPropertyName("RspCode")] string RspCode,
-    [property: System.Text.Json.Serialization.JsonPropertyName("Message")] string Message);
+/// <summary>Kết quả tra cứu payOS. Outcome: paid | pending | cancelled | expired | review | failed | none.</summary>
+public sealed record PaymentSyncResultDto(string Outcome, string Message, BookingDto Booking);
+
+/// <summary>Phản hồi cho payOS khi nhận webhook (payOS chỉ cần mã HTTP 2xx).</summary>
+public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference);

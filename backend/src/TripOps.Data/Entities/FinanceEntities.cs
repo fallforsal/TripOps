@@ -8,6 +8,8 @@ public string? Stage { get; set; }
 public string Description { get; set; } = string.Empty;
 public decimal Amount { get; set; }
 public DateTime? DueDate { get; set; }
+/// <summary>Hạn thanh toán chính xác (UTC). NULL với khoản cũ chỉ có ngày (due_date).</summary>
+public DateTime? DueAt { get; set; }
 public PaymentRequestStatus? Status { get; set; } = PaymentRequestStatus.Pending;
 public string? CreatedBy { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
@@ -30,6 +32,14 @@ public DateTime? PaidAt { get; set; } = DateTime.UtcNow;
 public string? GatewayTransactionNo { get; set; }
 /// <summary>Mã kết quả cổng trả về (VNPAY: vnp_ResponseCode).</summary>
 public string? GatewayResponseCode { get; set; }
+/// <summary>Mã link thanh toán phía cổng (payOS: paymentLinkId).</summary>
+public string? GatewayLinkId { get; set; }
+/// <summary>Trang thanh toán của cổng, dùng lại khi khách bấm lặp trong lúc link còn hạn.</summary>
+public string? CheckoutUrl { get; set; }
+/// <summary>Hạn của link thanh toán (UTC).</summary>
+public DateTime? ExpiresAt { get; set; }
+/// <summary>Ghi chú đối soát: tiền đến muộn, trả dư, số tiền không khớp...</summary>
+public string? ReviewNote { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public virtual Booking Booking { get; set; } = null!;
 public virtual PaymentRequest? PaymentRequest { get; set; }

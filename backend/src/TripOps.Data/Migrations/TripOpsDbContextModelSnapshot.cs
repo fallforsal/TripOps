@@ -1803,6 +1803,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("description");
 
+                    b.Property<DateTime?>("DueAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("due_at");
+
                     b.Property<DateTime?>("DueDate")
                         .HasColumnType("date")
                         .HasColumnName("due_date");
@@ -1858,11 +1862,25 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
 
+                    b.Property<string>("CheckoutUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("checkout_url");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("GatewayLinkId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("gateway_link_id");
 
                     b.Property<string>("GatewayResponseCode")
                         .HasMaxLength(10)
@@ -1898,6 +1916,11 @@ namespace TripOps.Data.Migrations
                     b.Property<string>("ProofImageUrl")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("payment_proof_url");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("review_note");
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()

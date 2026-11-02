@@ -382,12 +382,35 @@ export interface CustomMealChange {
 export interface PaymentRequest {
   id: string;
   bookingId: string;
+  /** Số tiền còn phải trả của đợt (đợt đã trả: tổng tiền đợt). */
   amount: number;
   description?: string;
+  /** "" khi đợt chưa có hạn (ví dụ phần còn lại thu sau tour). */
   dueDate: string;
-  status: "pending" | "paid" | "overdue" | "cancelled";
+  status: "pending" | "paid" | "overdue" | "cancelled" | "scheduled" | "not_issued";
   createdAt: string;
   paidAt?: string;
+  /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại. */
+  stage?: "deposit" | "balance";
+  /** Tổng tiền của đợt. */
+  totalAmount?: number;
+  /** Hạn chính xác (ISO UTC) do backend tính. */
+  dueAt?: string;
+  /** Hạn cọc rơi sau thời điểm khởi hành. */
+  dueAfterDeparture?: boolean;
+}
+
+export interface PaymentTransactionView {
+  id: string;
+  code: string;
+  method: string;
+  amount: number;
+  status: "pending" | "success" | "failed" | "cancelled" | "expired" | "needsreview" | "refunded";
+  paidAt?: string;
+  createdAt?: string;
+  gatewayTransactionNo?: string;
+  expiresAt?: string;
+  reviewNote?: string;
 }
 
 export interface BookingPriceAdjustment {
@@ -608,6 +631,7 @@ export interface Booking {
   depositPaid?: boolean;
   remainingAmount?: number;
   paymentRequests?: PaymentRequest[];
+  paymentTransactions?: PaymentTransactionView[];
   // Price adjustments by company
   originalTotalPrice?: number;
   priceAdjustmentNote?: string;

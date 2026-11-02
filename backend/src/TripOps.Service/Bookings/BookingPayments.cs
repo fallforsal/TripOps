@@ -5,109 +5,263 @@ using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
 
-// Lịch thanh toán đợt cọc + giao dịch cọc.
-// Quy tắc: thu 2 đợt — cọc sau khi Agency duyệt đơn, phần còn lại sau khi tour kết thúc.
-// Cổng thật: VNPAY môi trường SANDBOX (không trừ tiền thật). Thanh toán "DEMO" chỉ còn để thử nhanh trong Development.
+// Thanh toán hai đợt:
+//  - Đợt 1 – đặt cọc: tạo khi Agency duyệt, 50% tổng giá trị, hạn = lúc duyệt + 24 giờ (PaymentRules).
+//  - Đợt 2 – phần còn lại: thu sau khi tour kết thúc (= tổng nghĩa vụ − tiền đã ghi nhận − phần cọc còn thiếu).
+// Cổng thanh toán: payOS (không có sandbox — tiền thật). "DEMO" chỉ còn để thử nhanh trong Development.
+// Giao dịch VNPAY cũ được giữ làm lịch sử, không tạo mới.
 public sealed partial class BookingService
 {
     private const string DepositStage = "deposit";
     private const string BalanceStage = "balance";
-    private const string VnPayMethod = "VNPAY";
+    private const string PayOsMethod = "PAYOS";
+    private const string LegacyVnPayMethod = "VNPAY";
+    private const string PayOsCodePrefix = "PAYOS-";
     private static readonly CultureInfo Vietnamese = new("vi-VN");
 
-    // ---------------------------------------------------------------- VNPAY
+    // ---------------------------------------------------------------- payOS
 
     /// <summary>
-    /// Tạo một lần thanh toán cọc qua VNPAY: ghi giao dịch Pending (đúng số tiền còn phải trả của đợt cọc)
-    /// rồi trả URL đã ký để FE chuyển trình duyệt sang VNPAY. Tiền chỉ được ghi nhận khi VNPAY báo kết quả (IPN/return).
+    /// Tạo (hoặc dùng lại) link payOS cho phần cọc còn thiếu. Số tiền do backend tính từ đợt cọc, không nhận từ frontend.
+    /// Bấm lặp khi link cũ còn hạn và đúng số tiền: trả lại link cũ, không tạo link mới.
     /// </summary>
-    public async Task<VnPayCheckoutDto> StartVnPayDeposit(string customerId, int id, string? ipAddress, CancellationToken ct)
+    public async Task<PayOsCheckoutDto> StartPayOsDeposit(string customerId, int id, CancellationToken ct)
     {
-        if (!VnPay.Options.IsConfigured)
-            throw new BookingException(503, "Cổng VNPAY sandbox chưa được cấu hình (thiếu VnPay:TmnCode/HashSecret/ReturnUrl).");
+        if (!PayOs.Options.IsConfigured)
+            throw new BookingException(503, "Cổng payOS chưa được cấu hình (thiếu PayOs:ClientId/ApiKey/ChecksumKey hoặc ReturnUrl).");
 
         await using var transaction = await Repo.BeginPaymentChange(id, ct);
+        Repo.ResetTracking();
         var booking = await Repo.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.CustomerId != customerId)
             throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
-        var now = DateTime.UtcNow;
-        var deposit = PayableDeposit(booking, customerId, now);
+
+        var now = UtcNow;
+        var deposit = PayableDeposit(booking, now);
         var amount = Outstanding(booking, deposit);
 
-        var code = $"VNP{booking.Id}T{now:yyMMddHHmmssfff}{Random.Shared.Next(10, 99)}";
-        booking.PaymentTransactions.Add(new PaymentTransaction
+        var reusable = booking.PaymentTransactions
+            .Where(t => t.PaymentMethod == PayOsMethod && t.Status == PaymentTransactionStatus.Pending
+                && t.CheckoutUrl != null && t.ExpiresAt is { } expires && expires > now.AddMinutes(1)
+                && t.Amount == amount && LinkedTo(t, deposit))
+            .OrderByDescending(t => t.CreatedAt).FirstOrDefault();
+        if (reusable is not null)
         {
-            TransactionCode = code,
+            await transaction.CommitAsync(ct);
+            return new PayOsCheckoutDto(reusable.CheckoutUrl!, reusable.TransactionCode, reusable.Amount, Utc(reusable.ExpiresAt)!.Value, true);
+        }
+
+        // Link không sống lâu hơn hạn cọc: hết hạn cọc thì không thể trả qua link cũ.
+        var dueAt = DepositDeadline(deposit) ?? now.AddMinutes(PayOs.Options.LinkMinutes);
+        var linkExpires = new[] { now.AddMinutes(PayOs.Options.LinkMinutes), dueAt }.Min();
+        if (linkExpires <= now.AddMinutes(1))
+            throw new BookingException(409, "Đợt cọc sắp hết hạn, không đủ thời gian tạo phiên thanh toán mới.");
+
+        var orderCode = NewOrderCode(now);
+        var payment = new PaymentTransaction
+        {
+            TransactionCode = PayOsCodePrefix + orderCode.ToString(CultureInfo.InvariantCulture),
             Amount = amount,
-            PaymentMethod = VnPayMethod,
+            PaymentMethod = PayOsMethod,
             Status = PaymentTransactionStatus.Pending,
             PayerName = booking.ContactName,
             CreatedAt = now,
+            ExpiresAt = linkExpires,
             PaymentRequest = deposit
-        });
+        };
+        booking.PaymentTransactions.Add(payment);
+        await Repo.SaveChangesAsync(ct);
+
+        PayOsCreatedLink link;
+        try
+        {
+            link = await PayOs.CreateLink(orderCode, (long)amount, $"COC{booking.Id}",
+                new DateTimeOffset(DateTime.SpecifyKind(linkExpires, DateTimeKind.Utc)), ct);
+        }
+        catch (PayOsException exception)
+        {
+            payment.Status = PaymentTransactionStatus.Failed;
+            payment.GatewayResponseCode = "CREATE_ERR";
+            await Repo.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            throw new BookingException(502, exception.Message);
+        }
+
+        payment.CheckoutUrl = link.CheckoutUrl;
+        payment.GatewayLinkId = link.PaymentLinkId;
+        payment.GatewayResponseCode = "PENDING";
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-
-        var url = VnPay.CreatePaymentUrl(code, amount, $"Thanh toan coc don {booking.BookingCode}", ipAddress, now);
-        return new VnPayCheckoutDto(url, code, amount, DateTime.SpecifyKind(now.AddMinutes(VnPay.Options.ExpireMinutes), DateTimeKind.Utc));
+        return new PayOsCheckoutDto(link.CheckoutUrl, payment.TransactionCode, amount, DateTime.SpecifyKind(linkExpires, DateTimeKind.Utc), false);
     }
 
     /// <summary>
-    /// Xử lý dữ liệu VNPAY gửi về (IPN server-to-server hoặc trình duyệt quay về return URL).
-    /// Idempotent: chỉ giao dịch đang Pending mới được cập nhật, gọi lại nhiều lần không ghi thêm tiền.
-    /// Mã phản hồi theo đặc tả VNPAY: 00 thành công, 01 không thấy đơn, 02 đã xác nhận, 04 sai số tiền, 97 sai chữ ký, 99 lỗi khác.
+    /// Khách quay về từ payOS (hoặc bấm "Kiểm tra thanh toán"): backend tra cứu trực tiếp payOS các link còn chờ
+    /// của đơn rồi áp kết quả. Không dùng tham số trên URL quay về làm bằng chứng.
     /// </summary>
-    public async Task<VnPayConfirmation> ConfirmVnPay(IReadOnlyCollection<KeyValuePair<string, string>> query, CancellationToken ct)
+    public async Task<PaymentSyncResultDto> SyncPayOs(string customerId, int id, CancellationToken ct)
     {
-        if (!VnPay.Verify(query)) return new("97", "Invalid signature", null, null);
-        string? Value(string key) => query.FirstOrDefault(p => p.Key == key).Value;
+        var owner = await Repo.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        if (owner.CustomerId != customerId)
+            throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
+        var codes = owner.PaymentTransactions
+            .Where(t => t.PaymentMethod == PayOsMethod && t.Status == PaymentTransactionStatus.Pending)
+            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
+            .Take(3).Select(t => t.TransactionCode).ToList();
+        Repo.ResetTracking();
 
-        var reference = Value("vnp_TxnRef");
-        if (string.IsNullOrWhiteSpace(reference)) return new("01", "Order not found", null, null);
-        var known = await Repo.FindTransaction(reference, ct);
-        if (known is null || known.PaymentMethod != VnPayMethod) return new("01", "Order not found", null, null);
+        string? outcome = null;
+        string? error = null;
+        foreach (var code in codes)
+        {
+            if (!TryOrderCode(code, out var orderCode)) continue;
+            try
+            {
+                var info = await PayOs.GetLink(orderCode, ct);
+                if (info.OrderCode != 0 && info.OrderCode != orderCode)
+                {
+                    error = "payOS trả về mã đơn không khớp.";
+                    continue;
+                }
+                var applied = await ApplyGatewayResult(code, info.Status, info.AmountPaid, info.Reference, "lookup", ct);
+                outcome = MoreImportant(outcome, applied);
+            }
+            catch (PayOsException exception) { error = exception.Message; }
+        }
+
+        Repo.ResetTracking();
+        var booking = await Repo.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
+        var latest = booking.PaymentTransactions.Where(t => t.PaymentMethod == PayOsMethod)
+            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id).FirstOrDefault();
+        outcome ??= latest is null ? "none" : OutcomeOf(latest);
+        var message = error is not null && outcome is "pending" or "none"
+            ? error
+            : outcome switch
+            {
+                "paid" => "payOS đã xác nhận nhận tiền cọc.",
+                "pending" => "payOS chưa ghi nhận thanh toán. Nếu bạn vừa chuyển khoản, vui lòng chờ ít phút rồi kiểm tra lại.",
+                "cancelled" => "Giao dịch đã bị hủy trên payOS. Bạn có thể thanh toán lại khi đợt cọc còn hạn.",
+                "expired" => "Link thanh toán đã hết hạn mà chưa nhận tiền.",
+                "review" => "payOS báo có tiền nhưng số tiền không khớp. Giao dịch đã được lưu để đối soát.",
+                "failed" => "Giao dịch không thành công.",
+                _ => "Chưa có giao dịch payOS nào cho đơn này."
+            };
+        return new PaymentSyncResultDto(outcome, message, ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name));
+    }
+
+    /// <summary>Webhook payOS (đã kiểm tra chữ ký ở gateway). Dùng chung xử lý với tra cứu nên không cộng tiền hai lần.</summary>
+    public async Task<string> ApplyPayOsWebhook(PayOsWebhookData data, CancellationToken ct)
+    {
+        var code = PayOsCodePrefix + data.OrderCode.ToString(CultureInfo.InvariantCulture);
+        if (await Repo.FindTransaction(code, ct) is null) return "ignored"; // ví dụ: dữ liệu thử khi đăng ký webhook
+        // Webhook chỉ gửi khi có giao dịch tiền vào; code "00" = thành công.
+        var status = data.Code == "00" ? "PAID" : "FAILED";
+        return await ApplyGatewayResult(code, status, data.Amount, data.Reference, "webhook", ct);
+    }
+
+    /// <summary>Tìm đơn của một mã đơn payOS (chỉ để chuyển hướng trình duyệt về đúng trang, không đổi dữ liệu).</summary>
+    public async Task<int?> BookingIdForPayOsOrder(long orderCode, CancellationToken ct) =>
+        (await Repo.FindTransaction(PayOsCodePrefix + orderCode.ToString(CultureInfo.InvariantCulture), ct))?.BookingId;
+
+    /// <summary>
+    /// Áp kết quả cổng cho một giao dịch, trong giao dịch DB đã khóa đơn. Idempotent:
+    /// giao dịch đã Success/NeedsReview không bị đổi; gọi lặp (webhook + tra cứu) không cộng tiền thêm.
+    /// </summary>
+    private async Task<string> ApplyGatewayResult(string transactionCode, string gatewayStatus, long amountPaid,
+        string? reference, string source, CancellationToken ct)
+    {
+        var known = await Repo.FindTransaction(transactionCode, ct);
+        if (known is null) return "none";
 
         await using var transaction = await Repo.BeginPaymentChange(known.BookingId, ct);
+        Repo.ResetTracking();
         var booking = await Repo.Find(known.BookingId, ct);
-        var payment = booking?.PaymentTransactions.SingleOrDefault(t => t.TransactionCode == reference);
-        if (booking is null || payment is null) return new("01", "Order not found", null, null);
+        var payment = booking?.PaymentTransactions.SingleOrDefault(t => t.TransactionCode == transactionCode);
+        if (booking is null || payment is null) return "none";
+        if (payment.Status is PaymentTransactionStatus.Success or PaymentTransactionStatus.NeedsReview or PaymentTransactionStatus.Refunded)
+            return OutcomeOf(payment);
 
-        if (!long.TryParse(Value("vnp_Amount"), NumberStyles.None, CultureInfo.InvariantCulture, out var amount)
-            || amount != (long)decimal.Round(payment.Amount * 100m, 0, MidpointRounding.AwayFromZero))
-            return new("04", "Invalid amount", booking.Id, null);
-
-        if (payment.Status != PaymentTransactionStatus.Pending)
-            return new("02", "Order already confirmed", booking.Id, Outcome(payment));
-
-        var now = DateTime.UtcNow;
-        var success = Value("vnp_ResponseCode") == "00" && Value("vnp_TransactionStatus") == "00";
-        payment.GatewayTransactionNo = Value("vnp_TransactionNo");
-        payment.GatewayResponseCode = Value("vnp_ResponseCode");
-        if (success)
+        var now = UtcNow;
+        var expected = (long)decimal.Round(payment.Amount, 0, MidpointRounding.AwayFromZero);
+        payment.GatewayResponseCode = gatewayStatus.Length > 10 ? gatewayStatus[..10] : gatewayStatus;
+        switch (gatewayStatus)
         {
-            // Tiền đã thực sự bị trừ ở VNPAY nên luôn ghi nhận, kể cả khi đợt cọc đã đủ từ lần khác (Admin xử lý hoàn phần dư).
-            payment.Status = PaymentTransactionStatus.Success;
-            payment.PaidAt = now;
-            ApplyPayment(booking, payment.PaymentRequest, now);
-        }
-        else
-        {
-            payment.Status = PaymentTransactionStatus.Failed;
+            case "PAID" when amountPaid == expected:
+            {
+                var notes = new List<string>();
+                if (payment.Status != PaymentTransactionStatus.Pending)
+                    notes.Add($"Tiền về sau khi giao dịch đã ghi {payment.Status} ({source}).");
+                var request = payment.PaymentRequest;
+                if (request is not null && Outstanding(booking, request) == 0)
+                    notes.Add("Trả dư: đợt thu đã đủ trước khi giao dịch này về.");
+                if (request is not null && DepositDeadline(request) is { } due && now > due)
+                    notes.Add("Tiền về sau hạn của đợt thu.");
+                payment.Status = PaymentTransactionStatus.Success;
+                payment.PaidAt = now;
+                payment.GatewayTransactionNo = reference;
+                payment.ReviewNote = notes.Count == 0 ? null : string.Join(" ", notes);
+                ApplyPayment(booking, request, now);
+                break;
+            }
+            case "PAID":
+            case "UNDERPAID":
+                // Có tiền nhưng không khớp: không cộng vào đơn, lưu để Admin đối soát (không tự hoàn).
+                payment.Status = PaymentTransactionStatus.NeedsReview;
+                payment.GatewayTransactionNo = reference;
+                payment.ReviewNote = $"payOS báo {gatewayStatus}, đã nhận {amountPaid.ToString("N0", Vietnamese)}đ / yêu cầu {expected.ToString("N0", Vietnamese)}đ ({source}).";
+                break;
+            case "CANCELLED" when payment.Status == PaymentTransactionStatus.Pending:
+                payment.Status = PaymentTransactionStatus.Cancelled;
+                break;
+            case "EXPIRED" when payment.Status == PaymentTransactionStatus.Pending:
+                payment.Status = PaymentTransactionStatus.Expired;
+                break;
+            case "FAILED" when payment.Status == PaymentTransactionStatus.Pending:
+                payment.Status = PaymentTransactionStatus.Failed;
+                break;
+            default:
+                // PENDING / PROCESSING: chưa có kết quả, giữ nguyên.
+                break;
         }
 
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new("00", "Confirm Success", booking.Id, Outcome(payment));
+        return OutcomeOf(payment);
     }
 
-    private static string Outcome(PaymentTransaction payment) =>
-        payment.Status == PaymentTransactionStatus.Success ? "success" : "failed";
+    private static string OutcomeOf(PaymentTransaction payment) => payment.Status switch
+    {
+        PaymentTransactionStatus.Success => "paid",
+        PaymentTransactionStatus.Cancelled => "cancelled",
+        PaymentTransactionStatus.Expired => "expired",
+        PaymentTransactionStatus.NeedsReview => "review",
+        PaymentTransactionStatus.Failed => "failed",
+        _ => "pending"
+    };
+
+    private static string MoreImportant(string? current, string next)
+    {
+        static int Rank(string? o) => o switch { "paid" => 6, "review" => 5, "pending" => 4, "cancelled" => 3, "expired" => 2, "failed" => 1, _ => 0 };
+        return Rank(next) > Rank(current) ? next : current!;
+    }
+
+    /// <summary>Mã đơn payOS: số nguyên dương, duy nhất (unique transaction_code bảo đảm), nhỏ hơn 2^53.</summary>
+    private static long NewOrderCode(DateTime now) =>
+        long.Parse(now.ToString("yyMMddHHmmss", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture) * 1000
+        + Random.Shared.Next(0, 1000);
+
+    private static bool TryOrderCode(string transactionCode, out long orderCode)
+    {
+        orderCode = 0;
+        return transactionCode.StartsWith(PayOsCodePrefix, StringComparison.Ordinal)
+            && long.TryParse(transactionCode.AsSpan(PayOsCodePrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out orderCode);
+    }
 
     // ---------------------------------------------------- DEMO (Development)
 
     /// <summary>
-    /// Thanh toán cọc mô phỏng (chỉ Development, không qua ngân hàng). Cùng quy tắc với VNPAY:
-    /// đơn phải được duyệt, đúng số tiền còn phải trả của đợt cọc, mã giao dịch không dùng lại.
+    /// Thanh toán cọc mô phỏng (chỉ Development, không qua ngân hàng). Cùng quy tắc với payOS:
+    /// đơn đã duyệt, đợt cọc còn hạn, đúng số tiền còn thiếu, mã giao dịch không dùng lại.
     /// </summary>
     public async Task<BookingDto> Deposit(string customerId, int id, BookingDepositRequest request, CancellationToken ct)
     {
@@ -116,6 +270,7 @@ public sealed partial class BookingService
             throw new BookingException(400, "Thiếu mã giao dịch. Vui lòng tải lại trang và thử lại.");
 
         await using var transaction = await Repo.BeginPaymentChange(id, ct);
+        Repo.ResetTracking();
         var booking = await Repo.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.CustomerId != customerId)
             throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
@@ -130,8 +285,8 @@ public sealed partial class BookingService
             return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
         }
 
-        var now = DateTime.UtcNow;
-        var deposit = PayableDeposit(booking, customerId, now);
+        var now = UtcNow;
+        var deposit = PayableDeposit(booking, now);
         var outstanding = Outstanding(booking, deposit);
         if (Money(request.Amount) != outstanding)
             throw new BookingException(422, $"Số tiền cọc phải đúng {outstanding.ToString("N0", Vietnamese)}đ.");
@@ -157,33 +312,34 @@ public sealed partial class BookingService
 
     // --------------------------------------------------------- Lịch thanh toán
 
-    /// <summary>Kiểm tra đơn có đang được phép trả cọc không và trả về đợt cọc (tạo nếu đơn duyệt trước khi có lịch).</summary>
-    private PaymentRequest PayableDeposit(Booking booking, string actorId, DateTime now)
+    /// <summary>Kiểm tra đơn có đang được phép trả cọc không, trả về đợt cọc đang hiệu lực.</summary>
+    private static PaymentRequest PayableDeposit(Booking booking, DateTime now)
     {
         if (booking.Status == BookingStatus.Pending)
             throw new BookingException(409, "Đơn đang chờ công ty lữ hành duyệt. Bạn chỉ thanh toán cọc sau khi đơn được duyệt.");
         if (booking.Status != BookingStatus.Confirmed)
             throw new BookingException(422, "Đơn ở trạng thái này không thể thanh toán cọc.");
-        var deposit = EnsureDepositRequest(booking, actorId, now);
+        // Không tự tạo đợt cọc lúc khách bấm thanh toán: hạn phải tính từ lúc Agency duyệt.
+        var deposit = ActiveRequest(booking, DepositStage)
+            ?? throw new BookingException(409, "Đơn được duyệt trước khi áp dụng lịch thanh toán nên chưa có đợt cọc. Vui lòng liên hệ công ty lữ hành để được xử lý.");
         if (deposit.Status == PaymentRequestStatus.Paid || Outstanding(booking, deposit) == 0)
             throw new BookingException(409, "Đợt cọc của đơn này đã được thanh toán.");
+        if (DepositDeadline(deposit) is { } due && now > due)
+            throw new BookingException(409, $"Đợt cọc đã quá hạn thanh toán ({VietnamText(due)}). Không thể tạo thanh toán mới cho khoản thu đã hết hạn.");
         return deposit;
     }
 
     /// <summary>
-    /// Bảo đảm đơn có đúng một đợt cọc đang hiệu lực. Gọi trong giao dịch đã khóa đơn.
-    /// Khoản "Đặt cọc 30%" cũ (tạo lúc đặt tour) chưa trả được chuyển sang Cancelled — không xóa;
-    /// tiền DEMO đã ghi nhận trước đó được tính vào đợt cọc mới.
+    /// Tạo Đợt 1 – đặt cọc khi Agency duyệt (gọi trong giao dịch đã khóa đơn). Đã có đợt cọc hiệu lực thì trả lại nguyên trạng:
+    /// không đổi số tiền, không gia hạn. Khoản "Đặt cọc 30%" kiểu cũ (stage NULL) chưa trả chuyển sang Cancelled — không xóa;
+    /// tiền đã ghi nhận trước đó được trừ vào đợt cọc (chỉ thu phần còn thiếu).
     /// </summary>
     private PaymentRequest EnsureDepositRequest(Booking booking, string actorId, DateTime approvedAt)
     {
         var active = ActiveRequest(booking, DepositStage);
         if (active is not null) return active;
 
-        var dueDate = approvedAt.Date.AddDays(PaymentTerms.DepositDueDays);
-        if (dueDate > booking.StartDate.Date && booking.StartDate.Date >= approvedAt.Date)
-            dueDate = booking.StartDate.Date;
-
+        var dueAt = approvedAt + PaymentRules.DepositWindow;
         foreach (var legacy in booking.PaymentRequests.Where(p => p.Stage == null
                      && p.Status is null or PaymentRequestStatus.Pending or PaymentRequestStatus.Overdue))
             legacy.Status = PaymentRequestStatus.Cancelled;
@@ -191,9 +347,10 @@ public sealed partial class BookingService
         var request = new PaymentRequest
         {
             Stage = DepositStage,
-            Description = $"Đặt cọc {PaymentTerms.DepositPercent.ToString("0.##", Vietnamese)}%",
+            Description = $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
             Amount = PlannedDeposit(booking),
-            DueDate = dueDate,
+            DueAt = dueAt,
+            DueDate = PaymentRules.VietnamDate(dueAt),
             Status = PaymentRequestStatus.Pending,
             CreatedBy = actorId,
             CreatedAt = approvedAt
@@ -207,6 +364,16 @@ public sealed partial class BookingService
         return request;
     }
 
+    /// <summary>
+    /// Hạn của một đợt thu (UTC). Khoản mới có due_at chính xác. Khoản cũ chỉ có due_date: hết ngày đó theo giờ Việt Nam.
+    /// </summary>
+    private static DateTime? DepositDeadline(PaymentRequest request) =>
+        request.DueAt is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc)
+        : request.DueDate is { } date ? PaymentRules.VietnamMidnightUtc(date.AddDays(1)) : null;
+
+    private static string VietnamText(DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc).Add(PaymentRules.VietnamOffset).ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture);
+
     /// <summary>Cập nhật đợt thu và trạng thái thanh toán của đơn sau khi có tiền vào.</summary>
     private static void ApplyPayment(Booking booking, PaymentRequest? request, DateTime now)
     {
@@ -218,6 +385,7 @@ public sealed partial class BookingService
         var paid = PaidAmount(booking);
         booking.PaymentStatus = paid >= booking.TotalAmount ? PaymentStatus.Paid
             : paid > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
+        // Đủ cọc chưa phải đã thanh toán đủ booking: chỉ chuyển Paid khi đã thu đủ tổng giá trị.
         if (booking.PaymentStatus == PaymentStatus.Paid && booking.Status == BookingStatus.Confirmed)
             booking.Status = BookingStatus.Paid;
     }
@@ -229,73 +397,79 @@ public sealed partial class BookingService
             open.Status = PaymentRequestStatus.Cancelled;
     }
 
-    /// <summary>Có lần thanh toán VNPAY còn trong thời hạn mà chưa có kết quả hay không.</summary>
-    private bool HasOpenGatewayPayment(Booking booking, DateTime now) => booking.PaymentTransactions.Any(t =>
-        t.PaymentMethod == VnPayMethod && t.Status == PaymentTransactionStatus.Pending
-        && (t.CreatedAt ?? DateTime.MinValue) > now.AddMinutes(-(VnPay.Options.ExpireMinutes + 5)));
+    /// <summary>Có link payOS còn hạn mà chưa có kết quả hay không (khách có thể đang chuyển khoản).</summary>
+    private static bool HasOpenGatewayPayment(Booking booking, DateTime now) => booking.PaymentTransactions.Any(t =>
+        t.PaymentMethod == PayOsMethod && t.Status == PaymentTransactionStatus.Pending
+        && (t.ExpiresAt ?? DateTime.MinValue) > now);
 
     private static PaymentRequest? ActiveRequest(Booking booking, string stage) => booking.PaymentRequests
         .FirstOrDefault(p => p.Stage == stage
             && p.Status is PaymentRequestStatus.Pending or PaymentRequestStatus.Overdue or PaymentRequestStatus.Paid);
 
-    private decimal PlannedDeposit(Booking booking) => Money(booking.TotalAmount * PaymentTerms.DepositPercent / 100m);
+    private static decimal PlannedDeposit(Booking booking) => Money(booking.TotalAmount * PaymentRules.DepositPercent / 100m);
+
+    private static bool LinkedTo(PaymentTransaction t, PaymentRequest request) => ReferenceEquals(t.PaymentRequest, request)
+        || (request.Id != 0 && t.PaymentRequestId == request.Id);
 
     /// <summary>Số tiền còn phải trả của một đợt thu (chỉ tính giao dịch Success).</summary>
     private static decimal Outstanding(Booking booking, PaymentRequest request)
     {
-        // Dò theo cả navigation (giao dịch mới chưa lưu) lẫn khóa ngoại.
         var stageById = booking.PaymentRequests.Where(p => p.Id != 0).ToDictionary(p => p.Id, p => p.Stage);
-        bool LinkedTo(PaymentTransaction t) => ReferenceEquals(t.PaymentRequest, request)
-            || (request.Id != 0 && t.PaymentRequestId == request.Id);
         bool Legacy(PaymentTransaction t) => t.PaymentRequest is { } linked
             ? linked.Stage == null
             : t.PaymentRequestId is not int requestId || (stageById.TryGetValue(requestId, out var stage) && stage == null);
         var credited = booking.PaymentTransactions
             .Where(t => t.Status == PaymentTransactionStatus.Success)
-            // Đợt cọc nhận cả tiền cũ chưa gắn đợt hoặc gắn khoản "Đặt cọc 30%" cũ.
-            .Where(t => LinkedTo(t) || (request.Stage == DepositStage && Legacy(t)))
+            // Đợt cọc nhận cả tiền cũ chưa gắn đợt hoặc gắn khoản "Đặt cọc 30%" kiểu cũ.
+            .Where(t => LinkedTo(t, request) || (request.Stage == DepositStage && Legacy(t)))
             .Sum(t => t.Amount);
         return Math.Max(0, Money(request.Amount - credited));
     }
 
-    /// <summary>Tiền cọc hiển thị trên đơn: đợt cọc đang hiệu lực, nếu chưa có thì số dự kiến theo cấu hình.</summary>
-    private decimal DisplayDeposit(Booking booking) => ActiveRequest(booking, DepositStage)?.Amount ?? PlannedDeposit(booking);
+    /// <summary>Tiền cọc hiển thị trên đơn: đợt cọc đang hiệu lực, nếu chưa có thì mức 50% dự kiến.</summary>
+    private static decimal DisplayDeposit(Booking booking) => ActiveRequest(booking, DepositStage)?.Amount ?? PlannedDeposit(booking);
 
     /// <summary>
-    /// Lịch thanh toán của đơn. Đơn chờ duyệt: chưa có lịch. Đơn đã duyệt: Đợt 1 cọc + Đợt 2 phần còn lại (sau tour).
+    /// Lịch thanh toán của đơn. Chờ duyệt: chưa có lịch. Đã duyệt: Đợt 1 cọc + Đợt 2 phần còn lại (sau tour).
+    /// Số tiền và hạn do backend tính; frontend chỉ hiển thị.
     /// </summary>
     private IReadOnlyList<PaymentScheduleItemDto> Schedule(Booking booking)
     {
         if (booking.Status is BookingStatus.Pending or BookingStatus.Rejected) return [];
         var deposit = ActiveRequest(booking, DepositStage);
         if (deposit is null && booking.Status == BookingStatus.Cancelled) return [];
-        var today = DateTime.UtcNow.Date;
+        var now = UtcNow;
+        var departure = PaymentRules.VietnamMidnightUtc(booking.StartDate);
         var items = new List<PaymentScheduleItemDto>();
+        decimal depositOutstanding;
 
         if (deposit is not null)
         {
-            var outstanding = Outstanding(booking, deposit);
-            var status = deposit.Status == PaymentRequestStatus.Paid || outstanding == 0 ? "Paid"
-                : deposit.DueDate is { } due && due.Date < today ? "Overdue" : "Pending";
-            items.Add(new(deposit.Id, DepositStage, deposit.Description, deposit.Amount, status == "Paid" ? 0 : outstanding,
-                deposit.DueDate, status, Utc(deposit.PaidAt)));
+            depositOutstanding = Outstanding(booking, deposit);
+            var deadline = DepositDeadline(deposit);
+            var status = deposit.Status == PaymentRequestStatus.Paid || depositOutstanding == 0 ? "Paid"
+                : deadline is { } due && now > due ? "Overdue" : "Pending";
+            items.Add(new(deposit.Id, DepositStage, deposit.Description, deposit.Amount, status == "Paid" ? 0 : depositOutstanding,
+                deposit.DueDate, Utc(deadline), status, Utc(deposit.PaidAt), deadline is { } d && d > departure));
         }
         else
         {
-            // Đơn được duyệt trước khi có lịch: đợt cọc được tạo khi khách bấm thanh toán.
+            // Đơn được duyệt trước khi áp dụng lịch thanh toán: chưa phát hành đợt cọc (chờ quyết định xử lý).
             var amount = PlannedDeposit(booking);
-            items.Add(new(null, DepositStage, $"Đặt cọc {PaymentTerms.DepositPercent.ToString("0.##", Vietnamese)}%",
-                amount, Math.Max(0, Money(amount - LegacyCredit(booking))), null, "Pending", null));
+            depositOutstanding = Math.Max(0, Money(amount - LegacyCredit(booking)));
+            items.Add(new(null, DepositStage, $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
+                amount, depositOutstanding, null, null, depositOutstanding == 0 ? "Paid" : "NotIssued", null, false));
         }
 
-        var depositAmount = items[0].Amount;
+        // Đợt 2 = tổng nghĩa vụ − tiền đã ghi nhận − phần cọc còn thiếu (không mặc định 50%).
         var balance = ActiveRequest(booking, BalanceStage);
+        var balanceOutstanding = Math.Max(0, Money(booking.TotalAmount - PaidAmount(booking) - depositOutstanding));
         items.Add(balance is not null
             ? new PaymentScheduleItemDto(balance.Id, BalanceStage, balance.Description, balance.Amount, Outstanding(booking, balance),
-                balance.DueDate, balance.Status == PaymentRequestStatus.Paid ? "Paid" : "Pending", Utc(balance.PaidAt))
+                balance.DueDate, Utc(DepositDeadline(balance)), balance.Status == PaymentRequestStatus.Paid ? "Paid" : "Pending",
+                Utc(balance.PaidAt), false)
             : new PaymentScheduleItemDto(null, BalanceStage, "Thanh toán phần còn lại sau khi tour kết thúc",
-                Math.Max(0, booking.TotalAmount - depositAmount), Math.Max(0, booking.TotalAmount - depositAmount),
-                null, "Scheduled", null));
+                balanceOutstanding, balanceOutstanding, null, null, balanceOutstanding == 0 ? "Paid" : "Scheduled", null, false));
         return items;
     }
 
@@ -306,18 +480,25 @@ public sealed partial class BookingService
 
     private IReadOnlyList<PaymentTransactionDto> Transactions(Booking booking)
     {
-        var expiredBefore = DateTime.UtcNow.AddMinutes(-(VnPay.Options.ExpireMinutes + 5));
+        var now = UtcNow;
         return booking.PaymentTransactions
             .OrderBy(t => t.CreatedAt ?? t.PaidAt).ThenBy(t => t.Id)
             .Select(t => new PaymentTransactionDto(t.Id, t.PaymentRequestId, t.TransactionCode, t.PaymentMethod, t.Amount,
-                t.Status == PaymentTransactionStatus.Pending && t.PaymentMethod == VnPayMethod && (t.CreatedAt ?? DateTime.MinValue) < expiredBefore
-                    ? "Expired" : t.Status.GetValueOrDefault(PaymentTransactionStatus.Success).ToString(),
-                t.Status == PaymentTransactionStatus.Success ? Utc(t.PaidAt) : null, Utc(t.CreatedAt), t.GatewayTransactionNo))
+                DisplayStatus(t, now),
+                t.Status == PaymentTransactionStatus.Success ? Utc(t.PaidAt) : null, Utc(t.CreatedAt), t.GatewayTransactionNo,
+                Utc(t.ExpiresAt), t.ReviewNote))
             .ToList();
     }
 
+    /// <summary>
+    /// Trạng thái hiển thị. VNPAY Pending cũ không còn xác nhận được → "Expired" (không coi là đã trả).
+    /// payOS Pending đã quá hạn link → "Expired" cho tới khi tra cứu payOS cập nhật kết quả thật.
+    /// </summary>
+    private static string DisplayStatus(PaymentTransaction t, DateTime now) =>
+        t.Status == PaymentTransactionStatus.Pending && (t.PaymentMethod == LegacyVnPayMethod
+            || (t.PaymentMethod == PayOsMethod && (t.ExpiresAt ?? DateTime.MinValue) <= now))
+            ? "Expired"
+            : t.Status.GetValueOrDefault(PaymentTransactionStatus.Success).ToString();
+
     private static DateTime? Utc(DateTime? value) => value is { } v ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : null;
 }
-
-/// <summary>Kết quả xử lý dữ liệu VNPAY: RspCode/Message trả cho VNPAY, Outcome ("success"/"failed") cho trang return.</summary>
-public sealed record VnPayConfirmation(string RspCode, string Message, int? BookingId, string? Outcome);

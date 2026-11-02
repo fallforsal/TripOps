@@ -149,6 +149,9 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return transaction;
     }
 
+    /// <summary>Bỏ các entity đang theo dõi để lần đọc kế tiếp (sau khi đã khóa đơn) lấy dữ liệu mới nhất từ DB.</summary>
+    public void ResetTracking() => db.ChangeTracker.Clear();
+
     public Task<PaymentTransaction?> FindTransaction(string code, CancellationToken ct) =>
         db.PaymentTransactions.AsNoTracking().SingleOrDefaultAsync(t => t.TransactionCode == code, ct);
 

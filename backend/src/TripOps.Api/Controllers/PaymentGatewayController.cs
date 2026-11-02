@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Service.Bookings;
@@ -6,54 +8,52 @@ using TripOps.Service.Payments;
 namespace TripOps.Api.Controllers;
 
 /// <summary>
-/// Điểm nhận kết quả từ VNPAY (sandbox). Không cần đăng nhập vì VNPAY/trình duyệt gọi vào;
-/// mọi dữ liệu đều được kiểm tra chữ ký HMAC-SHA512 bằng HashSecret trước khi xử lý.
+/// Điểm nhận từ payOS. Không cần đăng nhập vì payOS/trình duyệt gọi vào:
+/// - webhook: chỉ xử lý khi chữ ký HMAC-SHA256 (Checksum Key) hợp lệ;
+/// - return: CHỈ chuyển hướng về trang đơn, không đổi dữ liệu (tham số trên URL không phải bằng chứng đã trả tiền).
 /// </summary>
-[ApiController, AllowAnonymous, Route("api/v1/payments/vnpay")]
+[ApiController, AllowAnonymous, Route("api/v1/payments/payos")]
 [Tags("Payments")]
-public sealed class PaymentGatewayController(BookingService bookings, VnPayOptions options, ILogger<PaymentGatewayController> logger) : ControllerBase
+public sealed class PaymentGatewayController(BookingService bookings, PayOsGateway payOs, ILogger<PaymentGatewayController> logger) : ControllerBase
 {
-    private List<KeyValuePair<string, string>> Query() =>
-        Request.Query.Select(q => new KeyValuePair<string, string>(q.Key, q.Value.ToString())).ToList();
-
-    /// <summary>IPN: VNPAY gọi server-to-server (cần URL public, ví dụ qua ngrok, khai báo trên cổng merchant sandbox).</summary>
-    [HttpGet("ipn")]
-    [EndpointSummary("VNPAY IPN callback: verify signature and confirm the deposit transaction idempotently")]
-    [ProducesResponseType<VnPayIpnResponse>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Ipn(CancellationToken ct)
+    /// <summary>
+    /// Webhook payOS (cần URL public khi triển khai thật; chạy localhost thì dùng tra cứu trạng thái thay thế).
+    /// Trả 2xx để payOS không gửi lại; dữ liệu sai chữ ký bị bỏ qua.
+    /// </summary>
+    [HttpPost("webhook")]
+    [EndpointSummary("payOS webhook: verify the signature and confirm the payment through the shared idempotent handler")]
+    [ProducesResponseType<PayOsWebhookAckDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Webhook([FromBody] JsonElement body, CancellationToken ct)
     {
+        var data = payOs.VerifyWebhook(body);
+        if (data is null)
+        {
+            logger.LogWarning("Rejected payOS webhook with invalid signature or payload");
+            return Ok(new PayOsWebhookAckDto(false, "invalid_signature"));
+        }
         try
         {
-            var result = await bookings.ConfirmVnPay(Query(), ct);
-            return Ok(new VnPayIpnResponse(result.RspCode, result.Message));
+            return Ok(new PayOsWebhookAckDto(true, await bookings.ApplyPayOsWebhook(data, ct)));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "VNPAY IPN processing failed");
-            return Ok(new VnPayIpnResponse("99", "Unknown error"));
+            // Lỗi tạm thời (DB...): trả 500 để payOS gửi lại sau.
+            logger.LogError(exception, "payOS webhook processing failed for order {OrderCode}", data.OrderCode);
+            return StatusCode(StatusCodes.Status500InternalServerError, new PayOsWebhookAckDto(false, "error"));
         }
     }
 
-    /// <summary>
-    /// Return URL: trình duyệt của khách quay về đây. Dữ liệu cũng đã được VNPAY ký nên được xác nhận như IPN
-    /// (idempotent) — cần thiết khi chạy localhost mà VNPAY không gọi được IPN. Sau đó chuyển về trang đơn trên FE.
-    /// </summary>
+    /// <summary>returnUrl/cancelUrl: chuyển khách về trang chi tiết đơn, FE sẽ gọi backend tra cứu payOS.</summary>
     [HttpGet("return")]
-    [EndpointSummary("VNPAY return URL: verify the result and redirect the customer back to the booking page")]
+    [EndpointSummary("payOS return/cancel URL: redirect the customer to the booking page, which then asks the server to verify")]
     [ProducesResponseType(StatusCodes.Status302Found)]
-    public async Task<IActionResult> Return(CancellationToken ct)
+    public async Task<IActionResult> Return([FromQuery] string? orderCode, CancellationToken ct)
     {
-        VnPayConfirmation result;
-        try { result = await bookings.ConfirmVnPay(Query(), ct); }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogError(exception, "VNPAY return processing failed");
-            result = new VnPayConfirmation("99", "Unknown error", null, null);
-        }
-
-        var outcome = result.Outcome ?? (result.RspCode == "97" ? "invalid" : "error");
-        var baseUrl = string.IsNullOrWhiteSpace(options.FrontendBaseUrl) ? "/" : options.FrontendBaseUrl.TrimEnd('/') + "/";
-        var route = result.BookingId is int bookingId ? $"#/my-bookings/{bookingId}" : "#/my-bookings";
-        return Redirect($"{baseUrl}{route}?payment={outcome}");
+        int? bookingId = null;
+        if (long.TryParse(orderCode, NumberStyles.None, CultureInfo.InvariantCulture, out var code))
+            bookingId = await bookings.BookingIdForPayOsOrder(code, ct);
+        var frontend = payOs.Options.FrontendBaseUrl;
+        var baseUrl = string.IsNullOrWhiteSpace(frontend) ? "/" : frontend.TrimEnd('/') + "/";
+        return Redirect(bookingId is int id ? $"{baseUrl}#/my-bookings/{id}/payos" : $"{baseUrl}#/my-bookings");
     }
 }

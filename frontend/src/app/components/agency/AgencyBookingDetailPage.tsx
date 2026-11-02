@@ -20,6 +20,7 @@ import {
   IncidentStatus,
   Location,
 } from "@/app/types";
+import { formatVietnamDateTime } from "@/app/services/payos";
 import {
   ArrowLeft,
   Calendar,
@@ -121,8 +122,9 @@ const statusMap: Record<string, { label: string; color: string }> = {
   rejected: { label: "Từ chối", color: "bg-gray-100 text-gray-800 border-gray-200" },
 };
 
-const paymentStatusMap: Record<string, { label: string; color: string }> = {
+const paymentStatusMap: Record<NonNullable<Booking["paymentStatus"]>, { label: string; color: string }> = {
   unpaid: { label: "Chưa thanh toán", color: "bg-red-50 text-red-700 border-red-200" },
+  partially_paid: { label: "Đã thanh toán một phần", color: "bg-sky-50 text-sky-800 border-sky-200" },
   paid: { label: "Đã thanh toán", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", color: "bg-[#F0F9FF] text-[#EA580C] border-[#F97316]/30" },
 };
@@ -1604,7 +1606,9 @@ export function AgencyBookingDetailPage({
   };
 
   const st = statusMap[booking.status] ?? { label: booking.status, color: "bg-gray-100 text-gray-700" };
-  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"];
+  const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
+    label: "Chưa xác định", color: "bg-gray-100 text-gray-700 border-gray-200",
+  };
 
   // Default contract number
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
@@ -4164,33 +4168,25 @@ export function AgencyBookingDetailPage({
                     ? "Đã thanh toán"
                     : booking.paymentStatus === "refunded"
                     ? "Đã hoàn tiền"
-                    : "Chưa thanh toán (Thanh toán sau)"}
+                    : booking.paymentStatus === "partially_paid"
+                    ? "Đã thanh toán một phần"
+                    : "Chưa thanh toán"}
                 </span>
               </div>
 
               {/* Progress breakdown */}
               {(() => {
-                const totalPaidIntoSystem = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status === "paid")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const totalRequested = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status !== "cancelled")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const remainingToRequest = Math.max(0, booking.totalPrice - totalRequested);
-
+                const paid = booking.paidAmount ?? 0;
+                const remaining = Math.max(0, booking.totalPrice - paid);
                 return (
                   <div className="space-y-1.5 py-1">
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Khách đã nộp vào TK Hệ thống:</span>
-                      <span className="font-bold text-emerald-700">{formatVND(totalPaidIntoSystem)}</span>
+                      <span className="text-gray-500">Khách đã thanh toán:</span>
+                      <span className="font-bold text-emerald-700">{formatVND(paid)}</span>
                     </div>
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Tổng tiền đã tạo yêu cầu:</span>
-                      <span className="font-bold text-[#075985]">{formatVND(totalRequested)} / {formatVND(booking.totalPrice)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500">Còn lại có thể yêu cầu thu:</span>
-                      <span className="font-bold text-amber-700">{formatVND(remainingToRequest)}</span>
+                      <span className="text-gray-500">Còn lại phải thu:</span>
+                      <span className="font-bold text-amber-700">{formatVND(remaining)} / {formatVND(booking.totalPrice)}</span>
                     </div>
                   </div>
                 );
@@ -4221,86 +4217,70 @@ export function AgencyBookingDetailPage({
               )}
             </div>
 
-            {/* Quick Payment Action Buttons */}
-            {isCurrentCompanyLead ? (
-              (() => {
-                const totalRequested = (booking.paymentRequests ?? [])
-                  .filter((pr) => pr.status !== "cancelled")
-                  .reduce((sum, pr) => sum + pr.amount, 0);
-                const remainingToRequest = Math.max(0, booking.totalPrice - totalRequested);
-
-                return (
-                  <div className="space-y-2 pt-2">
-                    <Button
-                      variant="outline"
-                      disabled={remainingToRequest <= 0}
-                      onClick={() => {
-                        setPaymentAmount(remainingToRequest.toString());
-                        setPaymentDescription(
-                          totalRequested === 0
-                            ? "Đặt cọc đợt 1 (50%)"
-                            : remainingToRequest === booking.totalPrice - totalRequested
-                            ? "Thanh toán phần còn lại trước khởi hành"
-                            : "Thanh toán đợt tiếp theo"
-                        );
-                        setPaymentDueDate("");
-                        setPaymentModalOpen(true);
-                      }}
-                      className={`w-full text-xs h-9 gap-1.5 font-bold ${
-                        remainingToRequest <= 0
-                          ? "border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed"
-                          : "border-blue-500 text-[#075985] hover:bg-[#F0F9FF]"
-                      }`}
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      {remainingToRequest <= 0
-                        ? "Đã tạo đủ yêu cầu cho 100% giá trị tour"
-                        : `Tạo yêu cầu thanh toán (Còn ${formatVND(remainingToRequest)})`}
-                    </Button>
-                  </div>
-                );
-              })()
-            ) : (
-              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  Quyền tạo yêu cầu thanh toán
-                </div>
-                <p className="text-amber-700 leading-relaxed">
-                  Đơn hàng này do <strong>{leadAgency?.agencyName || booking.companyName || "Công ty Chủ trì"}</strong> đại diện liên minh ký hợp đồng và quản lý thu tiền từ khách hàng. Đối tác liên minh không tạo yêu cầu thanh toán trực tiếp với khách.
-                </p>
+            {/* Lịch thanh toán: hệ thống tự tạo khi duyệt đơn — công ty chỉ xem (không tạo yêu cầu thu thủ công) */}
+            <div className="p-3 bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl text-[11px] text-blue-900 leading-relaxed">
+              <div className="font-bold flex items-center gap-1.5 text-blue-900">
+                <Lock className="w-3.5 h-3.5 text-[#075985]" />
+                Lịch thanh toán do hệ thống tạo
               </div>
-            )}
+              <p className="mt-0.5">
+                Khi công ty <strong>duyệt đơn</strong>, hệ thống mở Đợt 1 – đặt cọc <strong>50%</strong> tổng giá trị, hạn <strong>24 giờ</strong> kể từ lúc duyệt.
+                Phần còn lại thu sau khi tour kết thúc. Khách thanh toán qua payOS; đơn chỉ hiện "đã cọc" sau khi máy chủ xác minh với payOS.
+              </p>
+            </div>
 
-            {/* Existing Payment Requests List */}
             {booking.paymentRequests && booking.paymentRequests.length > 0 && (
               <div className="pt-3 border-t border-gray-100 space-y-2">
-                <span className="text-xs font-bold text-gray-700 block">Các yêu cầu thanh toán đã tạo:</span>
+                <span className="text-xs font-bold text-gray-700 block">Lịch thanh toán của khách:</span>
                 <div className="space-y-2">
                   {booking.paymentRequests.map((pr) => (
                     <div key={pr.id} className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs space-y-1">
-                      <div className="flex justify-between items-start">
-                        <p className="font-semibold text-gray-800">{pr.description}</p>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">
+                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán"}
+                          </span>
+                          <p className="font-semibold text-gray-800">{pr.description}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${
                           pr.status === "paid"
-                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                            : "bg-amber-100 text-amber-800 border border-amber-200"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : pr.status === "overdue"
+                            ? "bg-red-100 text-red-800 border-red-200"
+                            : pr.status === "scheduled"
+                            ? "bg-gray-100 text-gray-700 border-gray-200"
+                            : "bg-amber-100 text-amber-800 border-amber-200"
                         }`}>
-                          {pr.status === "paid" ? "Tiền đã vào TK Hệ thống" : "Chờ khách thanh toán"}
+                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Thu sau tour" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-gray-500 pt-1">
-                        <span>Hạn: {pr.dueDate}</span>
+                        <span>Hạn: {pr.dueAt ? `${formatVietnamDateTime(pr.dueAt)} (giờ VN)` : pr.dueDate || "—"}</span>
                         <span className="font-bold text-[#075985] text-sm">{formatVND(pr.amount)}</span>
                       </div>
+                      {pr.dueAfterDeparture && pr.status !== "paid" && (
+                        <p className="text-[10px] text-amber-700">Hạn cọc rơi sau ngày khởi hành.</p>
+                      )}
                       {pr.paidAt && (
                         <p className="text-[10px] text-emerald-600 font-medium">
-                          Khách đã nộp ngày: {pr.paidAt}
+                          Khách đã thanh toán ngày: {pr.paidAt}
                         </p>
                       )}
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {booking.paymentTransactions && booking.paymentTransactions.some((t) => t.status === "success") && (
+              <div className="pt-3 border-t border-gray-100 space-y-1.5">
+                <span className="text-xs font-bold text-gray-700 block">Giao dịch đã ghi nhận:</span>
+                {booking.paymentTransactions.filter((t) => t.status === "success").map((t) => (
+                  <div key={t.id} className="flex justify-between text-[11px] text-gray-600">
+                    <span className="font-mono truncate">{t.method === "PAYOS" ? "payOS" : t.method === "VNPAY" ? "VNPAY (cũ)" : t.method} · {t.code}</span>
+                    <span className="font-bold text-emerald-700 flex-shrink-0 ml-2">{formatVND(t.amount)}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -5023,7 +5003,7 @@ export function AgencyBookingDetailPage({
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN</p>
               <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.totalPrice)}</strong></p>
-              <p>Trạng thái thanh toán: <strong>{booking.paymentStatus === "paid" ? "Đã thanh toán" : booking.paymentStatus === "refunded" ? "Đã hoàn tiền" : "Chưa thanh toán"}</strong></p>
+              <p>Trạng thái thanh toán: <strong>{pst.label}</strong></p>
               {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
                 <p>Số tiền còn lại: <strong className="text-amber-700">{formatVND(booking.remainingAmount)}</strong></p>
               )}

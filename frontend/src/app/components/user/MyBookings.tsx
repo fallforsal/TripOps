@@ -215,7 +215,10 @@ export function MyBookings({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {booking.status !== "cancelled" && booking.status !== "completed" && (
+                      {/* Chỉ tự hủy được đơn chưa có tiền (đơn đã có tiền: hủy kèm hoàn tiền do Admin xem xét). */}
+                      {(booking.status === "pending" || booking.status === "confirmed") &&
+                        (booking.paidAmount ?? 0) === 0 &&
+                        !(booking.paymentTransactions ?? []).some((t) => t.status === "pending") && (
                         <Button
                           type="button"
                           variant="outline"
