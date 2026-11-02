@@ -1,5 +1,3 @@
-import type { BookingSnapshotDto, BookingSnapshotStatus } from "../services/wf05Bookings";
-
 export type UserRole = "user" | "guide" | "admin" | "provider" | "agency" | "company_admin";
 
 export type ProviderType =
@@ -585,14 +583,6 @@ export interface BookingAssignedGuide {
 }
 
 export interface Booking {
-  agreedSnapshot?: BookingSnapshotDto | null;
-  latestProposal?: BookingSnapshotDto | null;
-  initialRequestSnapshot?: BookingSnapshotDto | null;
-  snapshotStatus?: BookingSnapshotStatus;
-  effectiveSnapshotVersion?: number | null;
-  cancellationPolicy?: string;
-  inclusions?: string;
-  exclusions?: string;
   paidAmount?: number;
   tourEndDate?: string;
   bookingCode?: string;

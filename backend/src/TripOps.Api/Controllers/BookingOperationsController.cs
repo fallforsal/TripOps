@@ -51,36 +51,8 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
         await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
-
-    [HttpGet("snapshots")]
-    [EndpointSummary("List snapshot version history for the booking")]
-    [ProducesResponseType<List<BookingSnapshotSummaryDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListSnapshots(int id, CancellationToken ct) =>
-        Ok(await bookings.ListSnapshots(Actor, id, ct));
-
-    [HttpGet("snapshots/{snapshotId:int}")]
-    [EndpointSummary("Get detailed snapshot content for a specific version")]
-    [ProducesResponseType<BookingSnapshotDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSnapshot(int id, int snapshotId, CancellationToken ct) =>
-        Ok(await bookings.GetSnapshot(Actor, id, snapshotId, ct));
-
-    [HttpPost("snapshots/{snapshotId:int}/accept")]
-    [EndpointSummary("Customer accepts an agency proposal version")]
-    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> AcceptProposal(int id, int snapshotId, CancellationToken ct) =>
-        Ok(await bookings.AcceptProposal(Actor, id, snapshotId, ct));
-
-    [HttpPost("snapshots/{snapshotId:int}/request-changes")]
-    [EndpointSummary("Customer requests changes to the latest proposal")]
-    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> RequestChanges(int id, int snapshotId, RequestProposalChangesRequest request, CancellationToken ct) =>
-        Ok(await bookings.RequestProposalChanges(Actor, id, snapshotId, request, ct));
-#if false
-    }
 }
 
-#endif
-}
 [ApiController, Authorize(Roles = "guide"), Route("api/v1/guide/bookings/{id:int}"), Tags("Guide Operations")]
 public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings) : ControllerBase
 {

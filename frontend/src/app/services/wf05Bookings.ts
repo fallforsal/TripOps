@@ -64,132 +64,6 @@ export interface AssignedGuideDto {
   agencyId?: string;
 }
 
-export interface SnapshotPricingTier {
-  id: number;
-  name: string;
-  minAge?: number;
-  maxAge?: number;
-  pricePerGuest: number;
-}
-
-export interface SnapshotPassenger {
-  index: number;
-  fullName: string;
-  phoneNumber?: string | null;
-  dateOfBirth?: string;
-  gender?: string;
-  identityNumber?: string;
-  tierName?: string;
-  price: number;
-  /** schemaVersion >= 2 */
-  note?: string | null;
-  roommateNote?: string | null;
-  restaurantNote?: string | null;
-}
-
-export interface SnapshotDay {
-  dayNumber: number;
-  title: string;
-  description?: string;
-  locations?: {
-    name: string;
-    time?: string;
-    dayNumber: number;
-  }[];
-  meals?: {
-    serviceId?: number;
-    mealType: "breakfast" | "lunch" | "dinner";
-    dayNumber: number;
-    name: string;
-    time?: string;
-    priceDifference: number;
-  }[];
-}
-
-export interface SnapshotHotel {
-  serviceId?: number;
-  destination: string;
-  name: string;
-  stars?: number;
-  nights?: number;
-  priceDifference: number;
-}
-
-export interface SnapshotPaymentCondition {
-  conditionType: string;
-  amount: number;
-  dueDate?: string;
-  description: string;
-}
-
-export interface BookingSnapshotPayload {
-  schemaVersion: number;
-  tourId: number;
-  tourCode: string;
-  tourName: string;
-  sourceTourVersion?: number | null;
-  destination?: string;
-  departureLocation?: string;
-  durationDays: number;
-  durationNights: number;
-  startDate: string;
-  endDate: string;
-  agencyId: string;
-  agencyName?: string;
-  basePrice: number;
-  totalAmount: number;
-  depositAmount: number;
-  minGuests?: number;
-  maxGuests?: number;
-  pricingTiers: SnapshotPricingTier[];
-  passengers: SnapshotPassenger[];
-  itinerary: SnapshotDay[];
-  hotels: SnapshotHotel[];
-  inclusions?: string;
-  exclusions?: string;
-  cancellationPolicy?: string;
-  paymentConditions?: SnapshotPaymentCondition[];
-  customerNotes?: string;
-  /** schemaVersion >= 2: ghi chú của công ty lữ hành, tách khỏi customerNotes */
-  agencyNote?: string | null;
-  generatedAt: string;
-}
-
-export interface BookingSnapshotDto {
-  changeRequest?: { message: string; createdAt: string } | null;
-  proposalNote?: string | null;
-  id: number;
-  bookingId: number;
-  version: number;
-  snapshotType: "initial_request" | "proposal" | "agreed";
-  sourceTourVersion?: number | null;
-  createdAt: string;
-  createdBy: string;
-  creatorName?: string;
-  acceptedAt?: string;
-  acceptedBy?: string;
-  acceptorName?: string;
-  snapshotData: BookingSnapshotPayload;
-}
-
-export interface BookingSnapshotSummaryDto {
-  changeRequest?: { message: string; createdAt: string } | null;
-  proposalNote?: string | null;
-  id: number;
-  bookingId: number;
-  version: number;
-  snapshotType: "initial_request" | "proposal" | "agreed";
-  sourceTourVersion?: number | null;
-  createdAt: string;
-  createdBy: string;
-  creatorName?: string;
-  acceptedAt?: string;
-  acceptedBy?: string;
-  acceptorName?: string;
-}
-
-export type BookingSnapshotStatus = "initial_pending" | "proposal_pending" | "agreed" | "legacy_unverified";
-
 export interface BookingDto {
   id: number;
   bookingCode: string;
@@ -206,14 +80,14 @@ export interface BookingDto {
   depositAmount: number;
   paidAmount: number;
   status:
-  | "Pending"
-  | "Deposited"
-  | "Confirmed"
-  | "Paid"
-  | "InProgress"
-  | "Completed"
-  | "Cancelled"
-  | "Rejected";
+    | "Pending"
+    | "Deposited"
+    | "Confirmed"
+    | "Paid"
+    | "InProgress"
+    | "Completed"
+    | "Cancelled"
+    | "Rejected";
   paymentStatus: "Unpaid" | "PartiallyPaid" | "Paid" | "Refunded";
   contactName?: string;
   contactPhone?: string;
@@ -224,11 +98,6 @@ export interface BookingDto {
   createdAt: string;
   updatedAt?: string;
   incidents?: IncidentDto[];
-  agreedSnapshot?: BookingSnapshotDto | null;
-  latestProposal?: BookingSnapshotDto | null;
-  initialRequestSnapshot?: BookingSnapshotDto | null;
-  snapshotStatus?: BookingSnapshotStatus;
-  effectiveSnapshotVersion?: number | null;
   snapshotDays?: {
     id: number;
     dayNumber: number;
@@ -263,8 +132,6 @@ export interface BookingDto {
 export interface BookingListItem {
   id: number;
   bookingCode: string;
-  snapshotStatus?: BookingSnapshotStatus;
-  effectiveSnapshotVersion?: number | null;
   tourName?: string;
   customerName?: string;
   contactPhone?: string;
@@ -458,57 +325,6 @@ export async function reportIncident(
     method: "POST",
     body: JSON.stringify({ incidentType, title, description, severity }),
   });
-}
-
-export async function getBookingSnapshots(
-  bookingId: number,
-): Promise<BookingSnapshotSummaryDto[]> {
-  return await http<BookingSnapshotSummaryDto[]>(`/bookings/${bookingId}/snapshots`);
-}
-
-export async function getBookingSnapshotDetail(
-  bookingId: number,
-  snapshotId: number,
-): Promise<BookingSnapshotDto> {
-  return await http<BookingSnapshotDto>(`/bookings/${bookingId}/snapshots/${snapshotId}`);
-}
-
-export async function createAgencyProposal(
-  bookingId: number,
-  proposal?: { note?: string } | string,
-): Promise<BookingSnapshotDto> {
-  const note = typeof proposal === "string" ? proposal : proposal?.note;
-  return await http<BookingSnapshotDto>(`/agency/bookings/${bookingId}/proposals`, {
-    method: "POST",
-    body: JSON.stringify({ note }),
-  });
-}
-
-export async function acceptBookingProposal(
-  bookingId: number,
-  snapshotId: number,
-): Promise<BookingDto> {
-  return await http<BookingDto>(`/bookings/${bookingId}/snapshots/${snapshotId}/accept`, {
-    method: "POST",
-  });
-}
-
-export async function requestBookingProposalChanges(bookingId: number, snapshotId: number, message: string): Promise<BookingDto> {
-  return http<BookingDto>(`/bookings/${bookingId}/snapshots/${snapshotId}/request-changes`, {
-    method: "POST", body: JSON.stringify({ message }),
-  });
-}
-
-export interface BookingNotification {
-  id: number; bookingId: number; bookingCode: string; version: number;
-  eventType: "proposal_sent" | "proposal_accepted" | "changes_requested";
-  message?: string | null; createdAt: string; readAt?: string | null;
-}
-export function getBookingNotifications() {
-  return http<{ items: BookingNotification[]; unreadCount: number }>("/me/booking-notifications");
-}
-export function readBookingNotification(id: number) {
-  return http<void>(`/me/booking-notifications/${id}/read`, { method: "POST" });
 }
 
 export { fromApiBooking } from "./bookingAdapter";
