@@ -3,18 +3,18 @@
 :root {
   --font-size: 16px;
   --background: #F8FAFC;
-  --foreground: #0F172A;
+  --foreground: #1E293B;
   --card: #FFFFFF;
-  --card-foreground: #0F172A;
+  --card-foreground: #1E293B;
   --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
+  --popover-foreground: #1E293B;
   --primary: #075985;
   --primary-hover: #0C4A6E;
   --primary-dark: #082F49;
   --primary-light: #F0F9FF;
   --primary-foreground: #FFFFFF;
   --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
+  --secondary-foreground: #1E293B;
   --muted: #F8FAFC;
   --muted-foreground: #475569;
   --accent: #0369A1;

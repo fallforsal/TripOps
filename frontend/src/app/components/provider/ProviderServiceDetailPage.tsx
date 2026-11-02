@@ -357,7 +357,7 @@ export function ProviderServiceDetailPage({
 
               {service.status !== "hidden" && <Button
                 size="sm"
-                className="bg-[#075985] hover:bg-[#F97316] text-white rounded-xl shadow-xs"
+                className="bg-[#075985] hover:bg-[#0C4A6E] text-white rounded-xl shadow-xs"
                 onClick={() => onEdit?.(service)}
               >
                 <Edit className="w-4 h-4 mr-1.5" />
@@ -505,7 +505,7 @@ export function ProviderServiceDetailPage({
             </div>
 
             {/* Price Box */}
-            <div className="mt-5 p-4 rounded-xl bg-gradient-to-br from-blue-50/70 to-indigo-50/70 border border-blue-100">
+            <div className="mt-5 p-4 rounded-xl bg-[#F0F9FF] border border-blue-100">
               {(() => {
                 const isHotel = service.category === "hotel";
                 const pFrom = service.priceFrom ?? (isHotel ? Math.round((service.price || 1500000) * 0.8 / 10000) * 10000 : undefined);
@@ -894,7 +894,7 @@ export function ProviderServiceDetailPage({
             ) : (
               <>
                 {service.status !== "hidden" && <Button
-                  className="w-full bg-[#075985] hover:bg-[#F97316] text-white rounded-xl"
+                  className="w-full bg-[#075985] hover:bg-[#0C4A6E] text-white rounded-xl"
                   onClick={() => onEdit?.(service)}
                 >
                   <Edit className="w-4 h-4 mr-2" />

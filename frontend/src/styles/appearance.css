@@ -1,0 +1,115 @@
+/* Shared visual language for every role and portalled dialog.
+   This file changes only color and typography, never component geometry. */
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-sans);
+}
+
+.font-bold {
+  font-weight: 600;
+}
+
+.font-extrabold,
+.font-black {
+  font-weight: 700;
+}
+
+.text-xs,
+.text-\[11px\] {
+  font-size: 13px;
+}
+
+.text-\[10px\],
+.text-\[9px\],
+.text-\[8px\] {
+  font-size: 12px;
+}
+
+/* Role sidebars share the same text metrics, including mobile drawers. */
+.tripops-sidebar-nav > button,
+.tripops-sidebar-action {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.tripops-sidebar-nav > button[aria-current="page"] {
+  font-weight: 600;
+}
+
+[data-slot="sidebar-label"] {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+/* Preserve large marketing headings and compact sidebar titles. */
+h1:is(.text-lg, .text-xl, .text-2xl) {
+  font-size: clamp(24px, 2vw, 28px);
+  font-weight: 600;
+}
+
+main h3:is(.text-sm, .text-base):not(.truncate) {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+:where(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) {
+  font-size: 14px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+table th {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Neutral copy stays legible; status colors and text on photos are untouched. */
+html:not(.dark) :is(.text-gray-900, .text-slate-900, .text-\[\#0F172A\]) {
+  color: var(--foreground);
+}
+
+html:not(.dark) :is(.text-gray-600, .text-slate-600) {
+  color: #475569;
+}
+
+html:not(.dark) :is(.text-gray-500, .text-slate-500) {
+  color: #64748b;
+}
+
+html:not(.dark) :is(input, textarea, select) {
+  color: var(--foreground);
+}
+
+/* Orange remains available for warnings and category illustrations.
+   Solid orange action buttons use the common TripOps primary instead. */
+:is(button, a).bg-\[\#F97316\] {
+  background-color: var(--primary);
+}
+
+:is(button, a).bg-\[\#F97316\]:hover,
+:is(button, a).bg-\[\#075985\]:hover,
+.hover\:bg-\[\#F97316\]:hover {
+  background-color: var(--primary-hover);
+}
+
+@media (max-width: 639px) {
+  :where(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) {
+    font-size: 16px;
+  }
+}

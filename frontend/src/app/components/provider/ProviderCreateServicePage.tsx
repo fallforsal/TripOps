@@ -717,7 +717,7 @@ export function ProviderCreateServicePage({
             onClick={() => handleSubmit()}
             disabled={saving || uploading}
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs gap-1.5"
+            className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold rounded-lg text-xs gap-1.5"
           >
             <CheckCircle2 className="w-4 h-4" />
             {saving || uploading ? "Đang gửi…" : isEditing ? "Cập nhật bài đăng" : "Gửi duyệt ngay"}

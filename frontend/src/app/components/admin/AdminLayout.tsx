@@ -137,13 +137,14 @@ export function AdminLayout({
       </div>
 
       {/* Menu Items */}
-      <nav className="p-4 space-y-2">
+      <nav className="tripops-sidebar-nav p-4 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           return (
             <button
               key={item.id}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => {
                 onNavigate(item.id);
                 setMobileOpen(false);
@@ -159,7 +160,7 @@ export function AdminLayout({
               />
               {!collapsed && (
                 <div className="flex items-center justify-between flex-1">
-                  <span className="font-medium">
+                  <span data-slot="sidebar-label" className="font-medium">
                     {item.label}
                   </span>
                   {item.badge !== undefined && (
@@ -185,7 +186,7 @@ export function AdminLayout({
           >
             <LogOut className="w-5 h-5 flex-shrink-0 text-gray-600" />
             {!collapsed && (
-              <span className="font-medium">Đăng xuất</span>
+              <span data-slot="sidebar-label" className="font-medium">Đăng xuất</span>
             )}
           </button>
         )}
