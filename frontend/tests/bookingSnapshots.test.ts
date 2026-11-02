@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fromApiBooking } from "../src/app/services/bookingAdapter.ts";
-import { acceptedSnapshotFromBooking, selectSnapshotVersions, proposalVersionStyle } from "../src/app/services/bookingSnapshots.ts";
+import { acceptedSnapshotFromBooking, selectSnapshotVersions, proposalVersionStyle, snapshotNotes, snapshotHasPassengerNotes, contractFromAgreedSnapshot } from "../src/app/services/bookingSnapshots.ts";
 
 test("version colors remain consistent across selection and proposal version numbers", () => {
   for (const selected of [true, false]) {
@@ -86,4 +86,38 @@ test("acceptance uses the agreed snapshot id and version from BookingDto", () =>
   assert.equal(result.version, 3);
   assert.notEqual(result.id, dto.id);
   assert.throws(() => acceptedSnapshotFromBooking({ ...dto, agreedSnapshot: null }));
+});
+
+test("schema 2 keeps agency note separate from the customer's request", () => {
+  const v2: BookingSnapshotDto = { ...initial, id: 30, version: 2, snapshotType: "proposal", proposalNote: "Ghi chú từ event",
+    snapshotData: { ...initial.snapshotData, schemaVersion: 2, customerNotes: "Phòng tầng cao", agencyNote: "Đã giữ phòng hướng biển" } };
+  assert.deepEqual(snapshotNotes(v2), { customerNote: "Phòng tầng cao", agencyNote: "Đã giữ phòng hướng biển" });
+  const noNote = { ...v2, proposalNote: null, snapshotData: { ...v2.snapshotData, agencyNote: null } };
+  assert.equal(snapshotNotes(noNote).agencyNote, undefined);
+  const first = { ...initial, snapshotData: { ...initial.snapshotData, customerNotes: "Phòng tầng cao" } };
+  assert.deepEqual(snapshotNotes(first), { customerNote: "Phòng tầng cao", agencyNote: undefined });
+});
+
+test("legacy schema 1 proposal splits the merged note only for display", () => {
+  const legacy: BookingSnapshotDto = { ...initial, id: 31, version: 2, snapshotType: "proposal", proposalNote: null,
+    snapshotData: { ...initial.snapshotData, schemaVersion: 1, customerNotes: "Phòng tầng cao\n[Ghi chú đề xuất: Đổi sang 4 sao]" } };
+  const before = JSON.stringify(legacy);
+  assert.deepEqual(snapshotNotes(legacy), { customerNote: "Phòng tầng cao", agencyNote: "Đổi sang 4 sao" });
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal(snapshotNotes({ ...legacy, proposalNote: "Từ event" }).agencyNote, "Từ event");
+  assert.equal(snapshotHasPassengerNotes(legacy.snapshotData), false);
+  assert.equal(snapshotHasPassengerNotes({ schemaVersion: 2 }), true);
+});
+
+test("contract is built from the agreed snapshot only", () => {
+  assert.equal(contractFromAgreedSnapshot("BK-TEST", null), null);
+  const pending = { ...agreed, snapshotType: "proposal" as const, acceptedAt: undefined, acceptedBy: undefined };
+  assert.equal(contractFromAgreedSnapshot("BK-TEST", pending), null);
+  const contract = contractFromAgreedSnapshot("BK-TEST", agreed)!;
+  assert.equal(contract.contractNo, "BK-TEST-v3");
+  assert.equal(contract.tourName, "Tour ban đầu");
+  assert.equal(contract.totalAmount, 4250000);
+  assert.equal(contract.passengers.length, 3);
+  assert.equal(contract.startDate, "2026-12-15");
+  assert.equal(contract.cancellationPolicy, "Chính sách ban đầu");
 });

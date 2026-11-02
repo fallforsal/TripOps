@@ -53,6 +53,7 @@ import {
 import { CancelTourModal } from "./CancelTourModal";
 import { BookingSnapshotPanel } from "@/app/components/booking/BookingSnapshotPanel";
 import type { BookingDto } from "@/app/services/wf05Bookings";
+import { contractFromAgreedSnapshot } from "@/app/services/bookingSnapshots";
 
 interface UserBookingDetailPageProps {
   onSnapshotUpdated?: (updated: BookingDto) => void;
@@ -336,8 +337,8 @@ export function UserBookingDetailPage({
       color: "bg-amber-50 text-amber-800 border-amber-200",
     };
 
-  const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
-  const today = new Date().toLocaleDateString("vi-VN");
+  // Hợp đồng chỉ lập từ phương án đã chốt; chưa chốt thì contract = null.
+  const contract = contractFromAgreedSnapshot(booking.bookingCode || `BK-${booking.id}`, booking.agreedSnapshot);
   const canCancel = booking.status === "pending" || booking.status === "deposited" || booking.status === "confirmed" || booking.status === "paid";
 
   // Multi-company co-hosting logic
@@ -1916,34 +1917,45 @@ export function UserBookingDetailPage({
         />
       )}
 
-      {/* ELECTRONIC CONTRACT MODAL */}
+      {/* ELECTRONIC CONTRACT MODAL — nội dung lấy từ phương án đã chốt (agreed) */}
       <Dialog open={contractModalOpen} onOpenChange={setContractModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#075985]" />
-              Hợp đồng Dịch vụ Du lịch – {contractNo}
+              {contract ? `Hợp đồng Dịch vụ Du lịch – ${contract.contractNo}` : "Hợp đồng Dịch vụ Du lịch"}
             </DialogTitle>
           </DialogHeader>
 
+          {!contract ? (
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Chưa có hợp đồng</p>
+              <p>
+                Hợp đồng được lập từ phương án mà bạn đã chấp nhận. Đơn này đang trao đổi phương án với công ty lữ hành;
+                hãy xem và chấp nhận phương án ở mục “Phương án đặt tour &amp; lịch sử trao đổi”.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-4 text-xs text-gray-700 pt-2">
             <div className="text-center border-b pb-3">
               <p className="font-bold text-sm text-gray-900 uppercase">
                 {isCoHosted && leadCoHost
                   ? `${leadCoHost.companyName} & ${partnerCoHosts.map((c) => c.companyName).join(", ")}`
-                  : booking.companyName || booking.tour.companyName || "CÔNG TY DU LỊCH"}
+                  : contract.agencyName || booking.companyName || "CÔNG TY DU LỊCH"}
               </p>
               <p className="text-xs text-gray-500">
                 {isCoHosted ? "Liên minh Doanh nghiệp Lữ hành & Đối tác Chuyên tuyến" : "Giấy phép kinh doanh lữ hành"}
               </p>
               <p className="text-base font-bold mt-2 text-blue-800">HỢP ĐỒNG DỊCH VỤ LỮ HÀNH</p>
-              <p className="text-[11px] text-gray-400">Số: {contractNo} – Ngày lập: {today}</p>
+              <p className="text-[11px] text-gray-400">
+                Số: {contract.contractNo} – Theo phương án {contract.version}, khách chấp nhận ngày {new Date(contract.acceptedAt).toLocaleDateString("vi-VN")}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 p-2.5 rounded-lg border">
                 <p className="font-bold text-gray-900 mb-1">BÊN A (CÔNG TY LỮ HÀNH):</p>
-                <p>Đơn vị chủ trì: <strong>{leadCoHost?.companyName || booking.companyName || booking.tour.companyName || "Đơn vị tổ chức tour"}</strong></p>
+                <p>Đơn vị chủ trì: <strong>{leadCoHost?.companyName || contract.agencyName || booking.companyName || "Đơn vị tổ chức tour"}</strong></p>
                 {isCoHosted && partnerCoHosts.length > 0 && (
                   <p className="mt-1 text-purple-800">
                     Đồng tổ chức liên minh: <strong>{partnerCoHosts.map((c) => c.companyName).join(", ")}</strong>
@@ -1959,43 +1971,83 @@ export function UserBookingDetailPage({
 
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 1: NỘI DUNG VÀ THỜI GIAN</p>
-              <p>Tour: <strong>{booking.tour.name}</strong> ({booking.tour.tourCode})</p>
-              <p>Khởi hành: <strong>{booking.tourStartDate || "Theo thỏa thuận"}</strong> · Thời gian: {booking.tour.duration}</p>
-              <p>Số lượng khách: <strong>{booking.numberOfGuests} người</strong></p>
+              <p>Tour: <strong>{contract.tourName}</strong> ({contract.tourCode})</p>
+              {contract.destination && <p>Điểm đến: {contract.destination}{contract.departureLocation ? ` · Khởi hành từ: ${contract.departureLocation}` : ""}</p>}
+              <p>
+                Thời gian: <strong>{contract.startDate}</strong> → <strong>{contract.endDate}</strong> ({contract.durationDays} ngày {contract.durationNights} đêm)
+              </p>
+              <p>Số lượng khách: <strong>{contract.passengers.length} người</strong></p>
+              {contract.passengers.length > 0 && (
+                <ol className="mt-1.5 list-decimal pl-5 space-y-0.5">
+                  {contract.passengers.map((p) => (
+                    <li key={p.index}>
+                      {p.fullName} – {p.tierName ?? "—"} – {formatVND(p.price)}
+                      {(p.roommateNote || p.restaurantNote) && (
+                        <span className="text-gray-500">
+                          {p.roommateNote ? ` · Nguyện vọng xếp phòng: ${p.roommateNote}` : ""}
+                          {p.restaurantNote ? ` · Nguyện vọng ăn uống: ${p.restaurantNote}` : ""}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {contract.hotels.length > 0 && (
+                <p className="mt-1.5">
+                  Lưu trú: {contract.hotels.map((h) => `${h.name} (${h.destination}${h.nights ? `, ${h.nights} đêm` : ""})`).join("; ")}
+                </p>
+              )}
             </div>
 
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN</p>
-              <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.totalPrice)}</strong></p>
-              <p>Trạng thái thanh toán: <strong>{booking.paymentStatus === "paid" ? "Đã thanh toán" : booking.paymentStatus === "refunded" ? "Đã hoàn tiền" : "Chưa thanh toán"}</strong></p>
-              {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
-                <p>Số tiền còn lại cần nộp: <strong className="text-amber-700">{formatVND(booking.remainingAmount)}</strong></p>
-              )}
+              <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(contract.totalAmount)}</strong></p>
+              <p>Thanh toán hai đợt: đặt cọc sau khi hai bên thống nhất phương án, phần còn lại sau khi tour kết thúc. Số tiền và hạn từng đợt theo lịch thanh toán của đơn.</p>
+              <p className="mt-1 text-gray-500">
+                Tình trạng thanh toán hiện tại: {booking.paymentStatus === "paid" ? "Đã thanh toán" : booking.paymentStatus === "refunded" ? "Đã hoàn tiền" : booking.paymentStatus === "partially_paid" ? "Đã thanh toán một phần" : "Chưa thanh toán"}
+              </p>
             </div>
+
+            {(contract.inclusions || contract.exclusions || contract.cancellationPolicy) && (
+              <div>
+                <p className="font-bold text-gray-900 mb-1">ĐIỀU 3: DỊCH VỤ VÀ CHÍNH SÁCH HỦY</p>
+                {contract.inclusions && <p className="whitespace-pre-line"><strong>Bao gồm:</strong> {contract.inclusions}</p>}
+                {contract.exclusions && <p className="whitespace-pre-line mt-1"><strong>Không bao gồm:</strong> {contract.exclusions}</p>}
+                {contract.cancellationPolicy && <p className="whitespace-pre-line mt-1"><strong>Chính sách hủy:</strong> {contract.cancellationPolicy}</p>}
+              </div>
+            )}
+
+            {(contract.agencyNote || contract.customerNote) && (
+              <div>
+                <p className="font-bold text-gray-900 mb-1">GHI CHÚ THỎA THUẬN</p>
+                {contract.agencyNote && <p className="whitespace-pre-line"><strong>Công ty lữ hành:</strong> {contract.agencyNote}</p>}
+                {contract.customerNote && <p className="whitespace-pre-line mt-1"><strong>Yêu cầu của khách:</strong> {contract.customerNote}</p>}
+              </div>
+            )}
 
             {isCoHosted && (
               <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                <p className="font-bold text-amber-900 mb-1">ĐIỀU KHOẢN LIÊN MINH &amp; BẢO CHỨNG KÝ QUỸ (ESCROW):</p>
+                <p className="font-bold text-amber-900 mb-1">ĐIỀU KHOẢN LIÊN MINH:</p>
                 <p className="leading-relaxed">
-                  Tour được thực hiện theo cơ chế liên minh giữa <strong>{leadCoHost?.companyName || booking.companyName}</strong> và <strong>{partnerCoHosts.map((c) => c.companyName).join(", ")}</strong>. Tiền tour của Bên B được ký quỹ an toàn tại Tài khoản trung gian của Sàn Du Lịch ({systemBank.bankName} – STK: {systemBank.accountNumber}), và chỉ được giải ngân cho các đơn vị sau khi hoàn thành toàn bộ chương trình tour.
+                  Tour được thực hiện theo cơ chế liên minh giữa <strong>{leadCoHost?.companyName || contract.agencyName}</strong> và <strong>{partnerCoHosts.map((c) => c.companyName).join(", ")}</strong>.
                 </p>
               </div>
             )}
 
-            {booking.hasLocationCustomization && (
-              <div className="bg-[#F0F9FF] p-2.5 rounded-lg border border-[#F97316]/30">
-                <p className="font-bold text-purple-900 mb-1">ĐIỀU KHOẢN TÙY CHỈNH LỊCH TRÌNH:</p>
-                <p>Các điều chỉnh về khách sạn, địa điểm tham quan và thực đơn theo thỏa thuận phụ lục booking.</p>
-              </div>
-            )}
+            <p className="text-[11px] text-gray-400 border-t pt-2">
+              Nội dung hợp đồng được lập từ phương án {contract.version} đã được Bên B chấp nhận và không thay đổi theo các chỉnh sửa sau đó. Mọi thay đổi sau khi chốt cần lập phụ lục riêng.
+            </p>
           </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t">
             <Button variant="outline" onClick={() => setContractModalOpen(false)}>Đóng</Button>
-            <Button className="bg-[#075985] hover:bg-[#F97316] text-white gap-1.5" onClick={() => window.print()}>
-              <Printer className="w-4 h-4" />
-              In hợp đồng
-            </Button>
+            {contract && (
+              <Button className="bg-[#075985] hover:bg-[#F97316] text-white gap-1.5" onClick={() => window.print()}>
+                <Printer className="w-4 h-4" />
+                In hợp đồng
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -210,7 +210,9 @@ public sealed record BookingSnapshotPayload(
     string? CancellationPolicy,
     IReadOnlyList<SnapshotPaymentCondition>? PaymentConditions,
     string? CustomerNotes,
-    DateTime GeneratedAt
+    DateTime GeneratedAt,
+    // SchemaVersion >= 2: ghi chú của Agency, tách riêng khỏi yêu cầu của khách (CustomerNotes).
+    string? AgencyNote = null
 );
 
 public sealed record SnapshotPricingTier(
@@ -229,7 +231,11 @@ public sealed record SnapshotPassenger(
     string? Gender,
     string? IdentityNumber,
     string? TierName,
-    decimal Price
+    decimal Price,
+    // SchemaVersion >= 2: ghi chú hành khách tại thời điểm chụp (không gồm dòng số điện thoại).
+    string? Note = null,
+    string? RoommateNote = null,
+    string? RestaurantNote = null
 );
 
 public sealed record SnapshotDay(

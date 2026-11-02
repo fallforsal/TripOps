@@ -195,7 +195,9 @@ public sealed class BookingSnapshotFlowTests
 
         var snapDetail = await customer.GetFromJsonAsync<BookingSnapshotDto>($"/api/v1/bookings/{bookingId}/snapshots/{snapshots[0].Id}");
         Assert.NotNull(snapDetail);
-        Assert.Equal(1, snapDetail.SnapshotData.SchemaVersion);
+        Assert.Equal(2, snapDetail.SnapshotData.SchemaVersion);
+        Assert.Equal("Yêu cầu phòng tầng cao", snapDetail.SnapshotData.CustomerNotes);
+        Assert.Null(snapDetail.SnapshotData.AgencyNote);
         Assert.Equal("Tour Đà Nẵng 3N2Đ Ban Đầu", snapDetail.SnapshotData.TourName);
 
         // 4. Unauthorized agency cannot create proposal
@@ -211,7 +213,11 @@ public sealed class BookingSnapshotFlowTests
         Assert.Equal("proposal", proposal.SnapshotType);
         Assert.Null(proposal.AcceptedAt);
         Assert.Null(proposal.AcceptedBy);
-        Assert.Contains("Nâng cấp phòng hướng biển", proposal.SnapshotData.CustomerNotes);
+        // Ghi chú Agency nằm ở AgencyNote, yêu cầu của khách giữ nguyên ở CustomerNotes.
+        Assert.Equal(2, proposal.SnapshotData.SchemaVersion);
+        Assert.Equal("Nâng cấp phòng hướng biển", proposal.SnapshotData.AgencyNote);
+        Assert.Equal("Yêu cầu phòng tầng cao", proposal.SnapshotData.CustomerNotes);
+        Assert.Equal("Nâng cấp phòng hướng biển", proposal.ProposalNote);
         Assert.Equal("Tour Đà Nẵng 3N2Đ Ban Đầu", proposal.SnapshotData.TourName);
         Assert.Equal(3000000, proposal.SnapshotData.BasePrice);
         Assert.Equal(created.InitialRequestSnapshot.SourceTourVersion, proposal.SourceTourVersion);
@@ -381,6 +387,55 @@ public sealed class BookingSnapshotFlowTests
         var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
         var id=await NewBooking(customer); var proposal=await Proposal(agency,id,"v2");
         Assert.NotEmpty(proposal.SnapshotData.PricingTiers);
+    }
+    [Fact] public async Task SnapshotSchema2_KeepsPassengerNotes_WithoutPhoneLine() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test"); var agency=await app.Client("agency1@example.test");
+        var id=await NewBooking(customer);
+        var initial=(await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{id}"))!.InitialRequestSnapshot!;
+        var p1=Assert.Single(initial.SnapshotData.Passengers);
+        Assert.Equal("Ghi chu rieng", p1.Note);
+        Assert.Equal("Hai giuong don", p1.RoommateNote);
+        Assert.Equal("An chay", p1.RestaurantNote);
+        Assert.Equal("0901234567", p1.PhoneNumber);
+
+        var p2=await Proposal(agency,id,"  Da giu phong hai giuong don.  ");
+        Assert.Equal("Da giu phong hai giuong don.", p2.SnapshotData.AgencyNote);
+        Assert.Equal("REVIEW ONLY", p2.SnapshotData.CustomerNotes);
+        var passenger=Assert.Single(p2.SnapshotData.Passengers);
+        Assert.Equal("Ghi chu rieng", passenger.Note);
+        Assert.Equal("An chay", passenger.RestaurantNote);
+
+        // Ghi chú trống thì không tạo AgencyNote rỗng.
+        var p3=await Proposal(agency,id,"   ");
+        Assert.Null(p3.SnapshotData.AgencyNote);
+        Assert.Null(p3.ProposalNote);
+    }
+    [Fact] public async Task LegacySchema1Snapshot_StillReadable_AndAcceptable() {
+        using var app = new App(); await app.Initialize();
+        var customer=await app.Client("customer1@example.test");
+        var id=await NewBooking(customer);
+        int legacyId;
+        // Bản phương án cũ (schema 1): ghi chú Agency bị gộp trong customerNotes, hành khách không có ghi chú.
+        const string legacyJson = "{\"schemaVersion\":1,\"tourId\":1,\"tourCode\":\"DN-3N2D\",\"tourName\":\"Tour cũ\",\"durationDays\":3,\"durationNights\":2,"
+            + "\"startDate\":\"2026-12-01T00:00:00\",\"endDate\":\"2026-12-03T00:00:00\",\"agencyId\":\"agency1\",\"basePrice\":3000000,\"totalAmount\":3000000,\"depositAmount\":900000,"
+            + "\"pricingTiers\":[],\"passengers\":[{\"index\":1,\"fullName\":\"Legacy Passenger\",\"tierName\":\"Người lớn\",\"price\":3000000}],"
+            + "\"itinerary\":[],\"hotels\":[],\"customerNotes\":\"REVIEW ONLY\\n[Ghi chú đề xuất: v2 cũ]\",\"generatedAt\":\"2026-11-01T00:00:00Z\"}";
+        using(var scope=app.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var legacy = new BookingSnapshot {BookingId=id,Version=2,SnapshotType="proposal",SnapshotData=legacyJson,CreatedBy="agency1",CreatedAt=DateTime.UtcNow};
+            db.BookingSnapshots.Add(legacy); await db.SaveChangesAsync(); legacyId=legacy.Id;
+        }
+        var detail=await customer.GetFromJsonAsync<BookingSnapshotDto>($"/api/v1/bookings/{id}/snapshots/{legacyId}");
+        Assert.Equal(1, detail!.SnapshotData.SchemaVersion);
+        Assert.Null(detail.SnapshotData.AgencyNote);
+        Assert.Null(Assert.Single(detail.SnapshotData.Passengers).Note);
+        var accepted=await customer.PostAsJsonAsync($"/api/v1/bookings/{id}/snapshots/{legacyId}/accept", new {});
+        accepted.EnsureSuccessStatusCode();
+        using(var scope=app.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            Assert.Equal(legacyJson, (await db.BookingSnapshots.AsNoTracking().SingleAsync(s=>s.Id==legacyId)).SnapshotData);
+        }
     }
     [Fact] public async Task InitialSnapshot_MustUseActualTourVersion() {
         using var app = new App(); await app.Initialize();

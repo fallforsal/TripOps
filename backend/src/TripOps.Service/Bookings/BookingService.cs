@@ -447,9 +447,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         if (request.Note?.Length > 2000)
             throw new BookingException(400, "Nội dung phương án tối đa 2.000 ký tự.");
 
-        var note = string.IsNullOrWhiteSpace(request?.Note)
-            ? booking.SpecialRequests
-            : (string.IsNullOrWhiteSpace(booking.SpecialRequests) ? request.Note : $"{booking.SpecialRequests}\n[Ghi chú đề xuất: {request.Note}]");
+        var agencyNote = string.IsNullOrWhiteSpace(request?.Note) ? null : request.Note.Trim();
 
         // Preserve the catalogue terms that this booking was based on, even if the
         // public tour has since changed. Refresh operational choices/prices from the booking.
@@ -457,9 +455,10 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             .OrderBy(s => s.Version).FirstOrDefault()
             ?? booking.Snapshots.OrderByDescending(s => s.Version).FirstOrDefault();
         var terms = source is null ? null : ToSnapshotDto(source).SnapshotData;
-        var current = BuildSnapshotPayload(booking, booking.Tour!, booking.Tour!.Version, note);
+        var current = BuildSnapshotPayload(booking, booking.Tour!, booking.Tour!.Version, agencyNote: agencyNote);
         var payload = terms is null ? current : terms with
         {
+            SchemaVersion = current.SchemaVersion,
             StartDate = current.StartDate,
             EndDate = current.EndDate,
             TotalAmount = current.TotalAmount,
@@ -469,6 +468,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             Hotels = current.Hotels,
             PaymentConditions = current.PaymentConditions,
             CustomerNotes = current.CustomerNotes,
+            AgencyNote = current.AgencyNote,
             GeneratedAt = current.GeneratedAt
         };
         var json = System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions
@@ -491,7 +491,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         repository.AddSnapshot(proposalSnapshot);
         if (booking.CustomerId is not null)
             proposalSnapshot.Events.Add(new BookingProposalEvent { ActorId = agencyId,
-                RecipientId = booking.CustomerId, EventType = "proposal_sent", Message = request?.Note?.Trim() });
+                RecipientId = booking.CustomerId, EventType = "proposal_sent", Message = agencyNote });
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
@@ -623,7 +623,11 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
     }
 
-    private static BookingSnapshotPayload BuildSnapshotPayload(Booking booking, Tour tour, int? sourceTourVersion, string? customNotes = null)
+    // Schema 2: tách AgencyNote khỏi CustomerNotes và lưu 3 ghi chú hành khách.
+    // Bản chụp cũ (schema 1) giữ nguyên, không ghi đè.
+    private const int SnapshotSchemaVersion = 2;
+
+    private static BookingSnapshotPayload BuildSnapshotPayload(Booking booking, Tour tour, int? sourceTourVersion, string? customNotes = null, string? agencyNote = null)
     {
         var pricingTiers = tour.PricingTiers.OrderBy(t => t.DisplayOrder).Select(t => new SnapshotPricingTier(
             t.Id, t.Name ?? "Tiêu chuẩn", t.MinAge, t.MaxAge, t.PricePerGuest ?? 0)).ToList();
@@ -636,7 +640,10 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             p.Gender,
             p.IdentityNumber,
             p.TierName,
-            p.Price)).ToList();
+            p.Price,
+            NoteWithoutPhone(p.Note),
+            Blank(p.RoommateNote),
+            Blank(p.RestaurantNote))).ToList();
 
         var itinerary = booking.Timelines.OrderBy(t => t.DayNumber).Select(t => new SnapshotDay(
             t.DayNumber,
@@ -660,7 +667,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             pr.Description)).ToList();
 
         return new BookingSnapshotPayload(
-            SchemaVersion: 1,
+            SchemaVersion: SnapshotSchemaVersion,
             TourId: booking.TourId ?? tour.Id,
             TourCode: tour.Code ?? $"TRIP-{tour.Id}",
             TourName: tour.Name ?? "Tour Du Lịch",
@@ -687,7 +694,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
             CancellationPolicy: tour.CancellationPolicy,
             PaymentConditions: paymentConditions,
             CustomerNotes: customNotes ?? booking.SpecialRequests,
-            GeneratedAt: DateTime.UtcNow
+            GeneratedAt: DateTime.UtcNow,
+            AgencyNote: agencyNote
         );
     }
 
@@ -822,6 +830,9 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
     private static string? ParticipantNote(string? note, string? phone) => string.IsNullOrWhiteSpace(phone)
         ? note?.Trim() : string.Join("\n", new[] { note?.Trim(), $"Điện thoại: {phone.Trim()}" }.Where(s => !string.IsNullOrWhiteSpace(s)));
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NoteWithoutPhone(string? note) => Blank(note is null ? null
+        : System.Text.RegularExpressions.Regex.Replace(note, @"(?:^|\r?\n)Điện thoại: [^\r\n]*", ""));
     private static string? Phone(string? note) => string.IsNullOrWhiteSpace(note) ? null
         : System.Text.RegularExpressions.Regex.Match(note, @"(?:^|\n)Điện thoại: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
     private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)

@@ -17,6 +17,7 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
+  Users,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -42,7 +43,7 @@ import {
   type BookingSnapshotSummaryDto,
   type BookingSnapshotDto,
 } from "@/app/services/wf05Bookings";
-import { acceptedSnapshotFromBooking, canChangeBookingProposal, proposalVersionStyle, selectSnapshotVersions } from "@/app/services/bookingSnapshots";
+import { acceptedSnapshotFromBooking, canChangeBookingProposal, proposalVersionStyle, selectSnapshotVersions, snapshotHasPassengerNotes, snapshotNotes } from "@/app/services/bookingSnapshots";
 
 interface BookingSnapshotPanelProps {
   booking: Booking;
@@ -116,6 +117,7 @@ export function BookingSnapshotPanel({
   // Expanded sections in snapshot view
   const [showItinerary, setShowItinerary] = useState(true);
   const [showHotels, setShowHotels] = useState(true);
+  const [showPassengers, setShowPassengers] = useState(false);
   const [showPolicies, setShowPolicies] = useState(false);
 
   const bookingIdNumber = Number(booking.id);
@@ -445,12 +447,26 @@ export function BookingSnapshotPanel({
             </div>
           </div>
 
-          {(activeSnapshotDetail.proposalNote || currentSnapData.customerNotes) && (
-            <div className="rounded-md border border-slate-200 p-4 text-sm">
-              <h4 className="font-semibold text-slate-800">{activeSnapshotDetail.snapshotType === "initial_request" ? "Yêu cầu của khách" : "Nội dung từ công ty lữ hành"}</h4>
-              <p className="mt-2 whitespace-pre-line text-slate-700">{activeSnapshotDetail.proposalNote || currentSnapData.customerNotes}</p>
-            </div>
-          )}
+          {(() => {
+            const notes = snapshotNotes(activeSnapshotDetail);
+            if (!notes.agencyNote && !notes.customerNote) return null;
+            return (
+              <div className="space-y-3">
+                {notes.agencyNote && (
+                  <div className="rounded-md border border-slate-200 p-4 text-sm">
+                    <h4 className="font-semibold text-slate-800">Nội dung từ công ty lữ hành</h4>
+                    <p className="mt-2 whitespace-pre-line text-slate-700">{notes.agencyNote}</p>
+                  </div>
+                )}
+                {notes.customerNote && (
+                  <div className="rounded-md border border-slate-200 bg-slate-50/60 p-4 text-sm">
+                    <h4 className="font-semibold text-slate-800">Yêu cầu của khách</h4>
+                    <p className="mt-2 whitespace-pre-line text-slate-700">{notes.customerNote}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {activeSnapshotDetail.changeRequest && <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm" role="status">
             <h4 className="font-semibold text-amber-950">Khách yêu cầu chỉnh sửa · {formatDateTime(activeSnapshotDetail.changeRequest.createdAt)}</h4>
             <p className="mt-2 whitespace-pre-line text-amber-950">{activeSnapshotDetail.changeRequest.message}</p>
@@ -524,6 +540,46 @@ export function BookingSnapshotPanel({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Passengers as recorded in this version */}
+          {currentSnapData.passengers.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPassengers(!showPassengers)}
+                className="w-full flex items-center justify-between text-xs font-semibold text-slate-700 uppercase tracking-wide py-1 border-b border-slate-100 hover:text-slate-900"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-slate-500" />
+                  Danh sách hành khách ({currentSnapData.passengers.length})
+                </span>
+                {showPassengers ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+
+              {showPassengers && (
+                <div className="mt-3 space-y-2">
+                  {!snapshotHasPassengerNotes(currentSnapData) && (
+                    <p className="text-[11px] text-slate-500">Phiên bản này được lưu trước khi hệ thống ghi nhận ghi chú hành khách.</p>
+                  )}
+                  {currentSnapData.passengers.map((p) => (
+                    <div key={p.index} className="p-3 rounded-lg border border-slate-200 bg-white text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-800">{p.index}. {p.fullName}</span>
+                        <span className="text-slate-600">{p.tierName ?? "—"} · {formatVND(p.price)}</span>
+                      </div>
+                      {(p.note || p.roommateNote || p.restaurantNote) && (
+                        <dl className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-600">
+                          {p.note && <div><dt className="font-medium text-slate-500">Ghi chú</dt><dd className="whitespace-pre-line">{p.note}</dd></div>}
+                          {p.roommateNote && <div><dt className="font-medium text-slate-500">Nguyện vọng xếp phòng</dt><dd className="whitespace-pre-line">{p.roommateNote}</dd></div>}
+                          {p.restaurantNote && <div><dt className="font-medium text-slate-500">Nguyện vọng ăn uống</dt><dd className="whitespace-pre-line">{p.restaurantNote}</dd></div>}
+                        </dl>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
