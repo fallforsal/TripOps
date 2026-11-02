@@ -79,7 +79,37 @@ public sealed record BookingDto(
     DateTime? UpdatedAt,
     IReadOnlyList<IncidentDto>? Incidents = null,
     IReadOnlyList<BookingDayDto>? SnapshotDays = null,
-    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null);
+    IReadOnlyList<BookingHotelDto>? SnapshotHotels = null,
+    IReadOnlyList<PaymentScheduleItemDto>? PaymentSchedule = null,
+    IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null);
+
+/// <summary>
+/// Một đợt trong lịch thanh toán (backend tính, frontend chỉ hiển thị). Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).
+/// Status: Pending | Overdue | Paid | Scheduled (Đợt 2 chờ đủ cọc mới mở) | NotIssued (đơn duyệt trước khi có lịch, chưa phát hành đợt cọc).
+/// DueAt: hạn chính xác (UTC, hiển thị theo giờ Việt Nam). Đợt 1: duyệt + 24 giờ; Đợt 2: hết ngày (khởi hành − 8).
+/// Warning: hạn bất thường cần chốt quy tắc (hạn cọc sau khởi hành, hạn đợt 2 không sau hạn cọc).
+/// </summary>
+public sealed record PaymentScheduleItemDto(
+    int? Id, string Stage, string Description, decimal Amount, decimal Outstanding,
+    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, string? Warning);
+
+/// <summary>
+/// Giao dịch tiền. Method: PAYOS | DEMO (mô phỏng Development) | VNPAY (lịch sử cũ).
+/// Status: Pending | Success | Failed | Cancelled | Expired | NeedsReview | Refunded.
+/// </summary>
+public sealed record PaymentTransactionDto(
+    int Id, int? PaymentRequestId, string TransactionCode, string PaymentMethod, decimal Amount,
+    string Status, DateTime? PaidAt, DateTime? CreatedAt, string? GatewayTransactionNo,
+    DateTime? ExpiresAt = null, string? ReviewNote = null);
+
+/// <summary>Phiên thanh toán payOS: FE chuyển trình duyệt tới CheckoutUrl. Reused = dùng lại link còn hạn.</summary>
+public sealed record PayOsCheckoutDto(string CheckoutUrl, string TransactionCode, decimal Amount, DateTime ExpiresAt, bool Reused);
+
+/// <summary>Kết quả tra cứu payOS. Outcome: paid | pending | cancelled | expired | review | failed | none.</summary>
+public sealed record PaymentSyncResultDto(string Outcome, string Message, BookingDto Booking);
+
+/// <summary>Phản hồi cho payOS khi nhận webhook (payOS chỉ cần mã HTTP 2xx).</summary>
+public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference);

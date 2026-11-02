@@ -1,4 +1,5 @@
 import { http } from "@/app/lib/http";
+import type { PaymentOutcome } from "./payos";
 
 export interface ParticipantInput {
   fullName: string;
@@ -127,6 +128,52 @@ export interface BookingDto {
     serviceId?: number;
     priceDifference: number;
   }[];
+  /** Lịch thanh toán thật từ máy chủ (rỗng khi đơn còn chờ duyệt). */
+  paymentSchedule?: PaymentScheduleItemDto[];
+  paymentTransactions?: PaymentTransactionDto[];
+}
+
+export interface PaymentScheduleItemDto {
+  id?: number | null;
+  stage: "deposit" | "balance";
+  description: string;
+  amount: number;
+  outstanding: number;
+  dueDate?: string | null;
+  /** Hạn chính xác (UTC) do backend tính; hiển thị theo giờ Việt Nam. */
+  dueAt?: string | null;
+  status: "Pending" | "Overdue" | "Paid" | "Scheduled" | "NotIssued";
+  paidAt?: string | null;
+  /** Cảnh báo hạn bất thường (hạn cọc sau khởi hành, hạn đợt 2 không sau hạn cọc). */
+  warning?: string | null;
+}
+
+export interface PaymentTransactionDto {
+  id: number;
+  paymentRequestId?: number | null;
+  transactionCode: string;
+  paymentMethod: string;
+  amount: number;
+  status: "Pending" | "Success" | "Failed" | "Cancelled" | "Expired" | "NeedsReview" | "Refunded";
+  paidAt?: string | null;
+  createdAt?: string | null;
+  gatewayTransactionNo?: string | null;
+  expiresAt?: string | null;
+  reviewNote?: string | null;
+}
+
+export interface PayOsCheckoutDto {
+  checkoutUrl: string;
+  transactionCode: string;
+  amount: number;
+  expiresAt: string;
+  reused: boolean;
+}
+
+export interface PaymentSyncResultDto {
+  outcome: PaymentOutcome;
+  message: string;
+  booking: BookingDto;
 }
 
 export interface BookingListItem {
@@ -200,6 +247,22 @@ export async function depositBooking(
     body: JSON.stringify({ amount, transactionReference, paymentProofUrl }),
   });
 }
+
+/** Tạo (hoặc dùng lại) link payOS cho phần cọc còn thiếu. Số tiền do backend tính. */
+export async function startPayOsPayment(id: number): Promise<PayOsCheckoutDto> {
+  return await http<PayOsCheckoutDto>(`/bookings/${id}/payments/payos`, {
+    method: "POST",
+  });
+}
+
+/** Yêu cầu backend tra cứu payOS và cập nhật kết quả đã xác minh. */
+export async function syncPayOsPayment(id: number): Promise<PaymentSyncResultDto> {
+  return await http<PaymentSyncResultDto>(`/bookings/${id}/payments/payos/sync`, {
+    method: "POST",
+  });
+}
+
+export { isPayOsUrl } from "./payos";
 
 export async function cancelBooking(
   id: number,

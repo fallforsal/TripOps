@@ -51,6 +51,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
@@ -58,7 +59,14 @@ interface UserBookingDetailPageProps {
   systemBank?: SystemBankAccount;
   onBack: () => void;
   onCancelBooking: (bookingId: string, reason: string) => void;
-  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => void;
+  /** Thanh toán mô phỏng (chỉ Development). Trả về true nếu máy chủ đã ghi nhận. */
+  onPayPaymentRequest?: (bookingId: string, paymentRequestId: string) => Promise<boolean> | void;
+  /** Thanh toán cọc qua payOS (chuyển trình duyệt sang trang thanh toán payOS). */
+  onPayWithPayOs?: (bookingId: string) => Promise<void>;
+  /** Trạng thái xác nhận với payOS sau khi khách quay về (backend tra cứu, không dựa vào URL). */
+  paymentCheck?: { phase: "checking" | PaymentOutcome | "error"; message: string } | null;
+  /** Yêu cầu backend kiểm tra lại trạng thái thanh toán payOS. */
+  onCheckPayment?: (bookingId: string) => void;
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
   onNavigateToComplaint?: (booking: Booking) => void;
   onNavigateToReview?: (booking: Booking) => void;
@@ -129,11 +137,15 @@ export function UserBookingDetailPage({
   onBack,
   onCancelBooking,
   onPayPaymentRequest,
+  onPayWithPayOs,
+  paymentCheck,
+  onCheckPayment,
   onUpdateBookingPassengers,
   onNavigateToComplaint,
   onNavigateToReview,
   onSubmitRefundRequest,
 }: UserBookingDetailPageProps) {
+  const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequest | null>(null);
@@ -334,7 +346,36 @@ export function UserBookingDetailPage({
 
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
   const today = new Date().toLocaleDateString("vi-VN");
-  const canCancel = booking.status === "pending" || booking.status === "deposited" || booking.status === "confirmed" || booking.status === "paid";
+  // Chặn hủy đơn đã có tiền: hủy kèm hoàn tiền phải do Admin xem xét (máy chủ cũng chặn, trả 409).
+  const paidSoFar = booking.paidAmount ?? 0;
+  const hasPendingGatewayPayment = (booking.paymentTransactions ?? []).some((t) => t.status === "pending");
+  const cancellableStatus = booking.status === "pending" || booking.status === "confirmed";
+  const canCancel = cancellableStatus && paidSoFar === 0 && !hasPendingGatewayPayment;
+  const cancelBlockedReason = canCancel
+    ? null
+    : paidSoFar > 0 && booking.status !== "cancelled" && booking.status !== "completed"
+      ? "Đơn đã có khoản thanh toán nên bạn không thể tự hủy. Hủy kèm hoàn tiền sẽ do Admin xem xét."
+      : hasPendingGatewayPayment && cancellableStatus
+        ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
+        : null;
+  /** Hạn hiển thị theo giờ Việt Nam (ngày + giờ) từ giá trị backend trả về. */
+  const deadlineText = (pr: PaymentRequest) =>
+    pr.dueAt ? formatVietnamDeadline(pr.dueAt) : pr.dueDate ? `hết ngày ${pr.dueDate.split("-").reverse().join("/")}` : "—";
+  const stageLabel = (pr: PaymentRequest) =>
+    pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán";
+  const canPayRequest = (pr: PaymentRequest) =>
+    // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
+    // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
+    (pr.stage === "deposit" || pr.stage === "balance") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
+  const transactionStatusLabel: Record<string, { label: string; color: string }> = {
+    success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
+    failed: { label: "Không thành công", color: "bg-red-100 text-red-800 border-red-200" },
+    cancelled: { label: "Đã hủy", color: "bg-gray-100 text-gray-700 border-gray-200" },
+    expired: { label: "Hết hạn", color: "bg-gray-100 text-gray-700 border-gray-200" },
+    needsreview: { label: "Chờ đối soát", color: "bg-orange-100 text-orange-800 border-orange-200" },
+    refunded: { label: "Đã hoàn", color: "bg-sky-100 text-sky-800 border-sky-200" },
+  };
 
   // Multi-company co-hosting logic
   const isCoHosted = Boolean(booking.isCoHosted || booking.tour?.isCoHosted);
@@ -361,7 +402,7 @@ export function UserBookingDetailPage({
   return (
     <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
-        <p className="p-3 bg-amber-50 text-amber-900 rounded-lg text-sm">Thanh toán đang ở chế độ mô phỏng. Thao tác ghi nhận tiền không thực hiện hoặc xác minh chuyển khoản ngân hàng.</p>
+        <p className="p-3 bg-amber-50 text-amber-900 rounded-lg text-sm">Thanh toán cọc qua payOS (chuyển khoản/VietQR). Lưu ý: payOS không có môi trường thử nghiệm — chuyển khoản qua payOS là giao dịch tiền thật.</p>
         {/* PAYMENT SUCCESS TOAST */}
         {paymentSuccessToast && (
           <div className="bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
@@ -1644,9 +1685,7 @@ export function UserBookingDetailPage({
 
                 {/* Progress breakdown */}
                 {(() => {
-                  const totalPaidIntoSystem = (booking.paymentRequests ?? [])
-                    .filter((pr) => pr.status === "paid")
-                    .reduce((sum, pr) => sum + pr.amount, 0);
+                  const totalPaidIntoSystem = paidSoFar;
                   const remainingToPay = Math.max(0, booking.totalPrice - totalPaidIntoSystem);
 
                   return (
@@ -1663,9 +1702,9 @@ export function UserBookingDetailPage({
                   );
                 })()}
 
-                {booking.paymentStatus === "unpaid" && (
+                {booking.status === "pending" && (
                   <div className="bg-teal-50 p-3 rounded-xl border border-teal-200 text-teal-900 text-xs leading-relaxed">
-                    💡 <strong>Chính sách thanh toán sau:</strong> Bạn chưa cần thanh toán ngay lúc này. Công ty lữ hành sẽ liên hệ với các bên dịch vụ bên ngoài để chốt giá chính thức cho đoàn và gửi thông báo thanh toán cho bạn.
+                    💡 <strong>Chưa cần thanh toán:</strong> Đơn đang chờ công ty lữ hành duyệt. Sau khi duyệt, hệ thống mở <strong>Đợt 1 – đặt cọc 50%</strong> (hạn 24 giờ); <strong>Đợt 2 – phần còn lại</strong> phải thanh toán xong trước ngày khởi hành 1 tuần.
                   </div>
                 )}
 
@@ -1676,75 +1715,141 @@ export function UserBookingDetailPage({
                   </span>
                 </div>
 
-                {/* PROMINENT 100% ESCROW PAYMENT BUTTON FOR CUSTOMER */}
-                {booking.paymentStatus !== "paid" && booking.status !== "cancelled" && (
-                  <Button
-                    onClick={() => {
-                      const pr = (booking.paymentRequests && booking.paymentRequests.find((r) => r.status !== "paid")) || {
-                        id: `pr-full-${booking.id}`,
-                        bookingId: booking.id,
-                        amount: booking.totalPrice,
-                        description: `Thanh toán 100% trọn gói tour qua Ký quỹ Hệ thống (Escrow)`,
-                        dueDate: booking.tourStartDate || new Date().toISOString().split("T")[0],
-                        status: "pending",
-                        createdAt: new Date().toISOString().split("T")[0],
-                      };
-                      setSelectedPaymentRequest(pr);
-                    }}
-                    className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-9 gap-2 shadow-md rounded-xl"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-emerald-200" />
-                    Thanh toán 100% qua Ký quỹ Hệ thống (Escrow)
-                  </Button>
-                )}
               </div>
 
-              {/* Payment Requests from Tour Company */}
+              {/* Lịch thanh toán (máy chủ tạo khi công ty lữ hành duyệt đơn) */}
               {booking.paymentRequests && booking.paymentRequests.length > 0 && (
                 <div className="pt-3 border-t border-gray-100 space-y-2.5">
-                  <span className="text-xs font-bold text-gray-800 block">Các đợt thanh toán từ công ty lữ hành:</span>
+                  <span className="text-xs font-bold text-gray-800 block">Lịch thanh toán:</span>
                   <div className="space-y-2.5">
                     {booking.paymentRequests.map((pr) => {
                       const isPaid = pr.status === "paid";
                       return (
                         <div key={pr.id} className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 text-xs space-y-1.5 shadow-2xs">
                           <div className="flex justify-between items-start gap-2">
-                            <p className="font-bold text-gray-900">{pr.description}</p>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">{stageLabel(pr)}</span>
+                              <p className="font-bold text-gray-900">{pr.description}</p>
+                            </div>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${
                               isPaid
                                 ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                                 : pr.status === "overdue"
                                 ? "bg-red-100 text-red-800 border-red-200"
+                                : pr.status === "scheduled"
+                                ? "bg-gray-100 text-gray-700 border-gray-200"
                                 : "bg-amber-100 text-amber-800 border-amber-200"
                             }`}>
-                              {isPaid ? "Đã nộp vào TK Hệ thống" : pr.status === "overdue" ? "Quá hạn" : "Chờ thanh toán"}
+                              {isPaid ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Mở sau khi đủ cọc" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ thanh toán"}
                             </span>
                           </div>
 
                           <div className="flex justify-between items-center text-gray-500 pt-0.5">
-                            <span>Hạn chót: <strong>{pr.dueDate}</strong></span>
+                            <span>Hạn chót: <strong>{deadlineText(pr)}</strong>{pr.dueAt ? " (giờ VN)" : ""}</span>
                             <span className="font-extrabold text-[#075985] text-sm">{formatVND(pr.amount)}</span>
                           </div>
+                          {!isPaid && pr.totalAmount !== undefined && pr.totalAmount !== pr.amount && (
+                            <p className="text-[10px] text-gray-500">Tổng đợt {formatVND(pr.totalAmount)} — đã trừ khoản đã thanh toán trước đó.</p>
+                          )}
 
+                          {pr.status === "overdue" && (
+                            <p className="text-[10px] text-red-700">Đợt cọc đã quá hạn nên không thể thanh toán tiếp. Vui lòng liên hệ công ty lữ hành.</p>
+                          )}
+                          {pr.status === "not_issued" && (
+                            <p className="text-[10px] text-gray-600">Đơn được duyệt trước khi áp dụng lịch thanh toán mới nên chưa có đợt cọc. Công ty lữ hành sẽ xử lý.</p>
+                          )}
+                          {pr.warning && !isPaid && (
+                            <p className="text-[10px] text-amber-700">Lưu ý: {pr.warning}</p>
+                          )}
                           {isPaid ? (
                             <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1 pt-1 border-t border-gray-200/60">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              Đã chuyển khoản an toàn vào TK Hệ thống ({pr.paidAt})
+                              Đã thanh toán{pr.paidAt ? ` ngày ${pr.paidAt}` : ""}
                             </p>
-                          ) : (
+                          ) : canPayRequest(pr) ? (
                             <Button
                               size="sm"
                               onClick={() => setSelectedPaymentRequest(pr)}
                               className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs h-8 gap-1.5 shadow-xs"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
-                              Thanh toán đợt này ({formatVND(pr.amount)})
+                              {pr.stage === "balance" ? "Thanh toán đợt 2" : "Thanh toán cọc"} ({formatVND(pr.amount)})
                             </Button>
-                          )}
+                          ) : null}
                         </div>
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Xác nhận kết quả payOS: chỉ tin trạng thái backend đã tra cứu từ payOS */}
+              {(paymentCheck || hasPendingGatewayPayment) && (
+                <div className={`pt-3 border-t border-gray-100 text-[11px] rounded-lg p-2.5 border ${
+                  paymentCheck?.phase === "paid"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                    : paymentCheck?.phase === "error" || paymentCheck?.phase === "review"
+                    ? "bg-orange-50 border-orange-200 text-orange-900"
+                    : "bg-sky-50 border-sky-200 text-sky-900"
+                }`}>
+                  <p className="font-semibold">
+                    {paymentCheck?.phase === "checking"
+                      ? "Đang xác nhận với payOS..."
+                      : paymentCheck?.phase === "paid"
+                      ? "Đã xác nhận nhận tiền cọc"
+                      : paymentCheck?.phase === "cancelled"
+                      ? "Giao dịch đã hủy"
+                      : paymentCheck?.phase === "expired"
+                      ? "Link thanh toán đã hết hạn"
+                      : paymentCheck?.phase === "review"
+                      ? "Giao dịch cần đối soát"
+                      : paymentCheck?.phase === "error"
+                      ? "Chưa kiểm tra được"
+                      : "Đang chờ kết quả thanh toán"}
+                  </p>
+                  <p className="mt-0.5">
+                    {paymentCheck?.message ?? "Nếu bạn đã chuyển khoản, bấm \"Kiểm tra thanh toán\" để hệ thống hỏi lại payOS."}
+                  </p>
+                  {onCheckPayment && paymentCheck?.phase !== "paid" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={paymentCheck?.phase === "checking"}
+                      onClick={() => onCheckPayment(booking.id)}
+                      className="mt-2 h-7 text-[11px]"
+                    >
+                      {paymentCheck?.phase === "checking" ? "Đang kiểm tra..." : "Kiểm tra thanh toán"}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Lịch sử giao dịch */}
+              {booking.paymentTransactions && booking.paymentTransactions.length > 0 && (
+                <div className="pt-3 border-t border-gray-100 space-y-2">
+                  <span className="text-xs font-bold text-gray-800 block">Lịch sử giao dịch:</span>
+                  {booking.paymentTransactions.map((t) => {
+                    const meta = transactionStatusLabel[t.status] ?? transactionStatusLabel.pending;
+                    return (
+                      <div key={t.id} className="flex justify-between items-start gap-2 text-[11px] bg-white rounded-lg border border-gray-200 p-2.5">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800">
+                            {t.method === "PAYOS" ? "payOS" : t.method === "VNPAY" ? "VNPAY (cũ)" : t.method === "DEMO" ? "Mô phỏng (DEV)" : t.method}
+                            {" · "}{formatVND(t.amount)}
+                          </p>
+                          <p className="text-gray-500 font-mono truncate">{t.code}{t.gatewayTransactionNo ? ` · Mã GD ${t.gatewayTransactionNo}` : ""}</p>
+                          {t.status === "pending" && t.expiresAt && (
+                            <p className="text-gray-400">Link hết hạn lúc {formatVietnamDateTime(t.expiresAt)}</p>
+                          )}
+                          {t.reviewNote && <p className="text-orange-700">{t.reviewNote}</p>}
+                          {(t.paidAt || t.createdAt) && (
+                            <p className="text-gray-400">{formatVietnamDateTime(t.paidAt || t.createdAt)}</p>
+                          )}
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${meta.color}`}>{meta.label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1812,6 +1917,12 @@ export function UserBookingDetailPage({
                     <XCircle className="w-4 h-4 text-rose-600" />
                     Hủy đơn đặt tour này
                   </Button>
+                )}
+                {cancelBlockedReason && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed flex items-start gap-1.5">
+                    <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+                    {cancelBlockedReason}
+                  </p>
                 )}
               </div>
             </div>
@@ -1989,172 +2100,99 @@ export function UserBookingDetailPage({
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: THANH TOÁN QUA TÀI KHOẢN HỆ THỐNG */}
+      {/* MODAL: THANH TOÁN CỌC (payOS) */}
       <Dialog
         open={Boolean(selectedPaymentRequest)}
-        onOpenChange={(open) => !open && setSelectedPaymentRequest(null)}
+        onOpenChange={(open) => !open && !paymentBusy && setSelectedPaymentRequest(null)}
       >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           {selectedPaymentRequest && (
             <div className="space-y-4 pt-1 text-xs text-gray-700">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
-                  <Landmark className="w-5 h-5 text-[#075985]" />
-                  Thanh toán qua Tài khoản Hệ thống
+                  <CreditCard className="w-5 h-5 text-[#075985]" />
+                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại" : "Thanh toán đặt cọc"}
                 </DialogTitle>
               </DialogHeader>
 
-              {/* Booking & Stage Summary */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-[#CBD5E1] space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-[#075985] tracking-wide block">
-                      Đơn hàng #{booking.id}
+                      Đơn {booking.bookingCode || `#${booking.id}`}
                     </span>
                     <p className="font-bold text-gray-900 text-sm">{booking.tour.name}</p>
                   </div>
                   <span className="bg-[#E0F2FE] text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    Hạn: {selectedPaymentRequest.dueDate}
+                    Hạn: {deadlineText(selectedPaymentRequest)}
                   </span>
                 </div>
-
                 <div className="pt-2 border-t border-[#CBD5E1]/60 flex justify-between items-center">
-                  <span className="font-medium text-gray-700">Mục đích: <strong>{selectedPaymentRequest.description}</strong></span>
+                  <span className="font-medium text-gray-700">{stageLabel(selectedPaymentRequest)}: <strong>{selectedPaymentRequest.description}</strong></span>
                   <span className="text-base font-extrabold text-[#075985]">{formatVND(selectedPaymentRequest.amount)}</span>
                 </div>
               </div>
 
-              {/* Escrow Guarantee Banner */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[11px] text-emerald-950 flex items-start gap-2.5 leading-relaxed">
-                <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-[11px] text-amber-950 flex items-start gap-2.5 leading-relaxed">
+                <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-emerald-900">Cơ chế Bảo chứng Thanh toán (Escrow):</p>
-                  <p className="text-gray-700">
-                    Tiền của bạn được chuyển vào <strong>Tài khoản trung gian của Hệ thống Sàn Du lịch</strong>. Hệ thống chỉ quyết toán chuyển trả cho Công ty Du lịch sau khi bạn đã hoàn thành tour an toàn và hài lòng.
+                  <p className="font-bold text-amber-900">Giao dịch tiền thật qua payOS</p>
+                  <p>
+                    Bạn sẽ được chuyển sang trang payOS để chuyển khoản/quét VietQR. payOS không có môi trường thử nghiệm,
+                    nên đây là giao dịch thật. Khoản này chỉ được ghi nhận khi máy chủ xác minh kết quả trực tiếp với payOS.
+                    Đóng trang hoặc quay lại không có nghĩa là giao dịch đã bị hủy.
                   </p>
                 </div>
               </div>
 
-              {/* Bank Account Info Card */}
-              <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 relative overflow-hidden shadow-md">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] text-blue-300 font-bold uppercase tracking-wider block">
-                      Tài khoản thụ hưởng Sàn Du lịch
-                    </span>
-                    <p className="text-xs font-bold text-white mt-0.5">{systemBank.bankName}</p>
-                  </div>
-                  <CreditCard className="w-5 h-5 text-blue-300" />
-                </div>
+              <Button
+                disabled={paymentBusy || !onPayWithPayOs}
+                onClick={async () => {
+                  if (!onPayWithPayOs) return;
+                  setPaymentBusy(true);
+                  try {
+                    await onPayWithPayOs(booking.id);
+                  } finally {
+                    setPaymentBusy(false);
+                  }
+                }}
+                className="w-full bg-[#005BAA] hover:bg-[#004A8C] text-white font-bold text-sm h-11 gap-2 shadow-sm"
+              >
+                <ExternalLink className="w-4 h-4" />
+                {paymentBusy ? "Đang tạo link thanh toán..." : `Thanh toán ${formatVND(selectedPaymentRequest.amount)} qua payOS`}
+              </Button>
 
-                <div className="pt-1 flex items-center justify-between bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Số tài khoản</span>
-                    <span className="font-mono text-base font-extrabold text-amber-300 tracking-wider">
-                      {systemBank.accountNumber}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(systemBank.accountNumber);
-                      setCopiedAccount(true);
-                      setTimeout(() => setCopiedAccount(false), 2000);
+              {import.meta.env.DEV && onPayPaymentRequest && (
+                <div className="border border-dashed border-gray-300 rounded-xl p-3 space-y-2">
+                  <p className="text-[11px] text-gray-500">
+                    Chỉ dành cho môi trường phát triển: ghi nhận cọc mô phỏng, không qua payOS hay ngân hàng.
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={paymentBusy}
+                    onClick={async () => {
+                      setPaymentBusy(true);
+                      try {
+                        const ok = await onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
+                        if (ok !== false) {
+                          setSelectedPaymentRequest(null);
+                          setPaymentSuccessToast(true);
+                          setTimeout(() => setPaymentSuccessToast(false), 4000);
+                        }
+                      } finally {
+                        setPaymentBusy(false);
+                      }
                     }}
-                    className="flex items-center gap-1 text-[11px] bg-[#075985] hover:bg-blue-500 text-white px-2.5 py-1 rounded-lg font-medium transition-colors"
+                    className="w-full text-xs h-9 gap-2"
                   >
-                    {copiedAccount ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedAccount ? "Đã chép" : "Sao chép"}
-                  </button>
+                    <Check className="w-4 h-4" />
+                    [DEV] Ghi nhận cọc mô phỏng
+                  </Button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Chủ tài khoản</span>
-                    <span className="font-bold text-white text-[11px] uppercase truncate block">
-                      {systemBank.accountHolder}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Chi nhánh</span>
-                    <span className="text-gray-200 text-[11px] truncate block">{systemBank.branch || "Hội sở"}</span>
-                  </div>
-                </div>
-
-                {/* Transfer Content */}
-                <div className="flex items-center justify-between bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Nội dung chuyển khoản chuẩn</span>
-                    <span className="font-mono font-bold text-emerald-400 text-xs">
-                      TT {booking.id} {selectedPaymentRequest.id}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`TT ${booking.id} ${selectedPaymentRequest.id}`);
-                      setCopiedContent(true);
-                      setTimeout(() => setCopiedContent(false), 2000);
-                    }}
-                    className="flex items-center gap-1 text-[11px] bg-[#075985] hover:bg-blue-500 text-white px-2.5 py-1 rounded-lg font-medium transition-colors"
-                  >
-                    {copiedContent ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedContent ? "Đã chép" : "Sao chép"}
-                  </button>
-                </div>
-              </div>
-
-              {/* VietQR Code Display */}
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center space-y-2">
-                <p className="font-bold text-gray-800 flex items-center justify-center gap-1.5">
-                  <QrCode className="w-4 h-4 text-[#075985]" />
-                  Quét mã VietQR chuyển khoản nhanh:
-                </p>
-                <div className="inline-block p-2 bg-white rounded-xl border border-gray-200 shadow-xs">
-                  <img
-                    src={`https://img.vietqr.io/image/VCB-${systemBank.accountNumber}-compact2.png?amount=${selectedPaymentRequest.amount}&addInfo=TT%20${booking.id}%20${selectedPaymentRequest.id}&accountName=${encodeURIComponent(systemBank.accountHolder)}`}
-                    alt="Mã VietQR"
-                    className="w-44 h-44 object-contain mx-auto"
-                  />
-                </div>
-                <p className="text-[10px] text-gray-500">
-                  Mở ứng dụng ngân hàng bất kỳ để quét mã (Số tiền &amp; Nội dung đã được điền sẵn)
-                </p>
-              </div>
-
-              {/* DEMO NOTICE FOR TEACHER */}
-              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3.5 space-y-2 text-[11px] text-amber-950">
-                <p className="font-bold flex items-center gap-1.5 text-amber-900">
-                  <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  Cơ chế Tự động hóa Thực tế vs Nút Demo:
-                </p>
-                <ul className="list-disc pl-4 space-y-1 text-gray-700 leading-relaxed">
-                  <li>
-                    <strong>Trong thực tế triển khai:</strong> Sau khi khách quét mã VietQR và xác nhận chuyển tiền trên App ngân hàng, hệ thống webhook của cổng thanh toán / ngân hàng sẽ tự động gửi thông báo IPN. Máy chủ tự động nhận diện và cập nhật trạng thái đợt này sang <strong>"Đã thanh toán"</strong> cho Công ty du lịch ngay tức thì mà không cần thao tác bấm xác nhận thủ công.
-                  </li>
-                  <li>
-                    <strong>Phiên bản Demo:</strong> Bấm nút xác nhận bên dưới để mô phỏng tín hiệu webhook ngân hàng báo về chuyển khoản thành công.
-                  </li>
-                </ul>
-
-                <Button
-                  onClick={() => {
-                    if (onPayPaymentRequest) {
-                      onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
-                    }
-                    setSelectedPaymentRequest(null);
-                    setPaymentSuccessToast(true);
-                    setTimeout(() => setPaymentSuccessToast(false), 4000);
-                  }}
-                  className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 gap-2 shadow-sm"
-                >
-                  <Check className="w-4 h-4" />
-                  [DEMO] Mô phỏng Khách đã quét QR &amp; Chuyển khoản thành công
-                </Button>
-              </div>
+              )}
 
               <div className="flex justify-end pt-1">
-                <Button variant="outline" onClick={() => setSelectedPaymentRequest(null)}>
+                <Button variant="outline" disabled={paymentBusy} onClick={() => setSelectedPaymentRequest(null)}>
                   Đóng lại
                 </Button>
               </div>

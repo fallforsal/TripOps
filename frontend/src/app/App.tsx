@@ -40,10 +40,21 @@ import {
   BookingDto,
   getAllBookingDetails,
   getAvailableGuides,
+  isPayOsUrl,
+  startPayOsPayment,
+  syncPayOsPayment,
 } from "@/app/services/wf05Bookings";
+import type { PaymentOutcome } from "@/app/services/payos";
+
+interface PaymentCheckState {
+  bookingId: string;
+  phase: "checking" | PaymentOutcome | "error";
+  message: string;
+  attempts: number;
+}
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LoginScreen } from "@/app/components/LoginScreen";
 import { RegisterScreen } from "@/app/components/RegisterScreen";
 import { UnifiedHeader } from "@/app/components/UnifiedHeader";
@@ -377,7 +388,8 @@ function Application() {
         setCurrentPage("my-bookings");
         setSelectedUserBooking(null);
       } else if (rawHash.startsWith("my-bookings/")) {
-        const bId = rawHash.replace("my-bookings/", "");
+        // "my-bookings/{id}" hoặc "my-bookings/{id}/payos" (quay về từ payOS).
+        const bId = rawHash.replace("my-bookings/", "").split("/")[0];
         const foundB = bookings.find((b) => b.id === bId);
         if (foundB) {
           setSelectedUserBooking(foundB);
@@ -402,6 +414,69 @@ function Application() {
     window.addEventListener("hashchange", handleUrlChange);
     return () => window.removeEventListener("hashchange", handleUrlChange);
   }, [tours, bookings, restoreHistoryPosition]);
+
+  // ------------------------------------------------------------ payOS
+  // Kết quả thanh toán chỉ lấy từ backend (backend tra cứu payOS và xác minh chữ ký),
+  // không dựa vào tham số trên URL quay về.
+  const [paymentCheck, setPaymentCheck] = useState<PaymentCheckState | null>(null);
+  const paymentPollTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(paymentPollTimer.current), []);
+
+  const checkPayment = async (bookingId: string): Promise<PaymentOutcome | "error"> => {
+    setPaymentCheck((prev) => ({
+      bookingId,
+      phase: "checking",
+      message: "Đang xác nhận kết quả với payOS...",
+      attempts: prev?.bookingId === bookingId ? prev.attempts : 0,
+    }));
+    try {
+      const result = await syncPayOsPayment(Number(bookingId));
+      const converted = fromApiBooking(result.booking, tours, currentUser);
+      setBookings((prev) => prev.map((b) => (b.id === converted.id ? converted : b)));
+      setSelectedUserBooking((prev) => (prev?.id === converted.id ? converted : prev));
+      setPaymentCheck((prev) => ({
+        bookingId,
+        phase: result.outcome,
+        message: result.message,
+        attempts: (prev?.bookingId === bookingId ? prev.attempts : 0) + 1,
+      }));
+      return result.outcome;
+    } catch (err) {
+      setPaymentCheck((prev) => ({
+        bookingId,
+        phase: "error",
+        message: err instanceof Error ? err.message : "Không kiểm tra được trạng thái thanh toán.",
+        attempts: (prev?.bookingId === bookingId ? prev.attempts : 0) + 1,
+      }));
+      return "error";
+    }
+  };
+
+  // Sau khi quay về từ payOS: kiểm tra ngay, nếu payOS còn "đang chờ" thì kiểm tra lại tối đa 6 lần, mỗi lần cách 5 giây.
+  const autoCheckPayment = (bookingId: string) => {
+    window.clearTimeout(paymentPollTimer.current);
+    let attempts = 0;
+    const run = async () => {
+      attempts++;
+      const outcome = await checkPayment(bookingId);
+      if (outcome === "paid") toast.success("payOS đã xác nhận nhận tiền cọc.");
+      if (outcome === "pending" && attempts < 6)
+        paymentPollTimer.current = window.setTimeout(run, 5000);
+    };
+    void run();
+  };
+
+  const handledPaymentReturn = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentUser?.role !== "user" || bookings.length === 0) return;
+    const route = window.location.hash.replace(/^#\/?/, "").split("?")[0];
+    const match = /^my-bookings\/([^/]+)\/payos$/.exec(route);
+    if (!match || handledPaymentReturn.current === window.location.hash) return;
+    handledPaymentReturn.current = window.location.hash;
+    // Bỏ đoạn "/payos" khỏi URL để tải lại trang không kiểm tra lặp.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/my-bookings/${match[1]}`);
+    autoCheckPayment(match[1]);
+  }, [currentUser?.role, bookings]);
 
   const handleNavigate = (page: string, criteria?: TourSearchCriteria) => {
     navigateForward(() => {
@@ -551,17 +626,22 @@ function Application() {
   };
 
   const handleCancelBooking = async (bookingId: string, reason?: string) => {
-    const updated = fromApiBooking(
-      await cancelBooking(
-        Number(bookingId),
-        reason || "Khách hàng yêu cầu hủy đơn",
-      ),
-      tours,
-      currentUser,
-    );
-    setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
-    if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
-    toast.success("Đã hủy đơn đặt tour trên máy chủ.");
+    try {
+      const updated = fromApiBooking(
+        await cancelBooking(
+          Number(bookingId),
+          reason || "Khách hàng yêu cầu hủy đơn",
+        ),
+        tours,
+        currentUser,
+      );
+      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+      if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
+      toast.success("Đã hủy đơn đặt tour trên máy chủ.");
+    } catch (err) {
+      // Ví dụ: đơn đã có tiền (409) — máy chủ không cho tự hủy.
+      toast.error(err instanceof Error ? err.message : "Không thể hủy đơn đặt tour.");
+    }
   };
 
   const handleCreateRefundRequest = (..._args: any[]) => {
@@ -837,31 +917,58 @@ function Application() {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
   };
 
-  // Customer pays a payment request (into System Escrow Account)
+  // Mã giao dịch mô phỏng cố định cho mỗi đợt: bấm lại / mạng chập chờn không ghi tiền hai lần.
+  const demoPaymentKeys = useRef(new Map<string, string>());
+
+  // Thanh toán cọc MÔ PHỎNG (chỉ Development, không qua ngân hàng hay payOS).
   const handlePayPaymentRequest = async (
     bookingId: string,
     paymentRequestId: string,
-  ) => {
+  ): Promise<boolean> => {
     const target = bookings.find((b) => b.id === bookingId);
     const request = target?.paymentRequests?.find(
       (pr) => pr.id === paymentRequestId,
     );
-    if (!request || request.status === "paid")
-      throw new Error(
-        "Yêu cầu thanh toán không còn hợp lệ. Vui lòng tải lại đơn.",
+    if (!request || request.status === "paid" || request.status === "scheduled") {
+      toast.error("Đợt thanh toán không còn hợp lệ. Vui lòng tải lại đơn.");
+      return false;
+    }
+    const keyId = `${bookingId}:${paymentRequestId}:${request.amount}`;
+    let reference = demoPaymentKeys.current.get(keyId);
+    if (!reference) {
+      reference = `DEMO-${crypto.randomUUID()}`;
+      demoPaymentKeys.current.set(keyId, reference);
+    }
+    try {
+      const updated = fromApiBooking(
+        await depositBooking(Number(bookingId), request.amount, reference),
+        tours,
+        currentUser,
       );
-    const updated = fromApiBooking(
-      await depositBooking(
-        Number(bookingId),
-        request.amount,
-        `PAY-${Date.now()}`,
-      ),
-      tours,
-      currentUser,
-    );
-    setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
-    if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
-    toast.success("Đã ghi nhận thanh toán trên máy chủ.");
+      demoPaymentKeys.current.delete(keyId);
+      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+      if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
+      toast.success("Đã ghi nhận thanh toán cọc (mô phỏng).");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không thể ghi nhận thanh toán.");
+      return false;
+    }
+  };
+
+  // Thanh toán cọc qua payOS: backend tính số tiền và tạo (hoặc dùng lại) link, trình duyệt chuyển sang payOS.
+  const handlePayWithPayOs = async (bookingId: string): Promise<void> => {
+    try {
+      const checkout = await startPayOsPayment(Number(bookingId));
+      if (!isPayOsUrl(checkout.checkoutUrl)) {
+        toast.error("Địa chỉ thanh toán không hợp lệ.");
+        return;
+      }
+      if (checkout.reused) toast.info("Mở lại link thanh toán payOS còn hiệu lực.");
+      window.location.assign(checkout.checkoutUrl);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không thể tạo link thanh toán payOS.");
+    }
   };
 
   // Custom tour requests
@@ -1457,6 +1564,14 @@ function Application() {
               }}
               onCancelBooking={handleCancelBooking}
               onPayPaymentRequest={handlePayPaymentRequest}
+              onPayWithPayOs={handlePayWithPayOs}
+              paymentCheck={
+                paymentCheck?.bookingId === selectedUserBooking.id ? paymentCheck : null
+              }
+              onCheckPayment={(id) => {
+                window.clearTimeout(paymentPollTimer.current);
+                void checkPayment(id);
+              }}
               onUpdateBookingPassengers={handleUpdateBookingPassengers}
               onNavigateToComplaint={(b) => {
                 setComplaintInitialBooking(b);

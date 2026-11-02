@@ -50,7 +50,7 @@ public sealed class DatabaseDesignSchemaTests
             columnCount++;
         }
         Assert.Equal(39, tableCount);
-        Assert.Equal(494, columnCount);
+        Assert.Equal(503, columnCount);
         Assert.Equal(tableCount, tables.Count);
         Assert.Equal(columnCount, tables.Values.Sum(t => t.Columns.Count()));
     }

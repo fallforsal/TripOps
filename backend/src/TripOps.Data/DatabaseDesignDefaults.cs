@@ -88,6 +88,7 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<PaymentRequest>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<PaymentTransaction>().Property(e => e.Status).HasDefaultValue(PaymentTransactionStatus.Success);
         modelBuilder.Entity<PaymentTransaction>().Property(e => e.PaidAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
+        modelBuilder.Entity<PaymentTransaction>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingPriceAdjustment>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingAgency>().Property(e => e.IsHost).HasDefaultValue(false);
         modelBuilder.Entity<BookingAgency>().Property(e => e.OriginalAmount).HasDefaultValue(0m);

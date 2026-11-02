@@ -578,9 +578,11 @@ Ref: booking_incidents.reported_by > users.id
 Table payment_requests {
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
+  stage varchar(20) [note: 'Đợt thu: deposit (cọc 50%, mở khi Agency duyệt đơn) | balance (phần còn lại, tạo cùng lúc duyệt, thu sau khi đủ cọc, hạn trước khởi hành 1 tuần). NULL = khoản cũ trước khi có lịch thanh toán. CHECK CK_payment_requests_stage']
   description varchar(255) [not null, note: 'Khớp 100% với ô nhập "Nội dung yêu cầu" trên Modal (công ty có thể gõ tự do: "Cọc đợt 1 (50%)", "Thanh toán đợt 2", "Phụ thu đổi khách sạn"...).']
   amount decimal(12, 2) [not null, note: 'Số tiền cần thu']
-  due_date date [note: 'Hạn chót thanh toán']
+  due_date date [note: 'Ngày hạn thanh toán (theo giờ Việt Nam). Khoản cũ chỉ có cột này']
+  due_at timestamp [note: 'Hạn thanh toán chính xác, lưu UTC. Đợt cọc: thời điểm Agency duyệt + 24 giờ (backend tính, không gia hạn khi duyệt lặp). Đợt 2: 00:00 ngày khởi hành (giờ VN) − 7 ngày, ví dụ khởi hành 30/11 thì hạn hết ngày 22/11']
   status varchar(30) [default: 'PENDING', note: 'PENDING, PAID, OVERDUE, CANCELLED']
   created_by varchar(36) [note: 'FK tới users.id']
   created_at timestamp [default: `now()`]
@@ -588,6 +590,7 @@ Table payment_requests {
 
   indexes {
     (booking_id, id) [unique]
+    (booking_id, stage) [unique, name: 'UX_payment_requests_active_stage', note: 'Lọc: stage IS NOT NULL AND status IN (Pending, Overdue, Paid) — mỗi đơn chỉ một khoản đang hiệu lực cho mỗi đợt']
   }
 }
 
@@ -599,12 +602,19 @@ Table payment_transactions {
   booking_id int [not null, note: 'FK tới bookings.id']
   payment_request_id int [note: 'FK tới payment_requests.id']
   transaction_code varchar(100) [unique, not null, note: 'Mã GD ngân hàng/cổng thanh toán']
-  payment_method varchar(50) [not null, note: 'BANK_TRANSFER, VNPAY, MOMO, CASH']
+  payment_method varchar(50) [not null, note: 'PAYOS (cổng hiện dùng), DEMO (mô phỏng Development), VNPAY (lịch sử cũ, không còn tạo mới)']
   amount decimal(12, 2) [not null, note: 'Số tiền thực nộp']
-  status varchar(30) [default: 'SUCCESS', note: 'SUCCESS, PENDING, FAILED, REFUNDED']
+  status varchar(30) [default: 'SUCCESS', note: 'SUCCESS, PENDING, FAILED, REFUNDED, CANCELLED, EXPIRED, NEEDSREVIEW (cổng báo tiền không khớp, chưa cộng vào đơn)']
   payer_name varchar(150)
   payment_proof_url text [note: 'Ảnh chụp bill']
-  paid_at timestamp [default: `now()`]
+  paid_at timestamp [default: `now()`, note: 'Chỉ có nghĩa khi status = SUCCESS; giao dịch cổng được ghi đúng lúc backend xác minh thành công']
+  gateway_transaction_no varchar(100) [note: 'Mã giao dịch phía cổng/ngân hàng (payOS: reference; VNPAY cũ: vnp_TransactionNo)']
+  gateway_response_code varchar(10) [note: 'Trạng thái/mã kết quả cổng trả về (payOS: PAID, CANCELLED...; VNPAY cũ: vnp_ResponseCode)']
+  gateway_link_id varchar(100) [note: 'Mã link thanh toán phía cổng (payOS: paymentLinkId)']
+  checkout_url varchar(1000) [note: 'Trang thanh toán của cổng, dùng lại khi khách bấm lặp lúc link còn hạn']
+  expires_at timestamp [note: 'Hạn của link thanh toán, lưu UTC']
+  review_note varchar(500) [note: 'Ghi chú đối soát: tiền đến muộn, trả dư, số tiền không khớp']
+  created_at timestamp [default: `now()`, note: 'Thời điểm tạo lần thanh toán']
 }
 
 // ============================================================================
