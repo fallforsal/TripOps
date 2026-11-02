@@ -44,8 +44,6 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingIncident> BookingIncidents => Set<BookingIncident>();
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
-    public DbSet<BookingSnapshot> BookingSnapshots => Set<BookingSnapshot>();
-    public DbSet<BookingProposalEvent> BookingProposalEvents => Set<BookingProposalEvent>();
 
     // 5. Finance
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();
@@ -70,26 +68,6 @@ public class TripOpsDbContext : DbContext
     {
         if (ChangeTracker.Entries<TourVersion>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Tour history is immutable.");
-        if (ChangeTracker.Entries<BookingSnapshot>().Any(e => e.State == EntityState.Deleted))
-            throw new InvalidOperationException("Booking snapshot history is immutable.");
-        foreach (var entry in ChangeTracker.Entries<BookingSnapshot>().Where(e => e.State == EntityState.Modified))
-        {
-            if (entry.Property(e => e.SnapshotData).IsModified ||
-                entry.Property(e => e.Version).IsModified ||
-                entry.Property(e => e.BookingId).IsModified ||
-                entry.Property(e => e.CreatedBy).IsModified ||
-                entry.Property(e => e.CreatedAt).IsModified ||
-                entry.Property(e => e.SourceTourVersion).IsModified)
-            {
-                throw new InvalidOperationException("Booking snapshot data is immutable.");
-            }
-            var originalType = entry.Property(e => e.SnapshotType).OriginalValue?.ToString();
-            var currentType = entry.Property(e => e.SnapshotType).CurrentValue?.ToString();
-            if (originalType != "proposal" || currentType != "agreed")
-                throw new InvalidOperationException("Only pending proposals can transition to agreed.");
-            if (entry.Property(e => e.AcceptedAt).CurrentValue is null || entry.Property(e => e.AcceptedBy).CurrentValue is null)
-                throw new InvalidOperationException("Agreed snapshot requires acceptance metadata.");
-        }
         foreach (var entry in ChangeTracker.Entries<Tour>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             var tour = entry.Entity;
@@ -133,7 +111,6 @@ public class TripOpsDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.Entity<AgencySubscription>().ToTable("agency_subscriptions");
         modelBuilder.Entity<Booking>().ToTable("bookings");
-        modelBuilder.Entity<BookingSnapshot>().ToTable("booking_snapshots");
         modelBuilder.Entity<BookingAccommodation>().ToTable("booking_hotels");
         modelBuilder.Entity<BookingAgency>().ToTable("booking_agencies");
         modelBuilder.Entity<BookingAssignedGuide>().ToTable("booking_assigned_guides");

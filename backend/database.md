@@ -362,20 +362,6 @@ Table bookings {
 // ============================================================================
 // DANH SÁCH HÀNH KHÁCH THEO TỪNG CHẶNG VÀ CÔNG TY
 // ============================================================================
-Table booking_snapshots {
-  // Retained schema after feature rollback (02/11/2026); no active proposal API or booking-flow writes.
-  id int [pk, increment]
-  booking_id int [not null, note: 'FK trỏ tới bookings.id']
-  version int [not null]
-  snapshot_type varchar(30) [not null, note: 'initial_request, proposal, agreed']
-  snapshot_data json [not null]
-  source_tour_version int [note: 'Phiên bản tour nguồn tại thời điểm tạo']
-  created_at timestamp [not null, default: `now()`]
-  created_by varchar(36) [not null, note: 'FK tới users.id']
-  accepted_at timestamp
-  accepted_by varchar(36) [note: 'FK tới users.id']
-  Note: 'Lưu snapshot thương mại của booking: initial_request, proposal, agreed. Version > 0, unique(booking_id, version).'
-}
 
 Table booking_participants {
   id int [pk, increment]
@@ -1017,20 +1003,6 @@ Ref: tourist_locations.tour_timeline_id > tour_timeline.id
 // 4. Nhiều bữa ăn thuộc về 1 mốc timeline (tour_timeline -> tour_meals)
 Ref: tour_restaurants.tour_timeline_id > tour_timeline.id
 
-Table booking_proposal_events {
-  // Retained schema after feature rollback (02/11/2026); existing records are preserved.
-  id int [pk, increment]
-  snapshot_id int [not null]
-  actor_id varchar(36) [not null]
-  recipient_id varchar(36) [not null]
-  event_type varchar(30) [not null, note: 'proposal_sent, proposal_accepted, changes_requested']
-  message text
-  created_at timestamp [not null]
-  read_at timestamp
-}
-Ref: booking_proposal_events.snapshot_id > booking_snapshots.id
-Ref: booking_proposal_events.actor_id > users.id
-Ref: booking_proposal_events.recipient_id > users.id
 
 // 1. Một doanh nghiệp/agency tạo được nhiều tour (business_profiles -> tours)
 Ref: tours.agency_id > users.id

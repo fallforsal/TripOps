@@ -49,8 +49,8 @@ public sealed class DatabaseDesignSchemaTests
             Assert.True(actual.IsNullable == !required, $"NULL contract differs: {tableName}.{name}");
             columnCount++;
         }
-        Assert.Equal(41, tableCount);
-        Assert.Equal(521, columnCount);
+        Assert.Equal(39, tableCount);
+        Assert.Equal(503, columnCount);
         Assert.Equal(tableCount, tables.Count);
         Assert.Equal(columnCount, tables.Values.Sum(t => t.Columns.Count()));
     }
@@ -61,6 +61,17 @@ public sealed class DatabaseDesignSchemaTests
         using var db = new TripOpsDbContext(new DbContextOptionsBuilder<TripOpsDbContext>()
             .UseSqlServer("Server=.;Database=SchemaContract;Integrated Security=True").Options);
         Assert.False(db.Database.HasPendingModelChanges(), "Merged migration snapshot is missing model changes.");
+    }
+
+    [Fact]
+    public void Removal_migration_only_drops_the_two_retired_tables_in_dependency_order()
+    {
+        var migration = new TripOps.Data.Migrations.RemoveBookingSnapshotsAndProposalEvents();
+        Assert.Collection(migration.UpOperations,
+            op => Assert.Equal("booking_proposal_events", Assert.IsType<Microsoft.EntityFrameworkCore.Migrations.Operations.DropTableOperation>(op).Name),
+            op => Assert.Equal("booking_snapshots", Assert.IsType<Microsoft.EntityFrameworkCore.Migrations.Operations.DropTableOperation>(op).Name));
+        Assert.Equal(new[] { "booking_snapshots", "booking_proposal_events" }, migration.DownOperations
+            .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.CreateTableOperation>().Select(op => op.Name));
     }
 
     [Fact]
