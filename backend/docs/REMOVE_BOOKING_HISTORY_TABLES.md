@@ -5,7 +5,7 @@ Migration: **`20261102085451_RemoveBookingSnapshotsAndProposalEvents`**.
 - Xóa `booking_proposal_events` trước vì bảng này tham chiếu `booking_snapshots`.
 - Sau đó xóa `booking_snapshots`.
 - Đã loại bỏ entity, DbSet, navigation, Fluent API, cấu hình mặc định và logic bảo vệ snapshot cũ khỏi model hiện tại.
-- Cập nhật `TripOpsDbContextModelSnapshot`, file Designer của migration và các bản DBML. Schema còn **39 bảng, 494 cột**.
+- Cập nhật `TripOpsDbContextModelSnapshot`, file Designer của migration và các bản DBML. Sau khi gộp thêm phần lịch thanh toán/payOS, schema trong `backend/database.md` và EF model hiện tại có **39 bảng, 503 cột**.
 - Các bảng booking đang hoạt động, lịch trình/hành khách/dịch vụ đã chốt và `tour_versions` được giữ nguyên.
 
 ## Người tạo thay đổi cần push gì?

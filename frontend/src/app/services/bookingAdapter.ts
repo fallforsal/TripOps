@@ -2,6 +2,7 @@ import type {
   Booking,
   Tour,
   PaymentRequest,
+  PaymentTransactionView,
   User,
   IncidentReport,
 } from "../types/index.ts";
@@ -64,7 +65,35 @@ export function fromApiBooking(
   const remainingAmount = Math.max(0, dto.totalAmount - dto.paidAmount);
 
   const paymentRequests: PaymentRequest[] = [];
-  if (dto.depositAmount > 0) {
+  if (dto.paymentSchedule) {
+    // Lịch thanh toán thật của máy chủ (đơn chờ duyệt: chưa có đợt nào).
+    for (const item of dto.paymentSchedule) {
+      const status: PaymentRequest["status"] =
+        item.status === "Paid"
+          ? "paid"
+          : item.status === "Overdue"
+            ? "overdue"
+            : item.status === "Scheduled"
+              ? "scheduled"
+              : item.status === "NotIssued"
+                ? "not_issued"
+                : "pending";
+      paymentRequests.push({
+        id: item.id ? String(item.id) : `pr-${item.stage}-${dto.id}`,
+        bookingId: String(dto.id),
+        stage: item.stage,
+        amount: status === "paid" ? item.amount : item.outstanding,
+        totalAmount: item.amount,
+        description: item.description,
+        dueDate: item.dueDate ? item.dueDate.slice(0, 10) : "",
+        dueAt: item.dueAt || undefined,
+        warning: item.warning || undefined,
+        status,
+        paidAt: item.paidAt ? item.paidAt.slice(0, 10) : undefined,
+        createdAt: dto.createdAt.split("T")[0],
+      });
+    }
+  } else if (dto.depositAmount > 0) {
     paymentRequests.push({
       id: `pr-deposit-${dto.id}`,
       bookingId: String(dto.id),
@@ -82,7 +111,7 @@ export function fromApiBooking(
       createdAt: dto.createdAt.split("T")[0],
     });
   }
-  if (remainingAmount > 0 && isDepositPaid) {
+  if (!dto.paymentSchedule && remainingAmount > 0 && isDepositPaid) {
     paymentRequests.push({
       id: `pr-remaining-${dto.id}`,
       bookingId: String(dto.id),
@@ -96,6 +125,25 @@ export function fromApiBooking(
       createdAt: dto.createdAt.split("T")[0],
     });
   }
+
+  const scheduledDeposit = dto.paymentSchedule?.find((p) => p.stage === "deposit");
+  const depositPaid = scheduledDeposit
+    ? scheduledDeposit.status === "Paid"
+    : isDepositPaid;
+  const paymentTransactions: PaymentTransactionView[] = (
+    dto.paymentTransactions || []
+  ).map((t) => ({
+    id: String(t.id),
+    code: t.transactionCode,
+    method: t.paymentMethod,
+    amount: t.amount,
+    status: t.status.toLowerCase() as PaymentTransactionView["status"],
+    paidAt: t.paidAt || undefined,
+    createdAt: t.createdAt || undefined,
+    gatewayTransactionNo: t.gatewayTransactionNo || undefined,
+    expiresAt: t.expiresAt || undefined,
+    reviewNote: t.reviewNote || undefined,
+  }));
 
   const assignedLeadGuide = dto.assignedGuides?.find(g => guideRole(g.role) === "lead_guide") || dto.assignedGuides?.[0];
 
@@ -176,7 +224,7 @@ export function fromApiBooking(
       notes: ag.notes,
     })),
     depositAmount: dto.depositAmount,
-    depositPaid: isDepositPaid,
+    depositPaid,
     remainingAmount: remainingAmount,
     paidAmount: dto.paidAmount,
     tourEndDate: dto.endDate.split("T")[0],
@@ -189,6 +237,7 @@ export function fromApiBooking(
             ? "partially_paid"
             : "unpaid",
     paymentRequests: paymentRequests,
+    paymentTransactions,
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),

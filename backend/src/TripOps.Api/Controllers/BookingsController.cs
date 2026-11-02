@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
 namespace TripOps.Api.Controllers;
@@ -42,8 +43,25 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
         return Ok(await bookings.Deposit(Actor, id, request, ct));
     }
 
+    [HttpPost("{id:int}/payments/payos")]
+    [EndpointSummary("Create (or reuse) a payOS payment link for the outstanding deposit; the amount is computed by the server")]
+    [ProducesResponseType<PayOsCheckoutDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> StartPayOs(int id, CancellationToken ct) =>
+        Ok(await bookings.StartPayOsDeposit(Actor, id, ct));
+
+    [HttpPost("{id:int}/payments/payos/sync")]
+    [EnableRateLimiting("payment-sync")]
+    [EndpointSummary("Ask payOS for the real status of this booking's pending payment links and apply verified results")]
+    [ProducesResponseType<PaymentSyncResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> SyncPayOs(int id, CancellationToken ct) =>
+        Ok(await bookings.SyncPayOs(Actor, id, ct));
+
     [HttpPost("{id:int}/cancel")]
-    [EndpointSummary("Cancel a pending or confirmed booking")]
+    [EndpointSummary("Cancel a booking that has no recorded payment")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(int id, BookingCancellationRequest request, CancellationToken ct) =>
         Ok(await bookings.Cancel(Actor, id, request, ct));

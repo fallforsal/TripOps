@@ -458,18 +458,25 @@ internal static class DatabaseDesignConfiguration
         });
         modelBuilder.Entity<PaymentRequest>(entity =>
         {
-            entity.ToTable("payment_requests");
+            entity.ToTable("payment_requests", t =>
+                t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance')"));
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.Stage).HasColumnName("stage").HasColumnType("nvarchar(20)").HasMaxLength(20);
             entity.Property(e => e.Description).HasColumnName("description").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
             entity.Property(e => e.Amount).HasColumnName("amount").HasColumnType("decimal(12, 2)").IsRequired();
             entity.Property(e => e.DueDate).HasColumnName("due_date").HasColumnType("date");
+            entity.Property(e => e.DueAt).HasColumnName("due_at").HasColumnType("datetime2");
             entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.CreatedBy).HasColumnName("created_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.PaidAt).HasColumnName("paid_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.BookingId, e.Id }).IsUnique();
+            // Mỗi đơn chỉ có một khoản đang hiệu lực cho mỗi đợt (khoản đã hủy được giữ lại làm lịch sử).
+            entity.HasIndex(e => new { e.BookingId, e.Stage }).IsUnique()
+                .HasDatabaseName("UX_payment_requests_active_stage")
+                .HasFilter("[stage] IS NOT NULL AND [status] IN ('Pending', 'Overdue', 'Paid')");
         });
         modelBuilder.Entity<PaymentTransaction>(entity =>
         {
@@ -486,6 +493,13 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.PayerName).HasColumnName("payer_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
             entity.Property(e => e.ProofImageUrl).HasColumnName("payment_proof_url").HasColumnType("nvarchar(max)");
             entity.Property(e => e.PaidAt).HasColumnName("paid_at").HasColumnType("datetime2");
+            entity.Property(e => e.GatewayTransactionNo).HasColumnName("gateway_transaction_no").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.GatewayResponseCode).HasColumnName("gateway_response_code").HasColumnType("nvarchar(10)").HasMaxLength(10);
+            entity.Property(e => e.GatewayLinkId).HasColumnName("gateway_link_id").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.CheckoutUrl).HasColumnName("checkout_url").HasColumnType("nvarchar(1000)").HasMaxLength(1000);
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at").HasColumnType("datetime2");
+            entity.Property(e => e.ReviewNote).HasColumnName("review_note").HasColumnType("nvarchar(500)").HasMaxLength(500);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
         });
         modelBuilder.Entity<BookingPriceAdjustment>(entity =>
         {

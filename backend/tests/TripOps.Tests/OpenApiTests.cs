@@ -28,9 +28,13 @@ public sealed class OpenApiTests
         var descriptions = app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items.SelectMany(g => g.Items).ToArray();
         var expected = descriptions.Select(d => $"{d.HttpMethod!.ToLowerInvariant()} /{d.RelativePath}").Order().ToArray();
         Assert.Equal(expected, operations.Select(o => $"{o.Method} {o.Path}").Order().ToArray());
-        Assert.Equal(80, operations.Length);
-        Assert.Equal(70, operations.Count(o => !o.Path.StartsWith("/api/v1/auth") && !o.Path.StartsWith("/api/v1/me/business-profile") &&
-            !o.Path.StartsWith("/api/v1/admin/partner-applications") && o.Path != "/api/v1/health"));
+        // The complete route comparison above checks coverage as endpoints evolve.
+        // Assert payment contracts explicitly instead of fixing the total route count.
+        Assert.Contains(operations, o => o.Path == "/api/v1/bookings/{id}/payments/payos" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/bookings/{id}/payments/payos/sync" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/payments/payos/webhook" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/payments/payos/return" && o.Method == "get");
+        Assert.DoesNotContain(operations, o => o.Path.Contains("/vnpay", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/images" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/bookings/available-guides" && o.Method == "get");
@@ -76,7 +80,7 @@ public sealed class OpenApiTests
                 Assert.True(item.Operation.GetProperty("responses").TryGetProperty("403", out _));
             } else Assert.Equal(0, security.GetArrayLength());
         }
-        Assert.Equal(70, protectedCount);
+        Assert.Equal(72, protectedCount);
     }
 
     [Fact]
