@@ -43,6 +43,19 @@ import { toast } from "sonner";
 import { RejectServiceModal } from "../admin/RejectServiceModal";
 import { ProviderProfileLink } from "../admin/ProviderProfileLink";
 
+function formatCreatedAt(value?: string): string {
+  if (!value) return "Chưa có thông tin";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có thông tin";
+  const day = date.toLocaleDateString("vi-VN", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  });
+  const time = date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  return `${day} ${time}`;
+}
+
 export interface ProviderServiceDetailPageProps {
   service?: Service;
   serviceId?: string;
@@ -57,6 +70,7 @@ export interface ProviderServiceDetailPageProps {
   onApprove?: (serviceId: string) => void | Promise<void>;
   onReject?: (serviceId: string, reason: string) => void | Promise<void>;
   backTitle?: string;
+  isPreview?: boolean;
 }
 
 export function ProviderServiceDetailPage({
@@ -73,6 +87,7 @@ export function ProviderServiceDetailPage({
   onApprove,
   onReject,
   backTitle,
+  isPreview = false,
 }: ProviderServiceDetailPageProps) {
   const service = propService || (serviceId ? mockServices.find((s) => s.id === serviceId) : undefined);
 
@@ -207,7 +222,7 @@ export function ProviderServiceDetailPage({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Navigation & Action Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-xs">
+      {!isPreview && <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-xs">
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
@@ -368,8 +383,7 @@ export function ProviderServiceDetailPage({
             </>
           )}
         </div>
-      </div>
-
+      </div>}
       {/* Admin Hidden Notice Banner */}
       {service.isPaused && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm">
         Nhà cung cấp đang tạm ngừng cung cấp dịch vụ này. Bài đăng không xuất hiện trên sàn cho đến khi Provider mở lại và trạng thái kiểm duyệt là đã duyệt.
@@ -484,9 +498,6 @@ export function ProviderServiceDetailPage({
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {service.name}
             </h1>
-            <p className="text-xs text-gray-500 font-mono mt-1">
-              Mã dịch vụ: {service.id}
-            </p>
 
             <div className="flex items-start gap-2 mt-3 text-xs text-gray-600">
               <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
@@ -578,7 +589,7 @@ export function ProviderServiceDetailPage({
             <div className="p-2.5 bg-gray-50 rounded-xl">
               <span className="text-gray-500 block">Ngày tạo bài:</span>
               <strong className="text-gray-900">
-                {service.createdAt ? new Date(service.createdAt).toLocaleDateString("vi-VN") : "Chưa có thông tin"}
+                {formatCreatedAt(service.createdAt)}
               </strong>
             </div>
 
@@ -767,16 +778,6 @@ export function ProviderServiceDetailPage({
 
               {/* Map Preview & Google Maps Link */}
               <div className="pt-3 border-t border-gray-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-700 flex items-center gap-1">
-                    <Compass className="w-3.5 h-3.5 text-[#075985]" />
-                    Tọa độ GPS:
-                  </span>
-                  <span className="font-mono text-gray-800 font-semibold">
-                    {(service.latitude || 11.9404).toFixed(4)}, {(service.longitude || 108.4583).toFixed(4)}
-                  </span>
-                </div>
-
                 <div className="rounded-xl overflow-hidden border border-gray-200 h-40 bg-gray-100 relative">
                   <iframe
                     title="Bản đồ vị trí dịch vụ"
@@ -812,12 +813,8 @@ export function ProviderServiceDetailPage({
                 {isAdmin ? <ProviderProfileLink providerId={service.providerId} name={service.providerName} /> : <strong>{service.providerName}</strong>}
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
-                <span>Mã số định danh:</span>
-                <span className="font-mono">{service.id}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-100">
                 <span>Ngày tạo bài:</span>
-                <span>{service.createdAt ? new Date(service.createdAt).toLocaleString("vi-VN") : "Chưa có thông tin"}</span>
+                <span>{formatCreatedAt(service.createdAt)}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span>Trạng thái:</span>
