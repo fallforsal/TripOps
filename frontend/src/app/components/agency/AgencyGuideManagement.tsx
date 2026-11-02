@@ -5,46 +5,34 @@ import {
   Mail,
   Phone,
   Plus,
-  ShieldCheck,
   Search,
   Filter,
-  CheckCircle,
-  XCircle,
-  Clock,
   Award,
   Globe,
   Upload,
   Camera,
   Languages,
   UserPlus,
-  Compass,
   Edit2,
   Trash2,
-  UserCheck,
-  UserX,
   Calendar,
   AlertCircle,
   AlertTriangle,
-  Send,
-  RefreshCw,
   Eye,
   EyeOff,
   Lock,
   Unlock,
-  LayoutGrid,
-  List,
   ExternalLink,
-  Smartphone,
   Check,
   X,
   MapPin,
   Sparkles,
-  FileBadge,
-  Info,
   RotateCcw,
   KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import { changeAgencyGuidePassword, listAgencyGuides, getAgencyGuide, createAgencyGuide,
+  updateAgencyGuide, changeGuideAccountStatus, deleteAgencyGuide } from "@/app/services/agencyGuides";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -59,25 +47,16 @@ import {
 import {
   AgencyGuideProfile,
   COMMON_GUIDE_LANGUAGES,
-  COMMON_GUIDE_ROUTES,
   COMMON_GUIDE_SPECIALTIES,
   CreateAgencyGuideRequest,
   GuideAssignedTourItem,
   GuideMobileAccountStatus,
   GuideWorkStatus,
-  SendGuideInvitationRequest,
   UpdateAgencyGuideRequest,
-  UpdateGuideAccountStatusRequest,
-  createSeedAgencyGuides,
-  createSeedGuideAssignments,
   deriveGuideWorkInfo,
   evaluateGuideEligibility,
-  evaluateLicenseExpiry,
-  formatDateTimeVN,
   formatDateVN,
-  mergeGuideAssignments,
-  normalizeToAgencyGuideProfile,
-} from "./agencyGuideTypesAndMock";
+} from "./agencyGuideTypes";
 
 export const COMMON_GUIDE_PROVINCES = [
   "Lâm Đồng",
@@ -100,15 +79,9 @@ export const COMMON_GUIDE_PROVINCES = [
 ];
 
 export interface AgencyGuideManagementProps {
-  guides: User[];
-  tours: Tour[];
-  guideSchedules: GuideSchedule[];
-  bookings?: Booking[];
-  companyId?: string;
+  companyId: string;
+  onGuidesChanged?: () => void | Promise<void>;
   companyName?: string;
-  onAddGuide?: (guideData: Omit<User, "id">) => void;
-  onUpdateGuide?: (guideId: string, update: Partial<User>) => void;
-  onRemoveGuide?: (guideId: string) => void;
   onNavigateToBookings?: () => void;
   onViewBookingDetail?: (bookingId: string) => void;
 }
@@ -118,8 +91,6 @@ interface GuideFormErrors {
   email?: string;
   password?: string;
   phone?: string;
-  licenseNumber?: string;
-  licenseExpiryDate?: string;
   experienceYears?: string;
   languages?: string;
 }
@@ -135,24 +106,8 @@ const ACCOUNT_STATUS_BADGE: Record<
     dot: string;
   }
 > = {
-  not_invited: {
-    label: "Chưa gửi lời mời",
-    shortDesc: "Chưa cấp link kích hoạt",
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    border: "border-slate-300",
-    dot: "bg-slate-400",
-  },
-  pending_activation: {
-    label: "Chờ kích hoạt",
-    shortDesc: "Chờ HDV đặt mật khẩu qua email",
-    bg: "bg-[#E0F2FE]",
-    text: "text-[#075985]",
-    border: "border-sky-300",
-    dot: "bg-[#0284C7]",
-  },
   active: {
-    label: "Đã kích hoạt",
+    label: "Đang hoạt động",
     shortDesc: "Đăng nhập được Tour Guide App",
     bg: "bg-emerald-50",
     text: "text-emerald-700",
@@ -199,87 +154,49 @@ const WORK_STATUS_BADGE: Record<
 };
 
 export function AgencyGuideManagement({
-  guides: propGuides,
-  tours,
-  guideSchedules,
-  bookings = [],
-  companyId = "company-1",
-  companyName = "Viettravel",
-  onAddGuide,
-  onUpdateGuide,
-  onRemoveGuide,
+  companyId,
+  companyName = "Agency",
+  onGuidesChanged,
   onNavigateToBookings,
   onViewBookingDetail,
 }: AgencyGuideManagementProps) {
-  const isUnimplementedStub = (fn?: (...args: any[]) => any): boolean => {
-    if (!fn) return true;
-    try {
-      return fn
-        .toString()
-        .includes("Chức năng này chưa được triển khai API");
-    } catch {
-      return false;
-    }
-  };
-
-  // Khởi tạo danh sách HDV nội bộ của đúng Agency hiện tại (kết hợp dữ liệu mẫu đầy đủ kịch bản)
-  const buildInitialGuides = (
-    cId: string,
-    cName: string,
-    incomingGuides: User[]
-  ): AgencyGuideProfile[] => {
-    const seeded = createSeedAgencyGuides(cId, cName);
-    const scopedIncoming = incomingGuides
-      .filter((g) => !g.companyId || g.companyId === cId)
-      .filter((g) => g.email && g.licenseNumber)
-      .map((g) => normalizeToAgencyGuideProfile(g, cId, cName));
-
-    const mergedMap = new Map<string, AgencyGuideProfile>();
-    for (const item of seeded) {
-      mergedMap.set(item.id, item);
-    }
-    for (const item of scopedIncoming) {
-      if (!mergedMap.has(item.id)) {
-        mergedMap.set(item.id, item);
-      }
-    }
-    return Array.from(mergedMap.values());
-  };
-
-  const [localGuides, setLocalGuides] = useState<AgencyGuideProfile[]>(() =>
-    buildInitialGuides(companyId, companyName, propGuides)
-  );
-
-  // Đồng bộ khi đổi companyId
-  useEffect(() => {
-    setLocalGuides(buildInitialGuides(companyId, companyName, propGuides));
-  }, [companyId, companyName]);
-
-  // Kết hợp lịch phân công mẫu và lịch thực tế từ props (không tự ý sửa dữ liệu tour gốc)
-  const guideAssignmentsMap = useMemo(() => {
-    const seedMap = createSeedGuideAssignments(companyName);
-    return mergeGuideAssignments(seedMap, guideSchedules, bookings, tours);
-  }, [companyName, guideSchedules, bookings, tours]);
-
-  const getGuideAssignments = (guideId: string): GuideAssignedTourItem[] => {
-    return guideAssignmentsMap[guideId] || [];
-  };
-
-  // Bộ lọc & Tìm kiếm & Chế độ xem
+  const [localGuides, setLocalGuides] = useState<AgencyGuideProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [workStatusFilter, setWorkStatusFilter] = useState<
-    "all" | GuideWorkStatus
-  >("all");
-  const [accountFilter, setAccountFilter] = useState<
-    "all" | GuideMobileAccountStatus
-  >("all");
-  const [typeFilter, setTypeFilter] = useState<
-    "all" | "domestic" | "international"
-  >("all");
-  const [licenseAlertFilter, setLicenseAlertFilter] = useState<
-    "all" | "expiring_or_expired"
-  >("all");
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [workStatusFilter, setWorkStatusFilter] = useState<"all" | GuideWorkStatus>("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalGuides, setTotalGuides] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [detailGuide, setDetailGuide] = useState<AgencyGuideProfile | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const pageSize = 20;
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, workStatusFilter, companyId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsLoading(true); setLoadError("");
+    listAgencyGuides({ search: debouncedSearch, workStatus: workStatusFilter, page, pageSize }, controller.signal)
+      .then(result => {
+        if (controller.signal.aborted) return;
+        setLocalGuides(result.items); setTotal(result.total); setTotalGuides(result.summary.totalGuides);
+      }).catch(error => { if (!controller.signal.aborted) setLoadError(error.message || "Không thể tải danh sách HDV."); })
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
+    return () => controller.abort();
+  }, [companyId, debouncedSearch, workStatusFilter, page, revision]);
+  const reloadGuides = () => {
+    setPage(1); setRevision(v => v + 1);
+    Promise.resolve(onGuidesChanged?.()).catch(() => toast.error("Chưa thể cập nhật danh sách phân công. Vui lòng tải lại trang."));
+  };
+  const getGuideAssignments = (guideId: string): GuideAssignedTourItem[] =>
+    detailGuide?.id === guideId ? (detailGuide.assignments || []) : (localGuides.find(g => g.id === guideId)?.assignments || []);
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -288,6 +205,15 @@ export function AgencyGuideManagement({
   );
   const [detailGuideId, setDetailGuideId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<"profile" | "schedule">("profile");
+  useEffect(() => {
+    setDetailGuide(null); setDetailError("");
+    if (!detailGuideId) return;
+    const controller = new AbortController();
+    getAgencyGuide(detailGuideId, controller.signal).then(result => {
+      if (!controller.signal.aborted) setDetailGuide(result.guide);
+    }).catch(error => { if (!controller.signal.aborted) setDetailError(error.message || "Không thể tải hồ sơ HDV."); });
+    return () => controller.abort();
+  }, [companyId, detailGuideId, revision]);
 
   // Modal Tạm khóa / Mở khóa tài khoản
   const [accountActionTarget, setAccountActionTarget] = useState<{
@@ -300,7 +226,7 @@ export function AgencyGuideManagement({
   const [deleteTargetGuide, setDeleteTargetGuide] =
     useState<AgencyGuideProfile | null>(null);
 
-  // Modal Đổi mật khẩu cho HDV (Admin trực tiếp cập nhật khi HDV quên)
+  // Modal đổi mật khẩu do Agency quản lý tài khoản HDV
   const [changePasswordTarget, setChangePasswordTarget] =
     useState<AgencyGuideProfile | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState("");
@@ -308,16 +234,17 @@ export function AgencyGuideManagement({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const closeChangePasswordModal = () => {
+    setChangePasswordTarget(null);
+    setNewPasswordInput("");
+    setConfirmPasswordInput("");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setChangePasswordError("");
+  };
 
-  // Modal kết quả gửi lời mời kích hoạt (Mock Email Invite Preview)
-  const [invitePreviewInfo, setInvitePreviewInfo] = useState<{
-    guide: AgencyGuideProfile;
-    isResend: boolean;
-    sentAt: string;
-    expiresAt: string;
-  } | null>(null);
-
-  // Form states (Tuyệt đối KHÔNG có trường hay biến mật khẩu mặc định)
+  // Thông tin tài khoản ban đầu và hồ sơ HDV.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -328,6 +255,9 @@ export function AgencyGuideManagement({
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("Chỉ nhận ảnh JPG, PNG hoặc WEBP."); return;
+    }
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Kích thước ảnh đại diện tối đa là 2MB.");
       return;
@@ -340,14 +270,6 @@ export function AgencyGuideManagement({
     };
     reader.readAsDataURL(file);
   };
-  const [guideType, setGuideType] = useState<"domestic" | "international">(
-    "domestic"
-  );
-  const [licenseNumber, setLicenseNumber] = useState("");
-  const [licenseExpiryDate, setLicenseExpiryDate] = useState("");
-  const [issuingAuthority, setIssuingAuthority] = useState(
-    "Sở Du lịch TP. Hồ Chí Minh"
-  );
   const [experienceYears, setExperienceYears] = useState("3");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([
     "Tiếng Việt",
@@ -363,93 +285,9 @@ export function AgencyGuideManagement({
   ]);
   const [customSpecialtyInput, setCustomSpecialtyInput] = useState("");
   const [bio, setBio] = useState("");
-  const [initialInviteMode, setInitialInviteMode] = useState<
-    "send_invite" | "save_only"
-  >("send_invite");
-  const [editAccountStatus, setEditAccountStatus] =
-    useState<GuideMobileAccountStatus>("active");
   const [formErrors, setFormErrors] = useState<GuideFormErrors>({});
-
-  // HDV đang mở trong modal Chi tiết
-  const detailGuide = useMemo(
-    () => localGuides.find((g) => g.id === detailGuideId) || null,
-    [localGuides, detailGuideId]
-  );
-
-  // Chỉ lấy HDV thuộc đúng agency hiện tại
-  const agencyScopedGuides = useMemo(
-    () =>
-      localGuides.filter((g) => !g.companyId || g.companyId === companyId),
-    [localGuides, companyId]
-  );
-
-  // Thống kê tổng quan
-  const metrics = useMemo(() => {
-    let availableCount = 0;
-    let onTourCount = 0;
-    let pendingInviteCount = 0;
-    let suspendedCount = 0;
-    let licenseAlertCount = 0;
-    let internationalCount = 0;
-
-    for (const g of agencyScopedGuides) {
-      const assignments = getGuideAssignments(g.id);
-      const workInfo = deriveGuideWorkInfo(g, assignments);
-      const licenseCheck = evaluateLicenseExpiry(g.licenseExpiryDate);
-
-      if (workInfo.workStatus === "available") availableCount++;
-      if (workInfo.workStatus === "on_tour") onTourCount++;
-      if (
-        g.mobileAccountStatus === "not_invited" ||
-        g.mobileAccountStatus === "pending_activation"
-      ) {
-        pendingInviteCount++;
-      }
-      if (g.mobileAccountStatus === "suspended") suspendedCount++;
-      if (
-        licenseCheck.status === "expiring_soon" ||
-        licenseCheck.status === "expired"
-      ) {
-        licenseAlertCount++;
-      }
-      if (g.guideType === "international") internationalCount++;
-    }
-
-    return {
-      total: agencyScopedGuides.length,
-      availableCount,
-      onTourCount,
-      pendingInviteCount,
-      suspendedCount,
-      licenseAlertCount,
-      internationalCount,
-    };
-  }, [agencyScopedGuides, guideAssignmentsMap]);
-
-  // Lọc danh sách HDV
-  const filteredGuides = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-
-    return agencyScopedGuides.filter((guide) => {
-      const matchesSearch =
-        !q ||
-        guide.name.toLowerCase().includes(q) ||
-        guide.email.toLowerCase().includes(q) ||
-        (guide.phone && guide.phone.replace(/\s+/g, "").includes(q.replace(/\s+/g, "")));
-
-      const assignments = getGuideAssignments(guide.id);
-      const workInfo = deriveGuideWorkInfo(guide, assignments);
-      const matchesWorkStatus =
-        workStatusFilter === "all" || workInfo.workStatus === workStatusFilter;
-
-      return matchesSearch && matchesWorkStatus;
-    });
-  }, [
-    agencyScopedGuides,
-    searchQuery,
-    workStatusFilter,
-    guideAssignmentsMap,
-  ]);
+  const filteredGuides = localGuides;
+  const agencyScopedGuides = localGuides;
 
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
@@ -499,10 +337,6 @@ export function AgencyGuideManagement({
     setPassword("");
     setShowPassword(false);
     setAvatar("");
-    setGuideType("domestic");
-    setLicenseNumber("");
-    setLicenseExpiryDate("");
-    setIssuingAuthority("Sở Du lịch TP. Hồ Chí Minh");
     setExperienceYears("3");
     setSelectedLanguages(["Tiếng Việt", "Tiếng Anh"]);
     setCustomLanguageInput("");
@@ -511,9 +345,8 @@ export function AgencyGuideManagement({
     setSelectedSpecialties(["Văn hóa – Lịch sử"]);
     setCustomSpecialtyInput("");
     setBio("");
-    setInitialInviteMode("send_invite");
-    setEditAccountStatus("active");
     setFormErrors({});
+    setFormError("");
   };
 
   const handleOpenAddModal = () => {
@@ -530,15 +363,6 @@ export function AgencyGuideManagement({
     setPassword("");
     setShowPassword(false);
     setAvatar(guide.avatar || "");
-    setGuideType(guide.guideType);
-    setLicenseNumber(guide.licenseNumber);
-    setLicenseExpiryDate(guide.licenseExpiryDate);
-    setIssuingAuthority(
-      guide.issuingAuthority ||
-        (guide.guideType === "international"
-          ? "Cục Du lịch Quốc gia Việt Nam"
-          : "Sở Du lịch TP. Hồ Chí Minh")
-    );
     setExperienceYears(String(guide.experienceYears ?? 3));
     setSelectedLanguages(
       guide.languages && guide.languages.length > 0
@@ -557,8 +381,8 @@ export function AgencyGuideManagement({
     );
     setCustomSpecialtyInput("");
     setBio(guide.bio || "");
-    setEditAccountStatus(guide.mobileAccountStatus);
     setFormErrors({});
+    setFormError("");
     setIsFormModalOpen(true);
   };
 
@@ -601,11 +425,9 @@ export function AgencyGuideManagement({
     if (!editingGuide) {
       if (!password.trim()) {
         errors.password = "Vui lòng nhập mật khẩu đăng nhập.";
-      } else if (password.trim().length < 8 || password.trim().length > 16) {
+      } else if (password.length < 8 || password.length > 16) {
         errors.password = "Mật khẩu phải từ 8 đến 16 ký tự.";
       }
-    } else if (password.trim() && (password.trim().length < 8 || password.trim().length > 16)) {
-      errors.password = "Mật khẩu mới phải từ 8 đến 16 ký tự.";
     }
 
     const expNum = Number(experienceYears);
@@ -628,194 +450,27 @@ export function AgencyGuideManagement({
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateGuideForm()) return;
-
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim().toLowerCase();
-    const trimmedPhone = phone.trim();
-    const trimmedLicense = licenseNumber.trim().toUpperCase() || "HDV-NOI-BO";
-    const expYears = parseInt(experienceYears, 10) || 0;
-    const nowIso = new Date().toISOString();
-    const expiresIso = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
-
-    if (!editingGuide) {
-      const createPayload: CreateAgencyGuideRequest = {
-        name: trimmedName,
-        email: trimmedEmail,
-        phone: trimmedPhone,
-        guideType: "domestic",
-        licenseNumber: trimmedLicense,
-        licenseExpiryDate: licenseExpiryDate || "2030-12-31",
-        issuingAuthority: issuingAuthority.trim() || undefined,
-        languages: selectedLanguages,
-        routes: selectedRoutes,
-        specialties: selectedSpecialties,
-        experienceYears: expYears,
-        bio: bio.trim() || undefined,
-        sendActivationInviteImmediately: false,
-      };
-
-      const accountStatus: GuideMobileAccountStatus = "active";
-
-      const newGuide: AgencyGuideProfile = {
-        id: `guide-${Date.now().toString().slice(-6)}`,
-        role: "guide",
-        companyId,
-        companyName,
-        name: createPayload.name,
-        email: createPayload.email,
-        phone: createPayload.phone,
-        guideType: createPayload.guideType,
-        licenseNumber: createPayload.licenseNumber,
-        licenseExpiryDate: createPayload.licenseExpiryDate,
-        issuingAuthority: createPayload.issuingAuthority,
-        languages: createPayload.languages,
-        routes: createPayload.routes,
-        specialties: createPayload.specialties,
-        experienceYears: createPayload.experienceYears,
-        bio: createPayload.bio,
-        guideStatus: "active",
-        mobileAccountStatus: accountStatus,
-        invitationSentAt: createPayload.sendActivationInviteImmediately
-          ? nowIso
-          : undefined,
-        invitationExpiresAt: createPayload.sendActivationInviteImmediately
-          ? expiresIso
-          : undefined,
-        invitationCount: createPayload.sendActivationInviteImmediately ? 1 : 0,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          createPayload.name
-        )}&background=075985&color=fff`,
-      };
-
-      setLocalGuides((prev) => [newGuide, ...prev]);
-      if (!isUnimplementedStub(onAddGuide)) {
-        onAddGuide?.(newGuide);
+    if (isSaving || !validateGuideForm()) return;
+    const profile: UpdateAgencyGuideRequest = {
+      name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(),
+      languages: selectedLanguages, routes: selectedRoutes, specialties: selectedSpecialties,
+      experienceYears: Number(experienceYears), bio: bio.trim() || undefined, avatar: avatar || undefined,
+    };
+    setIsSaving(true); setFormError("");
+    try {
+      if (editingGuide) {
+        await updateAgencyGuide(editingGuide.id, profile);
+        toast.success(`Đã cập nhật hồ sơ HDV ${profile.name}.`);
+      } else {
+        await createAgencyGuide({ ...profile, password });
+        toast.success(`Đã tạo tài khoản và hồ sơ HDV ${profile.name}.`);
       }
-      setIsFormModalOpen(false);
-
-      toast.success(
-        `Đã thêm hướng dẫn viên ${newGuide.name} vào danh sách nhân sự.`
-      );
-      resetForm();
-      return;
-    }
-
-    // ========================================================================
-    // LUỒNG CẬP NHẬT HỒ SƠ HDV (KHÔNG TỰ Ý SỬA ĐỔI DỮ LIỆU TOUR/BOOKING ĐÃ GIAO)
-    // TODO: Integrate backend API `PUT /api/agency/guides/:guideId` (UpdateAgencyGuideRequest)
-    // ========================================================================
-    const updatePayload: UpdateAgencyGuideRequest = {
-      name: trimmedName,
-      email: trimmedEmail,
-      phone: trimmedPhone,
-      guideType,
-      licenseNumber: trimmedLicense,
-      licenseExpiryDate,
-      issuingAuthority: issuingAuthority.trim() || undefined,
-      languages: selectedLanguages,
-      routes: selectedRoutes,
-      specialties: selectedSpecialties,
-      experienceYears: expYears,
-      bio: bio.trim() || undefined,
-    };
-
-    const updatedGuide: AgencyGuideProfile = {
-      ...editingGuide,
-      ...updatePayload,
-      avatar: avatar || editingGuide.avatar,
-      mobileAccountStatus: editAccountStatus,
-      guideStatus: editAccountStatus === "suspended" ? "inactive" : "active",
-      updatedAt: nowIso,
-    };
-
-    setLocalGuides((prev) =>
-      prev.map((g) => (g.id === editingGuide.id ? updatedGuide : g))
-    );
-    if (!isUnimplementedStub(onUpdateGuide)) {
-      onUpdateGuide?.(editingGuide.id, updatedGuide);
-    }
-    setIsFormModalOpen(false);
-    setEditingGuide(null);
-    toast.success(
-      `Đã cập nhật hồ sơ HDV ${updatedGuide.name}. Dữ liệu các tour đã phân công được giữ nguyên.`
-    );
-  };
-
-  // ============================================================================
-  // THAO TÁC TÀI KHOẢN MOBILE: GỬI / GỬI LẠI LỜI MỜI, MÔ PHỎNG KÍCH HOẠT, KHÓA/MỞ
-  // ============================================================================
-  const handleSendOrResendInvitation = (guide: AgencyGuideProfile) => {
-    // TODO: Integrate backend API `POST /api/agency/guides/:guideId/send-invitation` (SendGuideInvitationRequest)
-    // Khi backend có API, gọi endpoint này để thu hồi token cũ và gửi email chứa link đặt mật khẩu mới.
-    const _requestContract: SendGuideInvitationRequest = {
-      guideId: guide.id,
-    };
-    void _requestContract;
-
-    const isResend = guide.mobileAccountStatus === "pending_activation";
-    const nowIso = new Date().toISOString();
-    const expiresIso = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
-
-    const updated: AgencyGuideProfile = {
-      ...guide,
-      mobileAccountStatus: "pending_activation",
-      invitationSentAt: nowIso,
-      invitationExpiresAt: expiresIso,
-      invitationCount: (guide.invitationCount || 0) + 1,
-      updatedAt: nowIso,
-    };
-
-    setLocalGuides((prev) =>
-      prev.map((g) => (g.id === guide.id ? updated : g))
-    );
-    if (!isUnimplementedStub(onUpdateGuide)) {
-      onUpdateGuide?.(guide.id, updated);
-    }
-
-    setInvitePreviewInfo({
-      guide: updated,
-      isResend,
-      sentAt: nowIso,
-      expiresAt: expiresIso,
-    });
-
-    toast.success(
-      isResend
-        ? `[Mô phỏng FE] Đã làm mới liên kết kích hoạt (48h) cho ${guide.email}.`
-        : `[Mô phỏng FE] Đã tạo lời mời kích hoạt tài khoản cho ${guide.email}.`
-    );
-  };
-
-  const handleSimulateGuideCompletedActivation = (
-    guide: AgencyGuideProfile
-  ) => {
-    const nowIso = new Date().toISOString();
-    const updated: AgencyGuideProfile = {
-      ...guide,
-      mobileAccountStatus: "active",
-      guideStatus: "active",
-      activatedAt: nowIso,
-      lastLoginAt: nowIso,
-      updatedAt: nowIso,
-    };
-
-    setLocalGuides((prev) =>
-      prev.map((g) => (g.id === guide.id ? updated : g))
-    );
-    if (!isUnimplementedStub(onUpdateGuide)) {
-      onUpdateGuide?.(guide.id, updated);
-    }
-    if (invitePreviewInfo?.guide.id === guide.id) {
-      setInvitePreviewInfo(null);
-    }
-    toast.success(
-      `[Mô phỏng] HDV ${guide.name} đã tự đặt mật khẩu thành công. Tài khoản chuyển sang "Đã kích hoạt".`
-    );
+      setIsFormModalOpen(false); setEditingGuide(null); resetForm(); reloadGuides();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Không thể lưu hồ sơ HDV.");
+    } finally { setIsSaving(false); }
   };
 
   const handleOpenAccountStatusDialog = (guide: AgencyGuideProfile) => {
@@ -829,111 +484,30 @@ export function AgencyGuideManagement({
     setAccountActionTarget({ guide, action });
   };
 
-  const handleConfirmAccountStatusChange = () => {
-    if (!accountActionTarget) return;
+  const handleConfirmAccountStatusChange = async () => {
+    if (!accountActionTarget || isSaving) return;
     const { guide, action } = accountActionTarget;
-    const assignments = getGuideAssignments(guide.id);
-    const activeOrUpcoming = assignments.filter(
-      (a) => a.status === "in_progress" || a.status === "upcoming"
-    );
-
-    // TODO: Integrate backend API `PATCH /api/agency/guides/:guideId/account-status` (UpdateGuideAccountStatusRequest)
-    const _requestContract: UpdateGuideAccountStatusRequest = {
-      guideId: guide.id,
-      action,
-      reason: suspendReason.trim() || undefined,
-      confirmWithUpcomingTours: activeOrUpcoming.length > 0,
-    };
-    void _requestContract;
-
-    const nowIso = new Date().toISOString();
-
-    if (action === "suspend") {
-      const previousStatus: Exclude<GuideMobileAccountStatus, "suspended"> =
-        guide.mobileAccountStatus === "suspended"
-          ? guide.previousAccountStatus || "active"
-          : guide.mobileAccountStatus;
-
-      const updated: AgencyGuideProfile = {
-        ...guide,
-        previousAccountStatus: previousStatus,
-        mobileAccountStatus: "suspended",
-        guideStatus: "inactive",
-        suspendedAt: nowIso,
-        suspendedReason:
-          suspendReason.trim() || "Tạm khóa quyền truy cập ứng dụng Mobile",
-        updatedAt: nowIso,
-      };
-
-      setLocalGuides((prev) =>
-        prev.map((g) => (g.id === guide.id ? updated : g))
-      );
-      if (!isUnimplementedStub(onUpdateGuide)) {
-        onUpdateGuide?.(guide.id, updated);
-      }
-      setAccountActionTarget(null);
-      toast.success(
-        `Đã tạm khóa tài khoản Mobile của HDV ${guide.name}. Không cho phép phân công tour mới.`
-      );
-    } else {
-      const restoredStatus: Exclude<GuideMobileAccountStatus, "suspended"> =
-        guide.previousAccountStatus ||
-        (guide.activatedAt ? "active" : "pending_activation");
-
-      const updated: AgencyGuideProfile = {
-        ...guide,
-        mobileAccountStatus: restoredStatus,
-        guideStatus: "active",
-        suspendedAt: undefined,
-        suspendedReason: undefined,
-        updatedAt: nowIso,
-      };
-
-      setLocalGuides((prev) =>
-        prev.map((g) => (g.id === guide.id ? updated : g))
-      );
-      if (!isUnimplementedStub(onUpdateGuide)) {
-        onUpdateGuide?.(guide.id, updated);
-      }
-      setAccountActionTarget(null);
-      toast.success(
-        `Đã mở khóa tài khoản của HDV ${guide.name} (Trạng thái: ${ACCOUNT_STATUS_BADGE[restoredStatus].label}).`
-      );
-    }
+    const affected = (guide.assignments || []).some(a => a.status === "in_progress" || a.status === "upcoming");
+    setIsSaving(true);
+    try {
+      await changeGuideAccountStatus({ guideId: guide.id, action, reason: suspendReason.trim() || undefined,
+        confirmWithUpcomingTours: affected });
+      setAccountActionTarget(null); reloadGuides();
+      toast.success(action === "suspend" ? `Đã khóa tài khoản HDV ${guide.name}.` : `Đã mở khóa tài khoản HDV ${guide.name}.`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể đổi trạng thái tài khoản."); }
+    finally { setIsSaving(false); }
+  };
+  const handleConfirmRemoveGuide = async () => {
+    if (!deleteTargetGuide || isSaving) return;
+    setIsSaving(true);
+    try {
+      await deleteAgencyGuide(deleteTargetGuide.id);
+      if (detailGuideId === deleteTargetGuide.id) setDetailGuideId(null);
+      setDeleteTargetGuide(null); reloadGuides(); toast.success("Đã xóa tài khoản và hồ sơ HDV chưa có lịch sử.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa HDV."); }
+    finally { setIsSaving(false); }
   };
 
-  // ============================================================================
-  // XÓA HỒ SƠ (CHẶN XÓA CỨNG NẾU ĐÃ CÓ LỊCH SỬ TOUR)
-  // ============================================================================
-  const handleConfirmRemoveGuide = () => {
-    if (!deleteTargetGuide) return;
-    const assignments = getGuideAssignments(deleteTargetGuide.id);
-
-    if (assignments.length > 0) {
-      toast.error(
-        "Không thể xóa cứng HDV đã có lịch sử phân công tour. Vui lòng dùng tính năng Tạm khóa tài khoản."
-      );
-      return;
-    }
-
-    setLocalGuides((prev) =>
-      prev.filter((g) => g.id !== deleteTargetGuide.id)
-    );
-    if (!isUnimplementedStub(onRemoveGuide)) {
-      onRemoveGuide?.(deleteTargetGuide.id);
-    }
-    if (detailGuideId === deleteTargetGuide.id) {
-      setDetailGuideId(null);
-    }
-    toast.success(
-      `Đã xóa hồ sơ HDV ${deleteTargetGuide.name} (chưa có lịch sử dẫn tour).`
-    );
-    setDeleteTargetGuide(null);
-  };
-
-  // ============================================================================
-  // KIỂM TRA ĐIỀU KIỆN PHÂN CÔNG & ĐIỀU HƯỚNG TỚI MÀN HÌNH ĐẶT TOUR
-  // ============================================================================
   const handleOpenChangePasswordModal = (guide: AgencyGuideProfile) => {
     setChangePasswordTarget(guide);
     setNewPasswordInput("");
@@ -943,48 +517,34 @@ export function AgencyGuideManagement({
     setChangePasswordError("");
   };
 
-  const handleSubmitChangePassword = (e: React.FormEvent) => {
+  const handleSubmitChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!changePasswordTarget) return;
-
-    const trimmedPass = newPasswordInput.trim();
-    const trimmedConfirm = confirmPasswordInput.trim();
-
-    if (!trimmedPass) {
-      setChangePasswordError("Vui lòng nhập mật khẩu mới.");
-      return;
-    }
-    if (trimmedPass.length < 8 || trimmedPass.length > 16) {
+    if (!changePasswordTarget || isChangingPassword) return;
+    if (newPasswordInput.length < 8 || newPasswordInput.length > 16) {
       setChangePasswordError("Mật khẩu mới phải từ 8 đến 16 ký tự.");
       return;
     }
-    if (trimmedPass !== trimmedConfirm) {
+    if (!newPasswordInput.trim()) {
+      setChangePasswordError("Mật khẩu không được chỉ gồm khoảng trắng.");
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
       setChangePasswordError("Xác nhận mật khẩu không khớp.");
       return;
     }
-
-    const nowIso = new Date().toISOString();
-    const targetId = changePasswordTarget.id;
-
-    const updatedTarget: AgencyGuideProfile = {
-      ...changePasswordTarget,
-      password: trimmedPass,
-      mobileAccountStatus: "active",
-      updatedAt: nowIso,
-    };
-
-    setLocalGuides((prev) =>
-      prev.map((g) => (g.id === targetId ? updatedTarget : g))
-    );
-
-    if (!isUnimplementedStub(onUpdateGuide)) {
-      onUpdateGuide?.(targetId, updatedTarget);
+    setIsChangingPassword(true);
+    setChangePasswordError("");
+    try {
+      await changeAgencyGuidePassword(changePasswordTarget.id, {
+        newPassword: newPasswordInput, confirmPassword: confirmPasswordInput,
+      });
+      toast.success(`Đã đổi mật khẩu cho HDV ${changePasswordTarget.name}.`);
+      closeChangePasswordModal();
+    } catch (error) {
+      setChangePasswordError(error instanceof Error ? error.message : "Không thể đổi mật khẩu. Vui lòng thử lại.");
+    } finally {
+      setIsChangingPassword(false);
     }
-
-    toast.success(
-      `Đã cập nhật mật khẩu mới thành công cho HDV ${changePasswordTarget.name}!`
-    );
-    setChangePasswordTarget(null);
   };
 
   const handleNavigateAssignmentForGuide = (guide: AgencyGuideProfile) => {
@@ -1076,7 +636,6 @@ export function AgencyGuideManagement({
             ))}
           </div>
 
-          
           {hasActiveFilters && (
             <button
               type="button"
@@ -1093,7 +652,13 @@ export function AgencyGuideManagement({
       {/* ==================================================================== */}
       {/* EMPTY STATES: 1. CHƯA CÓ HDV vs 2. BỘ LỌC KHÔNG CÓ KẾT QUẢ           */}
       {/* ==================================================================== */}
-      {agencyScopedGuides.length === 0 ? (
+      {isLoading ? (
+        <div role="status" className="p-8 text-center text-slate-500">Đang tải danh sách HDV...</div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-rose-700">
+          {loadError} <Button variant="outline" onClick={() => setRevision(v => v + 1)}>Tải lại</Button>
+        </div>
+      ) : totalGuides === 0 ? (
         <div className="bg-white rounded-2xl border border-[#CBD5E1] p-12 text-center shadow-2xs">
           <div className="w-16 h-16 rounded-2xl bg-[#F0F9FF] text-[#075985] flex items-center justify-center mx-auto mb-4 border border-sky-200">
             <Users className="w-8 h-8" />
@@ -1102,8 +667,7 @@ export function AgencyGuideManagement({
             Đội ngũ {companyName} chưa có Hướng dẫn viên nào
           </h3>
           <p className="text-slate-500 text-sm max-w-md mx-auto mt-1.5">
-            Hãy đăng ký hồ sơ nhân sự hướng dẫn viên nội bộ và gửi lời mời kích
-            hoạt để họ đăng nhập ứng dụng di động{" "}
+            Hãy thêm hồ sơ và cấp tài khoản cho hướng dẫn viên để họ đăng nhập ứng dụng di động{" "}
             <strong>TripOps Tour Guide</strong>.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
@@ -1114,19 +678,7 @@ export function AgencyGuideManagement({
               <Plus className="w-4 h-4" />
               Thêm Hướng dẫn viên đầu tiên
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setLocalGuides(
-                  buildInitialGuides(companyId, companyName, propGuides)
-                )
-              }
-              className="rounded-xl border-[#CBD5E1] text-[#075985] hover:bg-[#F0F9FF] flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Nạp dữ liệu mẫu kiểm thử (7 HDV)
-            </Button>
+
           </div>
         </div>
       ) : filteredGuides.length === 0 ? (
@@ -1148,7 +700,7 @@ export function AgencyGuideManagement({
               onClick={handleResetFilters}
               className="rounded-xl border-[#CBD5E1] text-[#075985] hover:bg-[#F0F9FF] text-xs font-semibold"
             >
-              Xóa bộ lọc & Xem tất cả ({agencyScopedGuides.length} HDV)
+              Xóa bộ lọc & Xem tất cả ({totalGuides} HDV)
             </Button>
           </div>
         </div>
@@ -1332,6 +884,16 @@ export function AgencyGuideManagement({
 
                               <button
                                 type="button"
+                                onClick={() => handleOpenChangePasswordModal(guide)}
+                                className="p-2 hover:bg-sky-50 text-[#075985] rounded-lg transition-colors cursor-pointer"
+                                title="Đổi mật khẩu"
+                                aria-label={`Đổi mật khẩu cho ${guide.name}`}
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                type="button"
                                 onClick={() => handleOpenEditModal(guide)}
                                 className="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors cursor-pointer"
                                 title="Chỉnh sửa hồ sơ"
@@ -1341,9 +903,8 @@ export function AgencyGuideManagement({
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleOpenAccountStatusDialog(guide)
-                                }
+                                disabled={isSaving || !guide.canReactivate}
+                                onClick={() => handleOpenAccountStatusDialog(guide)}
                                 className={`p-2 rounded-lg transition-colors cursor-pointer ${
                                   guide.mobileAccountStatus === "suspended"
                                     ? "text-emerald-600 hover:bg-emerald-50"
@@ -1382,10 +943,14 @@ export function AgencyGuideManagement({
               <div className="px-4 py-3 bg-[#F0F9FF]/70 border-t border-[#CBD5E1] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-slate-600">
                 <span>
                   Hiển thị <strong>{filteredGuides.length}</strong> /{" "}
-                  {agencyScopedGuides.length} hướng dẫn viên thuộc đội ngũ{" "}
+                  {total} hướng dẫn viên thuộc đội ngũ{" "}
                   <strong>{companyName}</strong>
                 </span>
-                <span>Tổng cộng <strong>{filteredGuides.length}</strong> hướng dẫn viên</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1 || isSaving} onClick={() => setPage(v => v - 1)}>Trang trước</Button>
+                  <span>Trang {page} / {Math.max(1, Math.ceil(total / pageSize))}</span>
+                  <Button variant="outline" size="sm" disabled={page * pageSize >= total || isSaving} onClick={() => setPage(v => v + 1)}>Trang sau</Button>
+                </div>
               </div>
             </div>
         </>
@@ -1401,6 +966,7 @@ export function AgencyGuideManagement({
             setIsFormModalOpen(false);
             setEditingGuide(null);
             setFormErrors({});
+    setFormError("");
           }
         }}
       >
@@ -1432,6 +998,7 @@ export function AgencyGuideManagement({
             noValidate
             className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
           >
+            {formError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{formError}</p>}
             {/* NHÓM 1: THÔNG TIN CÁ NHÂN & TÀI KHOẢN ĐĂNG NHẬP */}
             <div className="bg-slate-50/70 p-5 rounded-xl border border-slate-200/80 space-y-4">
               <div className="flex items-center justify-between">
@@ -1617,15 +1184,10 @@ export function AgencyGuideManagement({
                   )}
                 </div>
 
+                {!editingGuide && (
                 <div>
                   <Label className="text-xs font-semibold text-slate-700">
-                    {editingGuide ? (
-                      "Mật khẩu mới (tuỳ chọn)"
-                    ) : (
-                      <>
-                        Mật khẩu đăng nhập <span className="text-rose-500">*</span>
-                      </>
-                    )}
+                    Mật khẩu đăng nhập <span className="text-rose-500">*</span>
                   </Label>
                   <div className="relative mt-1">
                     <Input
@@ -1668,6 +1230,7 @@ export function AgencyGuideManagement({
                     </p>
                   )}
                 </div>
+                )}
               </div>
             </div>
 
@@ -2061,9 +1624,10 @@ export function AgencyGuideManagement({
             <Button
               type="submit"
               form="guide-form"
+              disabled={isSaving}
               className="bg-[#075985] hover:bg-[#0c4a6e] text-white font-semibold text-xs px-5 shadow-xs transition-all cursor-pointer"
             >
-              {editingGuide ? "Lưu cập nhật hồ sơ" : "Thêm Hướng dẫn viên"}
+              {isSaving ? "Đang lưu..." : editingGuide ? "Lưu cập nhật hồ sơ" : "Thêm Hướng dẫn viên"}
             </Button>
           </div>
         </DialogContent>
@@ -2077,13 +1641,11 @@ export function AgencyGuideManagement({
         onOpenChange={(open) => !open && setDetailGuideId(null)}
       >
         <DialogContent className="sm:max-w-4xl md:max-w-4xl lg:max-w-4xl w-full max-w-[94vw] bg-white max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200 shadow-2xl">
+          {!detailGuide && <p className="p-6 text-sm text-slate-500" role={detailError ? "alert" : "status"}>{detailError || "Đang tải hồ sơ HDV..."}</p>}
           {detailGuide &&
             (() => {
               const assignments = getGuideAssignments(detailGuide.id);
               const workInfo = deriveGuideWorkInfo(detailGuide, assignments);
-              const licenseCheck = evaluateLicenseExpiry(
-                detailGuide.licenseExpiryDate
-              );
               const eligibility = evaluateGuideEligibility(detailGuide);
               const accBadge =
                 ACCOUNT_STATUS_BADGE[detailGuide.mobileAccountStatus];
@@ -2395,6 +1957,10 @@ export function AgencyGuideManagement({
                     </Button>
 
                     <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm"
+                        onClick={() => { setDetailGuideId(null); handleOpenChangePasswordModal(detailGuide); }}>
+                        <KeyRound className="w-3.5 h-3.5 mr-1.5" />Đổi mật khẩu
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -2496,7 +2062,7 @@ export function AgencyGuideManagement({
                           rows={2}
                           value={suspendReason}
                           onChange={(e) => setSuspendReason(e.target.value)}
-                          placeholder="VD: Nghỉ phép cá nhân / Chờ gia hạn thẻ hành nghề..."
+                          placeholder="VD: Nghỉ phép cá nhân / Tạm ngừng công tác..."
                           className="mt-1 text-xs"
                         />
                       </div>
@@ -2504,7 +2070,7 @@ export function AgencyGuideManagement({
                   ) : (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 mt-2">
                       Khôi phục quyền đăng nhập ứng dụng Mobile cho{" "}
-                      <strong>{guide.name}</strong>. Nếu thẻ hành nghề còn hạn,
+                      <strong>{guide.name}</strong>. Sau khi mở khóa,
                       HDV có thể được phân công dẫn đoàn trở lại.
                     </div>
                   )}
@@ -2521,6 +2087,7 @@ export function AgencyGuideManagement({
                     <Button
                       type="button"
                       size="sm"
+                      disabled={isSaving}
                       onClick={handleConfirmAccountStatusChange}
                       className={
                         action === "suspend"
@@ -2625,6 +2192,7 @@ export function AgencyGuideManagement({
                         <Button
                           size="sm"
                           className="bg-rose-600 hover:bg-rose-700 text-white"
+                          disabled={isSaving}
                           onClick={handleConfirmRemoveGuide}
                         >
                           Xác nhận xóa hồ sơ
@@ -2639,82 +2207,59 @@ export function AgencyGuideManagement({
       </Dialog>
 
       {/* ==================================================================== */}
-      {/* MODAL 5: THÔNG BÁO MÔ PHỎNG LỜI MỜI KÍCH HOẠT QUA EMAIL              */}
+      {/* MODAL ĐỔI MẬT KHẨU HDV */}
       {/* ==================================================================== */}
-      <Dialog
-        open={!!invitePreviewInfo}
-        onOpenChange={(open) => !open && setInvitePreviewInfo(null)}
-      >
-        <DialogContent className="max-w-md bg-white rounded-2xl border border-[#CBD5E1]">
-          {invitePreviewInfo && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-base font-bold text-[#075985] flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-[#075985]" />
-                  {invitePreviewInfo.isResend
-                    ? "Đã tạo lại lời mời kích hoạt (Mô phỏng FE)"
-                    : "Đã khởi tạo lời mời kích hoạt (Mô phỏng FE)"}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-600 mt-1">
-                  Trạng thái mô phỏng luồng bảo mật khi chưa tích hợp dịch vụ
-                  gửi email từ Backend.
-                </DialogDescription>
-              </DialogHeader>
 
-              <div className="bg-[#F0F9FF] border border-sky-200 rounded-xl p-3.5 text-xs space-y-2 text-slate-700">
-                <p>
-                  <strong>Người nhận:</strong> {invitePreviewInfo.guide.name} (
-                  <span className="font-mono text-[#075985]">
-                    {invitePreviewInfo.guide.email}
-                  </span>
-                  )
-                </p>
-                <p>
-                  <strong>Trạng thái tài khoản:</strong>{" "}
-                  <span className="font-semibold text-[#075985]">
-                    Chờ kích hoạt (pending_activation)
-                  </span>
-                </p>
-                <p>
-                  <strong>Hiệu lực liên kết đặt mật khẩu:</strong> Đến{" "}
-                  {formatDateTimeVN(invitePreviewInfo.expiresAt)} (48 giờ)
-                </p>
-                <div className="bg-white p-2.5 rounded-lg border border-sky-100 text-[11px] text-slate-600">
-                  <strong>Quy trình thực tế khi nối API Backend:</strong> Hệ
-                  thống gửi email chứa one-time token tới{" "}
-                  <code>{invitePreviewInfo.guide.email}</code>. Hướng dẫn viên
-                  mở liên kết và tự đặt mật khẩu riêng để đăng nhập ứng dụng{" "}
-                  <strong>TripOps Tour Guide</strong> (Agency không biết và
-                  không lưu mật khẩu của HDV).
-                </div>
+      <Dialog open={Boolean(changePasswordTarget)} onOpenChange={(open) => {
+        if (!open && !isChangingPassword) closeChangePasswordModal();
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#075985]">
+              <KeyRound className="w-5 h-5" /> Đổi mật khẩu HDV
+            </DialogTitle>
+            <DialogDescription>
+              Đặt mật khẩu mới cho {changePasswordTarget?.name} ({changePasswordTarget?.email}).
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitChangePassword} className="space-y-4">
+            <p className="text-xs text-slate-500">Mật khẩu từ 8 đến 16 ký tự. Trạng thái khóa tài khoản được giữ nguyên.</p>
+            <div className="space-y-1.5">
+              <Label htmlFor="guide-new-password">Mật khẩu mới</Label>
+              <div className="relative">
+                <Input id="guide-new-password" type={showNewPassword ? "text" : "password"}
+                  autoComplete="new-password" value={newPasswordInput} disabled={isChangingPassword}
+                  onChange={(e) => { setNewPasswordInput(e.target.value); setChangePasswordError(""); }}
+                  className="pr-10" required minLength={8} maxLength={16} />
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  aria-label={showNewPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}>
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    handleSimulateGuideCompletedActivation(
-                      invitePreviewInfo.guide
-                    )
-                  }
-                  className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                >
-                  <Check className="w-3.5 h-3.5 mr-1" />
-                  Mô phỏng HDV đã đặt mật khẩu
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setInvitePreviewInfo(null)}
-                  className="bg-[#075985] hover:bg-[#F97316] text-white text-xs"
-                >
-                  Đã hiểu
-                </Button>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="guide-confirm-password">Xác nhận mật khẩu mới</Label>
+              <div className="relative">
+                <Input id="guide-confirm-password" type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password" value={confirmPasswordInput} disabled={isChangingPassword}
+                  onChange={(e) => { setConfirmPasswordInput(e.target.value); setChangePasswordError(""); }}
+                  className="pr-10" required minLength={8} maxLength={16} />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  aria-label={showConfirmPassword ? "Ẩn xác nhận mật khẩu" : "Hiện xác nhận mật khẩu"}>
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-            </>
-          )}
+            </div>
+            {changePasswordError && <p role="alert" className="text-sm text-rose-600">{changePasswordError}</p>}
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" disabled={isChangingPassword} onClick={closeChangePasswordModal}>Hủy</Button>
+              <Button type="submit" disabled={isChangingPassword} className="bg-[#075985] text-white hover:bg-[#064c6a]">
+                {isChangingPassword ? "Đang lưu..." : "Lưu mật khẩu"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

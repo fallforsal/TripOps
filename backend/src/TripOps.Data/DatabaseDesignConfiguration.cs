@@ -26,6 +26,22 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2").IsRequired();
         });
+        modelBuilder.Entity<GuideProfile>(entity =>
+        {
+            entity.ToTable("guide_profiles", table => table.HasCheckConstraint("CK_guide_profiles_experience", "experience_years BETWEEN 0 AND 50"));
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(36);
+            entity.Property(e => e.ExperienceYears).HasColumnName("experience_years").HasColumnType("smallint");
+            entity.Property(e => e.Languages).HasColumnName("languages").HasColumnType("nvarchar(max)").IsRequired();
+            entity.Property(e => e.Routes).HasColumnName("routes").HasColumnType("nvarchar(max)").IsRequired();
+            entity.Property(e => e.Specialties).HasColumnName("specialties").HasColumnType("nvarchar(max)").IsRequired();
+            entity.Property(e => e.Bio).HasColumnName("bio").HasMaxLength(5000);
+            entity.Property(e => e.SuspendedAt).HasColumnName("suspended_at").HasColumnType("datetime2");
+            entity.Property(e => e.SuspendedReason).HasColumnName("suspended_reason").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
+            entity.HasOne(e => e.User).WithOne(e => e.GuideProfile).HasForeignKey<GuideProfile>(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<BusinessProfile>(entity =>
         {
             entity.ToTable("business_profiles");

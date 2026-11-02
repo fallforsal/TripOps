@@ -1,3 +1,4 @@
+import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { toast } from "sonner";
@@ -223,7 +224,7 @@ function Application() {
     if (role !== "user" && role !== "agency" && role !== "guide") return;
     Promise.all([
       getAllBookingDetails(role),
-      role === "agency" ? getAvailableGuides() : Promise.resolve([]),
+      role === "agency" ? getAllAgencyGuides() : Promise.resolve([]),
     ])
       .then(([details, guides]) => {
         if (!active) return;
@@ -231,11 +232,10 @@ function Application() {
         setBookings(rows);
         const mapped = guides.map((g) => ({
           ...g,
-          email: "",
           role: "guide" as const,
           companyId: currentUser?.id,
         }));
-        setAvailableGuides(mapped);
+        setAvailableGuides(mapped.filter(g => g.guideStatus !== "inactive"));
         setUsers((previous) => [
           ...previous.filter((u) => u.role !== "guide"),
           ...mapped,
@@ -939,17 +939,10 @@ function Application() {
     setTourNotice("Tour đã được lưu trữ.");
   };
 
-  // Company Guide workforce handlers
-  const handleAddGuide = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
-  const handleUpdateGuide = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
-  const handleRemoveGuide = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleGuidesChanged = async () => {
+    const guides = await getAllAgencyGuides();
+    setAvailableGuides(guides.filter(g => g.mobileAccountStatus === "active"));
+    setUsers(previous => [...previous.filter(u => u.role !== "guide"), ...guides]);
   };
 
   // Tour moderation handlers (Admin)
@@ -1192,9 +1185,7 @@ function Application() {
               onEditTour={handleCompanyEditTour}
               onDeleteTour={handleCompanyDeleteTour}
               onDuplicateTour={handleCompanyDuplicateTour}
-              onAddGuide={handleAddGuide}
-              onUpdateGuide={handleUpdateGuide}
-              onRemoveGuide={handleRemoveGuide}
+              onGuidesChanged={handleGuidesChanged}
               onApproveBooking={handleApproveBooking}
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}

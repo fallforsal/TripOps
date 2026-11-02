@@ -1481,6 +1481,62 @@ namespace TripOps.Data.Migrations
                     b.ToTable("feedbacks", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.GuideProfile", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Bio")
+                        .HasMaxLength(5000)
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("bio");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("ExperienceYears")
+                        .HasColumnType("smallint")
+                        .HasColumnName("experience_years");
+
+                    b.Property<string>("Languages")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("languages");
+
+                    b.Property<string>("Routes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("routes");
+
+                    b.Property<string>("Specialties")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("specialties");
+
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("suspended_at");
+
+                    b.Property<string>("SuspendedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("suspended_reason");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("guide_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_guide_profiles_experience", "experience_years BETWEEN 0 AND 50");
+                        });
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.PaymentRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -3311,6 +3367,17 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.GuideProfile", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "User")
+                        .WithOne("GuideProfile")
+                        .HasForeignKey("TripOps.Data.Entities.GuideProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.PaymentRequest", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.Booking", "Booking")
@@ -3662,6 +3729,8 @@ namespace TripOps.Data.Migrations
             modelBuilder.Entity("TripOps.Data.Entities.User", b =>
                 {
                     b.Navigation("BusinessProfile");
+
+                    b.Navigation("GuideProfile");
                 });
 #pragma warning restore 612, 618
         }

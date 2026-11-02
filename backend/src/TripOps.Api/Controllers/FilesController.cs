@@ -10,12 +10,12 @@ public sealed class FilesController(IWebHostEnvironment environment) : Controlle
 {
     private IActionResult Read(string kind, string owner, string name)
     {
-        if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") || !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg)$")) return NotFound();
+        if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") || !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg|webp)$")) return NotFound();
         var file = Path.Combine(environment.ContentRootPath, "App_Data", "uploads", kind, owner, name);
         if (!System.IO.File.Exists(file)) return NotFound();
         Response.Headers.CacheControl = kind == "licenses" ? "private, no-store" : "public, max-age=3600";
         Response.Headers.XContentTypeOptions = "nosniff";
-        return PhysicalFile(file, name.EndsWith(".png") ? "image/png" : "image/jpeg");
+        return PhysicalFile(file, name.EndsWith(".png") ? "image/png" : name.EndsWith(".webp") ? "image/webp" : "image/jpeg");
     }
     [HttpGet("tours/{owner}/{name}")]
     [EndpointSummary("Read an uploaded public tour image")]
@@ -28,6 +28,11 @@ public sealed class FilesController(IWebHostEnvironment environment) : Controlle
     [Produces("image/png", "image/jpeg")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Service(string owner, string name) => Read("services", owner, name);
+
+    [HttpGet("guides/{owner}/{name}")]
+    [EndpointSummary("Read a public guide avatar uploaded in local development mode")]
+    [Produces("image/png", "image/jpeg", "image/webp")]
+    public IActionResult Guide(string owner, string name) => Read("guides", owner, name);
 
     [HttpGet("licenses/{owner}/{name}"), Authorize]
     [EndpointSummary("Read a business license as its owner or an Admin")]

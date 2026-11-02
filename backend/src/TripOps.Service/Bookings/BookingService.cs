@@ -303,6 +303,8 @@ public sealed class BookingService(BookingRepository repository, AccountService 
     // WF06: Phân công Hướng dẫn viên
     public async Task<BookingDto> AssignGuide(string agencyId, int id, GuideAssignmentRequest request, CancellationToken ct)
     {
+        await using var transaction = await repository.BeginGuideAssignment(ct);
+        await repository.LockGuide(request.GuideId, ct);
         var booking = await repository.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (booking.Tour?.AgencyId != agencyId)
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền phân công hướng dẫn viên.");
@@ -313,6 +315,9 @@ public sealed class BookingService(BookingRepository repository, AccountService 
 
         if (booking.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress))
             throw new BookingException(422, "Chỉ phân công hướng dẫn viên cho đơn đã được Agency xác nhận.");
+
+        if (await repository.GuideHasConflict(request.GuideId, id, booking.StartDate, EndDate(booking), ct))
+            throw new BookingException(409, "HDV đã được phân công cho chuyến khác trùng thời gian.");
 
         var existing = booking.AssignedGuides.FirstOrDefault(ag => ag.GuideId == request.GuideId);
         if (existing is null)
@@ -336,6 +341,7 @@ public sealed class BookingService(BookingRepository repository, AccountService 
         }
 
         await repository.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
     }
 

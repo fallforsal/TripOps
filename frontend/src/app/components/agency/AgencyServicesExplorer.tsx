@@ -431,9 +431,6 @@ function ExplorerOsmMap({
           <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-xs" style="background-color: ${meta.pinBg}">
             ${meta.shortLabel}
           </span>
-          <span class="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[11px] font-semibold">
-            ★ ${service.rating || "4.8"}
-          </span>
         </div>
         <div class="p-3 space-y-2">
           <h4 class="font-bold text-gray-900 text-sm leading-snug line-clamp-2">${service.name}</h4>
@@ -578,7 +575,7 @@ export function AgencyServicesExplorer({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedProvince, setSelectedProvince] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"split" | "map" | "grid">("split");
+  const [viewMode, setViewMode] = useState<"split" | "grid">("split");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
@@ -1247,19 +1244,6 @@ export function AgencyServicesExplorer({
               </button>
 
               <button
-                onClick={() => setViewMode("map")}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                  viewMode === "map"
-                    ? "bg-white text-[#075985] shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-                title="Bản đồ OpenStreetMap toàn cảnh"
-              >
-                <MapIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Bản đồ</span>
-              </button>
-
-              <button
                 onClick={() => setViewMode("grid")}
                 className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                   viewMode === "grid"
@@ -1365,7 +1349,7 @@ export function AgencyServicesExplorer({
       {viewMode === "split" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left / Top: Interactive OpenStreetMap (7 cols on desktop) */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden sticky top-24">
+          <div className="lg:col-span-8 xl:col-span-8 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden sticky top-24">
             <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
@@ -1398,7 +1382,7 @@ export function AgencyServicesExplorer({
           </div>
 
           {/* Right: Service Cards List (5 cols on desktop) */}
-          <div className="lg:col-span-5 space-y-4 max-h-[700px] overflow-y-auto pr-1">
+          <div className="lg:col-span-4 xl:col-span-4 space-y-3 max-h-[720px] overflow-y-auto pr-1">
             <div className="flex items-center justify-between text-xs text-gray-500 pb-1">
               <span>Tìm thấy <strong>{filteredServices.length}</strong> bài đăng phù hợp</span>
               {selectedProvince !== "all" && (
@@ -1419,7 +1403,7 @@ export function AgencyServicesExplorer({
                   }}
                   className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden hover:shadow-md hover:border-blue-400 transition-all flex flex-col sm:flex-row group cursor-pointer"
                 >
-                  <div className="sm:w-44 h-36 sm:h-auto relative overflow-hidden bg-gray-100 flex-shrink-0">
+                  <div className="w-full sm:w-32 lg:w-28 xl:w-36 h-32 sm:h-auto relative overflow-hidden bg-gray-100 flex-shrink-0">
                     <img
                       src={service.image}
                       alt={service.name}
@@ -1442,10 +1426,7 @@ export function AgencyServicesExplorer({
                         >
                           {service.province || "Việt Nam"} • {service.providerName}
                         </span>
-                        <span className="font-bold text-amber-600 flex items-center gap-1 flex-shrink-0">
-                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                          {service.rating || "4.8"}
-                        </span>
+                        
                       </div>
 
                       <h4
@@ -1481,7 +1462,7 @@ export function AgencyServicesExplorer({
                           setSelectedService(service);
                           setActiveImageIndex(0);
                         }}
-                        className="rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#075985] hover:text-white border border-[#CBD5E1] text-xs px-2.5 py-1 transition-all flex-shrink-0 font-medium"
+                        className="rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#075985] hover:text-white border border-[#CBD5E1] text-[11px] px-2 py-1 transition-all flex-shrink-0 font-medium h-7"
                       >
                         Xem bài đăng
                         <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
@@ -1516,32 +1497,6 @@ export function AgencyServicesExplorer({
         </div>
       )}
 
-      {viewMode === "map" && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden relative">
-          <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="w-4 h-4 text-emerald-600" />
-              <span className="font-bold text-gray-900 text-sm">
-                Bản đồ toàn cảnh — {filteredServices.length} bài đăng dịch vụ (Kèm nhãn giá trực tiếp)
-              </span>
-            </div>
-            <span className="text-xs text-gray-500">
-              Nhấp vào nhãn giá bất kỳ để xem nhanh thông tin dịch vụ
-            </span>
-          </div>
-
-          <ExplorerOsmMap
-            services={filteredServices}
-            selectedProvince={selectedProvince}
-            onSelectService={(service) => {
-              setSelectedService(service);
-              setActiveImageIndex(0);
-            }}
-            height="650px"
-          />
-        </div>
-      )}
-
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredServices.map((service) => {
@@ -1569,10 +1524,7 @@ export function AgencyServicesExplorer({
                     <CatIcon className="w-3 h-3" />
                     {meta.shortLabel}
                   </span>
-                  <span className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-xs text-white px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    {service.rating || "4.8"}
-                  </span>
+                  
                 </div>
 
                 <div className="p-4 flex-1 flex flex-col justify-between">

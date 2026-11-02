@@ -6,6 +6,9 @@ public sealed record RegisterRequest(
     [Required, StringLength(128, MinimumLength = 8)] string Password,
     [Required] string Role, bool AcceptedTerms);
 public sealed record LoginRequest([Required, EmailAddress] string Email, [Required] string Password);
+public sealed record ChangeGuidePasswordRequest(
+    [Required, StringLength(16, MinimumLength = 8)] string NewPassword,
+    [Required] string ConfirmPassword);
 public sealed record RejectRequest([Required, StringLength(2000)] string Reason);
 public sealed record ProfileRequest(
     [Required, StringLength(255)] string BusinessName,

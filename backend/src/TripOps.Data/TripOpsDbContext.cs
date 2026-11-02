@@ -13,6 +13,7 @@ public class TripOpsDbContext : DbContext
 
     // 1. Identity & Profile
     public DbSet<User> Users => Set<User>();
+    public DbSet<GuideProfile> GuideProfiles => Set<GuideProfile>();
     public DbSet<BusinessProfile> BusinessProfiles => Set<BusinessProfile>();
 
     // 2. Services

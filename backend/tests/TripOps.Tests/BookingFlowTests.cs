@@ -21,7 +21,8 @@ public sealed partial class BookingFlowTests
     private sealed class App : WebApplicationFactory<Program>
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
-        public App() => connection.Open();
+        private readonly Action<IWebHostBuilder>? configureHost;
+        public App(Action<IWebHostBuilder>? configure = null) { connection.Open(); configureHost = configure; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -33,6 +34,7 @@ public sealed partial class BookingFlowTests
                 services.AddDbContext<TripOpsDbContext>(o => o.UseSqlite(connection));
                 services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
             });
+            configureHost?.Invoke(builder);
         }
 
         public async Task Initialize()
@@ -99,6 +101,66 @@ public sealed partial class BookingFlowTests
             base.Dispose(disposing);
             connection.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task AgencyCanChangeOwnGuidePassword_WithoutChangingAccountStatus()
+    {
+        using var app = new App();
+        await app.Initialize();
+        using var agency = await app.Client("agency1@example.test");
+        var request = new { newPassword = "NewGuidePass123!", confirmPassword = "NewGuidePass123!" };
+        var response = await agency.PutAsJsonAsync("/api/v1/agency/guides/guide1/password", request);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        using var login = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await login.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = "guide1@example.test", password = "Password123!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await login.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = "guide1@example.test", password = request.newPassword })).StatusCode);
+
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+        var guide = await db.Users.SingleAsync(u => u.Id == "guide1");
+        Assert.NotEqual(request.newPassword, guide.PasswordHash);
+        Assert.Equal(PasswordVerificationResult.Success,
+            new PasswordHasher<User>().VerifyHashedPassword(guide, guide.PasswordHash!, request.newPassword));
+        guide.Status = UserStatus.Inactive;
+        await db.SaveChangesAsync();
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await agency.PutAsJsonAsync("/api/v1/agency/guides/guide1/password", request)).StatusCode);
+        await db.Entry(guide).ReloadAsync();
+        Assert.Equal(UserStatus.Inactive, guide.Status);
+    }
+
+    [Fact]
+    public async Task GuidePasswordChange_RequiresAgencyOwnershipAndMatchingValidPassword()
+    {
+        using var app = new App();
+        await app.Initialize();
+        var request = new { newPassword = "NewGuidePass123!", confirmPassword = "NewGuidePass123!" };
+        using var anonymous = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.PutAsJsonAsync("/api/v1/agency/guides/guide1/password", request)).StatusCode);
+        using var customer = await app.Client("customer1@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await customer.PutAsJsonAsync("/api/v1/agency/guides/guide1/password", request)).StatusCode);
+        using var otherAgency = await app.Client("agency2@example.test");
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await otherAgency.PutAsJsonAsync("/api/v1/agency/guides/guide1/password", request)).StatusCode);
+        using var agency = await app.Client("agency1@example.test");
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await agency.PutAsJsonAsync("/api/v1/agency/guides/customer1/password", request)).StatusCode);
+
+        foreach (var (password, confirm) in new[] {
+            ("short", "short"), ("12345678901234567", "12345678901234567"),
+            ("        ", "        "), ("NewGuidePass123!", "DifferentPass123!"), ("", "") })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest,
+                (await agency.PutAsJsonAsync("/api/v1/agency/guides/guide1/password",
+                    new { newPassword = password, confirmPassword = confirm })).StatusCode);
+        }
+        using var unchangedGuide = await app.Client("guide1@example.test");
     }
 
     [Fact]

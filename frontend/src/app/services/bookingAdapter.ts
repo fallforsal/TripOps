@@ -7,6 +7,15 @@ import type {
 } from "../types/index.ts";
 import type { BookingDto } from "./wf05Bookings.ts";
 
+function guideRole(role?: string): "lead_guide" | "support_guide" | "stage_guide" | "logistics" {
+  switch (role?.toLowerCase()) {
+    case "lead": case "lead_guide": return "lead_guide";
+    case "stage": case "stage_guide": return "stage_guide";
+    case "logistics": return "logistics";
+    default: return "support_guide";
+  }
+}
+
 export function fromApiBooking(
   dto: BookingDto,
   tours: Tour[] = [],
@@ -88,7 +97,7 @@ export function fromApiBooking(
     });
   }
 
-  const assignedLeadGuide = dto.assignedGuides?.[0];
+  const assignedLeadGuide = dto.assignedGuides?.find(g => guideRole(g.role) === "lead_guide") || dto.assignedGuides?.[0];
 
   return {
     id: String(dto.id),
@@ -162,7 +171,7 @@ export function fromApiBooking(
       guidePhone: ag.guidePhone,
       companyId: ag.agencyId || dto.agencyId || "",
       companyName: dto.agencyName || "",
-      role: ag.role === "Lead" ? "lead_guide" : "support_guide",
+      role: guideRole(ag.role),
       assignedAt: ag.assignedAt || dto.updatedAt || dto.createdAt,
       notes: ag.notes,
     })),

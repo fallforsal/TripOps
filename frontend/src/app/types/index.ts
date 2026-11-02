@@ -73,9 +73,6 @@ export interface User {
   accountStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   // Guide specific fields
-  licenseNumber?: string;
-  licenseExpiryDate?: string;
-  guideType?: "domestic" | "international";
   languages?: string[];
   specialties?: string[];
   experienceYears?: number;
