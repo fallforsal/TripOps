@@ -7,11 +7,12 @@ using TripOps.Service.Payments;
 namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
-    PayOsGateway payOs, PaymentClock clock)
+    PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingRepository Repo => repository;
     private PayOsGateway PayOs => payOs;
+    private PayOsPayoutGateway Payouts => payouts;
     /// <summary>Giờ hiện tại (UTC) cho nghiệp vụ thanh toán — test thay được để cố định thời điểm duyệt/quá hạn.</summary>
     private DateTime UtcNow => clock.UtcNow;
 
@@ -412,7 +413,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CustomizedLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus)).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CustomizedRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CustomizedHotelName??h.OriginalHotelName,h.CustomizedStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0)).ToList(),
-            Schedule(b), Transactions(b));
+            Schedule(b), Transactions(b), Cancellation(b));
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),

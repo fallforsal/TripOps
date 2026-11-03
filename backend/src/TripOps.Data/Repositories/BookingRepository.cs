@@ -26,6 +26,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         .Include(b => b.Incidents)
         .Include(b => b.PaymentTransactions)
         .Include(b => b.PaymentRequests)
+        .Include(b => b.RefundRequests)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
@@ -154,6 +155,25 @@ public sealed class BookingRepository(TripOpsDbContext db)
 
     public Task<PaymentTransaction?> FindTransaction(string code, CancellationToken ct) =>
         db.PaymentTransactions.AsNoTracking().SingleOrDefaultAsync(t => t.TransactionCode == code, ct);
+
+    /// <summary>Yêu cầu hủy/hoàn tiền cho màn hình Admin, mới nhất trước (chờ duyệt lên đầu).</summary>
+    public Task<List<RefundRequest>> ListRefunds(RefundStatus? status, CancellationToken ct)
+    {
+        IQueryable<RefundRequest> query = db.RefundRequests.AsNoTracking()
+            .Include(r => r.Booking).ThenInclude(b => b.Customer)
+            .Include(r => r.Booking).ThenInclude(b => b.Tour!).ThenInclude(t => t.Agency)
+            .Include(r => r.Booking).ThenInclude(b => b.PaymentTransactions)
+            .AsSplitQuery();
+        if (status is { } value)
+            query = query.Where(r => r.Status == value);
+        return query
+            .OrderBy(r => r.Status == RefundStatus.Pending ? 0 : 1).ThenByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+            .Take(500)
+            .ToListAsync(ct);
+    }
+
+    public Task<int?> RefundBookingId(int refundId, CancellationToken ct) =>
+        db.RefundRequests.Where(r => r.Id == refundId).Select(r => (int?)r.BookingId).SingleOrDefaultAsync(ct);
 
     public void AddIncident(BookingIncident incident) => db.BookingIncidents.Add(incident);
 

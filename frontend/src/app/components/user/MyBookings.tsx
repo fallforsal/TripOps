@@ -23,7 +23,7 @@ interface MyBookingsProps {
   bookings: Booking[];
   onCancelBooking: (bookingId: string, reason: string) => void;
   onViewBookingDetail: (booking: Booking) => void;
-  onSubmitRefundRequest?: (data: any) => void;
+  onSubmitRefundRequest?: (data: any) => void | boolean | Promise<boolean | void>;
   onNavigateToExplore?: () => void;
 }
 
@@ -277,12 +277,11 @@ export function MyBookings({
             onCancelBooking(id, reason);
             setCancelModalBooking(null);
           }}
-          onSubmitRefundRequest={(data) => {
-            if (onSubmitRefundRequest) {
-              onSubmitRefundRequest(data);
-            }
-            onCancelBooking(cancelModalBooking.id, data.reasonDetail);
-            setCancelModalBooking(null);
+          onSubmitRefundRequest={async (data) => {
+            // Đơn đã có tiền: chỉ gửi yêu cầu hủy (đơn hủy khi Admin duyệt), không gọi hủy ngay.
+            const ok = onSubmitRefundRequest ? await onSubmitRefundRequest(data) : false;
+            if (ok !== false) setCancelModalBooking(null);
+            return ok;
           }}
         />
       )}

@@ -51,6 +51,8 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import type { RefundAccountInput } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
@@ -70,6 +72,8 @@ interface UserBookingDetailPageProps {
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
   onNavigateToComplaint?: (booking: Booking) => void;
   onNavigateToReview?: (booking: Booking) => void;
+  /** Khách bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
+  onUpdateRefundAccount?: (bookingId: string, input: RefundAccountInput) => Promise<boolean>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -144,6 +148,7 @@ export function UserBookingDetailPage({
   onNavigateToComplaint,
   onNavigateToReview,
   onSubmitRefundRequest,
+  onUpdateRefundAccount,
 }: UserBookingDetailPageProps) {
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
@@ -346,15 +351,20 @@ export function UserBookingDetailPage({
 
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
   const today = new Date().toLocaleDateString("vi-VN");
-  // Chặn hủy đơn đã có tiền: hủy kèm hoàn tiền phải do Admin xem xét (máy chủ cũng chặn, trả 409).
+  // Chưa có tiền: hủy ngay. Đã có tiền: gửi yêu cầu hủy, phí theo chính sách chung, đơn chỉ hủy khi Admin duyệt.
   const paidSoFar = booking.paidAmount ?? 0;
   const hasPendingGatewayPayment = (booking.paymentTransactions ?? []).some((t) => t.status === "pending");
-  const cancellableStatus = booking.status === "pending" || booking.status === "confirmed";
-  const canCancel = cancellableStatus && paidSoFar === 0 && !hasPendingGatewayPayment;
+  const cancellation = booking.cancellation;
+  const cancellationPending = cancellation?.status === "Pending" || cancellation?.status === "Reviewing";
+  const cancellableStatus =
+    booking.status === "pending" || booking.status === "confirmed" || booking.status === "paid" || booking.status === "deposited";
+  const canCancel = cancellableStatus && !cancellationPending && !hasPendingGatewayPayment;
   const cancelBlockedReason = canCancel
-    ? null
-    : paidSoFar > 0 && booking.status !== "cancelled" && booking.status !== "completed"
-      ? "Đơn đã có khoản thanh toán nên bạn không thể tự hủy. Hủy kèm hoàn tiền sẽ do Admin xem xét."
+    ? paidSoFar > 0
+      ? "Đơn đã có khoản thanh toán: bạn gửi yêu cầu hủy, phí hủy tính theo chính sách chung và đơn chỉ bị hủy sau khi Admin duyệt."
+      : null
+    : cancellationPending
+      ? "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán."
       : hasPendingGatewayPayment && cancellableStatus
         ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
         : null;
@@ -367,7 +377,8 @@ export function UserBookingDetailPage({
   const canPayRequest = (pr: PaymentRequest) =>
     // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
     // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
-    (pr.stage === "deposit" || pr.stage === "balance" || pr.stage === "full") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
+    (pr.stage === "deposit" || pr.stage === "balance" || pr.stage === "full") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0
+    && !cancellationPending;
   const transactionStatusLabel: Record<string, { label: string; color: string }> = {
     success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -1895,6 +1906,13 @@ export function UserBookingDetailPage({
               )}
             </div>
 
+            {cancellation && (
+              <CancellationStatusCard
+                cancellation={cancellation}
+                onSaveRefundAccount={onUpdateRefundAccount ? (input) => onUpdateRefundAccount(booking.id, input) : undefined}
+              />
+            )}
+
             {/* CONTRACT & ACTIONS CARD */}
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-3">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
@@ -2002,13 +2020,11 @@ export function UserBookingDetailPage({
             onCancelBooking(id, reason);
             setShowCancelModal(false);
           }}
-          onSubmitRefundRequest={(data) => {
-            if (onSubmitRefundRequest) {
-              onSubmitRefundRequest(data);
-            } else {
-              onCancelBooking(data.bookingId, `[Yêu cầu hoàn tiền]: ${data.reasonDetail}`);
-            }
-            setShowCancelModal(false);
+          onSubmitRefundRequest={async (data) => {
+            // Đơn đã có tiền: chỉ gửi yêu cầu hủy; máy chủ tính phí, Admin duyệt mới hủy.
+            const ok = onSubmitRefundRequest ? await onSubmitRefundRequest(data) : false;
+            if (ok !== false) setShowCancelModal(false);
+            return ok;
           }}
           onConfirm={(reason) => {
             onCancelBooking(booking.id, reason);

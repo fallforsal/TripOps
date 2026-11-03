@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TripOps.Data;
@@ -27,6 +28,13 @@ public sealed partial class BookingFlowTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            // Không để khóa chi hộ thật trong user-secrets của máy dev lọt vào test (chi hộ là tiền thật).
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PayOsPayout:ClientId"] = "",
+                ["PayOsPayout:ApiKey"] = "",
+                ["PayOsPayout:ChecksumKey"] = "",
+            }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
@@ -58,7 +66,7 @@ public sealed partial class BookingFlowTests
             guide.PasswordHash = hasher.HashPassword(guide, "Password123!");
             db.Users.Add(guide);
 
-            foreach (var (id, role) in new[] { ("customer2", UserRole.User), ("guide2", UserRole.TourGuide), ("agency2", UserRole.TravelAgency) })
+            foreach (var (id, role) in new[] { ("customer2", UserRole.User), ("guide2", UserRole.TourGuide), ("agency2", UserRole.TravelAgency), ("admin1", UserRole.Admin) })
             {
                 var other = new User { Id = id, Name = id, Email = $"{id}@example.test", Role = role, Status = UserStatus.Active };
                 other.PasswordHash = hasher.HashPassword(other, "Password123!");

@@ -3646,7 +3646,7 @@ namespace TripOps.Data.Migrations
             modelBuilder.Entity("TripOps.Data.Entities.RefundRequest", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.Booking", "Booking")
-                        .WithMany()
+                        .WithMany("RefundRequests")
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -3918,6 +3918,8 @@ namespace TripOps.Data.Migrations
                     b.Navigation("PaymentTransactions");
 
                     b.Navigation("PriceAdjustments");
+
+                    b.Navigation("RefundRequests");
 
                     b.Navigation("Timelines");
                 });
