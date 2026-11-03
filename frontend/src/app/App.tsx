@@ -43,6 +43,19 @@ import {
   isPayOsUrl,
   startPayOsPayment,
   syncPayOsPayment,
+  requestCancellation,
+  updateRefundAccount,
+  agencyCancelBooking,
+  getAdminRefunds,
+  approveAdminRefund,
+  rejectAdminRefund,
+  getPayoutAccount,
+  payoutAdminRefund,
+  syncAdminPayout,
+  type PayoutAccountDto,
+  fromAdminRefund,
+  type RefundAccountInput,
+  type CancellationReason,
 } from "@/app/services/wf05Bookings";
 import type { PaymentOutcome } from "@/app/services/payos";
 
@@ -121,6 +134,7 @@ import {
   BookingAttractionCheckin,
   BookingIncident,
   RefundRequest,
+  RefundReasonType,
   CustomerComplaint,
 } from "@/app/types";
 import {
@@ -644,20 +658,161 @@ function Application() {
     }
   };
 
-  const handleCreateRefundRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  /** Cập nhật một đơn trong danh sách và trang chi tiết đang mở sau khi máy chủ trả về dữ liệu mới. */
+  const applyServerBooking = (dto: BookingDto) => {
+    const updated = fromApiBooking(dto, tours, currentUser);
+    setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    setSelectedUserBooking((current) => (current?.id === updated.id ? updated : current));
+    return updated;
   };
 
-  const handleApproveRefund = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  /** Khách gửi yêu cầu hủy cho đơn đã thanh toán. Phí và số hoàn do máy chủ tính; đơn chỉ hủy khi Admin duyệt. */
+  const handleCreateRefundRequest = async (data: {
+    bookingId: string;
+    reason: RefundReasonType;
+    reasonDetail: string;
+    refundBankName: string;
+    refundAccountNumber: string;
+    refundAccountHolder: string;
+  }): Promise<boolean> => {
+    try {
+      applyServerBooking(
+        await requestCancellation(Number(data.bookingId), {
+          reason: data.reason as CancellationReason,
+          reasonDetail: data.reasonDetail,
+          bankName: data.refundAccountNumber ? data.refundBankName : undefined,
+          accountNumber: data.refundAccountNumber || undefined,
+          accountHolder: data.refundAccountNumber ? data.refundAccountHolder : undefined,
+        }),
+      );
+      toast.success("Đã gửi yêu cầu hủy. Đơn sẽ được hủy và hoàn tiền sau khi Admin duyệt.");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không gửi được yêu cầu hủy.");
+      return false;
+    }
   };
 
-  const handleRejectRefund = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateRefundAccount = async (bookingId: string, input: RefundAccountInput): Promise<boolean> => {
+    try {
+      applyServerBooking(await updateRefundAccount(Number(bookingId), input));
+      toast.success("Đã lưu tài khoản nhận hoàn tiền.");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không lưu được tài khoản nhận hoàn tiền.");
+      return false;
+    }
+  };
+
+  /** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì gửi yêu cầu chờ Admin duyệt. */
+  const handleAgencyCancelBooking = async (bookingId: string, reason: string): Promise<boolean> => {
+    try {
+      const updated = applyServerBooking(await agencyCancelBooking(Number(bookingId), reason));
+      toast.success(
+        updated.status === "cancelled"
+          ? "Đã hủy đơn đặt tour."
+          : "Đã gửi yêu cầu hủy. Đơn sẽ được hủy sau khi Admin duyệt và hoàn tiền cho khách.",
+      );
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không hủy được đơn.");
+      return false;
+    }
+  };
+
+  const [payoutAccount, setPayoutAccount] = useState<PayoutAccountDto | null>(null);
+
+  const loadAdminRefunds = async () => {
+    try {
+      const rows = (await getAdminRefunds()).map(fromAdminRefund);
+      setRefundRequests(rows);
+      setPayoutAccount(await getPayoutAccount().catch(() => null));
+      return rows;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tải được danh sách yêu cầu hoàn tiền.");
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role !== "admin") {
+      setRefundRequests([]);
+      return;
+    }
+    void (async () => {
+      // Lệnh chi hộ còn đang chạy: hỏi payOS kết quả thật ngay khi mở trang.
+      const rows = await loadAdminRefunds();
+      const running = rows.filter((r) => r.status === "APPROVED");
+      if (running.length === 0) return;
+      await Promise.allSettled(running.map((r) => syncAdminPayout(Number(r.id))));
+      await loadAdminRefunds();
+    })();
+  }, [currentUser?.role]);
+
+  /** Duyệt và hoàn tự động qua chi hộ payOS. Đơn chỉ hủy khi payOS báo thành công. */
+  const handlePayoutRefund = async (refundId: string, refundAmount: number, note?: string): Promise<boolean> => {
+    try {
+      const result = await payoutAdminRefund(Number(refundId), { refundAmount, note });
+      toast.success(
+        result.status === "Completed"
+          ? "payOS đã chuyển tiền thành công. Đơn đã chuyển sang Đã hủy."
+          : "Đã gửi lệnh chi cho payOS. Bấm \"Kiểm tra chi hộ\" sau ít phút để cập nhật kết quả.",
+      );
+      await loadAdminRefunds();
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không chi hộ được qua payOS.");
+      await loadAdminRefunds();
+      return false;
+    }
+  };
+
+  const handleSyncPayout = async (refundId: string) => {
+    try {
+      const result = await syncAdminPayout(Number(refundId));
+      if (result.status === "Completed") toast.success("payOS đã chuyển tiền thành công. Đơn đã chuyển sang Đã hủy.");
+      else if (result.status === "Pending") toast.error(result.lastPayoutError || "Lệnh chi không thành công, yêu cầu đã trở lại chờ duyệt.");
+      else toast.info("payOS vẫn đang xử lý lệnh chi. Vui lòng kiểm tra lại sau.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không kiểm tra được lệnh chi.");
+    }
+    await loadAdminRefunds();
+  };
+
+  const handleApproveRefund = async (
+    refundId: string,
+    bankTransactionCode: string,
+    note?: string,
+    refundAmount?: number,
+  ): Promise<boolean> => {
+    const target = refundRequests.find((r) => r.id === refundId);
+    try {
+      await approveAdminRefund(Number(refundId), {
+        refundAmount: refundAmount ?? target?.suggestedRefundAmount ?? target?.approvedRefundAmount ?? 0,
+        transactionCode: bankTransactionCode || undefined,
+        note,
+      });
+      toast.success("Đã duyệt yêu cầu: đơn đã chuyển sang Đã hủy.");
+      await loadAdminRefunds();
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không duyệt được yêu cầu.");
+      return false;
+    }
+  };
+
+  const handleRejectRefund = async (refundId: string, reason: string) => {
+    try {
+      await rejectAdminRefund(Number(refundId), reason);
+      toast.success("Đã từ chối yêu cầu hủy. Đơn giữ nguyên trạng thái.");
+      await loadAdminRefunds();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không từ chối được yêu cầu.");
+    }
   };
 
   const handleReviewRefund = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+    toast.info("Yêu cầu chỉ cần duyệt hoặc từ chối; không có bước kiểm tra riêng.");
   };
 
   const handleRejectBooking = async (bookingId: string, reason?: string) => {
@@ -1317,6 +1472,7 @@ function Application() {
               onUpdateBookingAgencies={handleUpdateBookingAgencies}
               onUpdateAttractionCheckins={handleUpdateAttractionCheckins}
               onUpdateIncidents={handleUpdateIncidents}
+              onCancelBooking={handleAgencyCancelBooking}
               onUpdateCustomRequest={handleUpdateCustomTourRequest}
               onRestoreTourVersion={handleRestoreTourVersion}
               onViewTour={handleViewTour}
@@ -1396,6 +1552,9 @@ function Application() {
               onApproveRefund={handleApproveRefund}
               onRejectRefund={handleRejectRefund}
               onReviewRefund={handleReviewRefund}
+              payoutAccount={payoutAccount}
+              onPayoutRefund={handlePayoutRefund}
+              onSyncPayout={handleSyncPayout}
               systemBank={systemBankAccount}
               onUpdateSystemBank={handleUpdateSystemBank}
               onSettleBooking={handleSettleBooking}
@@ -1559,6 +1718,7 @@ function Application() {
               }
               systemBank={systemBankAccount}
               onSubmitRefundRequest={handleCreateRefundRequest}
+              onUpdateRefundAccount={handleUpdateRefundAccount}
               onBack={() => {
                 goBack(() => handleNavigate("my-bookings"));
               }}

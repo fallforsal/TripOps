@@ -93,6 +93,8 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import { getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
   booking: Booking;
@@ -112,6 +114,8 @@ interface AgencyBookingDetailPageProps {
   onUpdateBookingAgencies?: (bookingId: string, agencies: BookingAgencyShare[]) => void;
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
   onUpdateIncidents?: (bookingId: string, incidents: BookingIncident[]) => void;
+  /** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì gửi yêu cầu chờ Admin duyệt. */
+  onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -194,8 +198,41 @@ export function AgencyBookingDetailPage({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
+  onCancelBooking,
 }: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
+  const [agencyCancelOpen, setAgencyCancelOpen] = useState(false);
+  const [agencyCancelReason, setAgencyCancelReason] = useState("");
+  const [agencyCancelQuote, setAgencyCancelQuote] = useState<CancellationQuoteDto | null>(null);
+  const [agencyCancelError, setAgencyCancelError] = useState("");
+  const [agencyCancelling, setAgencyCancelling] = useState(false);
+  const agencyCancellationPending =
+    booking.cancellation?.status === "Pending" || booking.cancellation?.status === "Reviewing";
+  const openAgencyCancel = async () => {
+    setAgencyCancelOpen(true);
+    setAgencyCancelQuote(null);
+    setAgencyCancelError("");
+    try {
+      setAgencyCancelQuote(await getAgencyCancellationQuote(Number(booking.id)));
+    } catch (err) {
+      setAgencyCancelError(err instanceof Error ? err.message : "Không tải được thông tin hủy.");
+    }
+  };
+  const submitAgencyCancel = async () => {
+    if (agencyCancelReason.trim().length < 3) {
+      setAgencyCancelError("Vui lòng nhập lý do hủy (gửi cho khách và Admin).");
+      return;
+    }
+    if (!onCancelBooking) return;
+    setAgencyCancelling(true);
+    const ok = await onCancelBooking(booking.id, agencyCancelReason.trim());
+    setAgencyCancelling(false);
+    if (ok) {
+      setAgencyCancelOpen(false);
+      setAgencyCancelReason("");
+    }
+  };
   const [rejectReason, setRejectReason] = useState("");
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -4217,6 +4254,20 @@ export function AgencyBookingDetailPage({
               )}
             </div>
 
+            {booking.cancellation && <CancellationStatusCard cancellation={booking.cancellation} />}
+
+            {onCancelBooking && isCurrentCompanyLead && !agencyCancellationPending &&
+              (booking.status === "confirmed" || booking.status === "paid" || booking.status === "deposited") && (
+                <Button
+                  variant="outline"
+                  onClick={openAgencyCancel}
+                  className="w-full border-red-300 text-red-600 hover:bg-red-50 gap-1.5 text-xs font-semibold h-9"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Hủy đơn này
+                </Button>
+              )}
+
             {/* Lịch thanh toán: hệ thống tự tạo khi duyệt đơn — công ty chỉ xem (không tạo yêu cầu thu thủ công) */}
             <div className="p-3 bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl text-[11px] text-blue-900 leading-relaxed">
               <div className="font-bold flex items-center gap-1.5 text-blue-900">
@@ -4490,6 +4541,58 @@ export function AgencyBookingDetailPage({
                 }}
               >
                 Xác nhận từ chối
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: AGENCY HỦY ĐƠN ĐÃ DUYỆT */}
+      <Dialog open={agencyCancelOpen} onOpenChange={setAgencyCancelOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Hủy đơn đặt tour</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2 text-xs">
+            {!agencyCancelQuote && !agencyCancelError && <p className="text-gray-500">Đang tính hệ quả hủy...</p>}
+            {agencyCancelQuote && (
+              <div
+                className={`rounded-xl border p-3 space-y-1 ${
+                  agencyCancelQuote.mode === "overdue" ? "border-amber-300 bg-amber-50" : "border-[#CBD5E1] bg-[#F0F9FF]/70"
+                }`}
+              >
+                <p className="font-semibold">{agencyCancelQuote.explanation}</p>
+                {agencyCancelQuote.mode !== "immediate" && (
+                  <p>
+                    Khách đã trả <strong>{formatVND(agencyCancelQuote.paidAmount)}</strong> · hoàn lại{" "}
+                    <strong>{formatVND(agencyCancelQuote.refundAmount)}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+            <Label className="text-xs">
+              Lý do hủy (gửi cho khách và Admin) <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              value={agencyCancelReason}
+              onChange={(e) => {
+                setAgencyCancelReason(e.target.value);
+                setAgencyCancelError("");
+              }}
+              placeholder="VD: Không đủ số khách tối thiểu, thời tiết xấu, khách không thanh toán đợt 2..."
+              rows={3}
+            />
+            {agencyCancelError && <p className="text-[11px] text-red-600">{agencyCancelError}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAgencyCancelOpen(false)}>
+                Đóng
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!agencyCancelQuote || agencyCancelling}
+                onClick={submitAgencyCancel}
+              >
+                {agencyCancelQuote?.mode === "immediate" ? "Hủy đơn ngay" : "Gửi yêu cầu hủy cho Admin"}
               </Button>
             </div>
           </div>

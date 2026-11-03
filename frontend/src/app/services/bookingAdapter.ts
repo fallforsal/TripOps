@@ -5,8 +5,56 @@ import type {
   PaymentTransactionView,
   User,
   IncidentReport,
+  RefundRequest,
+  RefundReasonType,
 } from "../types/index.ts";
-import type { BookingDto } from "./wf05Bookings.ts";
+import type { AdminRefundDto, BookingDto } from "./wf05Bookings.ts";
+
+/** Yêu cầu hủy/hoàn tiền từ máy chủ → dạng dùng ở màn hình Admin. Số tiền lấy nguyên từ máy chủ. */
+export function fromAdminRefund(d: AdminRefundDto): RefundRequest {
+  const status: RefundRequest["status"] =
+    d.status === "Completed" ? "COMPLETED"
+      : d.status === "Rejected" ? "REJECTED"
+        : d.status === "Reviewing" ? "REVIEWING"
+          : d.status === "Approved" ? "APPROVED"
+            : "PENDING";
+  const refund = d.approvedRefundAmount ?? d.suggestedRefund;
+  return {
+    id: String(d.id),
+    bookingId: String(d.bookingId),
+    bookingCode: d.bookingCode,
+    tourName: d.tourName || "",
+    tourStartDate: d.startDate ? d.startDate.slice(0, 10) : undefined,
+    requestedBy: d.requestedByRole,
+    requestedByRole: d.requestedByRole,
+    customerName: d.customerName,
+    customerEmail: d.customerEmail || "",
+    customerPhone: d.customerPhone || undefined,
+    agencyName: d.agencyName || undefined,
+    reason: d.reason as RefundReasonType,
+    reasonDetail: d.reasonDetail,
+    originalPaidAmount: d.paidAmount,
+    approvedRefundAmount: refund,
+    suggestedRefundAmount: d.suggestedRefund,
+    refundFee: Math.min(d.fee, d.paidAmount),
+    feePercent: d.feePercent,
+    totalAmount: d.totalAmount,
+    refundPercentage: d.paidAmount > 0 ? Math.round((refund * 100) / d.paidAmount) : 0,
+    refundBankName: d.bankName || "",
+    refundAccountNumber: d.accountNumber || "",
+    refundAccountHolder: d.accountHolder || "",
+    status,
+    reviewNote: d.adminNote || undefined,
+    rejectionReason: d.rejectionReason || undefined,
+    bankTransactionCode: d.refundTransactionCode || undefined,
+    createdAt: d.createdAt,
+    reviewedAt: d.reviewedAt || undefined,
+    completedAt: d.completedAt || undefined,
+    bankBin: d.bankBin || undefined,
+    payoutState: d.payoutState || undefined,
+    lastPayoutError: d.lastPayoutError || undefined,
+  };
+}
 
 function guideRole(role?: string): "lead_guide" | "support_guide" | "stage_guide" | "logistics" {
   switch (role?.toLowerCase()) {
@@ -238,6 +286,7 @@ export function fromApiBooking(
             : "unpaid",
     paymentRequests: paymentRequests,
     paymentTransactions,
+    cancellation: dto.cancellation ?? undefined,
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),

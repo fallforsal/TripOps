@@ -18,6 +18,7 @@ import { UserManagement } from "./UserManagement";
 import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
 import { AdminRefundManagement } from "./AdminRefundManagement";
 import { RefundRequest } from "@/app/types";
+import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 import { AdminTourModeration } from "./AdminTourModeration";
 
 interface AdminDashboardProps {
@@ -60,9 +61,12 @@ interface AdminDashboardProps {
   ) => void;
   onSuspendCompany: (companyId: string, reason: string) => void;
   refundRequests?: RefundRequest[];
-  onApproveRefund?: (refundId: string, bankTransactionCode: string, note?: string) => void;
+  onApproveRefund?: (refundId: string, bankTransactionCode: string, note?: string, refundAmount?: number) => void | Promise<boolean | void>;
   onRejectRefund?: (refundId: string, reason: string) => void;
   onReviewRefund?: (refundId: string, note?: string) => void;
+  payoutAccount?: PayoutAccountDto | null;
+  onPayoutRefund?: (refundId: string, refundAmount: number, note?: string) => Promise<boolean>;
+  onSyncPayout?: (refundId: string) => Promise<void>;
   onLogout?: () => void;
 }
 
@@ -100,6 +104,9 @@ export function AdminDashboard({
   onApproveRefund = () => {},
   onRejectRefund = () => {},
   onReviewRefund = () => {},
+  payoutAccount,
+  onPayoutRefund,
+  onSyncPayout,
   onLogout,
 }: AdminDashboardProps) {
   const [activeSection, setActiveSection] =
@@ -150,6 +157,9 @@ export function AdminDashboard({
             onApproveRefund={onApproveRefund}
             onRejectRefund={onRejectRefund}
             onReviewRefund={onReviewRefund}
+            payoutAccount={payoutAccount}
+            onPayoutRefund={onPayoutRefund}
+            onSyncPayout={onSyncPayout}
           />
         );
 

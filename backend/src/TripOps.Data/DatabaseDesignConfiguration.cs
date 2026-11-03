@@ -767,7 +767,7 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<PaymentRequest>().HasOne<User>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<PaymentTransaction>().HasOne(e => e.Booking).WithMany(e => e.PaymentTransactions).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<PaymentTransaction>().HasOne(e => e.PaymentRequest).WithMany(e => e.Transactions).HasForeignKey(e => e.PaymentRequestId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<RefundRequest>().HasOne(e => e.Booking).WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<RefundRequest>().HasOne(e => e.Booking).WithMany(b => b.RefundRequests).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<RefundRequest>().HasOne(e => e.Requester).WithMany().HasForeignKey(e => e.RequestedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<RefundRequest>().HasOne(e => e.Reviewer).WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Service>().HasOne(e => e.Provider).WithMany().HasForeignKey(e => e.ProviderId).OnDelete(DeleteBehavior.Restrict);

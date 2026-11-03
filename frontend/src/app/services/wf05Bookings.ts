@@ -131,6 +131,102 @@ export interface BookingDto {
   /** Lịch thanh toán thật từ máy chủ (rỗng khi đơn còn chờ duyệt). */
   paymentSchedule?: PaymentScheduleItemDto[];
   paymentTransactions?: PaymentTransactionDto[];
+  /** Yêu cầu hủy/hoàn tiền mới nhất (không kèm số tài khoản). */
+  cancellation?: CancellationRequestDto | null;
+}
+
+/** Lý do yêu cầu hủy. TOUR_CANCELLED = Agency hủy; PAYMENT_OVERDUE = khách quá hạn thanh toán. */
+export type CancellationReason =
+  | "CUSTOMER_REQUEST"
+  | "WEATHER_FORCE_MAJEURE"
+  | "SERVICE_QUALITY"
+  | "OTHER"
+  | "TOUR_CANCELLED"
+  | "PAYMENT_OVERDUE";
+
+export interface CancellationRequestDto {
+  id: number;
+  reason: CancellationReason;
+  reasonDetail: string;
+  status: "Pending" | "Reviewing" | "Completed" | "Rejected" | "Approved";
+  requestedByRole: "customer" | "agency";
+  feePercent: number;
+  fee: number;
+  paidAmount: number;
+  suggestedRefund: number;
+  approvedRefundAmount?: number | null;
+  hasRefundAccount: boolean;
+  refundTransactionCode?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  completedAt?: string | null;
+}
+
+/** Báo giá hủy do backend tính theo chính sách chung. */
+export interface CancellationQuoteDto {
+  bookingId: number;
+  mode: "immediate" | "customer" | "agency" | "overdue";
+  daysBeforeDeparture: number;
+  coolingOff: boolean;
+  feePercent: number;
+  totalAmount: number;
+  paidAmount: number;
+  fee: number;
+  refundAmount: number;
+  explanation: string;
+}
+
+export interface RefundAccountInput {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+export interface AdminRefundDto {
+  id: number;
+  bookingId: number;
+  bookingCode: string;
+  tourName?: string | null;
+  startDate: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  agencyName?: string | null;
+  reason: CancellationReason;
+  reasonDetail: string;
+  status: "Pending" | "Reviewing" | "Completed" | "Rejected" | "Approved";
+  requestedByRole: "customer" | "agency";
+  totalAmount: number;
+  feePercent: number;
+  fee: number;
+  paidAmount: number;
+  suggestedRefund: number;
+  approvedRefundAmount?: number | null;
+  bankName?: string | null;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+  refundTransactionCode?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  completedAt?: string | null;
+  /** Mã BIN của ngân hàng khách (null = không chi tự động được, phải chuyển tay). */
+  bankBin?: string | null;
+  /** Trạng thái lệnh chi hộ đang chạy (PROCESSING...). */
+  payoutState?: string | null;
+  lastPayoutError?: string | null;
+}
+
+/** Kênh chuyển tiền payOS: đã cấu hình chưa và số dư. */
+export interface PayoutAccountDto {
+  configured: boolean;
+  accountNumber?: string | null;
+  accountName?: string | null;
+  balance?: number | null;
+  error?: string | null;
 }
 
 export interface PaymentScheduleItemDto {
@@ -275,7 +371,81 @@ export async function cancelBooking(
   });
 }
 
+/** Phí hủy và số tiền hoàn tại thời điểm này (backend tính). */
+export async function getCancellationQuote(id: number): Promise<CancellationQuoteDto> {
+  return await http<CancellationQuoteDto>(`/bookings/${id}/cancellation-quote`);
+}
+
+/** Gửi yêu cầu hủy cho đơn đã thanh toán. Đơn chỉ bị hủy khi Admin duyệt. */
+export async function requestCancellation(
+  id: number,
+  input: { reason: CancellationReason; reasonDetail: string } & Partial<RefundAccountInput>,
+): Promise<BookingDto> {
+  return await http<BookingDto>(`/bookings/${id}/cancellation-requests`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
+export async function updateRefundAccount(id: number, input: RefundAccountInput): Promise<BookingDto> {
+  return await http<BookingDto>(`/bookings/${id}/cancellation-requests/refund-account`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 // 2. Agency APIs (WF05 & WF06)
+export async function getAgencyCancellationQuote(id: number): Promise<CancellationQuoteDto> {
+  return await http<CancellationQuoteDto>(`/agency/bookings/${id}/cancellation-quote`);
+}
+
+/** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì tạo yêu cầu chờ Admin duyệt. */
+export async function agencyCancelBooking(id: number, reason: string): Promise<BookingDto> {
+  return await http<BookingDto>(`/agency/bookings/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// 4. Admin: yêu cầu hủy/hoàn tiền
+export async function getAdminRefunds(status?: string): Promise<AdminRefundDto[]> {
+  return await http<AdminRefundDto[]>(`/admin/refunds${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+}
+
+export async function approveAdminRefund(
+  id: number,
+  input: { refundAmount: number; transactionCode?: string; note?: string },
+): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPayoutAccount(): Promise<PayoutAccountDto> {
+  return await http<PayoutAccountDto>(`/admin/refunds/payout-account`);
+}
+
+/** Duyệt và hoàn tự động qua chi hộ payOS (tiền thật). Đơn chỉ hủy khi payOS báo thành công. */
+export async function payoutAdminRefund(id: number, input: { refundAmount: number; note?: string }): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/payout`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function syncAdminPayout(id: number): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/payout/sync`, { method: "POST" });
+}
+
+export async function rejectAdminRefund(id: number, reason: string): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export async function getAgencyBookings(
   status?: string,
   search?: string,
@@ -391,4 +561,4 @@ export async function reportIncident(
   });
 }
 
-export { fromApiBooking } from "./bookingAdapter";
+export { fromApiBooking, fromAdminRefund } from "./bookingAdapter";

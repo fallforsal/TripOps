@@ -31,6 +31,7 @@ public virtual ICollection<BookingPriceAdjustment> PriceAdjustments { get; set; 
 public virtual ICollection<BookingIncident> Incidents { get; set; } = new List<BookingIncident>();
 public virtual ICollection<PaymentRequest> PaymentRequests { get; set; } = new List<PaymentRequest>();
 public virtual ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
+public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
 }
 
 public class BookingParticipant : BaseEntity<int> {
