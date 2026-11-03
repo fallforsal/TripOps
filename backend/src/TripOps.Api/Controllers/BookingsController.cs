@@ -66,6 +66,19 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
     public async Task<IActionResult> Cancel(int id, BookingCancellationRequest request, CancellationToken ct) =>
         Ok(await bookings.Cancel(Actor, id, request, ct));
 
+    [HttpPost("{id:int}/contract/signed"), RequestSizeLimit(11 * 1024 * 1024)]
+    [EndpointSummary("Upload the signed travel contract (PDF, PNG or JPG up to 10 MB); required before the first payment")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadSignedContract(int id, IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length is <= 0 or > 10 * 1024 * 1024)
+            throw new BookingException(400, "File hợp đồng đã ký phải là PDF, PNG hoặc JPG, tối đa 10 MB.");
+        using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        return Ok(await bookings.UploadSignedContract(Actor, id, stream.ToArray(), ct));
+    }
+
     [HttpGet("{id:int}/cancellation-quote")]
     [EndpointSummary("Preview the cancellation fee and refund computed by the platform policy at this moment")]
     [ProducesResponseType<CancellationQuoteDto>(StatusCodes.Status200OK)]
@@ -121,6 +134,12 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<CancellationQuoteDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CancellationQuote(int id, CancellationToken ct) =>
         Ok(await bookings.AgencyCancellationQuote(Actor, id, ct));
+
+    [HttpPost("{id:int}/contract/review")]
+    [EndpointSummary("Agency checks the customer's signed contract: verify it or ask the customer to sign again")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReviewContract(int id, ContractReviewRequest request, CancellationToken ct) =>
+        Ok(await bookings.ReviewContract(Actor, id, request, ct));
 
     [HttpPost("{id:int}/cancel")]
     [EndpointSummary("Agency cancels a booking: immediately when unpaid, otherwise as a request an Admin must approve")]

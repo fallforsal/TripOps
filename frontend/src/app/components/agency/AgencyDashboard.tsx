@@ -55,6 +55,7 @@ interface AgencyDashboardProps {
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
   onUpdateIncidents?: (bookingId: string, incidents: BookingIncident[]) => void;
   onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
+  onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
   onUpdateCustomRequest?: (id: string, update: Partial<CustomTourRequest>) => void;
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
@@ -89,6 +90,7 @@ export function AgencyDashboard({
   onUpdateAttractionCheckins,
   onUpdateIncidents,
   onCancelBooking,
+  onReviewContract,
   onUpdateCustomRequest,
   onRestoreTourVersion,
   onViewTour,
@@ -294,6 +296,7 @@ export function AgencyDashboard({
               onUpdateAttractionCheckins={onUpdateAttractionCheckins}
               onUpdateIncidents={onUpdateIncidents}
               onCancelBooking={onCancelBooking}
+              onReviewContract={onReviewContract}
             />
           );
         }

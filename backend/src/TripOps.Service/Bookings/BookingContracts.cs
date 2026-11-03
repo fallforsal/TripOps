@@ -82,7 +82,22 @@ public sealed record BookingDto(
     IReadOnlyList<BookingHotelDto>? SnapshotHotels = null,
     IReadOnlyList<PaymentScheduleItemDto>? PaymentSchedule = null,
     IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null,
-    CancellationRequestDto? Cancellation = null);
+    CancellationRequestDto? Cancellation = null,
+    ContractDto? Contract = null);
+
+/// <summary>
+/// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.
+/// RequiredBeforePayment: khách phải ký (tải bản đã ký) thì mới thanh toán được.
+/// </summary>
+public sealed record ContractDto(
+    int Id, int Version, string ContractNo, decimal TotalAmount, string Status,
+    DateTime? SignedAt, string? SignedFileType, string? SignMethod, string? ReviewNote, DateTime? ReviewedAt, DateTime? CreatedAt,
+    bool RequiredBeforePayment);
+
+/// <summary>Agency kiểm tra bản ký: verify (hợp lệ) hoặc resign (yêu cầu ký lại, bắt buộc ghi lý do).</summary>
+public sealed record ContractReviewRequest(
+    [Required, AllowedValues("verify", "resign")] string Decision,
+    [StringLength(1000)] string? Note);
 
 /// <summary>
 /// Yêu cầu hủy/hoàn tiền mới nhất của đơn (không kèm số tài khoản ngân hàng để Agency không thấy).

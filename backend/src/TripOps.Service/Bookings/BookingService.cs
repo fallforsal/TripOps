@@ -2,17 +2,20 @@ using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
 using TripOps.Service.Accounts;
+using Microsoft.Extensions.Hosting;
 using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
-    PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts)
+    PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingRepository Repo => repository;
     private PayOsGateway PayOs => payOs;
     private PayOsPayoutGateway Payouts => payouts;
+    private AccountService Accounts => accounts;
+    private IHostEnvironment Env => environment;
     /// <summary>Giờ hiện tại (UTC) cho nghiệp vụ thanh toán — test thay được để cố định thời điểm duyệt/quá hạn.</summary>
     private DateTime UtcNow => clock.UtcNow;
 
@@ -241,6 +244,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
             // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ; Đợt 2 – phần còn lại, hạn = trước khởi hành 1 tuần.
             // Tour sát ngày (hạn Đợt 2 không sau hạn cọc): chỉ một khoản thu 100%, hạn = duyệt + 24 giờ.
             var first = EnsureDepositRequest(booking, agencyId, UtcNow);
+            // Lập hợp đồng phiên bản 1 với giá đã chốt; khách ký rồi mới thanh toán.
+            EnsureContract(booking, UtcNow);
             if (!IsFullPayment(booking, first))
                 EnsureBalanceRequest(booking, agencyId, UtcNow);
         }
@@ -413,7 +418,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CustomizedLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus)).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CustomizedRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CustomizedHotelName??h.OriginalHotelName,h.CustomizedStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0)).ToList(),
-            Schedule(b), Transactions(b), Cancellation(b));
+            Schedule(b), Transactions(b), Cancellation(b), ContractOf(b));
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),

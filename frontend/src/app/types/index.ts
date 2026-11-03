@@ -634,6 +634,8 @@ export interface Booking {
   paymentTransactions?: PaymentTransactionView[];
   /** Yêu cầu hủy/hoàn tiền mới nhất do máy chủ trả về (đơn chỉ bị hủy khi Admin duyệt). */
   cancellation?: import("@/app/services/wf05Bookings").CancellationRequestDto;
+  /** Hợp đồng lữ hành hiện hành (máy chủ lập khi Agency duyệt, có bản PDF và bản khách đã ký). */
+  travelContract?: import("@/app/services/wf05Bookings").ContractDto;
   // Price adjustments by company
   originalTotalPrice?: number;
   priceAdjustmentNote?: string;

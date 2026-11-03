@@ -326,6 +326,8 @@ public sealed partial class BookingService
             throw new BookingException(409, "Đơn đang chờ công ty lữ hành duyệt. Bạn chỉ thanh toán sau khi đơn được duyệt.");
         if (OpenCancellation(booking) is not null)
             throw new BookingException(409, "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán.");
+        if (ContractBlocksPayment(booking))
+            throw new BookingException(409, "Vui lòng tải hợp đồng, ký và tải bản đã ký lên trước khi thanh toán.");
         if (booking.Status != BookingStatus.Confirmed)
             throw new BookingException(422, booking.Status == BookingStatus.Paid
                 ? "Đơn đã được thanh toán đủ."

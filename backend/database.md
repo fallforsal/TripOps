@@ -908,6 +908,31 @@ Table complaints {
     Ref: refund_requests.booking_id > bookings.id
     Ref: refund_requests.requested_by > users.id
     Ref: refund_requests.reviewed_by > users.id
+    // Hợp đồng lữ hành (Luật Du lịch 2017 Điều 39): sinh khi Agency duyệt, khách ký rồi tải bản đã ký lên.
+    // Giá đổi sau khi duyệt thì tạo phiên bản mới (bản cũ Superseded) và khách ký lại.
+    Table booking_contracts {
+      id int [pk, increment]
+      booking_id int [not null, note: 'FK tới bookings.id']
+      version int [not null, note: 'Phiên bản hợp đồng của booking, bắt đầu từ 1']
+      contract_no varchar(50) [not null, note: 'Số hợp đồng, ví dụ HD-BK123-1']
+      total_amount decimal(12, 2) [not null, note: 'Tổng giá trị tour tại thời điểm lập hợp đồng']
+      status varchar(30) [not null, note: 'AwaitingSignature, Signed, Verified, ResignRequested, Superseded']
+      signed_file_name varchar(260) [note: 'Tên file bản đã ký lưu trên máy chủ']
+      signed_file_type varchar(50) [note: 'application/pdf, image/png, image/jpeg']
+      signed_file_sha256 varchar(64) [note: 'Mã băm SHA-256 của bản đã ký để chứng minh không bị sửa']
+      signed_at timestamp
+      sign_method varchar(20) [note: 'upload (tải bản ký lên) hoặc web (ký trên web)']
+      reviewed_by varchar(36) [note: 'FK tới users.id - Agency kiểm tra bản ký']
+      reviewed_at timestamp
+      review_note varchar(1000)
+      created_at timestamp [default: `now()`]
+      indexes {
+        (booking_id, version) [unique]
+      }
+    }
+    Ref: booking_contracts.booking_id > bookings.id
+    Ref: booking_contracts.reviewed_by > users.id
+
 
 
     // ============================================================================

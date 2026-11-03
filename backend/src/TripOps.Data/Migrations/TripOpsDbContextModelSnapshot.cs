@@ -647,6 +647,96 @@ namespace TripOps.Data.Migrations
                     b.ToTable("booking_attraction_checkins", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.BookingContract", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int")
+                        .HasColumnName("booking_id");
+
+                    b.Property<string>("ContractNo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("contract_no");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<string>("SignMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("sign_method");
+
+                    b.Property<DateTime?>("SignedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("signed_at");
+
+                    b.Property<string>("SignedFileName")
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)")
+                        .HasColumnName("signed_file_name");
+
+                    b.Property<string>("SignedFileSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("signed_file_sha256");
+
+                    b.Property<string>("SignedFileType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("signed_file_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(12, 2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("BookingId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("booking_contracts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_booking_contracts_status", "[status] IN ('AwaitingSignature', 'Signed', 'Verified', 'ResignRequested', 'Superseded')");
+                        });
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.BookingIncident", b =>
                 {
                     b.Property<int>("Id")
@@ -3309,6 +3399,22 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Guide");
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.BookingContract", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.Booking", "Booking")
+                        .WithMany("Contracts")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Booking");
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.BookingIncident", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.User", null)
@@ -3908,6 +4014,8 @@ namespace TripOps.Data.Migrations
                     b.Navigation("AssignedGuides");
 
                     b.Navigation("BookingAgencies");
+
+                    b.Navigation("Contracts");
 
                     b.Navigation("Incidents");
 

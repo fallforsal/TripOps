@@ -133,8 +133,25 @@ public sealed partial class BookingFlowTests
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         var decision = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
         decision.EnsureSuccessStatusCode();
-        return (customer, agency, (await decision.Content.ReadFromJsonAsync<BookingDto>())!);
+        var approved = (await decision.Content.ReadFromJsonAsync<BookingDto>())!;
+        await SignContract(customer, approved.Id); // ký hợp đồng là điều kiện để thanh toán đợt đầu
+        return (customer, agency, approved);
     }
+
+    private static readonly byte[] SignedPdf = "%PDF-1.4\n% hop dong da ky (test)\n"u8.ToArray();
+
+    /// <summary>Khách tải bản hợp đồng đã ký (PDF giả lập) lên.</summary>
+    private static async Task<HttpResponseMessage> UploadContract(HttpClient customer, int bookingId, byte[] content, string fileName = "hop-dong-da-ky.pdf")
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "file", fileName);
+        return await customer.PostAsync($"/api/v1/bookings/{bookingId}/contract/signed", form);
+    }
+
+    private static async Task SignContract(HttpClient customer, int bookingId) =>
+        (await UploadContract(customer, bookingId, SignedPdf)).EnsureSuccessStatusCode();
 
     private static long OrderCode(string transactionCode) => long.Parse(transactionCode["PAYOS-".Length..]);
 

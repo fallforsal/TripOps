@@ -94,6 +94,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import { ContractCard } from "@/app/components/common/ContractCard";
 import { getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
@@ -116,6 +117,8 @@ interface AgencyBookingDetailPageProps {
   onUpdateIncidents?: (bookingId: string, incidents: BookingIncident[]) => void;
   /** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì gửi yêu cầu chờ Admin duyệt. */
   onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
+  /** Agency kiểm tra bản hợp đồng khách đã ký. */
+  onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -199,6 +202,7 @@ export function AgencyBookingDetailPage({
   onUpdateAttractionCheckins,
   onUpdateIncidents,
   onCancelBooking,
+  onReviewContract,
 }: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
@@ -4253,6 +4257,14 @@ export function AgencyBookingDetailPage({
                 </div>
               )}
             </div>
+
+            {booking.travelContract && (
+              <ContractCard
+                bookingId={booking.id}
+                contract={booking.travelContract}
+                onReview={onReviewContract ? (decision, note) => onReviewContract(booking.id, decision, note) : undefined}
+              />
+            )}
 
             {booking.cancellation && <CancellationStatusCard cancellation={booking.cancellation} />}
 
