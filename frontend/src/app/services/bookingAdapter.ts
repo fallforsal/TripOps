@@ -126,7 +126,7 @@ export function fromApiBooking(
     });
   }
 
-  const scheduledDeposit = dto.paymentSchedule?.find((p) => p.stage === "deposit");
+  const scheduledDeposit = dto.paymentSchedule?.find((p) => p.stage === "deposit" || p.stage === "full");
   const depositPaid = scheduledDeposit
     ? scheduledDeposit.status === "Paid"
     : isDepositPaid;

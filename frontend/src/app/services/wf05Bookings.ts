@@ -135,7 +135,8 @@ export interface BookingDto {
 
 export interface PaymentScheduleItemDto {
   id?: number | null;
-  stage: "deposit" | "balance";
+  /** full = tour sát ngày khởi hành: thanh toán toàn bộ một lần, không có đợt 2. */
+  stage: "deposit" | "balance" | "full";
   description: string;
   amount: number;
   outstanding: number;

@@ -152,6 +152,23 @@ test("server deadline, overdue and not-issued deposit states are mapped without 
   assert.equal(legacy.paymentRequests?.[0].status, "not_issued");
 });
 
+test("a tour approved close to departure has one full payment and no balance stage", () => {
+  const booking = fromApiBooking({
+    ...dto, status: "Confirmed",
+    paymentSchedule: [
+      { id: 11, stage: "full", description: "Thanh toán toàn bộ (tour sát ngày)", amount: 10000000, outstanding: 10000000, dueDate: "2026-11-26T00:00:00", dueAt: "2026-11-26T07:00:00Z", status: "Pending", warning: "Tour sát ngày khởi hành: thanh toán toàn bộ một lần, không chia hai đợt." },
+    ],
+  });
+  assert.equal(booking.paymentRequests?.length, 1);
+  assert.equal(booking.paymentRequests?.[0].stage, "full");
+  assert.equal(booking.paymentRequests?.[0].amount, 10000000);
+  assert.equal(booking.depositPaid, false);
+  const paid = fromApiBooking({ ...dto, status: "Paid", paymentSchedule: [
+    { id: 11, stage: "full", description: "Thanh toán toàn bộ (tour sát ngày)", amount: 10000000, outstanding: 0, status: "Paid", paidAt: "2026-11-25T08:00:00Z" },
+  ] });
+  assert.equal(paid.depositPaid, true);
+});
+
 test("balance deadline at 00:00 is shown as the end of the previous day", () => {
   // Khởi hành 30/11 → backend trả hạn 17:00Z 22/11 (= 00:00 23/11 giờ VN) → hiển thị "23:59 22/11/2026".
   assert.equal(formatVietnamDeadline("2026-11-22T17:00:00Z"), "23:59 22/11/2026");
