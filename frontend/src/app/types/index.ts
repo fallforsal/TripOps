@@ -390,8 +390,8 @@ export interface PaymentRequest {
   status: "pending" | "paid" | "overdue" | "cancelled" | "scheduled" | "not_issued";
   createdAt: string;
   paidAt?: string;
-  /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại. */
-  stage?: "deposit" | "balance";
+  /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại, full = tour sát ngày trả toàn bộ một lần. */
+  stage?: "deposit" | "balance" | "full";
   /** Tổng tiền của đợt. */
   totalAmount?: number;
   /** Hạn chính xác (ISO UTC) do backend tính. */

@@ -362,11 +362,12 @@ export function UserBookingDetailPage({
   const deadlineText = (pr: PaymentRequest) =>
     pr.dueAt ? formatVietnamDeadline(pr.dueAt) : pr.dueDate ? `hết ngày ${pr.dueDate.split("-").reverse().join("/")}` : "—";
   const stageLabel = (pr: PaymentRequest) =>
-    pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán";
+    pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại"
+      : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán";
   const canPayRequest = (pr: PaymentRequest) =>
     // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
     // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
-    (pr.stage === "deposit" || pr.stage === "balance") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
+    (pr.stage === "deposit" || pr.stage === "balance" || pr.stage === "full") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
   const transactionStatusLabel: Record<string, { label: string; color: string }> = {
     success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -1773,7 +1774,7 @@ export function UserBookingDetailPage({
                               className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs h-8 gap-1.5 shadow-xs"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
-                              {pr.stage === "balance" ? "Thanh toán đợt 2" : "Thanh toán cọc"} ({formatVND(pr.amount)})
+                              {pr.stage === "balance" ? "Thanh toán đợt 2" : pr.stage === "full" ? "Thanh toán toàn bộ" : "Thanh toán cọc"} ({formatVND(pr.amount)})
                             </Button>
                           ) : null}
                         </div>
@@ -2111,7 +2112,8 @@ export function UserBookingDetailPage({
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
                   <CreditCard className="w-5 h-5 text-[#075985]" />
-                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại" : "Thanh toán đặt cọc"}
+                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại"
+                    : selectedPaymentRequest.stage === "full" ? "Thanh toán toàn bộ (tour sát ngày)" : "Thanh toán đặt cọc"}
                 </DialogTitle>
               </DialogHeader>
 

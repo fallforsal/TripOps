@@ -238,8 +238,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         {
             booking.Status = BookingStatus.Confirmed;
             // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ; Đợt 2 – phần còn lại, hạn = trước khởi hành 1 tuần.
-            EnsureDepositRequest(booking, agencyId, UtcNow);
-            EnsureBalanceRequest(booking, agencyId, UtcNow);
+            // Tour sát ngày (hạn Đợt 2 không sau hạn cọc): chỉ một khoản thu 100%, hạn = duyệt + 24 giờ.
+            var first = EnsureDepositRequest(booking, agencyId, UtcNow);
+            if (!IsFullPayment(booking, first))
+                EnsureBalanceRequest(booking, agencyId, UtcNow);
         }
         else if (request.Decision == "reject")
         {

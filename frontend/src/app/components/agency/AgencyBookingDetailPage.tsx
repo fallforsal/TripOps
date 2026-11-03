@@ -4239,7 +4239,8 @@ export function AgencyBookingDetailPage({
                       <div className="flex justify-between items-start gap-2">
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">
-                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán"}
+                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại"
+                              : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán"}
                           </span>
                           <p className="font-semibold text-gray-800">{pr.description}</p>
                         </div>
