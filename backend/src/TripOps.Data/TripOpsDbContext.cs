@@ -49,6 +49,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<RefundRequest> RefundRequests => Set<RefundRequest>();
+    public DbSet<BookingContract> BookingContracts => Set<BookingContract>();
     public DbSet<SystemBankAccount> SystemBankAccounts => Set<SystemBankAccount>();
     public DbSet<SystemCommissionConfig> SystemCommissionConfigs => Set<SystemCommissionConfig>();
 
@@ -130,6 +131,7 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<PaymentRequest>().ToTable("payment_requests");
         modelBuilder.Entity<PaymentTransaction>().ToTable("payment_transactions");
         modelBuilder.Entity<RefundRequest>().ToTable("refund_requests");
+        modelBuilder.Entity<BookingContract>().ToTable("booking_contracts");
         modelBuilder.Entity<Service>().ToTable("services");
         modelBuilder.Entity<SubscriptionPaymentHistory>().ToTable("subscription_payment_history");
         modelBuilder.Entity<SubscriptionPlan>().ToTable("subscription_plans");

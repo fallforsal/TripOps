@@ -255,7 +255,11 @@ public sealed partial class BookingFlowTests
                 Assert.Equal(TripOps.Service.Payments.PaymentRules.BalanceDeadline(createRequest.StartDate), balance.DueAt!.Value.ToUniversalTime());
             });
 
-        // 5. Customer đặt cọc (mô phỏng Development) đúng số tiền của đợt cọc
+        // 5. Chưa ký hợp đồng thì chưa thanh toán được; ký (tải bản đã ký) rồi đặt cọc đúng số tiền của đợt cọc
+        Assert.True(approved.Contract!.RequiredBeforePayment);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit",
+            new BookingDepositRequest(2500000, "VQR-UNSIGNED", null))).StatusCode);
+        await SignContract(customer, bookingId);
         var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(2500000, "VQR001", null));
         Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
         var deposited = await depositRes.Content.ReadFromJsonAsync<BookingDto>();
@@ -360,6 +364,7 @@ public sealed partial class BookingFlowTests
         created.EnsureSuccessStatusCode();
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).EnsureSuccessStatusCode();
+        await SignContract(customer, booking.Id);
         var payment = new BookingDepositRequest(1500000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
         for (var attempt = 0; attempt < 2; attempt++)
         {

@@ -52,6 +52,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
 import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import { ContractCard } from "@/app/components/common/ContractCard";
 import type { RefundAccountInput } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
@@ -74,6 +75,8 @@ interface UserBookingDetailPageProps {
   onNavigateToReview?: (booking: Booking) => void;
   /** Khách bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
   onUpdateRefundAccount?: (bookingId: string, input: RefundAccountInput) => Promise<boolean>;
+  /** Khách tải bản hợp đồng đã ký (bắt buộc trước thanh toán đầu tiên). */
+  onUploadSignedContract?: (bookingId: string, file: File) => Promise<boolean>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -149,6 +152,7 @@ export function UserBookingDetailPage({
   onNavigateToReview,
   onSubmitRefundRequest,
   onUpdateRefundAccount,
+  onUploadSignedContract,
 }: UserBookingDetailPageProps) {
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
@@ -378,7 +382,7 @@ export function UserBookingDetailPage({
     // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
     // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
     (pr.stage === "deposit" || pr.stage === "balance" || pr.stage === "full") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0
-    && !cancellationPending;
+    && !cancellationPending && !booking.travelContract?.requiredBeforePayment;
   const transactionStatusLabel: Record<string, { label: string; color: string }> = {
     success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -1905,6 +1909,14 @@ export function UserBookingDetailPage({
                 </div>
               )}
             </div>
+
+            {booking.travelContract && (
+              <ContractCard
+                bookingId={booking.id}
+                contract={booking.travelContract}
+                onUploadSigned={onUploadSignedContract ? (file) => onUploadSignedContract(booking.id, file) : undefined}
+              />
+            )}
 
             {cancellation && (
               <CancellationStatusCard

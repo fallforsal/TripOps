@@ -287,6 +287,7 @@ export function fromApiBooking(
     paymentRequests: paymentRequests,
     paymentTransactions,
     cancellation: dto.cancellation ?? undefined,
+    travelContract: dto.contract ?? undefined,
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),

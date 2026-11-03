@@ -54,6 +54,8 @@ import {
   syncAdminPayout,
   type PayoutAccountDto,
   fromAdminRefund,
+  uploadSignedContract,
+  reviewContract,
   type RefundAccountInput,
   type CancellationReason,
 } from "@/app/services/wf05Bookings";
@@ -700,6 +702,29 @@ function Application() {
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không lưu được tài khoản nhận hoàn tiền.");
+      return false;
+    }
+  };
+
+  /** Khách tải bản hợp đồng đã ký; ký xong mới mở thanh toán đợt đầu. */
+  const handleUploadSignedContract = async (bookingId: string, file: File): Promise<boolean> => {
+    try {
+      applyServerBooking(await uploadSignedContract(Number(bookingId), file));
+      toast.success("Đã tải bản hợp đồng đã ký. Bạn có thể thanh toán.");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tải được bản hợp đồng đã ký.");
+      return false;
+    }
+  };
+
+  const handleReviewContract = async (bookingId: string, decision: "verify" | "resign", note?: string): Promise<boolean> => {
+    try {
+      applyServerBooking(await reviewContract(Number(bookingId), decision, note));
+      toast.success(decision === "verify" ? "Đã xác nhận hợp đồng hợp lệ." : "Đã yêu cầu khách ký lại hợp đồng.");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không cập nhật được hợp đồng.");
       return false;
     }
   };
@@ -1473,6 +1498,7 @@ function Application() {
               onUpdateAttractionCheckins={handleUpdateAttractionCheckins}
               onUpdateIncidents={handleUpdateIncidents}
               onCancelBooking={handleAgencyCancelBooking}
+              onReviewContract={handleReviewContract}
               onUpdateCustomRequest={handleUpdateCustomTourRequest}
               onRestoreTourVersion={handleRestoreTourVersion}
               onViewTour={handleViewTour}
@@ -1719,6 +1745,7 @@ function Application() {
               systemBank={systemBankAccount}
               onSubmitRefundRequest={handleCreateRefundRequest}
               onUpdateRefundAccount={handleUpdateRefundAccount}
+              onUploadSignedContract={handleUploadSignedContract}
               onBack={() => {
                 goBack(() => handleNavigate("my-bookings"));
               }}

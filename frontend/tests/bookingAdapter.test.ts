@@ -182,6 +182,15 @@ test("cancellation request from the server is kept as is on the booking", () => 
   assert.equal(booking.cancellation?.suggestedRefund, 2500000);
 });
 
+test("travel contract from the server is exposed for signing before payment", () => {
+  const booking = fromApiBooking({
+    ...dto, status: "Confirmed",
+    contract: { id: 4, version: 1, contractNo: "HD-BK-TEST-1", totalAmount: 10000000, status: "AwaitingSignature", requiredBeforePayment: true },
+  });
+  assert.equal(booking.travelContract?.contractNo, "HD-BK-TEST-1");
+  assert.equal(booking.travelContract?.requiredBeforePayment, true);
+});
+
 test("admin refund rows use the server amounts and map statuses", () => {
   const row = fromAdminRefund({
     id: 7, bookingId: 101, bookingCode: "BK-TEST", tourName: "Tour", startDate: "2026-11-20T00:00:00",

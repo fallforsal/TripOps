@@ -32,6 +32,29 @@ public virtual ICollection<BookingIncident> Incidents { get; set; } = new List<B
 public virtual ICollection<PaymentRequest> PaymentRequests { get; set; } = new List<PaymentRequest>();
 public virtual ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
+public virtual ICollection<BookingContract> Contracts { get; set; } = new List<BookingContract>();
+}
+
+/// <summary>
+/// Hợp đồng lữ hành của một booking (Luật Du lịch 2017 Điều 39). Mỗi lần giá thay đổi sau khi duyệt tạo phiên bản mới.
+/// Status: AwaitingSignature | Signed (khách đã tải bản ký) | Verified (Agency xác nhận) | ResignRequested | Superseded.
+/// </summary>
+public class BookingContract : BaseEntity<int> {
+public int BookingId { get; set; }
+public int Version { get; set; }
+public string ContractNo { get; set; } = string.Empty;
+public decimal TotalAmount { get; set; }
+public string Status { get; set; } = "AwaitingSignature";
+public string? SignedFileName { get; set; }
+public string? SignedFileType { get; set; }
+public string? SignedFileSha256 { get; set; }
+public DateTime? SignedAt { get; set; }
+public string? SignMethod { get; set; }
+public string? ReviewedBy { get; set; }
+public DateTime? ReviewedAt { get; set; }
+public string? ReviewNote { get; set; }
+public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+public virtual Booking Booking { get; set; } = null!;
 }
 
 public class BookingParticipant : BaseEntity<int> {

@@ -669,6 +669,29 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.AdminNote).HasColumnName("admin_note").HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
         });
+        modelBuilder.Entity<BookingContract>(entity =>
+        {
+            entity.ToTable("booking_contracts", t =>
+                t.HasCheckConstraint("CK_booking_contracts_status", "[status] IN ('AwaitingSignature', 'Signed', 'Verified', 'ResignRequested', 'Superseded')"));
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.Version).HasColumnName("version").HasColumnType("int").IsRequired();
+            entity.Property(e => e.ContractNo).HasColumnName("contract_no").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.TotalAmount).HasColumnName("total_amount").HasColumnType("decimal(12, 2)").IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
+            entity.Property(e => e.SignedFileName).HasColumnName("signed_file_name").HasColumnType("nvarchar(260)").HasMaxLength(260);
+            entity.Property(e => e.SignedFileType).HasColumnName("signed_file_type").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.SignedFileSha256).HasColumnName("signed_file_sha256").HasColumnType("nvarchar(64)").HasMaxLength(64);
+            entity.Property(e => e.SignedAt).HasColumnName("signed_at").HasColumnType("datetime2");
+            entity.Property(e => e.SignMethod).HasColumnName("sign_method").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at").HasColumnType("datetime2");
+            entity.Property(e => e.ReviewNote).HasColumnName("review_note").HasColumnType("nvarchar(1000)").HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.HasIndex(e => new { e.BookingId, e.Version }).IsUnique();
+            entity.HasOne(e => e.Booking).WithMany(b => b.Contracts).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<RefundRequest>(entity =>
         {
             entity.ToTable("refund_requests");

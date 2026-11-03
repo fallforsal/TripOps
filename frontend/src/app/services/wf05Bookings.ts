@@ -133,6 +133,46 @@ export interface BookingDto {
   paymentTransactions?: PaymentTransactionDto[];
   /** Yêu cầu hủy/hoàn tiền mới nhất (không kèm số tài khoản). */
   cancellation?: CancellationRequestDto | null;
+  /** Hợp đồng lữ hành hiện hành (lập khi Agency duyệt). */
+  contract?: ContractDto | null;
+}
+
+/** Hợp đồng hiện hành. requiredBeforePayment: phải ký (tải bản đã ký) thì mới thanh toán được. */
+export interface ContractDto {
+  id: number;
+  version: number;
+  contractNo: string;
+  totalAmount: number;
+  status: "AwaitingSignature" | "Signed" | "Verified" | "ResignRequested";
+  signedAt?: string | null;
+  signedFileType?: string | null;
+  signMethod?: string | null;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt?: string | null;
+  requiredBeforePayment: boolean;
+}
+
+const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+/** Đường dẫn tải PDF hợp đồng (document) hoặc bản khách đã ký (signed); trình duyệt gửi kèm cookie đăng nhập. */
+export function contractFileUrl(bookingId: number | string, kind: "document" | "signed"): string {
+  return `${apiBase}/api/v1/files/contracts/${bookingId}/${kind}`;
+}
+
+/** Khách tải bản hợp đồng đã ký (PDF, PNG, JPG ≤ 10 MB). */
+export async function uploadSignedContract(id: number, file: File): Promise<BookingDto> {
+  const form = new FormData();
+  form.append("file", file);
+  return await http<BookingDto>(`/bookings/${id}/contract/signed`, { method: "POST", body: form });
+}
+
+/** Agency kiểm tra bản ký: verify (hợp lệ) hoặc resign (yêu cầu ký lại, kèm lý do). */
+export async function reviewContract(id: number, decision: "verify" | "resign", note?: string): Promise<BookingDto> {
+  return await http<BookingDto>(`/agency/bookings/${id}/contract/review`, {
+    method: "POST",
+    body: JSON.stringify({ decision, note }),
+  });
 }
 
 /** Lý do yêu cầu hủy. TOUR_CANCELLED = Agency hủy; PAYMENT_OVERDUE = khách quá hạn thanh toán. */
