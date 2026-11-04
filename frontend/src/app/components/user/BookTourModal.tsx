@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState } from "react";
 import { Tour, User } from "@/app/types";
 import {
@@ -230,14 +231,12 @@ export function BookTourModal({
             <Calendar className="w-4 h-4 inline mr-1" />
             Ngày khởi hành *
           </label>
-          <input
-            type="date"
+          <VietnameseDatePicker
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={setStartDate}
             min={getMinDate()}
-            className={`w-full px-4 py-2.5 border-2 rounded-lg focus:ring-2 focus:ring-[#075985] focus:border-transparent ${
-              errors.startDate ? "border-red-500" : "border-gray-300"
-            }`}
+            placeholder="Chọn ngày khởi hành"
+            className={errors.startDate ? "border-red-500" : ""}
           />
           {errors.startDate && (
             <p className="text-red-600 text-sm mt-1 flex items-center gap-1">

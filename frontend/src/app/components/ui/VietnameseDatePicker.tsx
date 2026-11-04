@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Button } from "./button";
+import { cn } from "./utils";
 
 interface VietnameseDatePickerProps {
   value?: string; // YYYY-MM-DD format
@@ -44,7 +45,7 @@ function CalendarPanel({ container, open, id, children }: {
     <div id={id} role="group" aria-label="Lịch chọn ngày khởi hành" className="mx-auto w-fit bg-white p-3">{children}</div>,
     container,
   ) : null;
-  return <PopoverContent align="start" className="w-auto p-3 bg-white rounded-lg border border-gray-200 shadow-lg">{children}</PopoverContent>;
+  return <PopoverContent align="start" className="z-[200] w-auto p-3 bg-white rounded-lg border border-gray-200 shadow-lg">{children}</PopoverContent>;
 }
 
 const VI_DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -225,11 +226,14 @@ export function VietnameseDatePicker({
               setIsOpen((open) => !open);
             }
           }}
-          className={`relative flex min-w-0 items-center justify-between w-full cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[#075985] ${variant === "minimal"
-            ? "h-9 border-0 bg-transparent p-0 text-left"
-            : "px-3.5 py-2.5 bg-white border border-gray-300 hover:border-teal-400 focus-within:border-[#075985] focus-within:ring-2 focus-within:ring-teal-100 rounded-xl shadow-2xs"} ${
-            disabled ? "opacity-60 cursor-not-allowed bg-gray-50" : ""
-          } ${className}`}
+          className={cn(
+            "relative flex min-w-0 items-center justify-between w-full cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[#075985]",
+            variant === "minimal"
+              ? "h-9 border-0 bg-transparent p-0 text-left"
+              : "px-3.5 py-2.5 bg-white border border-gray-300 hover:border-teal-400 focus-within:border-[#075985] focus-within:ring-2 focus-within:ring-teal-100 rounded-xl shadow-2xs",
+            disabled && "opacity-60 cursor-not-allowed bg-gray-50",
+            className,
+          )}
         >
           <div className="flex min-w-0 items-center gap-2.5">
             {variant !== "minimal" && <CalendarIcon className="w-4 h-4 text-[#075985] flex-shrink-0" />}

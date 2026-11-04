@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
 import {
   Booking,
@@ -4938,11 +4939,12 @@ export function AgencyBookingDetailPage({
                   <Label className="text-xs font-semibold text-gray-700">
                     Hạn chót thanh toán <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    type="date"
+                  <VietnameseDatePicker
                     value={paymentDueDate}
-                    onChange={(e) => setPaymentDueDate(e.target.value)}
-                    className="mt-1 text-xs"
+                    onChange={setPaymentDueDate}
+                    min={new Date().toLocaleDateString("sv-SE")}
+                    placeholder="Chọn hạn thanh toán"
+                    className="mt-1 py-2 rounded-lg"
                   />
                 </div>
 
@@ -5180,11 +5182,13 @@ export function AgencyBookingDetailPage({
 
               <div className="space-y-1">
                 <label className="font-bold text-gray-700">Ngày sinh *</label>
-                <input
-                  type="date"
+                <VietnameseDatePicker
                   value={passengerDob}
-                  onChange={(e) => handlePassengerDobChange(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs focus:border-blue-500 focus:outline-hidden"
+                  onChange={handlePassengerDobChange}
+                  isBirthDate
+                  max={new Date().toLocaleDateString("sv-SE")}
+                  placeholder="Chọn ngày sinh"
+                  className="py-1.5 rounded-lg"
                 />
                 {passengerDob && (
                   <span className="text-[10px] text-gray-500 block">

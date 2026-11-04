@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
 import { defaultSystemBankAccount, mockServices } from "@/app/data/mockData";
@@ -2290,11 +2291,13 @@ export function UserBookingDetailPage({
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Ngày sinh <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <VietnameseDatePicker
                   value={pDob}
-                  onChange={(e) => setPDob(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  onChange={setPDob}
+                  isBirthDate
+                  max={new Date().toLocaleDateString("sv-SE")}
+                  placeholder="Chọn ngày sinh"
+                  className="py-2 rounded-lg"
                 />
               </div>
 

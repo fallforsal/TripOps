@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useMemo, useState } from "react";
 import { Booking, User, PaymentRequest } from "@/app/types";
 import {
@@ -590,10 +591,11 @@ export function AgencyBookingManagement({
                 </div>
                 <div>
                   <Label className="text-sm">Hạn thanh toán <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="date"
+                  <VietnameseDatePicker
                     value={paymentDueDate}
-                    onChange={(e) => setPaymentDueDate(e.target.value)}
+                    onChange={setPaymentDueDate}
+                    min={new Date().toLocaleDateString("sv-SE")}
+                    placeholder="Chọn hạn thanh toán"
                     className="mt-1"
                   />
                 </div>

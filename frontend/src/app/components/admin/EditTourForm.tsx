@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState } from "react";
 import {
   Service,
@@ -476,18 +477,11 @@ export function EditTourForm({
 
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <input
-                        type="date"
+                      <VietnameseDatePicker
                         value={day.date}
-                        onChange={(e) =>
-                          handleDayChange(
-                            dayIndex,
-                            "date",
-                            e.target.value,
-                          )
-                        }
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                        onChange={(value) => handleDayChange(dayIndex, "date", value)}
                         placeholder="Ngày"
+                        className="py-2 rounded-lg"
                       />
                       <input
                         type="text"
