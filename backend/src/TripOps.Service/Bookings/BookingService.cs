@@ -8,7 +8,8 @@ using TripOps.Service.Payments;
 namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
-    PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment)
+    PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
+    BookingQuotationService quotations)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingRepository Repo => repository;
@@ -27,7 +28,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (customer.Status != UserStatus.Active)
             throw new BookingException(403, "Tài khoản khách hàng không hợp lệ hoặc đã bị khóa.");
 
-        var tour = await repository.FindPublicTour(request.TourId, ct);
+        var tour = await repository.FindBookableTour(request.TourId, customerId, ct);
         if (tour is null)
             throw new BookingException(404, "Tour không tồn tại hoặc chưa được công bố mở bán.");
 
@@ -131,6 +132,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             BookingCode = code,
             CustomerId = customerId,
             TourId = tour.Id,
+            DesignRequestId = tour.DesignRequestId,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
             OriginalTotalPrice = totalAmount - extra*participants.Count,
@@ -166,8 +168,12 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 NightsCount = a.NightsCount }).ToList()
         };
 
+        await using var transaction = await repository.BeginCreate(ct);
         repository.Add(booking);
         await repository.SaveChangesAsync(ct);
+
+        await quotations.Initialize(booking.Id, ct);
+        await transaction.CommitAsync(ct);
 
         return ToDto(booking, tour.Name, tour.AgencyId, tour.Agency?.Name);
     }
@@ -240,6 +246,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
 
         if (request.Decision == "approve")
         {
+            if (booking.DesignRequestId.HasValue || await quotations.HasPlatformRequests(booking.Id, ct) ||
+                await quotations.HasAgencySuppliers(booking.Id, ct))
+                await quotations.RequireAccepted(booking.Id, ct);
             booking.Status = BookingStatus.Confirmed;
             // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ; Đợt 2 – phần còn lại, hạn = trước khởi hành 1 tuần.
             // Tour sát ngày (hạn Đợt 2 không sau hạn cọc): chỉ một khoản thu 100%, hạn = duyệt + 24 giờ.

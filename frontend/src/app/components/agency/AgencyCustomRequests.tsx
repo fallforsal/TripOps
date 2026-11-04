@@ -360,6 +360,13 @@ function RequestGroupSection({
                   )}
 
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="w-full flex flex-wrap gap-2">
+                      {tours.filter((t) => t.customRequestId === req.id).map((plan) =>
+                        <button key={plan.id} onClick={() => onStartDesignTour(req, plan)}
+                          className="px-3 py-2 rounded border border-[#CBD5E1] bg-white text-xs text-[#075985]">
+                          {plan.name} · v{plan.version || 1} · Chỉnh sửa
+                        </button>)}
+                    </div>
                     <div className="flex items-center gap-2">
                       {matchingTour && onViewTour && (
                         <button
@@ -386,6 +393,11 @@ function RequestGroupSection({
                     </div>
 
                     {req.status !== "cancelled" && req.status !== "rejected" && (
+                      <div className="flex gap-2">
+                      {matchingTour && <button onClick={() => onStartDesignTour(req, null)}
+                        className="px-4 py-2.5 rounded-full border border-[#075985] text-[#075985] text-xs font-semibold">
+                        Thêm Tour plan mới
+                      </button>}
                       <button
                         onClick={() => onStartDesignTour(req, matchingTour)}
                         className="px-6 py-2.5 rounded-full bg-[#075985] text-white text-xs font-semibold hover:bg-[#F97316] transition-all duration-300 flex items-center gap-2 shadow-sm"
@@ -393,6 +405,7 @@ function RequestGroupSection({
                         <span>{matchingTour ? "Chỉnh sửa thiết kế tour" : "Bắt đầu thiết kế hành trình"}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
+                      </div>
                     )}
                   </div>
                 </div>

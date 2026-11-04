@@ -30,6 +30,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
     public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
     public DbSet<TourDesignRequest> TourDesignRequests => Set<TourDesignRequest>();
+    public DbSet<TourPlanProposal> TourPlanProposals => Set<TourPlanProposal>();
     public DbSet<TourDesignRequestAgency> TourDesignRequestAgencies => Set<TourDesignRequestAgency>();
 
     // 4. Bookings & Operations
@@ -44,6 +45,8 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingIncident> BookingIncidents => Set<BookingIncident>();
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
+    public DbSet<BookingSupplierRequest> BookingSupplierRequests => Set<BookingSupplierRequest>();
+    public DbSet<BookingQuotation> BookingQuotations => Set<BookingQuotation>();
 
     // 5. Finance
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();
@@ -119,6 +122,8 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<BookingIncident>().ToTable("booking_incidents");
         modelBuilder.Entity<BookingParticipant>().ToTable("booking_participants");
         modelBuilder.Entity<BookingPriceAdjustment>().ToTable("booking_price_adjustments");
+        modelBuilder.Entity<BookingSupplierRequest>().ToTable("booking_supplier_requests");
+        modelBuilder.Entity<BookingQuotation>().ToTable("booking_quotations");
         modelBuilder.Entity<BookingTimeline>().ToTable("booking_timelines");
         modelBuilder.Entity<BookingTimelineAttraction>().ToTable("booking_locations");
         modelBuilder.Entity<BookingTimelineMeal>().ToTable("booking_restaurants");
@@ -140,6 +145,7 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<Tour>().ToTable("tours");
         modelBuilder.Entity<TourAccommodation>().ToTable("tour_hotels");
         modelBuilder.Entity<TourDesignRequest>().ToTable("tour_design_requests");
+        modelBuilder.Entity<TourPlanProposal>().ToTable("tour_plan_proposals");
         modelBuilder.Entity<TourDesignRequestAgency>().ToTable("tour_design_request_agencies");
         modelBuilder.Entity<TourMeal>().ToTable("tour_restaurants");
         modelBuilder.Entity<TourPricingTier>().ToTable("tour_pricing_tiers");
@@ -148,6 +154,7 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<TouristAttraction>().ToTable("tourist_locations");
         modelBuilder.Entity<User>().ToTable("users");
         DatabaseDesignConfiguration.Configure(modelBuilder);
+        BookingQuotationConfiguration.Configure(modelBuilder);
         DatabaseDesignDefaults.Configure(modelBuilder, Database.IsSqlServer());
         if (!Database.IsSqlServer())
             foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetProperties()))

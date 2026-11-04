@@ -111,7 +111,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return (rows, total);
     }
 
-    public Task<Tour?> FindPublicTour(int tourId, CancellationToken ct) =>
+    public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>
         db.Tours.Include(t => t.PricingTiers)
             .Include(t => t.Agency)
             .Include(t => t.Timelines).ThenInclude(t => t.Attractions)
@@ -119,7 +119,9 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(t => t.Accommodations).AsSplitQuery()
             .SingleOrDefaultAsync(t => t.Id == tourId &&
                                        t.Status == TourStatus.Completed &&
-                                       t.Visibility == TourVisibility.Public && t.IsRequest != true &&
+                                       ((t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
+                                        (t.IsRequest == true && t.IsSharedToCustomer == true && t.DesignRequestId.HasValue &&
+                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId))) &&
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
@@ -138,6 +140,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
     public void Add(Booking booking) => db.Bookings.Add(booking);
+    public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginCreate(CancellationToken ct) =>
+        db.Database.BeginTransactionAsync(ct);
 
     /// <summary>
     /// Mở giao dịch DB và khóa dòng booking (UPDATE giả) để các thao tác tiền trên cùng một đơn chạy tuần tự:

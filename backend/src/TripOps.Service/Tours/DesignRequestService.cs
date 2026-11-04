@@ -59,7 +59,9 @@ public sealed class DesignRequestService(TripOpsDbContext db, AccountService acc
         var designedTours = await db.Tours.AsNoTracking().Where(t => t.DesignRequestId.HasValue && ids.Contains(t.DesignRequestId.Value) &&
             t.Status != TourStatus.Deleted).ToListAsync(ct);
         return requests.Select(r => Map(r, agencies.GetValueOrDefault(r.AgencyId ?? ""),
-            designedTours.FirstOrDefault(t => t.DesignRequestId == r.Id))).ToArray();
+            designedTours.Where(t => t.DesignRequestId == r.Id)
+                .OrderByDescending(t => t.Status == TourStatus.Completed && t.IsSharedToCustomer == true)
+                .ThenByDescending(t => t.CreatedAt).FirstOrDefault())).ToArray();
     }
     public async Task<DesignRequestDto> Cancel(string actor, int id, CancellationToken ct)
     {

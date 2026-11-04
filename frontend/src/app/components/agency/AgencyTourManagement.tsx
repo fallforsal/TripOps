@@ -91,6 +91,20 @@ import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHist
 import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 
+// Legacy fixture IDs are not rows in the Provider catalogue (the API uses numeric IDs).
+// Keep their price/details as an Agency supplier snapshot instead of posting a fake serviceId.
+const normalizeLegacyService = <T extends {
+  serviceId?: string; supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
+  supplier?: TourHotel["supplier"]; providerName?: string; isCustom?: boolean;
+  address?: string; description?: string;
+}>(item: T, referencePrice?: number, area?: string): T =>
+  item.serviceId && !/^\d+$/.test(item.serviceId)
+    ? { ...item, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
+        supplier: item.supplier || { address: item.address || area, area,
+          referencePrice: referencePrice || 0, conditions: item.description },
+        providerName: "Nhà cung cấp của agency", isCustom: true }
+    : item;
+
 export interface AgencyTourManagementProps {
   tours: Tour[];
   company: TourCompany;
@@ -1233,7 +1247,10 @@ export function TourFormPage(props: TourFormPageProps) {
     setDuration(generated.duration);
     setHighlights(generated.highlights);
     setDescription(generated.description);
-    setItinerary(generated.itinerary);
+    setItinerary(generated.itinerary.map((day) => ({ ...day,
+      meals: day.meals?.map((meal) => normalizeLegacyService(meal, meal.pricePerPerson, day.destinationCity || generated.destination)),
+      hotel: day.hotel ? normalizeLegacyService(day.hotel, day.hotel.pricePerNight, day.destinationCity || generated.destination) : undefined,
+    })));
     setNumberOfDays(generated.itinerary.length);
     setNumberOfNights(Math.max(1, generated.itinerary.length - 1));
   };
@@ -1823,6 +1840,9 @@ export function TourFormPage(props: TourFormPageProps) {
     setHotels((prev) =>
       prev.map((h) => {
         if (h.id === hotelId) {
+          const standardValid = h.supplierSource === "AGENCY_SUPPLIER" || h.isCustom
+            ? !h.serviceId && !!(h.supplier?.address || h.supplier?.area) && Number(h.supplier?.referencePrice) > 0
+            : !!h.serviceId && /^\d+$/.test(h.serviceId);
           const isStandardMatching =
             (h.serviceId && h.serviceId === serv.id) ||
             (h.agencySupplierId && h.agencySupplierId === (serv as any).agencySupplierId);
@@ -1831,7 +1851,7 @@ export function TourFormPage(props: TourFormPageProps) {
               (alt.serviceId && alt.serviceId === serv.id) ||
               (alt.agencySupplierId && alt.agencySupplierId === (serv as any).agencySupplierId),
           );
-          if (isStandardMatching || isAltMatching) {
+          if ((isStandardMatching && standardValid) || isAltMatching) {
             alert(
               `Khách sạn "${serv.name}" đã có trong danh sách lựa chọn của tour!`,
             );
@@ -1844,7 +1864,7 @@ export function TourFormPage(props: TourFormPageProps) {
             serv.providerName === "Nhà cung cấp của agency",
           );
           const isStandardEmpty =
-            !h.name || h.name === "Khách sạn / Resort mới";
+            !h.name || h.name === "Khách sạn / Resort mới" || !standardValid;
 
           if (isStandardEmpty) {
             return {
@@ -2171,7 +2191,11 @@ export function TourFormPage(props: TourFormPageProps) {
     const isStandardEmpty =
       !meal.serviceName ||
       meal.serviceName === "Nhà hàng địa phương" ||
-      meal.serviceName === "Nhà hàng theo tour";
+      meal.serviceName === "Nhà hàng theo tour" ||
+      (meal.supplierSource === "AGENCY_SUPPLIER" || meal.isCustom
+        ? !!meal.serviceId || !meal.supplier ||
+          !(meal.supplier.address || meal.supplier.area) || Number(meal.supplier.referencePrice) <= 0
+        : !meal.serviceId || !/^\d+$/.test(meal.serviceId));
 
     const refPrice = getMealRefPricePerPerson(serv);
 
@@ -2817,6 +2841,21 @@ export function TourFormPage(props: TourFormPageProps) {
   );
 
   // Tab 3: Bảng giá vé theo độ tuổi
+  useEffect(() => {
+    setHotels((rows) => rows.map((h) => {
+      const normalized = normalizeLegacyService(h, h.pricePerNight, h.destination || destination);
+      return { ...normalized, alternativeHotels: normalized.alternativeHotels?.map((a) =>
+        normalizeLegacyService(a, a.price ?? a.pricePerNight, h.destination || destination)) };
+    }));
+    setItinerary((days) => days.map((day) => ({ ...day,
+      meals: day.meals?.map((m) => {
+        const normalized = normalizeLegacyService(m, m.pricePerPerson, day.destinationCity || destination);
+        return { ...normalized, alternativeMeals: normalized.alternativeMeals?.map((a) =>
+          normalizeLegacyService(a, a.price, day.destinationCity || destination)) };
+      })
+    })));
+  }, []);
+
   const [priceTable, setPriceTable] = useState<TourPriceRow[]>(
     tour?.priceTable && tour.priceTable.length > 0
       ? JSON.parse(JSON.stringify(tour.priceTable))
@@ -3301,6 +3340,30 @@ export function TourFormPage(props: TourFormPageProps) {
     mode: "draft" | "complete_hidden" | "complete_public" = "complete_public",
   ) => {
     const isDraft = mode === "draft";
+    const prepareSupplier = <T extends TourHotel | TourAlternativeHotel | TourMeal | TourAlternativeMeal>(
+      item: T, type: "HOTEL" | "RESTAURANT", referencePrice: number, area: string,
+    ): T => {
+      const normalized = normalizeLegacyService(item, referencePrice, area);
+      const saved = (type === "HOTEL" ? savedHotels : savedRestaurants)
+        .find((supplier) => supplier.id === normalized.agencySupplierId);
+      if (!saved) return normalized;
+      return { ...normalized, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
+        isCustom: true, providerName: "Nhà cung cấp của agency",
+        supplier: { address: normalized.supplier?.address || saved.address || undefined,
+          area: normalized.supplier?.area || saved.area || area,
+          contactName: normalized.supplier?.contactName || saved.contactName || undefined,
+          contactPhone: normalized.supplier?.contactPhone || saved.contactPhone || undefined,
+          referencePrice: normalized.supplier?.referencePrice || saved.referencePrice || referencePrice,
+          conditions: normalized.supplier?.conditions || saved.conditions || undefined } } as T;
+    };
+    const preparedHotels = hotels.map((h) => ({
+      ...prepareSupplier(h, "HOTEL", h.pricePerNight, h.destination || destination),
+      alternativeHotels: h.alternativeHotels?.map((a) => prepareSupplier(a, "HOTEL", a.price || a.pricePerNight || 0, h.destination || destination)),
+    }));
+    const preparedItinerary = itinerary.map((day) => ({ ...day, meals: day.meals?.map((m) => ({
+      ...prepareSupplier(m, "RESTAURANT", m.pricePerPerson || 0, day.destinationCity || destination),
+      alternativeMeals: m.alternativeMeals?.map((a) => prepareSupplier(a, "RESTAURANT", a.price || 0, day.destinationCity || destination)),
+    })) }));
     if (!isDraft && provinceCodes.length === 0) {
       const msg =
         "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua trước khi hoàn tất hoặc đăng bán tour.";
@@ -3313,16 +3376,25 @@ export function TourFormPage(props: TourFormPageProps) {
       alert("Vui lòng nhập tên tour trước khi hoàn tất.");
       return;
     }
-    const validSource = (item: { serviceId?: string; isCustom?: boolean; supplierSource?: string; agencySupplierId?: number }) =>
-      item.supplierSource === "AGENCY_SUPPLIER" || item.isCustom || !!item.agencySupplierId ||
-      (item.supplierSource !== "AGENCY_SUPPLIER" && !!item.serviceId && /^\d+$/.test(item.serviceId));
-    if (!isDraft && (hotels.some((h) =>
-      !h.name.trim() || !validSource(h) || (h.alternativeHotels || []).some((a) => !a.name.trim() || !validSource(a))) ||
-      itinerary.some((d) => (d.meals || []).some((m) =>
-        !m.serviceName?.trim() || !validSource(m) || (m.alternativeMeals || []).some((a) => !a.restaurantName.trim() || !validSource(a)))))) {
-      setSaveError(
-        "Hãy chọn Platform Partner hoặc nhập nhà cung cấp của agency cho mỗi khách sạn và bữa ăn bắt buộc.",
-      );
+    const validSource = (item: { serviceId?: string; isCustom?: boolean; supplierSource?: string;
+      agencySupplierId?: number; supplier?: TourHotel["supplier"] }) => {
+      if (item.supplierSource === "AGENCY_SUPPLIER" || item.isCustom || item.agencySupplierId)
+        return !item.serviceId && !!item.supplier &&
+          !!(item.supplier.address?.trim() || item.supplier.area?.trim()) &&
+          Number(item.supplier.referencePrice) > 0;
+      return !!item.serviceId && /^\d+$/.test(item.serviceId);
+    };
+    const invalidHotel = preparedHotels.flatMap((h) => [h, ...(h.alternativeHotels || [])])
+      .find((h) => !h.name.trim() || !validSource(h));
+    const invalidMeal = preparedItinerary.flatMap((d) => (d.meals || []).flatMap((m) => [
+      { day: d.day, name: m.serviceName || "", option: m },
+      ...(m.alternativeMeals || []).map((a) => ({ day: d.day, name: a.restaurantName, option: a })),
+    ])).find((entry) => !entry.name.trim() || !validSource(entry.option));
+    if (!isDraft && (invalidHotel || invalidMeal)) {
+      setSaveError(invalidHotel
+        ? `Khách sạn "${invalidHotel.name || "chưa có tên"}" chưa gắn nguồn cung hợp lệ. Mở “Nhập khách sạn ngoài sàn” để chọn bản ghi danh bạ, hoặc chọn Provider thật.`
+        : `Ngày ${invalidMeal!.day}, nhà hàng "${invalidMeal!.name || "chưa có tên"}" chưa gắn nguồn cung hợp lệ. Mở “Nhập quán ăn ngoài sàn” để chọn bản ghi danh bạ, hoặc chọn Provider thật.`);
+      setActiveTab("itinerary");
       return;
     }
     const finalTourCode =
@@ -3434,8 +3506,8 @@ export function TourFormPage(props: TourFormPageProps) {
       maxGuests,
       description,
       highlights: highlights.filter((h) => h.trim().length > 0),
-      hotels,
-      itinerary,
+      hotels: preparedHotels,
+      itinerary: preparedItinerary,
       priceTable: priceTable.map((p) =>
         p.ageGroup === "adult" ? { ...p, price: finalTourPrice } : p,
       ),

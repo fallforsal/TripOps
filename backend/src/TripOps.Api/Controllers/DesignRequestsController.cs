@@ -34,6 +34,10 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [EndpointSummary("View the completed custom tour belonging to this customer")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Tour(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTour(Actor, id, ct));
+    [HttpGet("{id:int}/plans")]
+    [EndpointSummary("List all completed custom Tour plans shared with this customer")]
+    [ProducesResponseType<IReadOnlyList<TourDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Plans(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTours(Actor, id, ct));
 }
 
 [ApiController, Route("api/v1/agency/tour-design-requests"), Authorize(Roles = "agency")]

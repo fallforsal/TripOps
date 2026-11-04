@@ -40,13 +40,14 @@ export function MyRequestsPage({
   onBookTour,
 }: MyRequestsPageProps) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
   const selectedRequest = requests.find((r) => r.id === selectedRequestId);
-  const matchedTour = selectedRequest?.designedTourId
-    ? tours.find((t) => t.id === selectedRequest.designedTourId)
-    : null;
+  const plans = selectedRequest ? tours.filter((t) => t.customRequestId === selectedRequest.id) : [];
+  const matchedTour = plans.find((t) => t.id === selectedPlanId) ||
+    plans.find((t) => t.id === selectedRequest?.designedTourId) || plans[0] || null;
 
   const formatVND = (n: number) => {
     return new Intl.NumberFormat("vi-VN", {
@@ -134,10 +135,15 @@ export function MyRequestsPage({
               </div>
             )}
 
+            {plans.length > 1 && <div className="flex flex-wrap gap-2">
+              {plans.map((plan) => <Button key={plan.id} type="button" variant={matchedTour?.id === plan.id ? "default" : "outline"}
+                onClick={() => setSelectedPlanId(plan.id)}>{plan.name} · {formatVND(plan.price)}/khách (dự kiến)</Button>)}
+            </div>}
+
             {selectedRequest.quotedPricePerPerson && (
               <div className="flex items-center justify-between p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
                 <div>
-                  <span className="text-xs text-[#475569] block">Báo giá chính thức / một khách:</span>
+                  <span className="text-xs text-[#475569] block">Giá dự kiến / một khách; giá cuối sau khi Provider xác nhận:</span>
                   <span className="text-lg font-bold text-[#075985]">
                     {formatVND(selectedRequest.quotedPricePerPerson)}
                   </span>
@@ -164,7 +170,7 @@ export function MyRequestsPage({
                         onClick={() => onBookTour(matchedTour)}
                         className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-semibold"
                       >
-                        Chấp nhận &amp; Đặt tour này
+                        Đặt tour theo phương án này
                       </Button>
                     )}
                   </div>

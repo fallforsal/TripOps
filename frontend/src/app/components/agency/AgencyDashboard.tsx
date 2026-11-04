@@ -278,6 +278,7 @@ export function AgencyDashboard({
         if (currentSelectedBooking) {
           return (
             <AgencyBookingDetailPage
+              plans={tours.filter((t) => t.customRequestId && t.customRequestId === currentSelectedBooking.tour?.customRequestId)}
               booking={currentSelectedBooking}
               guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}

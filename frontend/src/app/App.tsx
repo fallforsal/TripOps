@@ -2,7 +2,7 @@ import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
-  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestTour } from "@/app/services/customTourRequests";
+  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestPlans } from "@/app/services/customTourRequests";
 import { toast } from "sonner";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
@@ -253,8 +253,8 @@ function Application() {
     } else if (currentUser?.role === "user") {
       const requests = await customerDesignRequests();
       setCustomTourRequests(requests);
-      const privateTours = await Promise.all(requests.filter((r) => r.designedTourId)
-        .map((r) => customerRequestTour(r.id)));
+      const privateTours = (await Promise.all(requests.filter((r) => r.designedTourId)
+        .map((r) => customerRequestPlans(r.id)))).flat();
       setTours((previous) => {
         const byId = new Map(previous.map((tour) => [tour.id, tour]));
         for (const tour of privateTours) byId.set(tour.id, tour);
@@ -1766,6 +1766,10 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
+              plans={selectedUserBooking.tour?.customRequestId
+                ? tours.filter((t) => t.customRequestId === selectedUserBooking.tour.customRequestId)
+                : tours.filter((t) => t.id === selectedUserBooking.tourId)}
+              onPlanChanged={() => setBookingReload((v) => v + 1)}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking

@@ -228,7 +228,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
         });
-        modelBuilder.Entity<Tour>().HasIndex(e => e.DesignRequestId).IsUnique().HasFilter("[design_request_id] IS NOT NULL");
+        modelBuilder.Entity<Tour>().HasIndex(e => e.DesignRequestId);
         modelBuilder.Entity<TourVersion>(entity =>
         {
             entity.ToTable("tour_versions");

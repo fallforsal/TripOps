@@ -59,3 +59,5 @@ export const createDesignRequestTour = async (requestId: string, tour: Partial<T
   });
 export const customerRequestTour = async (requestId: string) =>
   fromApiTour(await http<ApiTour>(`/tour-design-requests/${Number(requestId)}/tour`));
+export const customerRequestPlans = async (requestId: string) =>
+  (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map(fromApiTour);
