@@ -1713,6 +1713,7 @@ function Application() {
               }
             }}
             onBookNow={handleOpenBookingForm}
+            onOpenRequest={() => handleNavigate("my-requests")}
             onShowLogin={() => setShowLogin(true)}
           />
         ) : currentPage === "home" ? (

@@ -296,6 +296,33 @@ Table tour_design_requests {
 // ============================================================================
 // LỊCH SỬ PHIÊN BẢN & SAO LƯU TOUR (VERSION CONTROL & ROLLBACK)
 // ============================================================================
+Table tour_plan_proposals {
+  id int [pk, increment]
+  request_id int [not null]
+  tour_id int [not null]
+  customer_id varchar(36) [not null]
+  agency_id varchar(36) [not null]
+  base_tour_version int [not null]
+  proposal_json json [not null, note: 'SQL Server nvarchar(max); bản sao chỉnh của khách, không tự thay đổi Tour']
+  message varchar(2000) [not null]
+  status varchar(30) [not null]
+  agency_reply varchar(2000)
+  created_at timestamp [not null, note: 'SQL Server datetime2']
+  responded_at timestamp
+
+  indexes {
+    (request_id, created_at)
+    (agency_id, status)
+    customer_id
+    tour_id
+  }
+}
+
+Ref: tour_plan_proposals.request_id > tour_design_requests.id
+Ref: tour_plan_proposals.tour_id > tours.id
+Ref: tour_plan_proposals.customer_id > users.id
+Ref: tour_plan_proposals.agency_id > users.id
+
 Table tour_versions {
   id int [pk, increment]
   tour_id int [not null, note: 'FK tới tours.id']

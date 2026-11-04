@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
+import { customerPlanProposals, type TourPlanProposal } from "@/app/services/customTourRequests";
 import {
   FileQuestion,
   Plus,
@@ -43,6 +45,12 @@ export function MyRequestsPage({
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<Tour | null>(null);
+  const [editingDraftKey, setEditingDraftKey] = useState(0);
+  const [proposals, setProposals] = useState<TourPlanProposal[]>([]);
+  const [proposalReload, setProposalReload] = useState(0);
+  useEffect(() => { if (selectedRequestId) void customerPlanProposals(selectedRequestId)
+    .then(setProposals).catch(() => setProposals([])); }, [selectedRequestId, proposalReload]);
 
   const selectedRequest = requests.find((r) => r.id === selectedRequestId);
   const plans = selectedRequest ? tours.filter((t) => t.customRequestId === selectedRequest.id) : [];
@@ -189,6 +197,28 @@ export function MyRequestsPage({
             </p>
           </div>
         )}
+
+        {matchedTour && <section className="space-y-3 rounded border border-sky-200 bg-sky-50 p-5 text-sm">
+          <h3 className="font-bold text-sky-900">Trao đổi và tùy biến Tour plan với Agency</h3>
+          <p>Chọn plan, sửa bản riêng của bạn và gửi cho Agency xem. Giá và khả năng cung cấp sẽ được Agency xác nhận lại.</p>
+          {!editingPlan && <Button onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan(matchedTour); }}>Tùy biến phương án này</Button>}
+          {editingPlan && <CustomerPlanEditor key={`${editingPlan.id}-${editingPlan.version}-${editingDraftKey}`} requestId={selectedRequest.id}
+            plan={editingPlan} onCancel={() => setEditingPlan(null)} onDone={() => {
+              setEditingPlan(null); setProposalReload((n) => n + 1);
+            }} />}
+          {proposals.map((p) => {
+            const base = plans.find((plan) => Number(plan.id) === p.tourId);
+            return <div key={p.id} className="rounded border bg-white p-3">
+              <p className="font-semibold">Bản bạn gửi #{p.id} · Plan v{p.baseTourVersion} · {p.status === "Pending" ? "Chờ Agency xem" : p.status === "Reviewed" ? "Agency đã xem" : "Cần làm rõ"}</p>
+              <p className="mt-1">{p.message}</p>{p.agencyReply && <p className="mt-2 text-sky-800">Agency: {p.agencyReply}</p>}
+              {base?.version === p.baseTourVersion && <button type="button" className="mt-2 rounded border border-sky-700 px-3 py-1 text-sky-800"
+                onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan({ ...base,
+                  itinerary: structuredClone(p.proposal.itinerary), hotels: structuredClone(p.proposal.hotels) }); }}>
+                Chỉnh tiếp từ bản này
+              </button>}
+            </div>;
+          })}
+        </section>}
 
         {/* Actions footer */}
         <div className="flex items-center justify-between pt-4 border-t border-[#CBD5E1]">

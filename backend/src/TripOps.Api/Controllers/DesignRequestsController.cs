@@ -38,6 +38,16 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [EndpointSummary("List all completed custom Tour plans shared with this customer")]
     [ProducesResponseType<IReadOnlyList<TourDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Plans(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTours(Actor, id, ct));
+    [HttpGet("{id:int}/proposals")]
+    [EndpointSummary("List customer changes and Agency replies for a custom tour request")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Proposals(int id, CancellationToken ct) =>
+        Ok(await requests.Proposals(Actor, id, false, ct));
+    [HttpPost("{id:int}/proposals")]
+    [EndpointSummary("Send a customer-owned edited Tour plan to its Agency for review")]
+    [ProducesResponseType<DesignRequestService.PlanProposalDto>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> SubmitProposal(int id, DesignRequestService.PlanProposalInput input, CancellationToken ct) =>
+        StatusCode(StatusCodes.Status201Created, await requests.SubmitProposal(Actor, id, input, ct));
 }
 
 [ApiController, Route("api/v1/agency/tour-design-requests"), Authorize(Roles = "agency")]
@@ -61,4 +71,14 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
         var tour = await tours.CreateForRequest(Actor, id, configuration, ct);
         return Created($"/api/v1/agency/tours/{tour.Id}", tour);
     }
+    [HttpGet("{id:int}/proposals")]
+    [EndpointSummary("List customer Tour plan changes addressed to this Agency")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Proposals(int id, CancellationToken ct) =>
+        Ok(await requests.Proposals(Actor, id, true, ct));
+    [HttpPost("{id:int}/proposals/{proposalId:int}/reply")]
+    [EndpointSummary("Agency responds to a customer's edited Tour plan")]
+    [ProducesResponseType<DesignRequestService.PlanProposalDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReplyProposal(int id, int proposalId, DesignRequestService.PlanProposalReply input, CancellationToken ct) =>
+        Ok(await requests.ReplyProposal(Actor, id, proposalId, input, ct));
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
@@ -8,6 +9,60 @@ namespace TripOps.Service.Tours;
 
 public sealed class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours)
 {
+    public sealed record PlanProposalInput(int TourId, int BaseTourVersion, JsonElement Proposal, string Message);
+    public sealed record PlanProposalReply(string Decision, string Message);
+    public sealed record PlanProposalDto(int Id, int RequestId, int TourId, int BaseTourVersion,
+        JsonElement Proposal, string Message, string Status, string? AgencyReply, DateTime CreatedAt, DateTime? RespondedAt);
+    private static PlanProposalDto ProposalDto(TourPlanProposal p) => new(p.Id, p.RequestId, p.TourId,
+        p.BaseTourVersion, JsonSerializer.Deserialize<JsonElement>(p.ProposalJson), p.Message,
+        p.Status, p.AgencyReply, p.CreatedAt, p.RespondedAt);
+    public async Task<IReadOnlyList<PlanProposalDto>> Proposals(string actor, int requestId, bool agencyView, CancellationToken ct)
+    {
+        var request = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == requestId &&
+            (agencyView ? r.AgencyId == actor : r.CustomerId == actor), ct)
+            ?? throw new TourException(404, "Không tìm thấy yêu cầu thiết kế.");
+        return (await db.TourPlanProposals.AsNoTracking().Where(p => p.RequestId == request.Id)
+            .OrderByDescending(p => p.CreatedAt).ToListAsync(ct)).Select(ProposalDto).ToArray();
+    }
+    public async Task<PlanProposalDto> SubmitProposal(string actor, int requestId, PlanProposalInput input, CancellationToken ct)
+    {
+        await Customer(actor, ct);
+        var request = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == requestId && r.CustomerId == actor, ct)
+            ?? throw new TourException(404, "Không tìm thấy yêu cầu thiết kế.");
+        Require(request.Status is not (CustomRequestStatus.Cancelled or CustomRequestStatus.Rejected),
+            "Yêu cầu đã đóng.");
+        Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId &&
+            b.CustomerId == actor && b.PaymentStatus != PaymentStatus.Unpaid, ct),
+            "Yêu cầu đã có booking thanh toán; không thể gửi bản tùy biến mới.");
+        var tour = await db.Tours.AsNoTracking().SingleOrDefaultAsync(t => t.Id == input.TourId &&
+            t.DesignRequestId == requestId && t.Status == TourStatus.Completed && t.IsSharedToCustomer == true, ct)
+            ?? throw new TourException(422, "Tour plan chưa được chia sẻ cho bạn.");
+        Require(tour.Version == input.BaseTourVersion, "Tour plan đã có phiên bản mới; vui lòng tải lại trước khi sửa.");
+        Require(!string.IsNullOrWhiteSpace(input.Message) && input.Message.Length <= 2000, "Hãy ghi rõ yêu cầu gửi Agency.");
+        Require(input.Proposal.ValueKind == JsonValueKind.Object && input.Proposal.GetRawText().Length <= 100000,
+            "Bản tùy biến không hợp lệ hoặc quá lớn.");
+        var proposal = new TourPlanProposal { RequestId = requestId, TourId = tour.Id,
+            CustomerId = actor, AgencyId = request.AgencyId!, BaseTourVersion = tour.Version ?? 1,
+            ProposalJson = input.Proposal.GetRawText(), Message = input.Message!.Trim() };
+        db.TourPlanProposals.Add(proposal);
+        request.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ProposalDto(proposal);
+    }
+    public async Task<PlanProposalDto> ReplyProposal(string actor, int requestId, int proposalId,
+        PlanProposalReply input, CancellationToken ct)
+    {
+        await tours.Agency(actor, ct);
+        var proposal = await db.TourPlanProposals.SingleOrDefaultAsync(p => p.Id == proposalId &&
+            p.RequestId == requestId && p.AgencyId == actor, ct)
+            ?? throw new TourException(404, "Không tìm thấy bản tùy biến.");
+        Require(input.Decision is "reviewed" or "needs_changes", "Phản hồi không hợp lệ.");
+        Require(!string.IsNullOrWhiteSpace(input.Message) && input.Message.Length <= 2000, "Cần ghi phản hồi cho khách.");
+        proposal.Status = input.Decision == "reviewed" ? "Reviewed" : "NeedsChanges";
+        proposal.AgencyReply = input.Message!.Trim(); proposal.RespondedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ProposalDto(proposal);
+    }
     private static void Require(bool ok, string message) { if (!ok) throw new TourException(422, message); }
     private async Task Customer(string actor, CancellationToken ct)
     {
