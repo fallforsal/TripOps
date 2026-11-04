@@ -1202,6 +1202,13 @@ export function TourFormPage(props: TourFormPageProps) {
   const customRequest =
     props.customRequest ??
     (props.customRequestData ? (props.customRequestData as any) : null);
+  const customDestination = customRequest?.destination || customRequest?.destinations || "";
+  const customCustomer = customRequest?.customerName || customRequest?.contactName || "Khách hàng";
+  const customGuests = Number(customRequest?.numberOfGuests || customRequest?.numberOfPeople) || 2;
+  const customDays = customRequest?.numberOfDays || (customRequest?.departureDate && customRequest?.returnDate
+    ? Math.max(1, Math.round((Date.parse(customRequest.returnDate) - Date.parse(customRequest.departureDate)) / 86400000) + 1)
+    : 3);
+  const customSpecialRequests = customRequest?.specialRequests || customRequest?.additionalInfo;
   const mockServices = useServiceCatalogue();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -1241,11 +1248,11 @@ export function TourFormPage(props: TourFormPageProps) {
   const [name, setName] = useState(
     tour?.name ??
     (customRequest
-      ? `Tour riêng: ${customRequest.destination} - Khách đoàn ${customRequest.customerName}`
+      ? `Tour riêng: ${customDestination} - Khách đoàn ${customCustomer}`
       : ""),
   );
   const [destination, setDestination] = useState(
-    tour?.destination ?? customRequest?.destination ?? "",
+    tour?.destination ?? customDestination,
   );
   const [provinceCodes, setProvinceCodes] = useState<string[]>(() =>
     tour?.provinceCodes && tour.provinceCodes.length > 0
@@ -1268,22 +1275,21 @@ export function TourFormPage(props: TourFormPageProps) {
   const [duration, setDuration] = useState(
     tour?.duration ??
     (customRequest
-      ? `${customRequest.numberOfDays} ngày ${Math.max(1, customRequest.numberOfDays - 1)} đêm`
+      ? `${customDays} ngày ${Math.max(0, customDays - 1)} đêm`
       : "3 ngày 2 đêm"),
   );
   const [numberOfDays, setNumberOfDays] = useState(
-    tour?.numberOfDays ?? customRequest?.numberOfDays ?? 3,
+    tour?.numberOfDays ?? customDays,
   );
   const [numberOfNights, setNumberOfNights] = useState(
     tour?.numberOfNights ??
-    (customRequest ? Math.max(1, customRequest.numberOfDays - 1) : 2),
+    (customRequest ? Math.max(0, customDays - 1) : 2),
   );
   const [price, setPrice] = useState(
     tour?.price ??
-    (customRequest?.estimatedBudget
-      ? Math.round(
-        customRequest.estimatedBudget / (customRequest.numberOfGuests || 1),
-      )
+    (customRequest?.budgetPerPerson || customRequest?.estimatedBudget
+      ? Math.round(Number(customRequest.budgetPerPerson) ||
+        Number(customRequest.estimatedBudget) / customGuests)
       : 3500000),
   );
 
@@ -1309,15 +1315,15 @@ export function TourFormPage(props: TourFormPageProps) {
     tour?.departureLocation ?? tour?.departureCity ?? "TP. Hồ Chí Minh",
   );
   const [minGuests, setMinGuests] = useState(
-    tour?.minGuests ?? customRequest?.numberOfGuests ?? 2,
+    tour?.minGuests ?? customGuests,
   );
   const [maxGuests, setMaxGuests] = useState(
-    tour?.maxGuests ?? (customRequest ? customRequest.numberOfGuests + 2 : 20),
+    tour?.maxGuests ?? (customRequest ? customGuests : 20),
   );
   const [description, setDescription] = useState(
     tour?.description ??
-    (customRequest?.specialRequests
-      ? `Tour thiết kế riêng theo yêu cầu của ${customRequest.customerName}.\nYêu cầu đặc biệt: ${customRequest.specialRequests}`
+    (customSpecialRequests
+      ? `Tour thiết kế riêng theo yêu cầu của ${customCustomer}.\nYêu cầu đặc biệt: ${customSpecialRequests}`
       : ""),
   );
   const [highlights, setHighlights] = useState<string[]>(
@@ -2644,6 +2650,13 @@ export function TourFormPage(props: TourFormPageProps) {
   const [itinerary, setItinerary] = useState<DailyItinerary[]>(
     tour?.itinerary && tour.itinerary.length > 0
       ? JSON.parse(JSON.stringify(tour.itinerary))
+      : isCustom && customRequest
+        ? Array.from({ length: customDays }, (_, index) => ({
+            id: `day-${index + 1}`, day: index + 1,
+            title: `Ngày ${index + 1}: ${customDestination}`,
+            description: "", destinationCity: customDestination,
+            locations: [], meals: [],
+          }))
       : [
         {
           id: `day-1`,
@@ -3449,11 +3462,11 @@ export function TourFormPage(props: TourFormPageProps) {
       customRequestId: customRequest?.id || tour?.customRequestId,
       targetUserId: customRequest?.userId || tour?.targetUserId,
       targetCustomerName:
-        customRequest?.customerName || tour?.targetCustomerName,
+        isCustom ? customCustomer : tour?.targetCustomerName,
       targetCustomerPhone:
-        customRequest?.customerPhone || tour?.targetCustomerPhone,
+        customRequest?.customerPhone || customRequest?.contactPhone || tour?.targetCustomerPhone,
       targetCustomerEmail:
-        customRequest?.customerEmail || tour?.targetCustomerEmail,
+        customRequest?.customerEmail || customRequest?.contactEmail || tour?.targetCustomerEmail,
       version: isCustom ? nextVersion : tour?.version,
       changeNote: isCustom
         ? changeNote.trim() ||

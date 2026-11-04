@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -20,6 +21,30 @@ interface VietnameseDatePickerProps {
   className?: string;
   id?: string;
   disabled?: boolean;
+  variant?: "default" | "minimal";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  panelContainer?: HTMLDivElement | null;
+}
+
+function CalendarPanel({ container, open, id, children }: {
+  container?: HTMLDivElement | null;
+  open: boolean;
+  id: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    if (!container || !open) return;
+    const frame = requestAnimationFrame(() => {
+      container.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [container, open]);
+  if (container) return open ? createPortal(
+    <div id={id} role="group" aria-label="Lịch chọn ngày khởi hành" className="mx-auto w-fit bg-white p-3">{children}</div>,
+    container,
+  ) : null;
+  return <PopoverContent align="start" className="w-auto p-3 bg-white rounded-lg border border-gray-200 shadow-lg">{children}</PopoverContent>;
 }
 
 const VI_DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -48,8 +73,19 @@ export function VietnameseDatePicker({
   className = "",
   id,
   disabled = false,
+  variant = "default",
+  open,
+  onOpenChange,
+  panelContainer,
 }: VietnameseDatePickerProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const calendarId = React.useId();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = (next: React.SetStateAction<boolean>) => {
+    const nextOpen = typeof next === "function" ? next(isOpen) : next;
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
 
   // Parse initial value or default to current date / 2000 for birth date
   const parseDate = (val?: string) => {
@@ -180,13 +216,24 @@ export function VietnameseDatePicker({
       <PopoverTrigger asChild disabled={disabled}>
         <div
           id={id}
-          className={`relative flex items-center justify-between w-full px-3.5 py-2.5 bg-white border border-gray-300 hover:border-teal-400 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 rounded-xl cursor-pointer transition-all shadow-2xs ${
+          {...(panelContainer ? { "aria-controls": calendarId } : {})}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          onKeyDown={(event) => {
+            if (!disabled && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              setIsOpen((open) => !open);
+            }
+          }}
+          className={`relative flex min-w-0 items-center justify-between w-full cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[#075985] ${variant === "minimal"
+            ? "h-9 border-0 bg-transparent p-0 text-left"
+            : "px-3.5 py-2.5 bg-white border border-gray-300 hover:border-teal-400 focus-within:border-[#075985] focus-within:ring-2 focus-within:ring-teal-100 rounded-xl shadow-2xs"} ${
             disabled ? "opacity-60 cursor-not-allowed bg-gray-50" : ""
           } ${className}`}
         >
-          <div className="flex items-center gap-2.5 truncate">
-            <CalendarIcon className="w-4 h-4 text-teal-600 flex-shrink-0" />
-            <span className={`text-sm ${value ? "font-semibold text-gray-900" : "text-gray-400"}`}>
+          <div className="flex min-w-0 items-center gap-2.5">
+            {variant !== "minimal" && <CalendarIcon className="w-4 h-4 text-[#075985] flex-shrink-0" />}
+            <span className={`text-sm ${value ? "font-medium text-gray-900" : "text-slate-500"}`}>
               {value ? formatDisplay(value) : placeholder}
             </span>
           </div>
@@ -206,28 +253,25 @@ export function VietnameseDatePicker({
         </div>
       </PopoverTrigger>
 
-      <PopoverContent
-        align="start"
-        className="w-[320px] sm:w-[340px] p-4 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200"
-      >
-        <div className="space-y-3.5">
+      <CalendarPanel container={panelContainer} open={isOpen} id={calendarId}>
+        <div className="w-[224px] space-y-2">
           {/* Header Navigation with Year/Month Quick Select */}
-          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-gray-100">
+          <div className="flex items-center justify-between gap-1">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
               title="Tháng trước"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
             {/* Quick selectors for Month & Year */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <select
                 value={viewMonth}
                 onChange={(e) => setViewMonth(Number(e.target.value))}
-                className="text-xs font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="text-sm font-medium text-gray-900 bg-transparent hover:bg-gray-100 rounded-md px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#075985]"
               >
                 {VI_MONTHS.map((m, idx) => (
                   <option key={idx} value={idx}>
@@ -239,7 +283,7 @@ export function VietnameseDatePicker({
               <select
                 value={viewYear}
                 onChange={(e) => setViewYear(Number(e.target.value))}
-                className="text-xs font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="text-sm font-medium text-gray-900 bg-transparent hover:bg-gray-100 rounded-md px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#075985]"
               >
                 {yearOptions.map((y) => (
                   <option key={y} value={y}>
@@ -252,7 +296,7 @@ export function VietnameseDatePicker({
             <button
               type="button"
               onClick={handleNextMonth}
-              className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
               title="Tháng sau"
             >
               <ChevronRight className="w-4 h-4" />
@@ -270,8 +314,8 @@ export function VietnameseDatePicker({
                   onClick={() => setViewYear(decadeYear)}
                   className={`px-2 py-0.5 rounded-md border flex-shrink-0 font-medium transition-colors ${
                     viewYear === decadeYear
-                      ? "bg-teal-600 text-white border-teal-600 font-bold"
-                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-teal-50 hover:text-teal-700"
+                      ? "bg-[#075985] text-white border-[#075985] font-bold"
+                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-[#F0F9FF] hover:text-[#0C4A6E]"
                   }`}
                 >
                   {decadeYear}
@@ -281,12 +325,12 @@ export function VietnameseDatePicker({
           )}
 
           {/* Day of Week Header */}
-          <div className="grid grid-cols-7 gap-1 text-center">
+          <div className="grid grid-cols-7 text-center">
             {VI_DAYS.map((d, idx) => (
               <span
                 key={idx}
-                className={`text-[11px] font-bold py-1 ${
-                  idx === 6 ? "text-rose-500" : "text-gray-400"
+                className={`text-[0.75rem] font-normal ${
+                  idx === 6 ? "text-rose-500" : "text-gray-500"
                 }`}
               >
                 {d}
@@ -295,12 +339,12 @@ export function VietnameseDatePicker({
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1 text-center">
+          <div className="grid grid-cols-7 gap-y-1 text-center">
             {/* Days from previous month */}
             {Array.from({ length: firstDay }).map((_, i) => (
               <span
                 key={`prev-${i}`}
-                className="h-8 flex items-center justify-center text-xs text-gray-300 font-normal select-none"
+                className="h-8 w-8 flex items-center justify-center text-sm text-gray-300 font-normal select-none"
               >
                 {prevMonthDays - firstDay + i + 1}
               </span>
@@ -319,19 +363,19 @@ export function VietnameseDatePicker({
                   type="button"
                   disabled={disabledDay}
                   onClick={() => handleSelectDay(day)}
-                  className={`h-8 w-full rounded-xl text-xs font-medium transition-all flex items-center justify-center relative ${
+                  className={`h-8 w-8 rounded-md text-sm font-normal transition-colors flex items-center justify-center relative ${
                     selected
-                      ? "bg-teal-600 text-white font-bold shadow-md shadow-teal-500/30 scale-105"
+                      ? "bg-[#075985] text-white font-medium"
                       : disabledDay
                       ? "text-gray-300 cursor-not-allowed"
                       : today
-                      ? "border border-teal-500 text-teal-700 font-bold bg-teal-50/50 hover:bg-teal-100"
+                      ? "text-[#0C4A6E] font-semibold bg-[#E0F2FE] hover:bg-[#BAE6FD]"
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
                   {day}
                   {today && !selected && (
-                    <span className="absolute bottom-1 w-1 h-1 bg-teal-600 rounded-full" />
+                    <span className="absolute bottom-0.5 w-1 h-1 bg-[#075985] rounded-full" />
                   )}
                 </button>
               );
@@ -356,7 +400,7 @@ export function VietnameseDatePicker({
                   setViewMonth(today.getMonth());
                 }
               }}
-              className="text-teal-700 hover:text-teal-900 font-semibold hover:underline"
+              className="text-[#0C4A6E] hover:text-[#0C4A6E] font-semibold hover:underline"
             >
               Hôm nay
             </button>
@@ -375,7 +419,7 @@ export function VietnameseDatePicker({
             )}
           </div>
         </div>
-      </PopoverContent>
+      </CalendarPanel>
     </Popover>
   );
 }

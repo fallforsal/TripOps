@@ -25,7 +25,7 @@ import { Button } from "@/app/components/ui/button";
 interface MyRequestsPageProps {
   requests: CustomTourRequest[];
   tours?: Tour[];
-  onCancelRequest: (requestId: string) => void;
+  onCancelRequest: (requestId: string) => Promise<void>;
   onNavigateToCreate: () => void;
   onViewTour?: (tour: Tour) => void;
   onBookTour?: (tour: Tour) => void;
@@ -40,6 +40,8 @@ export function MyRequestsPage({
   onBookTour,
 }: MyRequestsPageProps) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   const selectedRequest = requests.find((r) => r.id === selectedRequestId);
   const matchedTour = selectedRequest?.designedTourId
@@ -193,19 +195,27 @@ export function MyRequestsPage({
             Quay lại danh sách
           </Button>
 
-          {selectedRequest.status !== "cancelled" && selectedRequest.status !== "accepted" && (
+          {cancelError && <p role="alert" className="text-xs text-red-700">{cancelError}</p>}
+          {(selectedRequest.status === "pending" || selectedRequest.status === "reviewing") && (
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
+              disabled={cancelling}
+              onClick={async () => {
                 if (confirm("Bạn có chắc chắn muốn hủy yêu cầu thiết kế này?")) {
-                  onCancelRequest(selectedRequest.id);
-                  setSelectedRequestId(null);
+                  setCancelling(true);
+                  setCancelError("");
+                  try {
+                    await onCancelRequest(selectedRequest.id);
+                    setSelectedRequestId(null);
+                  } catch (error) {
+                    setCancelError(error instanceof Error ? error.message : "Không thể hủy yêu cầu.");
+                  } finally { setCancelling(false); }
                 }
               }}
               className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs h-9 px-4 rounded-[6px]"
             >
-              Hủy yêu cầu
+              {cancelling ? "Đang hủy..." : "Hủy yêu cầu"}
             </Button>
           )}
         </div>

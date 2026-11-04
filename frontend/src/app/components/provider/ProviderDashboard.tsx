@@ -1,5 +1,5 @@
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
@@ -57,6 +57,21 @@ export function ProviderDashboard({
   >("overview");
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?provider\/([^/?]+)(?:\/([^/?]+))?/);
+      if (match) {
+        const sec = match[1] as any;
+        const sId = match[2] || null;
+        setActiveSection(sec);
+        if (sId) setSelectedServiceId(sId);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
   const [editingService, setEditingService] = useState<Service | null>(null);
 
   // Quản lý Yêu cầu Dịch vụ Đoàn từ các Agency (Chỉ lấy yêu cầu thuộc Provider đăng nhập, không fallback sang người khác)

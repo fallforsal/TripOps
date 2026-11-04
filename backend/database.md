@@ -144,6 +144,10 @@ Table tours {
   is_ai_generated boolean [default: false]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+
+  indexes {
+    design_request_id [unique, note: 'Mỗi yêu cầu chỉ có một tour thiết kế']
+  }
 }
 
 Table tour_pricing_tiers {
@@ -264,6 +268,9 @@ Table tour_design_requests {
   // 1. CHỌN CÔNG TY DU LỊCH (Agency/Business Profile nhận yêu cầu)
   user_id varchar(36) // FK trỏ tới users.id (người dùng gửi form, có thể null nếu cho phép khách vãng lai)
   agency_id varchar(36) [note: 'Công ty nhận yêu cầu ban đầu; không thay thế Host trong bảng phân công']
+  business_name varchar(255)
+  business_email varchar(191)
+  business_phone varchar(30)
   // 2. ĐẠI DIỆN ĐẶT TOUR
   contact_name varchar(150) [not null] // Người liên hệ, đại diện đặt tour (*)
   contact_email varchar(191) [not null] // Email cá nhân người đại diện (*)
@@ -281,7 +288,7 @@ Table tour_design_requests {
   special_requirements text // Các điểm tham quan, hoạt động tour, lửa trại... hay ghi chú khác
 
   // 5. TRẠNG THÁI XỬ LÝ CỦA HỆ THỐNG
-  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED
+  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED, REJECTED
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
@@ -932,6 +939,24 @@ Table complaints {
     }
     Ref: booking_contracts.booking_id > bookings.id
     Ref: booking_contracts.reviewed_by > users.id
+
+    // Phiên ký hợp đồng trực tuyến: mở bằng QR (điện thoại) hoặc trên máy tính; một lần dùng, hết hạn 15 phút, xác nhận bằng OTP email.
+    Table contract_sign_sessions {
+      id int [pk, increment]
+      contract_id int [not null, note: 'FK tới booking_contracts.id']
+      token_hash varchar(64) [not null, unique, note: 'SHA-256 của mã phiên trong QR (không lưu mã gốc)']
+      expires_at timestamp [not null]
+      otp_hash varchar(64) [note: 'SHA-256 của OTP đã gửi email']
+      otp_expires_at timestamp
+      otp_sent_at timestamp
+      otp_send_count int [not null, default: 0]
+      otp_attempts int [not null, default: 0, note: 'Số lần nhập sai OTP; quá 5 lần thì khóa phiên']
+      completed_at timestamp [note: 'Thời điểm khách xác nhận ký']
+      signer_ip varchar(45)
+      signer_user_agent varchar(300)
+      created_at timestamp [default: `now()`]
+    }
+    Ref: contract_sign_sessions.contract_id > booking_contracts.id
 
 
 

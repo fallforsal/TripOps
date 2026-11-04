@@ -77,59 +77,50 @@ export function AgencyOverview({
       )}
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="relative h-32 bg-gradient-to-r from-blue-600 to-indigo-600">
-          {company.coverImage && (
-            <img
-              src={company.coverImage}
-              alt=""
-              className="w-full h-full object-cover opacity-40"
-            />
-          )}
-        </div>
-        <div className="px-6 pb-6">
-          <div className="flex items-end gap-4 -mt-8">
-            <img
-              src={company.logo}
-              alt={company.name}
-              className="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow-md"
-            />
-            <div className="pb-1">
-              <h1 className="text-xl font-bold text-gray-900">
+      <section aria-label="Thông tin công ty lữ hành" className="bg-white rounded-[8px] border border-[#CBD5E1] border-t-4 border-t-[#075985] shadow-2xs">
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-[#F0F9FF] text-lg font-semibold text-[#075985]">
+              {company.logo ? <img src={company.logo} alt={company.name} className="h-full w-full object-contain" /> : company.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold text-[#0F172A] break-words">
                 {company.name}
               </h1>
-              <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#475569] mt-1">
                 {company.rating && (
-                  <span className="flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span className="flex items-center gap-1 font-semibold text-amber-600">
+                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                     {company.rating}
                   </span>
                 )}
                 <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" />
+                  <MapPin className="w-3.5 h-3.5 text-[#075985]" />
                   {company.address}
                 </span>
               </div>
             </div>
           </div>
-          <p className="text-gray-600 text-sm mt-3 leading-relaxed">
-            {company.description}
-          </p>
-          <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-500">
+          {company.description && (
+            <p className="text-[#334155] text-xs sm:text-sm leading-relaxed border-t border-slate-100 pt-3">
+              {company.description}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-4 mt-3 text-xs text-[#475569]">
             <span className="flex items-center gap-1.5">
-              <Phone className="w-4 h-4" /> {company.phone}
+              <Phone className="w-3.5 h-3.5 text-[#075985]" /> {company.phone}
             </span>
-            <span className="flex items-center gap-1.5">
-              <Mail className="w-4 h-4" /> {company.email}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-[#075985]" /> {company.email}
             </span>
             {company.website && (
               <span className="flex items-center gap-1.5 text-[#075985]">
-                <Globe className="w-4 h-4" /> {company.website}
+                <Globe className="w-3.5 h-3.5" /> {company.website}
               </span>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -167,7 +158,7 @@ export function AgencyOverview({
           return (
             <div
               key={stat.label}
-              className="bg-white rounded-xl border border-gray-200 p-4"
+              className="bg-white rounded-[8px] border border-[#CBD5E1] p-4 shadow-2xs"
             >
               <div
                 className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}
@@ -186,24 +177,33 @@ export function AgencyOverview({
       </div>
 
       {/* Revenue */}
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-xs">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp className="w-5 h-5 opacity-80" />
-          <p className="text-sm opacity-80">Doanh thu ước tính</p>
+      <div className="bg-white border border-[#CBD5E1] rounded-[8px] p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#475569] mb-1">
+            <TrendingUp className="w-4 h-4 text-[#075985]" />
+            <span>Doanh thu ước tính</span>
+          </div>
+          <p className="text-3xl font-extrabold text-[#075985]">
+            {totalRevenue.toLocaleString("vi-VN")} <span className="text-lg font-bold text-[#64748b]">VNĐ</span>
+          </p>
+          <p className="text-xs text-[#64748b] mt-1">
+            Ghi nhận từ {confirmedBookings} booking đã xác nhận
+          </p>
         </div>
-        <p className="text-3xl font-bold">
-          {totalRevenue.toLocaleString("vi-VN")}
-          <span className="text-lg font-normal opacity-70 ml-1">
-            đ
-          </span>
-        </p>
-        <p className="text-sm opacity-60 mt-1">
-          Từ {confirmedBookings} booking đã xác nhận
-        </p>
+        <div className="flex items-center gap-2">
+          {onNavigate && (
+            <Button
+              onClick={() => onNavigate("bookings")}
+              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px]"
+            >
+              Xem chi tiết booking
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Services Discovery Banner */}
-      <div className="bg-gradient-to-r from-sky-50 via-blue-50 to-indigo-50 border border-[#CBD5E1] rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-[8px] p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[#075985] text-white flex items-center justify-center flex-shrink-0 shadow-md">
             <Compass className="w-6 h-6" />

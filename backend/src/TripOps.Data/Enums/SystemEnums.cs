@@ -65,7 +65,8 @@ public enum CustomRequestStatus
     Contacted,
     Quoted,
     Accepted,
-    Cancelled
+    Cancelled,
+    Rejected
 }
 
 public enum BookingStatus

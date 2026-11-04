@@ -17,6 +17,9 @@ public sealed record ContractData(
     decimal TotalAmount,
     IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule);
 
+/// <summary>Chữ ký trực tuyến của Bên B (ảnh PNG khách vẽ) và thông tin xác thực ghi vào bản đã ký.</summary>
+public sealed record ContractSignature(byte[] Png, DateTime SignedAtVietnam, string MaskedEmail, string SessionRef);
+
 /// <summary>
 /// Tạo hợp đồng lữ hành nội địa dạng PDF (QuestPDF). Nội dung theo Luật Du lịch 2017 Điều 39: chương trình,
 /// giá và cách thanh toán, điều kiện hủy và trách nhiệm tài chính, bất khả kháng, bảo hiểm.
@@ -36,7 +39,7 @@ public static class ContractPdf
     private static string Money(decimal value) => value.ToString("N0", Vi) + " đ";
     private static string Date(DateTime value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    public static byte[] Generate(ContractData d) => Document.Create(document =>
+    public static byte[] Generate(ContractData d, ContractSignature? signature = null) => Document.Create(document =>
     {
         document.Page(page =>
         {
@@ -179,7 +182,7 @@ public static class ContractPdf
                 {
                     closing.Spacing(6);
                     Section(closing, "ĐIỀU 7. HIỆU LỰC");
-                    closing.Item().Text("Hợp đồng có hiệu lực khi Bên B ký và tải bản đã ký lên TripOps. Tranh chấp được giải quyết bằng thương lượng; " +
+                    closing.Item().Text("Hợp đồng có hiệu lực khi Bên B ký (ký trực tuyến hoặc tải bản đã ký lên TripOps). Tranh chấp được giải quyết bằng thương lượng; " +
                         "không thương lượng được thì đưa ra Tòa án có thẩm quyền. Hợp đồng lập bằng tiếng Việt, mỗi bên lưu một bản điện tử trên TripOps.");
 
                     closing.Item().PaddingTop(16).Row(row =>
@@ -193,10 +196,30 @@ public static class ContractPdf
                         row.RelativeItem().Column(b =>
                         {
                             b.Item().AlignCenter().Text("BÊN B").Bold();
-                            b.Item().AlignCenter().Text("(Ký và ghi rõ họ tên)").Italic().FontSize(8);
-                            b.Item().PaddingTop(30).AlignCenter().Text(d.CustomerName);
+                            if (signature is null)
+                            {
+                                b.Item().AlignCenter().Text("(Ký và ghi rõ họ tên)").Italic().FontSize(8);
+                                b.Item().PaddingTop(30).AlignCenter().Text(d.CustomerName);
+                            }
+                            else
+                            {
+                                b.Item().AlignCenter().Text("(Đã ký trực tuyến trên TripOps)").Italic().FontSize(8);
+                                b.Item().Height(55).AlignCenter().Image(signature.Png).FitArea();
+                                b.Item().AlignCenter().Text(d.CustomerName);
+                            }
                         });
                     });
+
+                    if (signature is not null)
+                        closing.Item().PaddingTop(10).Border(0.5f).BorderColor(Colors.Grey.Lighten1).Background(Colors.Grey.Lighten4).Padding(8).Column(audit =>
+                        {
+                            audit.Spacing(2);
+                            audit.Item().Text("XÁC NHẬN KÝ ĐIỆN TỬ").Bold().FontSize(9);
+                            audit.Item().Text($"Bên B ({d.CustomerName}) đã đọc và ký hợp đồng số {d.ContractNo}, phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)}, " +
+                                $"lúc {signature.SignedAtVietnam.ToString("HH:mm:ss dd/MM/yyyy", CultureInfo.InvariantCulture)} (giờ Việt Nam).").FontSize(8);
+                            audit.Item().Text($"Xác thực bằng mã OTP gửi tới email {signature.MaskedEmail}. Mã phiên ký: {signature.SessionRef}.").FontSize(8);
+                            audit.Item().Text("Chữ ký điện tử theo Luật Giao dịch điện tử 2023. Mã băm SHA-256 của file này được TripOps lưu để kiểm tra file không bị sửa.").FontSize(8);
+                        });
                 });
             });
 

@@ -210,6 +210,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.CustomerId).HasColumnName("user_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
+            entity.Property(e => e.BusinessName).HasColumnName("business_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.BusinessEmail).HasColumnName("business_email").HasColumnType("nvarchar(191)").HasMaxLength(191);
+            entity.Property(e => e.BusinessPhone).HasColumnName("business_phone").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.ContactName).HasColumnName("contact_name").HasColumnType("nvarchar(150)").HasMaxLength(150).IsRequired();
             entity.Property(e => e.ContactEmail).HasColumnName("contact_email").HasColumnType("nvarchar(191)").HasMaxLength(191).IsRequired();
             entity.Property(e => e.ContactPhone).HasColumnName("contact_phone").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
@@ -225,6 +228,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
         });
+        modelBuilder.Entity<Tour>().HasIndex(e => e.DesignRequestId).IsUnique().HasFilter("[design_request_id] IS NOT NULL");
         modelBuilder.Entity<TourVersion>(entity =>
         {
             entity.ToTable("tour_versions");
@@ -691,6 +695,25 @@ internal static class DatabaseDesignConfiguration
             entity.HasIndex(e => new { e.BookingId, e.Version }).IsUnique();
             entity.HasOne(e => e.Booking).WithMany(b => b.Contracts).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<ContractSignSession>(entity =>
+        {
+            entity.ToTable("contract_sign_sessions");
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.ContractId).HasColumnName("contract_id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash").HasColumnType("nvarchar(64)").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at").HasColumnType("datetime2").IsRequired();
+            entity.Property(e => e.OtpHash).HasColumnName("otp_hash").HasColumnType("nvarchar(64)").HasMaxLength(64);
+            entity.Property(e => e.OtpExpiresAt).HasColumnName("otp_expires_at").HasColumnType("datetime2");
+            entity.Property(e => e.OtpSentAt).HasColumnName("otp_sent_at").HasColumnType("datetime2");
+            entity.Property(e => e.OtpSendCount).HasColumnName("otp_send_count").HasColumnType("int").IsRequired();
+            entity.Property(e => e.OtpAttempts).HasColumnName("otp_attempts").HasColumnType("int").IsRequired();
+            entity.Property(e => e.CompletedAt).HasColumnName("completed_at").HasColumnType("datetime2");
+            entity.Property(e => e.SignerIp).HasColumnName("signer_ip").HasColumnType("nvarchar(45)").HasMaxLength(45);
+            entity.Property(e => e.SignerUserAgent).HasColumnName("signer_user_agent").HasColumnType("nvarchar(300)").HasMaxLength(300);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasOne(e => e.Contract).WithMany(c => c.SignSessions).HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<RefundRequest>(entity =>
         {

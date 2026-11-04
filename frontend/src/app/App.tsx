@@ -1,10 +1,14 @@
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
+import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
+  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestTour } from "@/app/services/customTourRequests";
 import { toast } from "sonner";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
 import { ServiceCatalogueProvider } from "@/app/contexts/ServiceCatalogue";
+import { SignContractPage } from "@/app/components/sign/SignContractPage";
+import { parseSignRoute } from "@/app/services/contractSigning";
 import { companyFromUser } from "@/app/services/authService";
 import {
   agencyTours,
@@ -56,6 +60,8 @@ import {
   fromAdminRefund,
   uploadSignedContract,
   reviewContract,
+  startSignSession,
+  type SignSessionStartDto,
   type RefundAccountInput,
   type CancellationReason,
 } from "@/app/services/wf05Bookings";
@@ -167,6 +173,7 @@ function Application() {
   const [currentPage, setCurrentPage] = useState<string>("home");
   const [previousPage, setPreviousPage] = useState<string>("home");
   const [tours, setTours] = useState<Tour[]>([]);
+  const [toursLoaded, setToursLoaded] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -231,17 +238,36 @@ function Application() {
   }, [tourNotice]);
   useEffect(() => {
     let active = true;
-    refreshTours().catch((e) => active && setApiError(e.message));
+    refreshTours().then(() => refreshCustomRequests()).catch((e) => active && setApiError(e.message))
+      .finally(() => active && setToursLoaded(true));
     return () => {
       active = false;
     };
   }, [currentUser?.id, currentUser?.role]);
   useEffect(() => {
     setUsers(currentUser ? [currentUser] : []);
-    setCompanies(
-      currentUser?.role === "agency" ? [companyFromUser(currentUser)] : [],
-    );
   }, [currentUser]);
+  useEffect(() => {
+    let active = true;
+    requestAgencies().then((rows) => { if (active) setCompanies(rows); })
+      .catch((e) => { if (active) setApiError(e.message); });
+    return () => { active = false; };
+  }, []);
+  async function refreshCustomRequests() {
+    if (currentUser?.role === "agency") {
+      setCustomTourRequests(await agencyDesignRequests());
+    } else if (currentUser?.role === "user") {
+      const requests = await customerDesignRequests();
+      setCustomTourRequests(requests);
+      const privateTours = await Promise.all(requests.filter((r) => r.designedTourId)
+        .map((r) => customerRequestTour(r.id)));
+      setTours((previous) => {
+        const byId = new Map(previous.map((tour) => [tour.id, tour]));
+        for (const tour of privateTours) byId.set(tour.id, tour);
+        return [...byId.values()];
+      });
+    } else setCustomTourRequests([]);
+  }
   useEffect(() => {
     let active = true;
     setBookings([]);
@@ -410,6 +436,22 @@ function Application() {
         if (foundB) {
           setSelectedUserBooking(foundB);
           setCurrentPage("user-booking-detail");
+        } else {
+          const numId = Number(bId);
+          if (Number.isSafeInteger(numId) && numId > 0) {
+            setCurrentPage("user-booking-detail");
+            getBookingDetail(numId)
+              .then((dto) => {
+                const converted = fromApiBooking(dto, tours, currentUser);
+                setSelectedUserBooking(converted);
+              })
+              .catch(() => {
+                if (bookings.length > 0) {
+                  toast.error("Không tìm thấy đơn đặt tour.");
+                  setCurrentPage("my-bookings");
+                }
+              });
+          }
         }
       } else if (rawHash === "custom-tour") {
         setCurrentPage("custom-tour");
@@ -715,6 +757,25 @@ function Application() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không tải được bản hợp đồng đã ký.");
       return false;
+    }
+  };
+
+  /** Khách bắt đầu ký trực tuyến: tạo mã một lần để hiện QR (mã cũ hết hiệu lực). */
+  const handleStartWebSign = async (bookingId: string): Promise<SignSessionStartDto | null> => {
+    try {
+      return await startSignSession(Number(bookingId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tạo được mã ký hợp đồng.");
+      return null;
+    }
+  };
+
+  /** Hỏi lại máy chủ trạng thái đơn (khi đang chờ khách ký trên điện thoại). Trả về hợp đồng mới nhất. */
+  const handleRefreshContract = async (bookingId: string) => {
+    try {
+      return applyServerBooking(await getBookingDetail(Number(bookingId))).travelContract ?? null;
+    } catch {
+      return null;
     }
   };
 
@@ -1152,34 +1213,42 @@ function Application() {
   };
 
   // Custom tour requests
-  const handleSubmitCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleSubmitCustomTourRequest = async (data: Omit<CustomTourRequest, "id" | "createdAt" | "status">) => {
+    await submitDesignRequest(data);
+    await refreshCustomRequests();
   };
 
-  const handleCancelCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleCancelCustomTourRequest = async (id: string) => {
+    await cancelDesignRequest(id);
+    await refreshCustomRequests();
   };
 
-  const handleUpdateCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateCustomTourRequest = async (id: string, update: Partial<CustomTourRequest>) => {
+    if (update.status === "reviewing" || update.status === "rejected")
+      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject");
+    await refreshCustomRequests();
   };
 
   // Company admin - tour CRUD
   const handleCompanyCreateTour = async (
     tourData: Omit<Tour, "id"> & { id?: string },
   ) => {
-    if (tourData.is_request)
-      throw new Error("Tour theo yêu cầu chưa có API tạo riêng.");
-    const created = await createAgencyTour(tourData);
+    const created = tourData.is_request
+      ? await createDesignRequestTour(tourData.customRequestId || "", tourData)
+      : await createAgencyTour(tourData);
     const result =
-      tourData.visibility === "public"
+      tourData.is_request && tourData.status === "completed"
+        ? await completeAgencyTour(String(created.id), created.version)
+        : tourData.visibility === "public"
         ? await publishAgencyTour(String(created.id), created.version)
         : tourData.status === "completed"
           ? await completeAgencyTour(String(created.id), created.version)
           : created;
     await refreshTours();
     setTourNotice(
-      result.visibility === "public"
+      tourData.is_request && tourData.status === "completed"
+        ? "Tour thiết kế đã được gửi cho khách hàng."
+        : result.visibility === "public"
         ? "Tour đã được đăng bán."
         : "Bản nháp đã được lưu.",
     );
@@ -1192,8 +1261,6 @@ function Application() {
   ) => {
     const current = tours.find((t) => t.id === tourId);
     if (!current) throw new Error("Không tìm thấy tour.");
-    if (tourData.is_request)
-      throw new Error("Tour theo yêu cầu chưa có API chỉnh sửa riêng.");
     const visibilityOnly = Object.keys(tourData).every((key) =>
       ["status", "visibility"].includes(key),
     );
@@ -1211,7 +1278,9 @@ function Application() {
         ...current,
         ...tourData,
       });
-      if (tourData.visibility === "public")
+      if (tourData.is_request && tourData.status === "completed")
+        await completeAgencyTour(tourId, updated.version);
+      else if (tourData.visibility === "public")
         await publishAgencyTour(tourId, updated.version);
       else if (tourData.status === "completed")
         await completeAgencyTour(tourId, updated.version);
@@ -1405,6 +1474,16 @@ function Application() {
     await refreshTours();
     setTourNotice(`Đã khôi phục v${versionNumber} thành bản nháp mới.`);
   };
+
+  // Auth restoring loading screen
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
+        <div className="w-10 h-10 border-4 border-[#075985]/20 border-t-[#075985] rounded-full animate-spin mb-4" />
+        <p className="text-sm font-semibold text-slate-600">Đang khôi phục phiên làm việc...</p>
+      </div>
+    );
+  }
 
   // Show register screen
   if (showRegister) {
@@ -1628,7 +1707,7 @@ function Application() {
 
       <main
         className={
-          currentPage === "home"
+          currentPage === "home" || currentPage === "user-booking-detail"
             ? "flex-1 w-full min-w-0"
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
@@ -1703,6 +1782,7 @@ function Application() {
             onBookTour={(t) => handleOpenBookingForm(t)}
             onOpenAIAdvisor={() => setShowAIAdvisor(true)}
             onSearchTours={(criteria) => handleNavigate("book-tours", criteria)}
+            loading={!toursLoaded}
           />
         ) : currentPage === "book-tours" ? (
           <BookToursPage
@@ -1746,6 +1826,8 @@ function Application() {
               onSubmitRefundRequest={handleCreateRefundRequest}
               onUpdateRefundAccount={handleUpdateRefundAccount}
               onUploadSignedContract={handleUploadSignedContract}
+              onStartWebSign={handleStartWebSign}
+              onRefreshContract={handleRefreshContract}
               onBack={() => {
                 goBack(() => handleNavigate("my-bookings"));
               }}
@@ -1821,6 +1903,7 @@ function Application() {
             onViewTour={handleViewTour}
             onBookTour={(t) => handleOpenBookingForm(t)}
             onOpenAIAdvisor={() => setShowAIAdvisor(true)}
+            loading={!toursLoaded}
           />
         )}
       </main>
@@ -1844,7 +1927,20 @@ function Application() {
   );
 }
 
+/** Trang ký hợp đồng từ mã QR (#/sign/{mã}) chạy riêng, không cần đăng nhập. */
+function useSignToken(): string | null {
+  const [token, setToken] = useState(() => parseSignRoute(window.location.hash));
+  useEffect(() => {
+    const onHash = () => setToken(parseSignRoute(window.location.hash));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return token;
+}
+
 export default function App() {
+  const signToken = useSignToken();
+  if (signToken) return <SignContractPage token={signToken} />;
   return (
     <ServiceCatalogueProvider>
       <Application />

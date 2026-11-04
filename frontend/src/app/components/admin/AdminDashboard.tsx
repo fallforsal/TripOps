@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Tour,
   Booking,
@@ -109,6 +109,19 @@ export function AdminDashboard({
   onSyncPayout,
   onLogout,
 }: AdminDashboardProps) {
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?admin\/([^/?]+)/);
+      if (match) {
+        setActiveSection(match[1]);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   const [activeSection, setActiveSection] =
     useState<string>("partner-approvals");
 

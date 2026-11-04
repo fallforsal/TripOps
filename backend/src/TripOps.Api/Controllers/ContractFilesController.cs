@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
 namespace TripOps.Api.Controllers;
@@ -19,6 +20,18 @@ public sealed class ContractFilesController(BookingService bookings) : Controlle
     {
         var (content, fileName) = await bookings.ContractPdfFile(Actor, bookingId, ct);
         Response.Headers.CacheControl = "private, no-store";
+        return File(content, "application/pdf", fileName);
+    }
+
+    [HttpGet("signing/{token}/document"), AllowAnonymous, EnableRateLimiting("contract-signing")]
+    [EndpointSummary("Read the contract on the online signing page (unsigned while the session is open, signed copy after completion)")]
+    [Produces("application/pdf")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SigningDocument(string token, CancellationToken ct)
+    {
+        var (content, fileName) = await bookings.SignSessionDocument(token, ct);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["Referrer-Policy"] = "no-referrer";
         return File(content, "application/pdf", fileName);
     }
 

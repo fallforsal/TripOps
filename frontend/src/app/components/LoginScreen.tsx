@@ -193,19 +193,7 @@ export function LoginScreen({
 
               {/* Password */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold text-[#0F172A]">Mật khẩu:</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsForgotPw(true);
-                      setForgotEmail(email);
-                    }}
-                    className="text-[11px] text-[#075985] hover:underline"
-                  >
-                    Quên mật khẩu?
-                  </button>
-                </div>
+                <label className="font-semibold text-[#0F172A] block">Mật khẩu:</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -219,9 +207,22 @@ export function LoginScreen({
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] p-1"
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex justify-end pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPw(true);
+                      setForgotEmail(email);
+                    }}
+                    className="text-[11px] text-[#075985] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075985] rounded-[2px]"
+                  >
+                    Quên mật khẩu?
                   </button>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ShieldAlert,
   Plus,
@@ -48,6 +48,12 @@ export function MyComplaintsPage({
   const [description, setDescription] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [replyText, setReplyText] = useState("");
+  useEffect(() => {
+    if (initialSelectedBooking?.id) {
+      setSelectedBookingId(initialSelectedBooking.id);
+      setShowCreateModal(true);
+    }
+  }, [initialSelectedBooking]);
 
   const selectedComplaint = complaints.find((c) => c.id === selectedComplaintId);
 
@@ -405,17 +411,38 @@ export function MyComplaintsPage({
                 <label className="font-semibold text-[#0F172A]">
                   Chọn đơn đặt tour cần khiếu nại <span className="text-[#B91C1C]">*</span>
                 </label>
-                <select
-                  value={selectedBookingId}
-                  onChange={(e) => setSelectedBookingId(e.target.value)}
-                  className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                >
-                  {userBookings.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      #{b.id} – {b.tour?.name} (Khởi hành: {b.tourStartDate})
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto border border-[#CBD5E1] rounded-[6px] p-1.5 bg-slate-50/50 divide-y divide-slate-100">
+                  {userBookings.map((b) => {
+                    const isSelected = selectedBookingId === b.id;
+                    return (
+                      <div
+                        key={b.id}
+                        onClick={() => setSelectedBookingId(b.id)}
+                        className={`p-2.5 rounded-[4px] cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-[#F0F9FF] border border-[#BAE6FD] text-[#075985]"
+                            : "bg-white hover:bg-slate-50 text-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs">
+                            #{b.id} – {b.tour?.name || "Tour du lịch"}
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                            Khởi hành: {b.tourStartDate || "Thỏa thuận"}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3">
+                          <span>Đơn vị: {b.companyName || b.tour?.companyName || "Travel Agency"}</span>
+                          <span>•</span>
+                          <span>{b.numberOfGuests} khách</span>
+                          <span>•</span>
+                          <span>{(b.totalPrice || 0).toLocaleString("vi-VN")} đ</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Prefilled booking preview */}
