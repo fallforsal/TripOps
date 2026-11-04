@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
         services.AddScoped<TripOps.Data.Repositories.BookingRepository>();
         services.AddScoped<Tours.TourService>();
+        services.AddScoped<Tours.DesignRequestService>();
         // Đọc cấu hình lúc dựng service (không đọc sớm) để appsettings/user-secrets/test override đều có hiệu lực.
         services.TryAddSingleton<Payments.PaymentClock>();
         services.AddSingleton(sp => Payments.PayOsOptions.From(sp.GetRequiredService<IConfiguration>()));

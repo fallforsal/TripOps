@@ -144,6 +144,10 @@ Table tours {
   is_ai_generated boolean [default: false]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+
+  indexes {
+    design_request_id [unique, note: 'Mỗi yêu cầu chỉ có một tour thiết kế']
+  }
 }
 
 Table tour_pricing_tiers {
@@ -264,6 +268,9 @@ Table tour_design_requests {
   // 1. CHỌN CÔNG TY DU LỊCH (Agency/Business Profile nhận yêu cầu)
   user_id varchar(36) // FK trỏ tới users.id (người dùng gửi form, có thể null nếu cho phép khách vãng lai)
   agency_id varchar(36) [note: 'Công ty nhận yêu cầu ban đầu; không thay thế Host trong bảng phân công']
+  business_name varchar(255)
+  business_email varchar(191)
+  business_phone varchar(30)
   // 2. ĐẠI DIỆN ĐẶT TOUR
   contact_name varchar(150) [not null] // Người liên hệ, đại diện đặt tour (*)
   contact_email varchar(191) [not null] // Email cá nhân người đại diện (*)
@@ -281,7 +288,7 @@ Table tour_design_requests {
   special_requirements text // Các điểm tham quan, hoạt động tour, lửa trại... hay ghi chú khác
 
   // 5. TRẠNG THÁI XỬ LÝ CỦA HỆ THỐNG
-  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED
+  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED, REJECTED
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }

@@ -2602,7 +2602,9 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("DesignRequestId");
+                    b.HasIndex("DesignRequestId")
+                        .IsUnique()
+                        .HasFilter("[design_request_id] IS NOT NULL");
 
                     b.ToTable("tours", (string)null);
                 });
@@ -2724,6 +2726,21 @@ namespace TripOps.Data.Migrations
                     b.Property<decimal?>("BudgetPerPerson")
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("budget_per_person");
+
+                    b.Property<string>("BusinessEmail")
+                        .HasMaxLength(191)
+                        .HasColumnType("nvarchar(191)")
+                        .HasColumnName("business_email");
+
+                    b.Property<string>("BusinessName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("business_name");
+
+                    b.Property<string>("BusinessPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("business_phone");
 
                     b.Property<string>("ContactEmail")
                         .IsRequired()

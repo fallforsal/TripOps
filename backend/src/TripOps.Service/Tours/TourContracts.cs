@@ -69,7 +69,7 @@ public sealed record AiDraftRequest([Required, StringLength(255)] string Destina
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
-    DateTime CreatedAt, DateTime UpdatedAt);
+    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration);
 public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,

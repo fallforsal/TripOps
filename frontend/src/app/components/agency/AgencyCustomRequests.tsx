@@ -25,9 +25,9 @@ interface AgencyCustomRequestsProps {
   company: TourCompany;
   tours: Tour[];
   allCompanies?: TourCompany[];
-  onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void;
-  onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => void;
-  onEditTour: (tourId: string, tour: Partial<Tour>) => void;
+  onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
+  onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
+  onEditTour: (tourId: string, tour: Partial<Tour>) => void | Promise<void>;
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
 }
@@ -78,33 +78,21 @@ export function AgencyCustomRequests({
     setEditingTourForRequest(existingTour || null);
   };
 
-  const handleSaveTourFromRequest = (tourData: Partial<Tour>) => {
+  const handleSaveTourFromRequest = async (tourData: Partial<Tour>) => {
     if (!designingRequest) return;
     if (editingTourForRequest) {
-      onEditTour(editingTourForRequest.id, tourData);
-      onUpdateRequest(designingRequest.id, {
-        status: "designed",
-        currentVersion: (editingTourForRequest.version || 1) + 1,
-      });
+      await onEditTour(editingTourForRequest.id, { ...tourData, is_request: true });
     } else {
-      const newTourId = `tour-custom-${Date.now()}`;
-      onCreateTour({
+      await onCreateTour({
         ...(tourData as any),
-        id: newTourId,
         customRequestId: designingRequest.id,
-        isCustomRequest: true,
-        version: 1,
+        is_request: true,
         companyId: company.id,
         companyName: company.name,
         companyLogo: company.logo,
-        status: "published",
-      });
-      onUpdateRequest(designingRequest.id, {
-        status: "designed",
-        designedTourId: newTourId,
-        currentVersion: 1,
       });
     }
+    await onUpdateRequest(designingRequest.id, {});
     setDesigningRequest(null);
     setEditingTourForRequest(null);
   };
@@ -397,13 +385,15 @@ function RequestGroupSection({
                       </button>
                     </div>
 
-                    <button
-                      onClick={() => onStartDesignTour(req, matchingTour)}
-                      className="px-6 py-2.5 rounded-full bg-[#075985] text-white text-xs font-semibold hover:bg-[#F97316] transition-all duration-300 flex items-center gap-2 shadow-sm"
-                    >
-                      <span>{matchingTour ? "Chỉnh sửa thiết kế tour" : "Bắt đầu thiết kế hành trình"}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {req.status !== "cancelled" && req.status !== "rejected" && (
+                      <button
+                        onClick={() => onStartDesignTour(req, matchingTour)}
+                        className="px-6 py-2.5 rounded-full bg-[#075985] text-white text-xs font-semibold hover:bg-[#F97316] transition-all duration-300 flex items-center gap-2 shadow-sm"
+                      >
+                        <span>{matchingTour ? "Chỉnh sửa thiết kế tour" : "Bắt đầu thiết kế hành trình"}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

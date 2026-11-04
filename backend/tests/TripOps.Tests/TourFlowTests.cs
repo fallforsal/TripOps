@@ -697,6 +697,19 @@ public sealed partial class TourFlowTests
             await using var app = new App(sqlServer: connectionString);
             await ProvincePersistenceScenario(app);
             await SupplierArchiveScenario(app);
+            using (var customer = await app.Login("customer"))
+            using (var agency = await app.Login("agency"))
+            {
+                var design = await Read<DesignRequestDto>(await customer.PostAsJsonAsync(
+                    "/api/v1/tour-design-requests", new CreateDesignRequestInput(
+                        "agency", "SQL customer", "sql-customer@example.test", "0900000000", "Da Lat",
+                        DateTime.UtcNow.Date.AddDays(10), DateTime.UtcNow.Date.AddDays(11), 4,
+                        BusinessName: "SQL business")), HttpStatusCode.Created);
+                Assert.Equal(design.Id, Assert.Single(await Read<DesignRequestDto[]>(
+                    await agency.GetAsync("/api/v1/agency/tour-design-requests"))).Id);
+                Assert.Equal(design.Id, Assert.Single(await Read<DesignRequestDto[]>(
+                    await customer.GetAsync("/api/v1/tour-design-requests"))).Id);
+            }
             await app.Inspect(async db => {
                 Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", db.Database.ProviderName);
                 Assert.Contains("20261101130000_AddTourProvinces", await db.Database.GetAppliedMigrationsAsync());

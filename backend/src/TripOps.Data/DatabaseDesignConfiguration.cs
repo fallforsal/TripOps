@@ -210,6 +210,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.CustomerId).HasColumnName("user_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
+            entity.Property(e => e.BusinessName).HasColumnName("business_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.BusinessEmail).HasColumnName("business_email").HasColumnType("nvarchar(191)").HasMaxLength(191);
+            entity.Property(e => e.BusinessPhone).HasColumnName("business_phone").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.ContactName).HasColumnName("contact_name").HasColumnType("nvarchar(150)").HasMaxLength(150).IsRequired();
             entity.Property(e => e.ContactEmail).HasColumnName("contact_email").HasColumnType("nvarchar(191)").HasMaxLength(191).IsRequired();
             entity.Property(e => e.ContactPhone).HasColumnName("contact_phone").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
@@ -225,6 +228,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
         });
+        modelBuilder.Entity<Tour>().HasIndex(e => e.DesignRequestId).IsUnique().HasFilter("[design_request_id] IS NOT NULL");
         modelBuilder.Entity<TourVersion>(entity =>
         {
             entity.ToTable("tour_versions");

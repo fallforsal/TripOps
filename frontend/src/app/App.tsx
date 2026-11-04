@@ -1,6 +1,8 @@
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
+import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
+  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestTour } from "@/app/services/customTourRequests";
 import { toast } from "sonner";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
@@ -231,17 +233,35 @@ function Application() {
   }, [tourNotice]);
   useEffect(() => {
     let active = true;
-    refreshTours().catch((e) => active && setApiError(e.message));
+    refreshTours().then(() => refreshCustomRequests()).catch((e) => active && setApiError(e.message));
     return () => {
       active = false;
     };
   }, [currentUser?.id, currentUser?.role]);
   useEffect(() => {
     setUsers(currentUser ? [currentUser] : []);
-    setCompanies(
-      currentUser?.role === "agency" ? [companyFromUser(currentUser)] : [],
-    );
   }, [currentUser]);
+  useEffect(() => {
+    let active = true;
+    requestAgencies().then((rows) => { if (active) setCompanies(rows); })
+      .catch((e) => { if (active) setApiError(e.message); });
+    return () => { active = false; };
+  }, []);
+  async function refreshCustomRequests() {
+    if (currentUser?.role === "agency") {
+      setCustomTourRequests(await agencyDesignRequests());
+    } else if (currentUser?.role === "user") {
+      const requests = await customerDesignRequests();
+      setCustomTourRequests(requests);
+      const privateTours = await Promise.all(requests.filter((r) => r.designedTourId)
+        .map((r) => customerRequestTour(r.id)));
+      setTours((previous) => {
+        const byId = new Map(previous.map((tour) => [tour.id, tour]));
+        for (const tour of privateTours) byId.set(tour.id, tour);
+        return [...byId.values()];
+      });
+    } else setCustomTourRequests([]);
+  }
   useEffect(() => {
     let active = true;
     setBookings([]);
@@ -1152,34 +1172,42 @@ function Application() {
   };
 
   // Custom tour requests
-  const handleSubmitCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleSubmitCustomTourRequest = async (data: Omit<CustomTourRequest, "id" | "createdAt" | "status">) => {
+    await submitDesignRequest(data);
+    await refreshCustomRequests();
   };
 
-  const handleCancelCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleCancelCustomTourRequest = async (id: string) => {
+    await cancelDesignRequest(id);
+    await refreshCustomRequests();
   };
 
-  const handleUpdateCustomTourRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateCustomTourRequest = async (id: string, update: Partial<CustomTourRequest>) => {
+    if (update.status === "reviewing" || update.status === "rejected")
+      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject");
+    await refreshCustomRequests();
   };
 
   // Company admin - tour CRUD
   const handleCompanyCreateTour = async (
     tourData: Omit<Tour, "id"> & { id?: string },
   ) => {
-    if (tourData.is_request)
-      throw new Error("Tour theo yêu cầu chưa có API tạo riêng.");
-    const created = await createAgencyTour(tourData);
+    const created = tourData.is_request
+      ? await createDesignRequestTour(tourData.customRequestId || "", tourData)
+      : await createAgencyTour(tourData);
     const result =
-      tourData.visibility === "public"
+      tourData.is_request && tourData.status === "completed"
+        ? await completeAgencyTour(String(created.id), created.version)
+        : tourData.visibility === "public"
         ? await publishAgencyTour(String(created.id), created.version)
         : tourData.status === "completed"
           ? await completeAgencyTour(String(created.id), created.version)
           : created;
     await refreshTours();
     setTourNotice(
-      result.visibility === "public"
+      tourData.is_request && tourData.status === "completed"
+        ? "Tour thiết kế đã được gửi cho khách hàng."
+        : result.visibility === "public"
         ? "Tour đã được đăng bán."
         : "Bản nháp đã được lưu.",
     );
@@ -1192,8 +1220,6 @@ function Application() {
   ) => {
     const current = tours.find((t) => t.id === tourId);
     if (!current) throw new Error("Không tìm thấy tour.");
-    if (tourData.is_request)
-      throw new Error("Tour theo yêu cầu chưa có API chỉnh sửa riêng.");
     const visibilityOnly = Object.keys(tourData).every((key) =>
       ["status", "visibility"].includes(key),
     );
@@ -1211,7 +1237,9 @@ function Application() {
         ...current,
         ...tourData,
       });
-      if (tourData.visibility === "public")
+      if (tourData.is_request && tourData.status === "completed")
+        await completeAgencyTour(tourId, updated.version);
+      else if (tourData.visibility === "public")
         await publishAgencyTour(tourId, updated.version);
       else if (tourData.status === "completed")
         await completeAgencyTour(tourId, updated.version);
