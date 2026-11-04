@@ -1,5 +1,7 @@
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
+import { BookingQuotationPanel } from "@/app/components/common/BookingQuotationPanel";
+import type { Tour } from "@/app/types";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
 import { defaultSystemBankAccount, mockServices } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
@@ -58,6 +60,8 @@ import type { ContractDto, RefundAccountInput, SignSessionStartDto } from "@/app
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
+  plans?: Tour[];
+  onPlanChanged?: () => void;
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
   booking: Booking;
   systemBank?: SystemBankAccount;
@@ -144,6 +148,8 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function UserBookingDetailPage({
+  plans = [],
+  onPlanChanged,
   booking,
   systemBank = defaultSystemBankAccount,
   onBack,
@@ -425,6 +431,11 @@ export function UserBookingDetailPage({
   return (
     <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
       <div className="w-full min-w-0 px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
+        <BookingQuotationPanel bookingId={booking.id} agency={false} plans={plans}
+          currentTourId={booking.tourId} currentStartDate={booking.tourStartDate} passengers={booking.passengers || []}
+          currentTourSnapshot={booking.tour} currentSpecialRequests={booking.bookingNotes}
+          canChange={(booking.status === "pending" || booking.status === "confirmed") && booking.paymentStatus === "unpaid"}
+          onChanged={onPlanChanged} />
         <p className="p-3 bg-amber-50 text-amber-900 rounded-lg text-sm">Thanh toán cọc qua payOS (chuyển khoản/VietQR). Lưu ý: payOS không có môi trường thử nghiệm — chuyển khoản qua payOS là giao dịch tiền thật.</p>
         {/* PAYMENT SUCCESS TOAST */}
         {paymentSuccessToast && (

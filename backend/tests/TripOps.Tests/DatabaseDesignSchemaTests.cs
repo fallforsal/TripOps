@@ -49,8 +49,8 @@ public sealed class DatabaseDesignSchemaTests
             Assert.True(actual.IsNullable == !required, $"NULL contract differs: {tableName}.{name}");
             columnCount++;
         }
-        Assert.Equal(41, tableCount);
-        Assert.Equal(534, columnCount);
+        Assert.Equal(44, tableCount);
+        Assert.Equal(577, columnCount);
         Assert.Equal(tableCount, tables.Count);
         Assert.Equal(columnCount, tables.Values.Sum(t => t.Columns.Count()));
     }

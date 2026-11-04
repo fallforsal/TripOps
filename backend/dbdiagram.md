@@ -146,7 +146,7 @@ Table tours {
   updated_at timestamp [default: `now()`]
 
   indexes {
-    design_request_id [unique, note: 'Mỗi yêu cầu chỉ có một tour thiết kế']
+    design_request_id [note: 'Một yêu cầu có thể có nhiều Tour plan']
   }
 }
 
@@ -296,6 +296,33 @@ Table tour_design_requests {
 // ============================================================================
 // LỊCH SỬ PHIÊN BẢN & SAO LƯU TOUR (VERSION CONTROL & ROLLBACK)
 // ============================================================================
+Table tour_plan_proposals {
+  id int [pk, increment]
+  request_id int [not null]
+  tour_id int [not null]
+  customer_id varchar(36) [not null]
+  agency_id varchar(36) [not null]
+  base_tour_version int [not null]
+  proposal_json json [not null, note: 'SQL Server nvarchar(max); bản sao chỉnh của khách, không tự thay đổi Tour']
+  message varchar(2000) [not null]
+  status varchar(30) [not null]
+  agency_reply varchar(2000)
+  created_at timestamp [not null, note: 'SQL Server datetime2']
+  responded_at timestamp
+
+  indexes {
+    (request_id, created_at)
+    (agency_id, status)
+    customer_id
+    tour_id
+  }
+}
+
+Ref: tour_plan_proposals.request_id > tour_design_requests.id
+Ref: tour_plan_proposals.tour_id > tours.id
+Ref: tour_plan_proposals.customer_id > users.id
+Ref: tour_plan_proposals.agency_id > users.id
+
 Table tour_versions {
   id int [pk, increment]
   tour_id int [not null, note: 'FK tới tours.id']
@@ -617,6 +644,56 @@ Table payment_transactions {
 // ============================================================================
 // 3. NHẬT KÝ ĐIỀU CHỈNH TĂNG / GIẢM GIÁ TOUR DO PHÁT SINH
 // ============================================================================
+Table booking_supplier_requests {
+  id int [pk, increment]
+  booking_id int [not null]
+  service_id int [not null]
+  provider_id varchar(36) [not null]
+  slot_key varchar(100) [not null]
+  service_name varchar(255) [not null]
+  service_date_from date
+  service_date_to date
+  quantity decimal(12, 2) [not null]
+  unit varchar(30) [not null]
+  estimated_cost decimal(12, 2) [not null]
+  quoted_cost decimal(12, 2)
+  status varchar(30) [not null]
+  note varchar(1000)
+  created_at timestamp [not null]
+  responded_at timestamp
+  indexes {
+    (provider_id, status)
+    (booking_id, slot_key)
+  }
+}
+Ref: booking_supplier_requests.booking_id > bookings.id
+Ref: booking_supplier_requests.service_id > services.id
+Ref: booking_supplier_requests.provider_id > users.id
+
+Table booking_quotations {
+  id int [pk, increment]
+  booking_id int [not null]
+  version int [not null]
+  tour_id int [not null]
+  tour_version int [not null]
+  status varchar(30) [not null]
+  estimated_sale decimal(12, 2) [not null]
+  total_cost decimal(12, 2) [not null]
+  agency_profit decimal(12, 2) [not null]
+  sale_total decimal(12, 2) [not null]
+  lines_json text [not null, note: 'Snapshot bất biến của từng dòng chi phí']
+  reason varchar(1000) [not null]
+  created_at timestamp [not null]
+  sent_at timestamp
+  accepted_at timestamp
+  indexes {
+    (booking_id, version) [unique]
+  }
+}
+Ref: booking_quotations.booking_id > bookings.id
+Ref: booking_quotations.tour_id > tours.id
+
+
 Table booking_price_adjustments {
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']

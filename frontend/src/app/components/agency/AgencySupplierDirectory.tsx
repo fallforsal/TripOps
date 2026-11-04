@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { BookUser, Eye, Hotel, Loader2, MapPin, Search, Trash2, UtensilsCrossed } from "lucide-react";
+import { BookUser, Eye, Hotel, Loader2, MapPin, Pencil, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
-import type { AgencySupplier } from "@/app/services/wf02Tours";
-import { agencySuppliers, deleteAgencySupplier, getAgencySupplier } from "@/app/services/wf02Tours";
+import type { AgencySupplier, SupplierInput } from "@/app/services/wf02Tours";
+import { agencySuppliers, deleteAgencySupplier, getAgencySupplier, updateAgencySupplier } from "@/app/services/wf02Tours";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -41,6 +41,10 @@ export function AgencySupplierDirectory() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [viewing, setViewing] = useState<AgencySupplier | null>(null);
+  const [editing, setEditing] = useState<AgencySupplier | null>(null);
+  const [draft, setDraft] = useState<SupplierInput | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
   const [deleting, setDeleting] = useState<AgencySupplier | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -58,6 +62,36 @@ export function AgencySupplierDirectory() {
     try { setViewing(await getAgencySupplier(supplier.id)); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể tải thông tin nhà cung cấp."); }
     finally { setLoadingDetailId(null); }
+  };
+  const editSupplier = async (supplier: AgencySupplier) => {
+    setLoadingDetailId(supplier.id); setEditError("");
+    try {
+      const full = await getAgencySupplier(supplier.id);
+      setEditing(full);
+      setDraft({ type: full.type, name: full.name, address: full.address || "", area: full.area || "",
+        contactName: full.contactName || "", contactPhone: full.contactPhone || "",
+        contactEmail: full.contactEmail || "", starRating: full.starRating,
+        referencePrice: full.referencePrice, conditions: full.conditions || "", notes: full.notes || "",
+        status: full.status });
+      setViewing(null);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể tải nhà cung cấp."); }
+    finally { setLoadingDetailId(null); }
+  };
+  const saveSupplier = async () => {
+    if (!editing || !draft || saving) return;
+    if (!draft.name?.trim() || !draft.area?.trim() && !draft.address?.trim() ||
+        !draft.referencePrice || draft.referencePrice <= 0) {
+      setEditError("Cần tên, địa chỉ hoặc khu vực, và giá tham khảo lớn hơn 0."); return;
+    }
+    setSaving(true); setEditError("");
+    try {
+      const updated = await updateAgencySupplier(editing.id, draft);
+      setSuppliers((items) => updated.status === "ARCHIVED"
+        ? items.filter((item) => item.id !== updated.id)
+        : items.map((item) => item.id === updated.id ? updated : item));
+      setEditing(null); setDraft(null); toast.success("Đã cập nhật nhà cung cấp.");
+    } catch (error) { setEditError(error instanceof Error ? error.message : "Không thể cập nhật nhà cung cấp."); }
+    finally { setSaving(false); }
   };
   const confirmDelete = async () => {
     if (!deleting || isDeleting) return;
@@ -133,6 +167,7 @@ export function AgencySupplierDirectory() {
                     <td className="px-5 py-5"><p className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><strong className="font-semibold tabular-nums">{money(supplier.referencePrice)}</strong><span className="text-xs text-slate-500">{supplier.type === "HOTEL" ? "/ người / đêm" : "/ người / bữa"}</span></p></td>
                     <td className="px-3 py-5"><div className="flex justify-center gap-1">
                       <Button variant="ghost" size="icon" disabled={loadingDetailId !== null} aria-label={`Xem ${supplier.name}`} title="Xem chi tiết" onClick={() => void viewSupplier(supplier)} className="h-9 w-9 text-[#075985]">{loadingDetailId === supplier.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}</Button>
+                      <Button variant="ghost" size="icon" disabled={loadingDetailId !== null} aria-label={`Sửa ${supplier.name}`} title="Chỉnh sửa" onClick={() => void editSupplier(supplier)} className="h-9 w-9 text-[#075985]"><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" aria-label={`Xóa ${supplier.name}`} title="Xóa khỏi danh bạ" onClick={() => { setDeleteError(""); setDeleting(supplier); }} className="h-9 w-9 text-rose-600 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></Button>
                     </div></td>
                   </tr>
@@ -169,9 +204,48 @@ export function AgencySupplierDirectory() {
             <div><h3 className="text-sm font-semibold">Ghi chú nội bộ</h3><p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{viewing.notes || "Chưa có ghi chú"}</p></div>
             <div className="flex flex-wrap justify-between gap-3 border-t border-slate-200 pt-4">
               <Button variant="outline" className="gap-2 border-rose-200 text-rose-600 hover:bg-rose-50" onClick={() => { setDeleteError(""); setDeleting(viewing); setViewing(null); }}><Trash2 className="h-4 w-4" />Xóa khỏi danh bạ</Button>
-              <Button variant="outline" onClick={() => setViewing(null)}>Đóng</Button>
+              <div className="flex gap-2"><Button variant="outline" onClick={() => void editSupplier(viewing)}><Pencil className="mr-2 h-4 w-4" />Chỉnh sửa</Button><Button variant="outline" onClick={() => setViewing(null)}>Đóng</Button></div>
             </div>
           </>}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !saving) { setEditing(null); setDraft(null); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-white text-slate-900 sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Chỉnh sửa {editing?.name}</DialogTitle><DialogDescription>Thông tin này chỉ thuộc danh bạ Agency. Tour đã lưu giữ snapshot riêng.</DialogDescription></DialogHeader>
+          {draft && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {([
+              ["name", "Tên nhà cung cấp"], ["area", "Khu vực"], ["address", "Địa chỉ"],
+              ["contactName", "Người liên hệ"], ["contactPhone", "Số điện thoại"], ["contactEmail", "Email"],
+            ] as const).map(([field, label]) => <label key={field} className="text-sm">{label}
+              <Input className="mt-1" value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+            </label>)}
+            {draft.type === "HOTEL" && <label className="text-sm">Số sao
+              <Input type="number" min="1" max="5" className="mt-1" value={draft.starRating ?? ""}
+                onChange={(e) => setDraft({ ...draft, starRating: e.target.value ? Number(e.target.value) : null })} />
+            </label>}
+            <label className="text-sm">Giá tham khảo {draft.type === "HOTEL" ? "/ người / đêm" : "/ người / bữa"}
+              <Input type="number" min="1" className="mt-1" value={draft.referencePrice ?? ""}
+                onChange={(e) => setDraft({ ...draft, referencePrice: e.target.value ? Number(e.target.value) : null })} />
+            </label>
+            <label className="text-sm sm:col-span-2">Điều kiện tham khảo
+              <textarea className="mt-1 w-full rounded-md border p-2" rows={3} value={draft.conditions || ""}
+                onChange={(e) => setDraft({ ...draft, conditions: e.target.value })} />
+            </label>
+            <label className="text-sm sm:col-span-2">Ghi chú nội bộ
+              <textarea className="mt-1 w-full rounded-md border p-2" rows={3} value={draft.notes || ""}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+            </label>
+            <label className="text-sm">Trạng thái
+              <select className="mt-1 w-full rounded-md border p-2" value={draft.status || "ACTIVE"}
+                onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
+                <option value="ACTIVE">Đang dùng</option><option value="ARCHIVED">Lưu trữ</option>
+              </select>
+            </label>
+            {editError && <p role="alert" className="text-sm text-rose-600 sm:col-span-2">{editError}</p>}
+            <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="outline" disabled={saving} onClick={() => { setEditing(null); setDraft(null); }}>Hủy</Button>
+              <Button disabled={saving} onClick={() => void saveSupplier()}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></div>
+          </div>}
         </DialogContent>
       </Dialog>
 

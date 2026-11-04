@@ -59,3 +59,18 @@ export const createDesignRequestTour = async (requestId: string, tour: Partial<T
   });
 export const customerRequestTour = async (requestId: string) =>
   fromApiTour(await http<ApiTour>(`/tour-design-requests/${Number(requestId)}/tour`));
+export const customerRequestPlans = async (requestId: string) =>
+  (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map(fromApiTour);
+export type TourPlanProposal = { id: number; requestId: number; tourId: number; baseTourVersion: number;
+  proposal: Pick<Tour, "itinerary" | "hotels">; message: string; status: string;
+  agencyReply: string | null; createdAt: string; respondedAt: string | null };
+export const customerPlanProposals = (requestId: string) =>
+  http<TourPlanProposal[]>(`/tour-design-requests/${Number(requestId)}/proposals`);
+export const agencyPlanProposals = (requestId: string) =>
+  http<TourPlanProposal[]>(`/agency/tour-design-requests/${Number(requestId)}/proposals`);
+export const submitPlanProposal = (requestId: string, plan: Tour, proposal: TourPlanProposal["proposal"], message: string) =>
+  http<TourPlanProposal>(`/tour-design-requests/${Number(requestId)}/proposals`, { method: "POST",
+    body: JSON.stringify({ tourId: Number(plan.id), baseTourVersion: plan.version || 1, proposal, message }) });
+export const replyPlanProposal = (requestId: string, proposalId: number, decision: "reviewed" | "needs_changes", message: string) =>
+  http<TourPlanProposal>(`/agency/tour-design-requests/${Number(requestId)}/proposals/${proposalId}/reply`, {
+    method: "POST", body: JSON.stringify({ decision, message }) });

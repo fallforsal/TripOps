@@ -116,14 +116,14 @@ export function ProviderOverview({
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="font-black text-base sm:text-lg">
-                  Bạn có {pendingGroupRequestsCount} yêu cầu giữ phòng đoàn mới từ các Công ty Lữ hành!
+                  Bạn có {pendingGroupRequestsCount} yêu cầu dịch vụ mới từ các Agency!
                 </h4>
                 <span className="px-2 py-0.5 rounded-full bg-white text-amber-950 font-black text-[10px] uppercase tracking-wider shadow-xs animate-pulse">
                   Cần báo giá
                 </span>
               </div>
               <p className="text-xs text-amber-100 mt-0.5 leading-relaxed">
-                Agency đang chờ xác nhận số phòng và báo giá tổng trọn gói cho toàn bộ đoàn khách.
+                Agency đang chờ bạn xác nhận khả năng cung cấp và báo giá thực tế cho booking.
               </p>
             </div>
           </div>

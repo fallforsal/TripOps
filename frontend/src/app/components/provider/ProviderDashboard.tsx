@@ -1,5 +1,7 @@
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
-import { useState, useEffect } from "react";
+import { ProviderBookingConfirmations } from "@/app/components/provider/ProviderBookingConfirmations";
+import { http } from "@/app/lib/http";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
@@ -73,16 +75,22 @@ export function ProviderDashboard({
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [pendingBookingCount, setPendingBookingCount] = useState(0);
+  useEffect(() => {
+    void http<Array<{ status: string }>>("/provider/booking-requests")
+      .then((rows) => setPendingBookingCount(rows.filter((r) => r.status === "Pending").length))
+      .catch(() => setPendingBookingCount(0));
+  }, [currentUser.id]);
 
   // Quản lý Yêu cầu Dịch vụ Đoàn từ các Agency (Chỉ lấy yêu cầu thuộc Provider đăng nhập, không fallback sang người khác)
   const [internalRequests, setInternalRequests] = useState<ProviderGroupReservationRequest[]>(() => {
     return mockProviderGroupRequests.filter((r) => r.providerId === currentUser.id);
   });
 
-  const activeRequestsList = (externalGroupRequests && externalGroupRequests.length > 0 ? externalGroupRequests : internalRequests)
+  const activeRequestsList = (externalGroupRequests || [])
     .filter((r) => r.providerId === currentUser.id);
 
-  const pendingGroupCount = activeRequestsList.filter((r) => r.status === "pending").length;
+  const pendingGroupCount = activeRequestsList.filter((r) => r.status === "pending").length + pendingBookingCount;
 
   const handleApproveAndQuote = (
     requestId: string,
@@ -242,6 +250,8 @@ export function ProviderDashboard({
         />
       ) : activeSection === "room-requests" ? (
         <ErrorBoundary fallbackTitle="Không thể tải trang Yêu cầu dịch vụ">
+          <ProviderBookingConfirmations onPendingChange={setPendingBookingCount} />
+          {activeRequestsList.length > 0 &&
           <ProviderGroupBookingRequests
             requests={activeRequestsList}
             providerServices={services.filter((s) => s.providerId === currentUser.id)}
@@ -249,6 +259,7 @@ export function ProviderDashboard({
             onApproveAndQuote={handleApproveAndQuote}
             onRejectRequest={handleRejectRequest}
           />
+          }
         </ErrorBoundary>
       ) : activeSection === "services" ? (
         /* 4. Services Management - Table View */

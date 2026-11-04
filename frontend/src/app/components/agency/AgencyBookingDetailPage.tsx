@@ -1,5 +1,7 @@
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
+import { BookingQuotationPanel } from "@/app/components/common/BookingQuotationPanel";
+import type { Tour } from "@/app/types";
 import {
   Booking,
   User,
@@ -99,6 +101,7 @@ import { ContractCard } from "@/app/components/common/ContractCard";
 import { getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
+  plans?: Tour[];
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -185,6 +188,7 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function AgencyBookingDetailPage({
+  plans = [],
   booking,
   guides,
   companyName,
@@ -1658,6 +1662,9 @@ export function AgencyBookingDetailPage({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      <BookingQuotationPanel bookingId={booking.id} agency plans={plans}
+        currentTourId={booking.tourId} currentTourSnapshot={booking.tour}
+        canChange={booking.status === "pending" && booking.paymentStatus === "unpaid"} />
       {/* Top Header & Actions Bar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

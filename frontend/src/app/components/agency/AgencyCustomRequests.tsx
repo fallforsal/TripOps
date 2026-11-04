@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { agencyPlanProposals, replyPlanProposal, type TourPlanProposal } from "@/app/services/customTourRequests";
 import { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { mockTourCompanies } from "@/app/data/mockData";
 import {
@@ -67,7 +68,20 @@ export function AgencyCustomRequests({
   const [editingTourForRequest, setEditingTourForRequest] = useState<Tour | null>(null);
   const [versionHistoryTour, setVersionHistoryTour] = useState<Tour | null>(null);
   const [invitingRequest, setInvitingRequest] = useState<CustomTourRequest | null>(null);
-
+  const [pendingProposalCounts, setPendingProposalCounts] = useState<Record<string, number>>({});
+  const [proposalRefresh, setProposalRefresh] = useState(0);
+  const requestIds = requests.filter((r) => r.status === "designed" || r.status === "quoted" || r.status === "accepted")
+    .map((r) => r.id).join(",");
+  useEffect(() => {
+    const ids = requestIds.split(",").filter(Boolean);
+    if (!ids.length) return;
+    let active = true;
+    void Promise.all(ids.map(async (id) => {
+      try { return [id, (await agencyPlanProposals(id)).filter((p) => p.status === "Pending").length] as const; }
+      catch { return [id, 0] as const; }
+    })).then((rows) => { if (active) setPendingProposalCounts(Object.fromEntries(rows)); });
+    return () => { active = false; };
+  }, [requestIds, proposalRefresh]);
   // Filter requests
   const pending = requests.filter((r) => r.status === "pending" || r.status === "reviewing");
   const designed = requests.filter((r) => r.status === "designed" || r.status === "quoted" || r.status === "accepted");
@@ -184,6 +198,8 @@ export function AgencyCustomRequests({
           onViewTour={onViewTour}
           onOpenVersionHistory={(tour) => setVersionHistoryTour(tour)}
           onOpenInviteCoHost={(req) => setInvitingRequest(req)}
+          pendingProposalCounts={pendingProposalCounts}
+          onProposalReviewed={() => setProposalRefresh((n) => n + 1)}
         />
       )}
 
@@ -199,6 +215,8 @@ export function AgencyCustomRequests({
           onViewTour={onViewTour}
           onOpenVersionHistory={(tour) => setVersionHistoryTour(tour)}
           onOpenInviteCoHost={(req) => setInvitingRequest(req)}
+          pendingProposalCounts={pendingProposalCounts}
+          onProposalReviewed={() => setProposalRefresh((n) => n + 1)}
         />
       )}
 
@@ -242,6 +260,8 @@ interface RequestGroupSectionProps {
   onViewTour?: (tour: Tour) => void;
   onOpenVersionHistory?: (tour: Tour) => void;
   onOpenInviteCoHost: (req: CustomTourRequest) => void;
+  pendingProposalCounts: Record<string, number>;
+  onProposalReviewed: () => void;
 }
 
 function RequestGroupSection({
@@ -254,7 +274,28 @@ function RequestGroupSection({
   onViewTour,
   onOpenVersionHistory,
   onOpenInviteCoHost,
+  pendingProposalCounts,
+  onProposalReviewed,
 }: RequestGroupSectionProps) {
+  const [proposalRows, setProposalRows] = useState<TourPlanProposal[]>([]);
+  const [proposalReply, setProposalReply] = useState<Record<number, string>>({});
+  const [proposalError, setProposalError] = useState("");
+  useEffect(() => {
+    if (!expanded || !requests.some((r) => r.id === expanded)) return;
+    setProposalError("");
+    setProposalRows([]);
+    void agencyPlanProposals(expanded).then(setProposalRows)
+      .catch((e) => setProposalError(e instanceof Error ? e.message : "Không tải được bản khách chỉnh."));
+  }, [expanded, requests]);
+  const reply = async (requestId: string, proposalId: number, decision: "reviewed" | "needs_changes") => {
+    setProposalError("");
+    try {
+      await replyPlanProposal(requestId, proposalId, decision, proposalReply[proposalId] || "");
+      setProposalRows(await agencyPlanProposals(requestId));
+      setProposalReply((previous) => ({ ...previous, [proposalId]: "" }));
+      onProposalReviewed();
+    } catch (e) { setProposalError(e instanceof Error ? e.message : "Không gửi được phản hồi."); }
+  };
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1]">
@@ -298,6 +339,9 @@ function RequestGroupSection({
                         Phiên bản v{matchingTour.version || 1}
                       </span>
                     )}
+                    {pendingProposalCounts[req.id] > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800">
+                      {pendingProposalCounts[req.id]} bản khách chỉnh cần xem
+                    </span>}
                     {req.isCoHosted && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F97316]/10 text-[#F97316] font-medium border border-[#F97316]/20 flex items-center gap-1">
                         <Handshake className="w-3 h-3" />
@@ -359,7 +403,41 @@ function RequestGroupSection({
                     </div>
                   )}
 
+                  <section className="space-y-3 rounded-xl border border-sky-300 bg-white p-4 text-sm">
+                    <h4 className="font-bold text-sky-900">Bản khách tùy biến và trao đổi</h4>
+                    {proposalError && <p role="alert" className="text-red-700">{proposalError}</p>}
+                    {!proposalRows.length && <p className="text-slate-500">Khách chưa gửi bản chỉnh nào cho yêu cầu này.</p>}
+                    {proposalRows.map((proposal) => {
+                      const base = tours.find((t) => t.id === String(proposal.tourId));
+                      return <div key={proposal.id} className="space-y-2 rounded border p-3">
+                        <p className="font-semibold">Bản #{proposal.id} · Plan v{proposal.baseTourVersion} · {proposal.status}</p>
+                        <p>{proposal.message}</p>
+                        {base && base.version !== proposal.baseTourVersion &&
+                          <p className="text-amber-800">Plan hiện là v{base.version}; hãy đối chiếu các thay đổi cũ trước khi lưu.</p>}
+                        <p className="text-xs text-slate-600">Khách đã chỉnh địa điểm, khách sạn hoặc nhà hàng trong bản sao. Kiểm tra tính khả dụng và giá trước khi công bố plan mới.</p>
+                        {base && <button className="rounded border border-sky-700 px-3 py-2 text-sky-800"
+                          onClick={() => onStartDesignTour(req, { ...base,
+                            itinerary: proposal.proposal.itinerary, hotels: proposal.proposal.hotels })}>
+                          Mở bản khách chỉnh để tạo phiên bản Agency</button>}
+                        {proposal.agencyReply && <p className="text-sky-800">Đã phản hồi: {proposal.agencyReply}</p>}
+                        <textarea aria-label={`Phản hồi bản ${proposal.id}`} className="w-full rounded border p-2" rows={2}
+                          placeholder="Thông báo phần nào được chấp nhận, cần đổi hoặc sẽ báo giá lại…"
+                          value={proposalReply[proposal.id] || ""} onChange={(e) => setProposalReply({ ...proposalReply, [proposal.id]: e.target.value })} />
+                        <div className="flex gap-2"><button className="rounded bg-sky-800 px-3 py-2 text-white"
+                          onClick={() => void reply(req.id, proposal.id, "reviewed")}>Đã xem, sẽ cập nhật plan</button>
+                          <button className="rounded border px-3 py-2" onClick={() => void reply(req.id, proposal.id, "needs_changes")}>Yêu cầu khách làm rõ</button></div>
+                      </div>;
+                    })}
+                  </section>
+
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="w-full flex flex-wrap gap-2">
+                      {tours.filter((t) => t.customRequestId === req.id).map((plan) =>
+                        <button key={plan.id} onClick={() => onStartDesignTour(req, plan)}
+                          className="px-3 py-2 rounded border border-[#CBD5E1] bg-white text-xs text-[#075985]">
+                          {plan.name} · v{plan.version || 1} · Chỉnh sửa
+                        </button>)}
+                    </div>
                     <div className="flex items-center gap-2">
                       {matchingTour && onViewTour && (
                         <button
@@ -386,6 +464,11 @@ function RequestGroupSection({
                     </div>
 
                     {req.status !== "cancelled" && req.status !== "rejected" && (
+                      <div className="flex gap-2">
+                      {matchingTour && <button onClick={() => onStartDesignTour(req, null)}
+                        className="px-4 py-2.5 rounded-full border border-[#075985] text-[#075985] text-xs font-semibold">
+                        Thêm Tour plan mới
+                      </button>}
                       <button
                         onClick={() => onStartDesignTour(req, matchingTour)}
                         className="px-6 py-2.5 rounded-full bg-[#075985] text-white text-xs font-semibold hover:bg-[#F97316] transition-all duration-300 flex items-center gap-2 shadow-sm"
@@ -393,6 +476,7 @@ function RequestGroupSection({
                         <span>{matchingTour ? "Chỉnh sửa thiết kế tour" : "Bắt đầu thiết kế hành trình"}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
+                      </div>
                     )}
                   </div>
                 </div>

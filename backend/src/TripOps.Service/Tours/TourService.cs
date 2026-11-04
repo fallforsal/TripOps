@@ -380,7 +380,6 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         await Agency(actor, ct);
         var request = await repository.DesignRequest(actor, requestId, ct) ?? throw new TourException(404, "Yêu cầu thiết kế không tồn tại.");
         Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.Contacted, "Yêu cầu không còn ở trạng thái có thể thiết kế.");
-        Require(!await repository.HasRequestTour(requestId, ct), "Yêu cầu đã có tour thiết kế.");
         await Validate(config, false, ct, actor);
         var tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
             IsRequest = true, DesignRequestId = requestId, IsSharedToCustomer = false };
@@ -393,6 +392,12 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         var user = await accounts.Current(actor, ct);
         Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
         return Dto(await repository.CustomerRequestTour(actor, requestId, ct) ?? throw new TourException(404, "Tour chưa sẵn sàng cho khách xem."));
+    }
+    public async Task<IReadOnlyList<TourDto>> CustomerRequestTours(string actor, int requestId, CancellationToken ct)
+    {
+        var user = await accounts.Current(actor, ct);
+        Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
+        return (await repository.CustomerRequestTours(actor, requestId, ct)).Select(Dto).ToArray();
     }
 
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
