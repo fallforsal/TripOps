@@ -76,3 +76,11 @@
   --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-ring: #38BDF8;
 }
+
+/* Map token shadcn còn thiếu: nền popover/thẻ trắng (trước đây lớp bg-popover/bg-card không sinh ra nên trong suốt). */
+@theme inline {
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+}

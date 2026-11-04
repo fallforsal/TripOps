@@ -377,7 +377,13 @@ function Application() {
     setCurrentUser(null);
     setShowLogin(false);
     setShowRegister(false);
+    setSelectedUserBooking(null);
+    setSelectedTour(null);
+    setBookingTour(null);
     setCurrentPage("home");
+    // Đăng xuất ở bất kỳ vai trò nào cũng về trang chủ ngay; thay địa chỉ (không thêm lịch sử) để nút Back không mở lại trang cần đăng nhập.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    window.scrollTo({ top: 0 });
   };
 
   const { navigateForward, restoreHistoryPosition, goBack } =
