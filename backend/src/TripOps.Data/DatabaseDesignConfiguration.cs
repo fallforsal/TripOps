@@ -696,6 +696,25 @@ internal static class DatabaseDesignConfiguration
             entity.HasOne(e => e.Booking).WithMany(b => b.Contracts).HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
         });
+        modelBuilder.Entity<ContractSignSession>(entity =>
+        {
+            entity.ToTable("contract_sign_sessions");
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.ContractId).HasColumnName("contract_id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash").HasColumnType("nvarchar(64)").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at").HasColumnType("datetime2").IsRequired();
+            entity.Property(e => e.OtpHash).HasColumnName("otp_hash").HasColumnType("nvarchar(64)").HasMaxLength(64);
+            entity.Property(e => e.OtpExpiresAt).HasColumnName("otp_expires_at").HasColumnType("datetime2");
+            entity.Property(e => e.OtpSentAt).HasColumnName("otp_sent_at").HasColumnType("datetime2");
+            entity.Property(e => e.OtpSendCount).HasColumnName("otp_send_count").HasColumnType("int").IsRequired();
+            entity.Property(e => e.OtpAttempts).HasColumnName("otp_attempts").HasColumnType("int").IsRequired();
+            entity.Property(e => e.CompletedAt).HasColumnName("completed_at").HasColumnType("datetime2");
+            entity.Property(e => e.SignerIp).HasColumnName("signer_ip").HasColumnType("nvarchar(45)").HasMaxLength(45);
+            entity.Property(e => e.SignerUserAgent).HasColumnName("signer_user_agent").HasColumnType("nvarchar(300)").HasMaxLength(300);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasOne(e => e.Contract).WithMany(c => c.SignSessions).HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<RefundRequest>(entity =>
         {
             entity.ToTable("refund_requests");

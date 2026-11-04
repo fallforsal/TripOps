@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Tour,
   Booking,
@@ -99,6 +99,22 @@ export function AgencyDashboard({
 }: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
+      if (match) {
+        const sec = match[1];
+        const bId = match[2] || null;
+        setActiveSection(sec);
+        if (bId) setSelectedBookingId(bId);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   const [editingCoHostItem, setEditingCoHostItem] = useState<{
     tour?: Tour | null;
     customRequest?: CustomTourRequest | null;
@@ -148,6 +164,7 @@ export function AgencyDashboard({
     setActiveSection(section);
     setSelectedBookingId(null);
     setEditingCoHostItem(null);
+    window.location.hash = `#/agency/${section}`;
   };
 
   const handleEditTourSegment = (item: Tour | CustomTourRequest) => {

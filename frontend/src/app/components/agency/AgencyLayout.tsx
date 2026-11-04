@@ -17,6 +17,7 @@ import {
   BookUser,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 
 interface AgencyLayoutProps {
   children: React.ReactNode;
@@ -142,18 +143,7 @@ export function AgencyLayout({
         })}
       </nav>
 
-      {/* Logout */}
-      {onLogout && (
-        <div className="p-3 border-t border-[#CBD5E1]">
-          <button
-            onClick={onLogout}
-            className="tripops-sidebar-action w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span data-slot="sidebar-label">Đăng xuất</span>}
-          </button>
-        </div>
-      )}
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
     </div>
   );
 

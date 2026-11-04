@@ -94,6 +94,24 @@ public sealed record ContractDto(
     DateTime? SignedAt, string? SignedFileType, string? SignMethod, string? ReviewNote, DateTime? ReviewedAt, DateTime? CreatedAt,
     bool RequiredBeforePayment);
 
+/// <summary>Mã phiên ký trực tuyến (chỉ trả một lần). FE ghép thành đường dẫn #/sign/{Token} cho QR hoặc ký ngay trên máy tính.</summary>
+public sealed record SignSessionStartDto(string Token, DateTime ExpiresAt, string ContractNo, int Version);
+
+/// <summary>
+/// Trạng thái phiên ký cho trang ký (không lộ thông tin nhạy cảm). Status: open | completed | expired.
+/// DevelopmentOtp: chỉ có ở môi trường Development khi chưa cấu hình SMTP, để demo.
+/// </summary>
+public sealed record SignSessionDto(
+    string Status, string ContractNo, int Version, string TourName, DateTime StartDate, string CustomerName,
+    string MaskedEmail, decimal TotalAmount, DateTime ExpiresAt, DateTime? OtpSentAt, DateTime? OtpExpiresAt,
+    DateTime? CompletedAt, string? DevelopmentOtp = null);
+
+/// <summary>Xác nhận ký: ảnh chữ ký PNG (data URL), mã OTP từ email và xác nhận đã đọc hợp đồng.</summary>
+public sealed record WebSignRequest(
+    [Required, StringLength(800_000)] string SignaturePng,
+    [Required, StringLength(10)] string Otp,
+    bool Agreed);
+
 /// <summary>Agency kiểm tra bản ký: verify (hợp lệ) hoặc resign (yêu cầu ký lại, bắt buộc ghi lý do).</summary>
 public sealed record ContractReviewRequest(
     [Required, AllowedValues("verify", "resign")] string Decision,

@@ -1,5 +1,6 @@
 import { http } from "@/app/lib/http";
 import type { PaymentOutcome } from "./payos";
+import { buildSignPageUrl } from "./contractSigning";
 
 export interface ParticipantInput {
   fullName: string;
@@ -158,6 +159,67 @@ const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
 /** Đường dẫn tải PDF hợp đồng (document) hoặc bản khách đã ký (signed); trình duyệt gửi kèm cookie đăng nhập. */
 export function contractFileUrl(bookingId: number | string, kind: "document" | "signed"): string {
   return `${apiBase}/api/v1/files/contracts/${bookingId}/${kind}`;
+}
+
+/** Mã phiên ký trực tuyến (chỉ nhận một lần), dùng cho QR hoặc ký ngay trên máy này. */
+export interface SignSessionStartDto {
+  token: string;
+  expiresAt: string;
+  contractNo: string;
+  version: number;
+}
+
+/** Trạng thái phiên ký trên trang ký (không cần đăng nhập). */
+export interface SignSessionDto {
+  status: "open" | "completed" | "expired";
+  contractNo: string;
+  version: number;
+  tourName: string;
+  startDate: string;
+  customerName: string;
+  maskedEmail: string;
+  totalAmount: number;
+  expiresAt: string;
+  otpSentAt?: string | null;
+  otpExpiresAt?: string | null;
+  completedAt?: string | null;
+  /** Chỉ có ở môi trường Development khi chưa cấu hình SMTP (để demo). */
+  developmentOtp?: string | null;
+}
+
+/** Khách bắt đầu ký trực tuyến (tạo mã QR mới; mã cũ hết hiệu lực). */
+export async function startSignSession(id: number): Promise<SignSessionStartDto> {
+  return await http<SignSessionStartDto>(`/bookings/${id}/contract/sign-sessions`, { method: "POST" });
+}
+
+export async function getSignSession(token: string): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}`);
+}
+
+/** Gửi OTP 6 số về email tài khoản (hiệu lực 5 phút, gửi lại sau 60 giây). */
+export async function sendSignOtp(token: string): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}/otp`, { method: "POST" });
+}
+
+/** Xác nhận ký: ảnh chữ ký PNG (data URL) + OTP + đã đọc hợp đồng. */
+export async function completeWebSign(
+  token: string,
+  input: { signaturePng: string; otp: string; agreed: boolean },
+): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}/sign`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** PDF trên trang ký: bản chưa ký khi phiên mở, bản đã ký sau khi hoàn tất. */
+export function signingDocumentUrl(token: string): string {
+  return `${apiBase}/api/v1/files/contracts/signing/${encodeURIComponent(token)}/document`;
+}
+
+/** Đường dẫn trang ký đặt trong QR. Khi triển khai, đặt VITE_PUBLIC_APP_URL = tên miền chính thức. */
+export function signPageUrl(token: string): string {
+  return buildSignPageUrl(token, window.location.origin, window.location.pathname, import.meta.env?.VITE_PUBLIC_APP_URL);
 }
 
 /** Khách tải bản hợp đồng đã ký (PDF, PNG, JPG ≤ 10 MB). */

@@ -1,3 +1,4 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState } from "react";
 import { Tour } from "@/app/types";
 import { X, Calendar, Users, MapPin, Handshake, ShieldCheck } from "lucide-react";
@@ -98,13 +99,11 @@ export function BookingModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Ngày khởi hành
               </label>
-              <input
-                type="date"
+              <VietnameseDatePicker
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#075985] focus:border-transparent"
-                required
+                onChange={setStartDate}
+                min={new Date().toLocaleDateString("sv-SE")}
+                placeholder="Chọn ngày khởi hành"
               />
             </div>
 

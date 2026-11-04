@@ -150,8 +150,17 @@ public sealed partial class BookingFlowTests
         return await customer.PostAsync($"/api/v1/bookings/{bookingId}/contract/signed", form);
     }
 
-    private static async Task SignContract(HttpClient customer, int bookingId) =>
-        (await UploadContract(customer, bookingId, SignedPdf)).EnsureSuccessStatusCode();
+    /// <summary>Ảnh chữ ký PNG 120×40 (nét vẽ giả lập) như trang ký gửi lên.</summary>
+    private const string SignaturePng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAYAAAA16j4lAAAAjUlEQVR42u3YMQ6AQAzEwDydnwdKRAESXBEtU7i10Lo5Ut1dyMUIAkNgCAyBITAEhsACQ2AIDIEhMATGTeCqrdcK+Wb5DuGZFR/IN8l3EX6V8w3zPUnfyPnm+IwZ7jNmuM+Y4b7yUMn2ld+ObF85ImT7nPPcoiEwBIbAEBgCQ2CBITAEhsAQGAJD4N+yA0S58ayA+aWaAAAAAElFTkSuQmCC";
+
+    /// <summary>Khách ký trực tuyến: tạo phiên ký, nhận OTP (Development chưa cấu hình SMTP thì OTP trả về), vẽ chữ ký và xác nhận.</summary>
+    private static async Task SignContract(HttpClient customer, int bookingId)
+    {
+        var start = await Read<SignSessionStartDto>(await customer.PostAsync($"/api/v1/bookings/{bookingId}/contract/sign-sessions", null));
+        var otp = await Read<SignSessionDto>(await customer.PostAsync($"/api/v1/contract-signing/{start.Token}/otp", null));
+        await Read<SignSessionDto>(await customer.PostAsJsonAsync($"/api/v1/contract-signing/{start.Token}/sign",
+            new WebSignRequest(SignaturePng, otp.DevelopmentOtp!, true)));
+    }
 
     private static long OrderCode(string transactionCode) => long.Parse(transactionCode["PAYOS-".Length..]);
 

@@ -135,7 +135,7 @@ export type AgencySupplier = {
   referencePrice?: number | null; conditions?: string | null; notes?: string | null;
   status: string;
 };
-export type SupplierInput = Omit<AgencySupplier, "id" | "status">;
+export type SupplierInput = Omit<AgencySupplier, "id" | "status"> & { status?: string };
 export const agencySuppliers = (type?: "HOTEL" | "RESTAURANT", search = "", signal?: AbortSignal) =>
   http<AgencySupplier[]>(`/agency/suppliers?${type ? `type=${type}&` : ""}search=${encodeURIComponent(search)}`, { signal });
 export const getAgencySupplier = (id: number) =>

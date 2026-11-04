@@ -28,6 +28,8 @@ public static class DependencyInjection
         // Kênh chi hộ payOS chỉ nhận IP đã khai báo: luôn đi IPv4 để IP payOS thấy khớp IP đã thêm (tránh mạng có IPv6).
         services.AddHttpClient<Payments.PayOsPayoutGateway>(client => client.Timeout = TimeSpan.FromSeconds(20))
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { ConnectCallback = Payments.PayOsPayoutGateway.ConnectIPv4 });
+        services.AddSingleton(sp => Notifications.SmtpOptions.From(sp.GetRequiredService<IConfiguration>()));
+        services.TryAddSingleton<Notifications.EmailSender>();
         services.AddScoped<Bookings.BookingService>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();

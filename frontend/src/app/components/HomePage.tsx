@@ -37,6 +37,9 @@ import {
 } from "@/app/components/customer/homepage-media";
 import type { TourSearchCriteria } from "@/app/components/customer/tour-search";
 import "@/styles/customer-home.css";
+import { DestinationCombobox } from "@/app/components/common/DestinationCombobox";
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 interface HomePageProps {
   onShowLogin: () => void;
@@ -46,6 +49,26 @@ interface HomePageProps {
   onBookTour?: (tour: Tour) => void;
   onOpenAIAdvisor?: () => void;
   onSearchTours?: (criteria: TourSearchCriteria) => void;
+  /** Đang tải danh sách tour lần đầu: hiện khung xương thay vì khoảng trắng. */
+  loading?: boolean;
+}
+
+/** Khung xương một thẻ tour trong lúc tải. */
+function TourCardSkeleton() {
+  return (
+    <div className="bg-white border border-[#E5EAE7] rounded-[12px] overflow-hidden" aria-hidden="true">
+      <Skeleton className="aspect-[3/2] w-full rounded-none bg-slate-200" />
+      <div className="p-5 space-y-3">
+        <Skeleton className="h-3 w-24 bg-slate-200" />
+        <Skeleton className="h-5 w-4/5 bg-slate-200" />
+        <Skeleton className="h-3 w-3/5 bg-slate-200" />
+        <div className="flex items-center justify-between pt-3">
+          <Skeleton className="h-6 w-28 bg-slate-200" />
+          <Skeleton className="h-9 w-24 bg-slate-200" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function HomePage({
@@ -55,11 +78,11 @@ export function HomePage({
   onBookTour,
   onOpenAIAdvisor,
   onSearchTours,
+  loading = false,
 }: HomePageProps) {
   const [destination, setDestination] = useState("");
-  const [departure, setDeparture] = useState<Date>();
+  const [departureDate, setDepartureDate] = useState<string>("");
   const [guests, setGuests] = useState("");
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const today = startOfDay(new Date());
 
   // Video Flycam Background State & Controls
@@ -156,7 +179,7 @@ export function HomePage({
   function search(place = destination) {
     const criteria: TourSearchCriteria = {
       destination: place.trim(),
-      departureDate: departure ? format(departure, "yyyy-MM-dd") : "",
+      departureDate: departureDate, // giữ nguyên định dạng yyyy-MM-dd gửi API
       guests,
     };
     if (onSearchTours) {
@@ -177,9 +200,11 @@ export function HomePage({
       {/* SECTION B: HERO — Ảnh phong cảnh lớn phủ ngang, nội dung căn giữa */}
       {/* ============================================================== */}
       <section
-        className="home-hero-full relative w-full overflow-hidden bg-slate-900"
+        className="home-hero-full relative w-full bg-slate-900"
         aria-labelledby="home-title"
       >
+        {/* Lớp nền (ảnh/video) tự cắt mép; khung tìm kiếm phía trên được phép nổi ra ngoài hero mà không đẩy bố cục */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Background Landscape Photo: Poster / Fallback when video fails or prefers-reduced-motion */}
         <img
           src={heroImage}
@@ -210,6 +235,8 @@ export function HomePage({
           />
         )}
 
+        </div>
+
         {/* Accessible Play/Pause Button */}
         {!prefersReducedMotion && !videoError && (
           <button
@@ -236,7 +263,7 @@ export function HomePage({
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-900/40 to-slate-950/75 pointer-events-none z-10" />
 
         {/* Hero Content Container */}
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-16 lg:pt-20 lg:pb-20 flex flex-col items-center text-center">
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-16 lg:pt-20 lg:pb-20 flex flex-col items-center text-center">
           {/* Eyebrow badge */}
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs font-medium mb-4 shadow-xs">
             <Compass className="w-3.5 h-3.5 text-teal-300" />
@@ -260,103 +287,55 @@ export function HomePage({
           {/* ============================================================== */}
           {/* WHITE FLOATING SEARCH BAR — Khối tìm kiếm nổi bật trong Hero    */}
           {/* ============================================================== */}
-          <div className="w-full max-w-[980px] mt-8">
+          <div className="w-full max-w-[1100px] mt-8">
             <form
               onSubmit={submitSearch}
-              className="bg-white rounded-[16px] p-3 sm:p-4 shadow-[0_12px_40px_rgba(0,0,0,0.14)] border border-[#E5EAE7] flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5 text-left"
+              className="home-hero-search bg-white rounded-[16px] p-4 sm:p-5 shadow-[0_12px_40px_rgba(0,0,0,0.14)] border border-[#E5EAE7] grid grid-cols-1 gap-4 text-left lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_auto] lg:items-center lg:gap-0"
               aria-label="Tìm kiếm tour"
             >
-              {/* Field 1: Điểm đến */}
-              <div className="flex-1 min-w-0 px-3.5 py-1.5 lg:border-r border-[#E5EAE7]">
+              {/* Field 1: Điểm đến (Combobox) */}
+              <div className="min-w-0 lg:pr-6 lg:border-r border-[#E5EAE7]">
                 <label
                   htmlFor="home-destination"
                   className="flex items-center gap-1.5 text-xs font-semibold text-[#172523] mb-1"
                 >
-                  <MapPin className="w-3.5 h-3.5 text-[#0F766E]" />
+                  <MapPin className="w-3.5 h-3.5 text-[#075985]" />
                   <span>Bạn muốn đi đâu?</span>
                 </label>
-                <Input
+                <DestinationCombobox
                   id="home-destination"
                   value={destination}
-                  onChange={(event) => setDestination(event.target.value)}
-                  placeholder="Địa danh hoặc tên tour"
-                  className="h-8 border-0 p-0 text-sm font-medium text-[#172523] placeholder:text-[#62706C]/70 focus-visible:ring-0 shadow-none bg-transparent"
-                  autoComplete="off"
-                  list="home-destination-suggestions"
+                  onChange={setDestination}
+                  placeholder="Địa danh hoặc tên tour..."
                 />
-                <datalist id="home-destination-suggestions">
-                  {quickDestinations.map((place) => (
-                    <option key={place} value={place} />
-                  ))}
-                </datalist>
               </div>
 
-              {/* Field 2: Ngày đi dự kiến */}
-              <div className="flex-1 min-w-0 px-3.5 py-1.5 lg:border-r border-[#E5EAE7] relative">
+              {/* Field 2: Ngày khởi hành (VietnameseDatePicker với chọn nhanh tháng/năm) */}
+              <div className="min-w-0 lg:px-6 lg:border-r border-[#E5EAE7] relative">
                 <label
                   htmlFor="home-departure"
                   className="flex items-center gap-1.5 text-xs font-semibold text-[#172523] mb-1"
                 >
-                  <CalendarDays className="w-3.5 h-3.5 text-[#0F766E]" />
+                  <CalendarDays className="w-3.5 h-3.5 text-[#075985]" />
                   <span>Ngày khởi hành</span>
                 </label>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                  <PopoverTrigger
-                    id="home-departure"
-                    className="flex items-center justify-between w-full h-8 p-0 text-sm font-medium text-[#172523] text-left bg-transparent hover:bg-transparent shadow-none"
-                  >
-                    <span>
-                      {departure ? (
-                        format(departure, "dd/MM/yyyy")
-                      ) : (
-                        <span className="text-[#62706C]/70 font-normal">
-                          Chọn ngày đi
-                        </span>
-                      )}
-                    </span>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="center"
-                    className="w-auto p-0 bg-white border border-[#E5EAE7] rounded-[10px] shadow-xl z-50"
-                  >
-                    <Calendar
-                      locale={vi}
-                      labels={{
-                        labelPrevious: () => "Tháng trước",
-                        labelNext: () => "Tháng sau",
-                      }}
-                      mode="single"
-                      selected={departure}
-                      onSelect={(date) => {
-                        setDeparture(date);
-                        setCalendarOpen(false);
-                      }}
-                      disabled={{ before: today }}
-                      fromDate={today}
-                      defaultMonth={departure || today}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                {departure && (
-                  <button
-                    type="button"
-                    onClick={() => setDeparture(undefined)}
-                    className="absolute right-3 top-6 text-slate-400 hover:text-slate-600 p-1"
-                    aria-label="Xóa ngày đã chọn"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <VietnameseDatePicker
+                  id="home-departure"
+                  value={departureDate}
+                  onChange={setDepartureDate}
+                  min={format(new Date(), "yyyy-MM-dd")}
+                  placeholder="Chọn ngày đi"
+                  variant="minimal"
+                />
               </div>
 
               {/* Field 3: Số khách */}
-              <div className="w-full lg:w-44 px-3.5 py-1.5">
+              <div className="min-w-0 lg:px-6">
                 <label
                   htmlFor="home-guests"
                   className="flex items-center gap-1.5 text-xs font-semibold text-[#172523] mb-1"
                 >
-                  <Users className="w-3.5 h-3.5 text-[#0F766E]" />
+                  <Users className="w-3.5 h-3.5 text-[#075985]" />
                   <span>Số lượng khách</span>
                 </label>
                 <Input
@@ -367,14 +346,14 @@ export function HomePage({
                   value={guests}
                   onChange={(event) => setGuests(event.target.value)}
                   placeholder="VD: 10 khách"
-                  className="h-8 border-0 p-0 text-sm font-medium text-[#172523] placeholder:text-[#62706C]/70 focus-visible:ring-0 shadow-none bg-transparent"
+                  className="h-9 border-0 p-0 text-sm font-medium text-[#172523] placeholder:text-[#62706C]/70 focus-visible:ring-0 shadow-none bg-transparent"
                 />
               </div>
 
               {/* Button: Tìm tour */}
               <Button
                 type="submit"
-                className="h-11 px-7 bg-[#0F766E] hover:bg-[#115E59] text-white text-sm font-semibold rounded-[8px] shadow-sm flex items-center justify-center gap-2 shrink-0 transition-colors"
+                className="h-12 px-7 bg-[#075985] hover:bg-[#0C4A6E] text-white text-sm font-semibold rounded-[8px] shadow-sm flex items-center justify-center gap-2 shrink-0 transition-colors"
               >
                 <Search className="w-4 h-4" />
                 <span>Tìm tour</span>
@@ -402,6 +381,17 @@ export function HomePage({
       {/* ============================================================== */}
       {/* SECTION C: ĐIỂM ĐẾN NỔI BẬT                                    */}
       {/* ============================================================== */}
+      {loading && destinations.length === 0 && (
+        <section className="max-w-[1300px] mx-auto px-6 sm:px-8 lg:px-12 py-16 lg:py-20" aria-busy="true" aria-label="Đang tải điểm đến">
+          <Skeleton className="h-3 w-44 mb-3 bg-slate-200" />
+          <Skeleton className="h-8 w-80 max-w-full mb-9 bg-slate-200" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="aspect-[4/3] w-full rounded-[12px] bg-slate-200" />
+            ))}
+          </div>
+        </section>
+      )}
       {destinations.length > 0 && (
         <section
           id="home-destinations"
@@ -501,7 +491,11 @@ export function HomePage({
           </Button>
         </div>
 
-        {featuredTours.length > 0 ? (
+        {loading && featuredTours.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7" aria-busy="true" aria-label="Đang tải tour">
+            {[0, 1, 2].map((i) => <TourCardSkeleton key={i} />)}
+          </div>
+        ) : featuredTours.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
             {featuredTours.map((tour) => (
               <HomeTourCard

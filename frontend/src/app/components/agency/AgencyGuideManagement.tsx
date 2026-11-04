@@ -1725,7 +1725,7 @@ export function AgencyGuideManagement({
                             </div>
                             <div className="min-w-0">
                               <span className="text-[11px] font-medium text-slate-400 block">Email</span>
-                              <span className="text-xs font-semibold text-slate-800 truncate block" title={detailGuide.email}>
+                              <span className="text-xs font-semibold text-slate-800 break-all block select-all" title={detailGuide.email}>
                                 {detailGuide.email}
                               </span>
                             </div>

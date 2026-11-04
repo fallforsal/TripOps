@@ -1,18 +1,29 @@
-import { useRef, useState } from "react";
-import { CheckCircle2, Download, FileSignature, FileText, RotateCcw, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import qrcode from "qrcode-generator";
+import { CheckCircle2, Download, ExternalLink, FileSignature, FileText, QrCode, RotateCcw, Upload, X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Textarea } from "@/app/components/ui/textarea";
-import { contractFileUrl, type ContractDto } from "@/app/services/wf05Bookings";
+import { contractFileUrl, signPageUrl, type ContractDto, type SignSessionStartDto } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime } from "@/app/services/payos";
 
 const STATUS: Record<ContractDto["status"], { label: string; tone: string }> = {
   AwaitingSignature: { label: "Chờ khách ký", tone: "bg-amber-50 text-amber-800 border-amber-300" },
-  Signed: { label: "Khách đã ký – chờ công ty kiểm tra", tone: "bg-sky-50 text-sky-800 border-sky-300" },
+  Signed: { label: "Đã tải bản ký – chờ công ty xác nhận", tone: "bg-sky-50 text-sky-800 border-sky-300" },
   Verified: { label: "Đã xác nhận hợp lệ", tone: "bg-emerald-50 text-emerald-800 border-emerald-300" },
   ResignRequested: { label: "Cần ký lại", tone: "bg-rose-50 text-rose-800 border-rose-300" },
 };
 
+const WEB_SIGNED = { label: "Đã ký trực tuyến (OTP)", tone: "bg-emerald-50 text-emerald-800 border-emerald-300" };
+
 const formatVND = (n: number) => `${n.toLocaleString("vi-VN")}đ`;
+
+/** Ảnh SVG mã QR (dạng data URL) cho đường dẫn trang ký. */
+function qrSvgDataUrl(text: string): string {
+  const qr = qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }))}`;
+}
 
 interface ContractCardProps {
   bookingId: string;
@@ -21,17 +32,53 @@ interface ContractCardProps {
   onUploadSigned?: (file: File) => Promise<boolean>;
   /** Agency: xác nhận hoặc yêu cầu ký lại. */
   onReview?: (decision: "verify" | "resign", note?: string) => Promise<boolean>;
+  /** Khách: tạo mã ký trực tuyến một lần (hiện QR). */
+  onStartWebSign?: () => Promise<SignSessionStartDto | null>;
+  /** Khách: hỏi lại trạng thái hợp đồng trong lúc chờ ký trên điện thoại. */
+  onRefresh?: () => Promise<ContractDto | null>;
 }
 
 /** Hợp đồng lữ hành của đơn: tải PDF, tải bản đã ký (khách), kiểm tra bản ký (Agency). */
-export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview }: ContractCardProps) {
+export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview, onStartWebSign, onRefresh }: ContractCardProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resignNote, setResignNote] = useState("");
   const [showResign, setShowResign] = useState(false);
-  const status = STATUS[c.status] ?? STATUS.AwaitingSignature;
-  const canUpload = Boolean(onUploadSigned) && c.status !== "Verified";
+  const [signSession, setSignSession] = useState<SignSessionStartDto | null>(null);
+  const webSigned = c.status === "Signed" && c.signMethod === "web";
+  const status = webSigned ? WEB_SIGNED : STATUS[c.status] ?? STATUS.AwaitingSignature;
+  const canSign = c.status !== "Verified" && !webSigned;
+  const canUpload = Boolean(onUploadSigned) && canSign;
+  const canWebSign = Boolean(onStartWebSign) && canSign;
+  const signUrl = useMemo(() => (signSession ? signPageUrl(signSession.token) : ""), [signSession]);
+  const qrImage = useMemo(() => (signUrl ? qrSvgDataUrl(signUrl) : ""), [signUrl]);
+
+  // Đang mở QR: cứ 4 giây hỏi máy chủ, khách ký xong trên điện thoại thì tự đóng.
+  const refresh = useRef(onRefresh);
+  refresh.current = onRefresh;
+  useEffect(() => {
+    if (!signSession) return;
+    const timer = window.setInterval(async () => {
+      const latest = await refresh.current?.();
+      if (latest?.status === "Signed" && latest.signMethod === "web") setSignSession(null);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [signSession]);
+
+  const startWebSign = async () => {
+    if (!onStartWebSign) return;
+    setBusy(true);
+    setError("");
+    const session = await onStartWebSign();
+    setBusy(false);
+    if (session) setSignSession(session);
+  };
+
+  const closeWebSign = async () => {
+    setSignSession(null);
+    await onRefresh?.();
+  };
   const hasSigned = c.status === "Signed" || c.status === "Verified" || (c.status === "ResignRequested" && Boolean(c.signedAt));
 
   const upload = async (file?: File) => {
@@ -75,15 +122,26 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview 
       <p>
         Số <strong>{c.contractNo}</strong> · phiên bản {c.version} · giá trị <strong>{formatVND(c.totalAmount)}</strong>
       </p>
-      {c.requiredBeforePayment && onUploadSigned && (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-amber-900 leading-relaxed">
-          Bước 1: tải hợp đồng PDF. Bước 2: ký tay rồi chụp/quét lại, hoặc chèn chữ ký vào file. Bước 3: tải bản đã ký lên.
-          Ký xong mới mở thanh toán.
-        </p>
+      {c.requiredBeforePayment && (onUploadSigned || onStartWebSign) && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-amber-900 leading-relaxed space-y-1">
+          {c.status === "Signed" ? (
+            <p>Bạn đã tải bản ký lên. Công ty lữ hành xác nhận bản ký hợp lệ thì mới mở thanh toán. Muốn thanh toán ngay, hãy ký trực tuyến.</p>
+          ) : (
+            <>
+              <p>
+                <strong>Cách nhanh (khuyên dùng):</strong> bấm “Ký trực tuyến”, quét mã QR bằng điện thoại, ký tên và nhập mã OTP gửi về email.
+                Ký xong mở thanh toán ngay.
+              </p>
+              <p>
+                <strong>Cách dự phòng:</strong> tải PDF, ký tay rồi chụp/quét lại và tải lên. Cách này cần công ty lữ hành xác nhận rồi mới thanh toán được.
+              </p>
+            </>
+          )}
+        </div>
       )}
       {c.signedAt && (
         <p className="text-gray-500">
-          Khách tải bản ký lúc {formatVietnamDateTime(c.signedAt)}
+          {c.signMethod === "web" ? "Khách ký trực tuyến lúc" : "Khách tải bản ký lúc"} {formatVietnamDateTime(c.signedAt)}
           {c.reviewedAt ? ` · công ty kiểm tra lúc ${formatVietnamDateTime(c.reviewedAt)}` : ""}
         </p>
       )}
@@ -91,12 +149,12 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview 
         <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-rose-800">Lý do cần ký lại: {c.reviewNote}</p>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <a
           href={contractFileUrl(bookingId, "document")}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 font-semibold hover:bg-gray-50"
+          className="inline-flex w-full items-center justify-center gap-2 min-h-10 px-3 py-2 rounded-md border border-gray-300 font-semibold text-center hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-[#075985]"
         >
           <Download className="w-3.5 h-3.5" /> Tải hợp đồng (PDF)
         </a>
@@ -105,10 +163,15 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview 
             href={contractFileUrl(bookingId, "signed")}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 font-semibold hover:bg-gray-50"
+            className="inline-flex w-full items-center justify-center gap-2 min-h-10 px-3 py-2 rounded-md border border-gray-300 font-semibold text-center hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-[#075985]"
           >
             <FileText className="w-3.5 h-3.5" /> Xem bản đã ký
           </a>
+        )}
+        {canWebSign && (
+          <Button size="sm" disabled={busy} onClick={startWebSign} className="h-auto min-h-10 w-full whitespace-normal rounded-md py-2 text-xs gap-2 bg-[#075985] hover:bg-[#0C4A6E] text-white">
+            <QrCode className="w-3.5 h-3.5" /> Ký trực tuyến
+          </Button>
         )}
         {canUpload && (
           <>
@@ -119,7 +182,7 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview 
               className="hidden"
               onChange={(e) => upload(e.target.files?.[0])}
             />
-            <Button size="sm" disabled={busy} onClick={() => fileInput.current?.click()} className="h-8 text-xs gap-1.5">
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => fileInput.current?.click()} className="h-auto min-h-10 w-full whitespace-normal rounded-md py-2 text-xs gap-2 hover:bg-gray-100">
               <Upload className="w-3.5 h-3.5" />
               {busy ? "Đang tải lên..." : c.signedAt ? "Tải lại bản đã ký" : "Tải bản đã ký lên"}
             </Button>
@@ -154,6 +217,36 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview 
         </div>
       )}
       {error && <p className="text-[11px] text-rose-600">{error}</p>}
+
+      {signSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3 text-sm text-gray-700">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-bold text-gray-900">Ký hợp đồng trực tuyến</p>
+                <p className="text-xs text-gray-500">Hợp đồng {signSession.contractNo} · phiên bản {signSession.version}</p>
+              </div>
+              <button type="button" onClick={closeWebSign} aria-label="Đóng" className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <img src={qrImage} alt="Mã QR ký hợp đồng" className="mx-auto w-56 h-56" />
+            <p className="text-center text-xs leading-relaxed">
+              Mở camera điện thoại quét mã, ký tên và nhập mã OTP gửi về email của bạn.
+              Mã dùng một lần, hết hạn lúc {formatVietnamDateTime(signSession.expiresAt)}.
+            </p>
+            <p className="text-center text-[11px] text-gray-400">Ký xong, trang này tự cập nhật.</p>
+            <a
+              href={signUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-1.5 h-9 rounded-lg border border-gray-300 text-xs font-semibold hover:bg-gray-50"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Ký ngay trên máy này
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -143,6 +143,18 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginCreate(CancellationToken ct) =>
         db.Database.BeginTransactionAsync(ct);
 
+    /// <summary>Đơn của một phiên ký trực tuyến (tìm theo mã băm của mã phiên).</summary>
+    public Task<int?> BookingIdForSignToken(string tokenHash, CancellationToken ct) =>
+        db.ContractSignSessions.Where(s => s.TokenHash == tokenHash).Select(s => (int?)s.Contract.BookingId).SingleOrDefaultAsync(ct);
+
+    public Task<ContractSignSession?> FindSignSession(string tokenHash, CancellationToken ct) =>
+        db.ContractSignSessions.SingleOrDefaultAsync(s => s.TokenHash == tokenHash, ct);
+
+    public Task<List<ContractSignSession>> OpenSignSessions(int contractId, DateTime now, CancellationToken ct) =>
+        db.ContractSignSessions.Where(s => s.ContractId == contractId && s.CompletedAt == null && s.ExpiresAt > now).ToListAsync(ct);
+
+    public void AddSignSession(ContractSignSession session) => db.ContractSignSessions.Add(session);
+
     /// <summary>
     /// Mở giao dịch DB và khóa dòng booking (UPDATE giả) để các thao tác tiền trên cùng một đơn chạy tuần tự:
     /// hai lần bấm thanh toán, IPN và trang return của VNPAY đến cùng lúc sẽ không ghi trùng.

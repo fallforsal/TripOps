@@ -26,6 +26,7 @@ interface CustomTourRequestPageProps {
 }
 
 const TODAY = new Date().toISOString().split("T")[0];
+const formatDateDisplay = (value: string) => value.split("-").reverse().join("/");
 
 export function CustomTourRequestPage({
   companies,
@@ -188,7 +189,7 @@ export function CustomTourRequestPage({
             </div>
             <div className="flex justify-between">
               <span className="text-[#475569]">Thời gian dự kiến:</span>
-              <strong className="font-semibold">{form.departureDate} đến {form.returnDate}</strong>
+              <strong className="font-semibold">{formatDateDisplay(form.departureDate)} đến {formatDateDisplay(form.returnDate)}</strong>
             </div>
             {form.budgetPerPerson ? (
               <div className="flex justify-between">
@@ -404,7 +405,15 @@ export function CustomTourRequestPage({
               </label>
               <VietnameseDatePicker
                 value={form.departureDate}
-                onChange={(d) => setForm((p) => ({ ...p, departureDate: d }))}
+                onChange={(d) =>
+                  setForm((p) => ({
+                    ...p,
+                    departureDate: d,
+                    returnDate: d && p.returnDate && p.returnDate < d ? d : p.returnDate,
+                  }))
+                }
+                min={TODAY}
+                placeholder="dd/MM/yyyy"
                 className="h-9 text-xs bg-white"
               />
             </div>
@@ -416,6 +425,8 @@ export function CustomTourRequestPage({
               <VietnameseDatePicker
                 value={form.returnDate}
                 onChange={(d) => setForm((p) => ({ ...p, returnDate: d }))}
+                min={form.departureDate || TODAY}
+                placeholder="dd/MM/yyyy"
                 className="h-9 text-xs bg-white"
               />
             </div>

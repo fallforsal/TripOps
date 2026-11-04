@@ -9,7 +9,7 @@ namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
-    BookingQuotationService quotations)
+    TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingRepository Repo => repository;
@@ -17,6 +17,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private PayOsPayoutGateway Payouts => payouts;
     private AccountService Accounts => accounts;
     private IHostEnvironment Env => environment;
+    private TripOps.Service.Notifications.EmailSender Email => email;
     /// <summary>Giờ hiện tại (UTC) cho nghiệp vụ thanh toán — test thay được để cố định thời điểm duyệt/quá hạn.</summary>
     private DateTime UtcNow => clock.UtcNow;
 

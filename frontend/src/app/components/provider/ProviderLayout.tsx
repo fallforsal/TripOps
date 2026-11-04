@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { User } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 
 interface ProviderLayoutProps {
   children: React.ReactNode;
@@ -182,25 +183,7 @@ export function ProviderLayout({
         </div>
       )}
 
-      {/* User / Logout Footer */}
-      {onLogout && (
-        <div className="p-3 border-t border-[#CBD5E1]">
-          <button
-            onClick={onLogout}
-            title={collapsed ? "Đăng xuất" : undefined}
-            className={`tripops-sidebar-action w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-rose-50 hover:text-rose-600 transition-all ${
-              collapsed ? "justify-center px-0" : ""
-            }`}
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0 text-gray-400 group-hover:text-rose-600" />
-            {!collapsed && (
-              <span data-slot="sidebar-label" className="font-medium text-sm">
-                Đăng xuất
-              </span>
-            )}
-          </button>
-        </div>
-      )}
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
     </div>
   );
 
