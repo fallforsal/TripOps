@@ -1,21 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { http } from "@/app/lib/http";
 import type { BookingPassenger, Tour } from "@/app/types";
 
-type Line = { slotKey: string; source: string; name: string; quantity: number; unit: string;
-  referenceUnitCost: number; unitCost: number; total: number };
-type Quote = { id: number; bookingId: number; version: number; tourId: number; status: string;
-  estimatedSale: number; totalCost: number | null; agencyProfit: number | null;
-  saleTotal: number; costs: Line[] | null; reason: string; createdAt: string };
-type SupplierRequest = { id: number; serviceName: string; status: string; estimatedCost: number;
-  quotedCost: number | null; note: string | null };
+import type { BookingQuotation as Quote, BookingSupplierRequest as SupplierRequest, BookingQuotationState } from "@/app/lib/bookingSupplierStatus";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value) + " ₫";
 
 export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTourId, currentStartDate,
-  currentTourSnapshot, currentSpecialRequests, passengers = [], canChange = false, onChanged }:
+  currentTourSnapshot, currentSpecialRequests, passengers = [], canChange = false, onChanged,
+  showSupplierRequests = true, onStateChange }:
   { bookingId: string; agency: boolean; plans?: Tour[]; currentTourId?: string;
     currentStartDate?: string; currentTourSnapshot?: Tour; currentSpecialRequests?: string;
-    passengers?: BookingPassenger[]; canChange?: boolean; onChanged?: () => void }) {
+    passengers?: BookingPassenger[]; canChange?: boolean; onChanged?: () => void;
+    showSupplierRequests?: boolean; onStateChange?: (state: BookingQuotationState) => void }) {
+  const stateCallback = useRef(onStateChange);
+  stateCallback.current = onStateChange;
+  const loadSequence = useRef(0);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [supplierRequests, setSupplierRequests] = useState<SupplierRequest[]>([]);
   const [profit, setProfit] = useState("");
@@ -36,11 +35,26 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
   useEffect(() => { setStartDate(currentStartDate?.slice(0, 10) || ""); }, [currentStartDate]);
   useEffect(() => { setSpecialRequests(currentSpecialRequests || ""); }, [currentSpecialRequests]);
   useEffect(() => { setGuests(passengers); setGuestsDirty(false); }, [passengers]);
-  const load = async () => {
-    const rows = await http<Quote[]>(`/bookings/${Number(bookingId)}/quotations`);
+  const load = async (resetForm = true) => {
+    const sequence = ++loadSequence.current;
+    stateCallback.current?.({ bookingId, loading: true, quotes: [], requests: [] });
+    let rows: Quote[], requests: SupplierRequest[];
+    try {
+      [rows, requests] = await Promise.all([
+        http<Quote[]>(`/bookings/${Number(bookingId)}/quotations`),
+        agency ? http<SupplierRequest[]>(`/bookings/${Number(bookingId)}/quotations/supplier-requests`) : Promise.resolve([]),
+      ]);
+    } catch (error) {
+      if (sequence === loadSequence.current) stateCallback.current?.({ bookingId, loading: false,
+        error: error instanceof Error ? error.message : "Không tải được dữ liệu.", quotes: [], requests: [] });
+      throw error;
+    }
+    if (sequence !== loadSequence.current) return;
+    setError("");
     setQuotes(rows);
-    if (agency) setSupplierRequests(await http<SupplierRequest[]>(`/bookings/${Number(bookingId)}/quotations/supplier-requests`));
-    if (agency && rows[0]) {
+    setSupplierRequests(requests);
+    stateCallback.current?.({ bookingId, loading: false, quotes: rows, requests });
+    if (resetForm && agency && rows[0]) {
       setProfit(String(rows[0].agencyProfit ?? 0));
       setCosts(Object.fromEntries((rows[0].costs || []).filter((l) => l.source === "AGENCY_SUPPLIER")
         .map((l) => [l.slotKey, String(l.unitCost)])));
@@ -48,7 +62,12 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
         name: l.name, quantity: String(l.quantity), unit: l.unit, unitCost: String(l.unitCost) })));
     }
   };
-  useEffect(() => { void load().catch((e) => setError(e.message)); }, [bookingId, agency]);
+  useEffect(() => {
+    const refresh = () => { void load(false).catch((e) => setError(e.message)); };
+    void load().catch((e) => setError(e.message));
+    window.addEventListener("focus", refresh);
+    return () => { loadSequence.current++; window.removeEventListener("focus", refresh); };
+  }, [bookingId, agency]);
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setError("");
     try { await action(); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Không thể xử lý báo giá."); }
@@ -63,7 +82,7 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
     <div className="flex justify-between items-center"><h3 className="font-bold text-sky-900">Báo giá theo Tour plan</h3>
       <button className="border rounded px-3 py-1 text-sm" onClick={() => void load().catch((e) => setError(e.message))}>Làm mới</button></div>
     {error && <p role="alert" className="text-red-700 text-sm">{error}</p>}
-    {agency && supplierRequests.filter((r) => r.status !== "Superseded").map((r) =>
+    {agency && showSupplierRequests && supplierRequests.filter((r) => r.status !== "Superseded").map((r) =>
       <p key={r.id} className="text-sm border-b pb-2">{r.serviceName}: {r.status} · Giá tham khảo {money(r.estimatedCost)}
         {r.quotedCost != null && ` · Giá xác nhận ${money(r.quotedCost)}`}{r.note && ` · ${r.note}`}
       </p>)}

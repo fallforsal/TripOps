@@ -14,7 +14,6 @@ import {
   TourCoHost,
   BookingPriceAdjustment,
   BookingAgencyShare,
-  BookingProviderConfirmation,
   BookingAssignedGuide,
   BookingAttractionCheckin,
   BookingIncident,
@@ -84,9 +83,11 @@ import {
 import * as XLSX from "xlsx";
 import { Button } from "@/app/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/app/components/ui/popover";
-import { mockUsers, mockServices } from "@/app/data/mockData";
+import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
-import { ProviderProfileModal } from "./ProviderProfileModal";
+import { BookingSupplierConfirmation } from "./BookingSupplierConfirmation";
+import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
+import { bookingApprovalEligibility, type BookingQuotationState, type BookingServiceSlot } from "@/app/lib/bookingSupplierStatus";
 import {
   Dialog,
   DialogContent,
@@ -209,6 +210,21 @@ export function AgencyBookingDetailPage({
   onCancelBooking,
   onReviewContract,
 }: AgencyBookingDetailPageProps) {
+  const services = useServiceCatalogue();
+  const [quotationState, setQuotationState] = useState<BookingQuotationState>({ bookingId: booking.id,
+    loading: true, quotes: [], requests: [] });
+  const currentQuotationState = quotationState.bookingId === booking.id ? quotationState : {
+    bookingId: booking.id, loading: true, quotes: [], requests: [],
+  };
+  const expectedServiceSlots: BookingServiceSlot[] = [
+    ...(booking.tour.hotels || []).filter((h) => h.serviceId).map((h) => ({
+      kind: "hotel" as const, itemId: h.id, serviceId: h.serviceId,
+    })),
+    ...booking.tour.itinerary.flatMap((d) => (d.meals || []).filter((m) => m.serviceId).map((m) => ({
+      kind: "meal" as const, itemId: m.id, serviceId: m.serviceId,
+    }))),
+  ];
+  const approvalEligibility = bookingApprovalEligibility(currentQuotationState, expectedServiceSlots);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
   const [agencyCancelOpen, setAgencyCancelOpen] = useState(false);
@@ -649,7 +665,7 @@ export function AgencyBookingDetailPage({
   // ----------------------------------------------------
   // ITINERARY SUB-TAB & FILTERS (NO BUS/XE MENTION!)
   // ----------------------------------------------------
-  const [itinerarySubTab, setItinerarySubTab] = useState<"standard" | "live_checkin">("standard");
+  const [itinerarySubTab, setItinerarySubTab] = useState<"standard" | "live_checkin" | "incidents">("standard");
   const [trackerGuideFilter, setTrackerGuideFilter] = useState<string>("all");
   const [trackerDayFilter, setTrackerDayFilter] = useState<string>("all");
 
@@ -846,140 +862,6 @@ export function AgencyBookingDetailPage({
   // Viewing Provider Service Detail Modal (Xem bài viết & Bản đồ)
   const [viewingServiceId, setViewingServiceId] = useState<string | null>(null);
 
-  // ----------------------------------------------------
-  // PROVIDER CONFIRMATIONS & APPROVAL MATRIX (HOTEL & MEALS)
-  // ----------------------------------------------------
-  const providerItems: BookingProviderConfirmation[] = useMemo(() => {
-    if (booking.providerConfirmations && booking.providerConfirmations.length > 0) {
-      return booking.providerConfirmations;
-    }
-
-    const items: BookingProviderConfirmation[] = [];
-    const tour = booking.tour;
-
-    // 1. Hotel items
-    const customHotelChanges = booking.customHotelChanges || [];
-    if (customHotelChanges.length > 0) {
-      customHotelChanges.forEach((hc, idx) => {
-        const isCustom = hc.isCustom || hc.mode === "custom" || (!hc.serviceId && hc.mode !== "system");
-        items.push({
-          id: `p-hotel-${idx}`,
-          type: "hotel",
-          title: `Khách sạn lưu trú (${hc.destination})`,
-          destination: hc.destination,
-          originalName: hc.originalHotelName,
-          selectedName: hc.newHotelName,
-          isCustom,
-          serviceId: hc.serviceId,
-          providerId: hc.providerId,
-          providerName: hc.providerName || (isCustom ? undefined : "Đối tác Khách sạn Nền tảng"),
-          providerPhone: hc.providerPhone || (isCustom ? undefined : "0263 3825 444"),
-          providerAddress: hc.providerAddress || hc.address,
-          status: hc.providerStatus || (isCustom ? "confirmed" : "pending"),
-          confirmedAt: hc.providerConfirmedAt,
-          rejectionReason: hc.providerRejectionReason,
-          priceDifference: hc.priceDifference,
-          address: hc.address,
-          image: hc.serviceImage,
-          stars: hc.stars || 4,
-          notes: hc.note,
-        });
-      });
-    } else if (tour?.hotels && tour.hotels.length > 0) {
-      tour.hotels.forEach((h, idx) => {
-        items.push({
-          id: `p-tour-hotel-${idx}`,
-          type: "hotel",
-          title: `Khách sạn tiêu chuẩn tour (${h.destination || tour.destination})`,
-          destination: h.destination || tour.destination,
-          selectedName: h.name,
-          isCustom: false,
-          serviceId: "service-1",
-          providerName: "Đối tác Nền tảng theo Tour",
-          providerPhone: "0263 3825 444",
-          status: "confirmed",
-          confirmedAt: booking.bookingDate,
-          address: h.address || h.description,
-          stars: h.stars || 4,
-        });
-      });
-    } else if (tour?.itinerary?.[0]?.hotel) {
-      const defHotel = tour.itinerary[0].hotel;
-      items.push({
-        id: `p-tour-hotel-def`,
-        type: "hotel",
-        title: `Khách sạn tiêu chuẩn tour (${tour.destination})`,
-        destination: tour.destination,
-        selectedName: defHotel.name,
-        isCustom: false,
-        serviceId: "service-1",
-        providerName: "Đối tác Nền tảng theo Tour",
-        providerPhone: "0263 3825 444",
-        status: "confirmed",
-        confirmedAt: booking.bookingDate,
-        address: defHotel.description,
-      });
-    }
-
-    // 2. Meal items
-    const customMealChanges = booking.customMealChanges || [];
-    if (customMealChanges.length > 0) {
-      customMealChanges.forEach((mc, idx) => {
-        const isCustom = mc.isCustom || mc.mode === "custom" || (!mc.serviceId && mc.mode !== "system");
-        const mealLabel = mc.mealType === "breakfast" ? "Ăn sáng" : mc.mealType === "lunch" ? "Ăn trưa" : "Ăn tối";
-        const defaultTime = mc.time || (mc.mealType === "breakfast" ? "07:30" : mc.mealType === "lunch" ? "12:00" : "18:30");
-        items.push({
-          id: `p-meal-${idx}`,
-          type: "meal",
-          title: `Ngày ${mc.dayNumber} • ${mealLabel} (${defaultTime})`,
-          dayNumber: mc.dayNumber,
-          time: defaultTime,
-          mealType: mc.mealType,
-          originalName: mc.originalMealName,
-          selectedName: mc.newMealName,
-          isCustom,
-          serviceId: mc.serviceId,
-          providerId: mc.providerId,
-          providerName: mc.providerName || (isCustom ? undefined : "Đối tác Ẩm thực Nền tảng"),
-          providerPhone: mc.providerPhone || (isCustom ? undefined : "0263 3825 444"),
-          providerAddress: mc.providerAddress,
-          status: mc.providerStatus || (isCustom ? "confirmed" : "pending"),
-          confirmedAt: mc.providerConfirmedAt,
-          rejectionReason: mc.providerRejectionReason,
-          priceDifference: mc.priceDifference,
-          image: mc.serviceImage,
-          notes: mc.note,
-        });
-      });
-    }
-
-    return items;
-  }, [booking]);
-
-  const platformProviderItems = useMemo(
-    () => providerItems.filter((i) => !i.isCustom),
-    [providerItems]
-  );
-  const customProviderItems = useMemo(
-    () => providerItems.filter((i) => i.isCustom),
-    [providerItems]
-  );
-  const pendingProviders = useMemo(
-    () => platformProviderItems.filter((i) => i.status === "pending"),
-    [platformProviderItems]
-  );
-  const rejectedProviders = useMemo(
-    () => platformProviderItems.filter((i) => i.status === "rejected"),
-    [platformProviderItems]
-  );
-  const confirmedProviders = useMemo(
-    () => platformProviderItems.filter((i) => i.status === "confirmed"),
-    [platformProviderItems]
-  );
-  const isAllProvidersApproved =
-    platformProviderItems.length === 0 ||
-    (pendingProviders.length === 0 && rejectedProviders.length === 0);
-
   // Quick Service Edit Modal State
   const [serviceEditModalOpen, setServiceEditModalOpen] = useState(false);
   const [serviceEditType, setServiceEditType] = useState<"hotel" | "location" | "meal">("hotel");
@@ -1150,6 +1032,10 @@ export function AgencyBookingDetailPage({
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
   const handleApproveHappyCase = async () => {
+    if (!approvalEligibility.canApprove) {
+      alert(approvalEligibility.reason);
+      return;
+    }
     const approved = await onApproveBooking(booking.id);
     if (approved === false) return;
     setAgenciesList((current) => current.map((a) => ({
@@ -1604,53 +1490,6 @@ export function AgencyBookingDetailPage({
   const [paymentDescription, setPaymentDescription] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
 
-  // Provider Profile Modal state
-  const [selectedProvider, setSelectedProvider] = useState<User | null>(null);
-  const [providerModalOpen, setProviderModalOpen] = useState(false);
-  const [providerServiceContext, setProviderServiceContext] = useState<{
-    serviceName?: string;
-    category?: "hotel" | "fnb" | "meal" | string;
-    dayNumber?: number;
-    destination?: string;
-  } | undefined>(undefined);
-
-  const handleOpenProviderProfile = (
-    providerId?: string,
-    context?: { serviceName?: string; category?: string; dayNumber?: number; destination?: string }
-  ) => {
-    const foundUser = mockUsers.find(
-      (u) =>
-        u.id === providerId ||
-        u.email === "provider.heritage@gmail.com" ||
-        u.email === "provider@demo.com" ||
-        u.aliasEmails?.includes("provider.heritage@gmail.com") ||
-        u.aliasEmails?.includes("provider@demo.com")
-    );
-    if (foundUser) {
-      setSelectedProvider(foundUser);
-    } else {
-      const defaultProvider: User = {
-        id: providerId || "provider-1",
-        name: "Nguyễn Thị Mai (Heritage Provider)",
-        email: "provider.heritage@gmail.com",
-        aliasEmails: ["provider@demo.com"],
-        role: "provider",
-        businessName: "Tổ hợp Dịch vụ Du lịch Heritage",
-        businessPhone: "0263 3825 444",
-        businessEmail: "provider.heritage@gmail.com",
-        businessAddress: "02 Trần Phú, Phường 3, TP. Đà Lạt, Tỉnh Lâm Đồng",
-        taxCode: "0123456789",
-        latitude: 11.9404,
-        longitude: 108.4583,
-        businessDescription:
-          "Tổ hợp Dịch vụ Du lịch Heritage chuyên cung cấp các dịch vụ lưu trú cao cấp, ẩm thực bản địa trứ danh và các hoạt động trải nghiệm dã ngoại, vận chuyển du khách uy tín trên toàn quốc.",
-      };
-      setSelectedProvider(defaultProvider);
-    }
-    setProviderServiceContext(context);
-    setProviderModalOpen(true);
-  };
-
   const st = statusMap[booking.status] ?? { label: booking.status, color: "bg-gray-100 text-gray-700" };
   const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
     label: "Chưa xác định", color: "bg-gray-100 text-gray-700 border-gray-200",
@@ -1664,6 +1503,7 @@ export function AgencyBookingDetailPage({
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       <BookingQuotationPanel bookingId={booking.id} agency plans={plans}
         currentTourId={booking.tourId} currentTourSnapshot={booking.tour}
+        showSupplierRequests={false} onStateChange={setQuotationState}
         canChange={booking.status === "pending" && booking.paymentStatus === "unpaid"} />
       {/* Top Header & Actions Bar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -1703,40 +1543,15 @@ export function AgencyBookingDetailPage({
             {booking.status === "pending" && (
               <>
                 {isCurrentCompanyLead ? (
-                  isAllProvidersApproved ? (
-                    <Button
-                      onClick={handleApproveHappyCase}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm text-sm font-bold ring-2 ring-emerald-400 ring-offset-1 cursor-pointer"
-                      title="Tất cả nhà cung cấp trên sàn đã duyệt xác nhận dịch vụ. Sẵn sàng duyệt booking!"
-                    >
+                  <div className="space-y-1.5">
+                    <Button onClick={handleApproveHappyCase} disabled={!approvalEligibility.canApprove}
+                      title={approvalEligibility.reason}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm text-sm font-bold disabled:opacity-50">
                       <CheckCircle className="w-4 h-4" />
-                      Duyệt Booking (Đủ điều kiện)
+                      Duyệt Booking
                     </Button>
-                  ) : rejectedProviders.length > 0 ? (
-                    <Button
-                      disabled
-                      className="bg-red-50 text-red-500 border border-red-300 cursor-not-allowed gap-1.5 text-sm font-bold shadow-none opacity-80"
-                      title={`Có ${rejectedProviders.length} dịch vụ bị nhà cung cấp từ chối. Vui lòng liên hệ khách hoặc đổi dịch vụ trước khi duyệt.`}
-                    >
-                      <XCircle className="w-4 h-4 text-red-500" />
-                      Duyệt Booking (Bị từ chối)
-                    </Button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        disabled
-                        className="bg-gray-100 text-gray-400 border border-gray-300 cursor-not-allowed gap-1.5 text-sm font-semibold shadow-none"
-                        title={`Chưa thể duyệt: Đang chờ ${pendingProviders.length} nhà cung cấp xác nhận phòng/bàn.`}
-                      >
-                        <Lock className="w-4 h-4 text-gray-400" />
-                        Duyệt Booking
-                      </Button>
-                      <span className="text-xs px-2.5 py-1.5 rounded-xl font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
-                        <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-                        Chờ {pendingProviders.length} Provider duyệt ({confirmedProviders.length}/{platformProviderItems.length})
-                      </span>
-                    </div>
-                  )
+                    <p className="max-w-sm text-xs text-gray-600" role="status">{approvalEligibility.reason}</p>
+                  </div>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F0F9FF] text-purple-800 border border-[#F97316]/30">
                     <Handshake className="w-4 h-4 text-[#F97316]" />
@@ -1815,284 +1630,20 @@ export function AgencyBookingDetailPage({
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs">
             <p className="font-bold text-sm text-amber-950 flex items-center gap-2">
-              Lưu ý đối soát dịch vụ &amp; Chốt giá ngoài hệ thống:
+              Xác nhận dịch vụ &amp; Chốt báo giá:
               <span className="bg-amber-200 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
                 Khách không thanh toán liền
               </span>
             </p>
             <p className="text-amber-800 leading-relaxed">
-              Khách hàng đặt tour này <strong>không thanh toán ngay</strong>. Vì các dịch vụ như khách sạn lưu trú và chỗ ăn uống có thể có giá khác nhau theo thời điểm thực tế, nhân viên công ty cần chủ động liên hệ trực tiếp với các nhà cung ứng đối tác (provider) ở ngoài hệ thống để hỏi và chốt mức giá thực tế cho đoàn {booking.numberOfGuests} người.
+              Kiểm tra phản hồi Provider ngay tại từng khách sạn và bữa ăn bên dưới. Với nhà cung cấp riêng, Agency trực tiếp xác nhận dịch vụ và nhập chi phí thực tế trong phần báo giá.
             </p>
             <p className="font-semibold text-amber-900 pt-1">
-              → Sau khi chốt giá và kiểm tra chỗ thành công, bấm <span className="text-emerald-700 font-bold">Duyệt Booking</span> và sử dụng tính năng <span className="text-[#075985] font-bold">Tạo yêu cầu thanh toán</span> để gửi thông tin thanh toán cho khách hàng.
+              → Gửi báo giá và chờ khách đồng ý trước khi duyệt booking. Sau đó hoàn tất hợp đồng và thanh toán theo các đợt của booking.
             </p>
           </div>
         </div>
       )}
-
-      {/* ========================================================================= */}
-      {/* BẢNG TIẾN TRÌNH XÁC NHẬN DỊCH VỤ TỪ CÁC NHÀ CUNG CẤP (PROVIDER STATUS) */}
-      {/* ========================================================================= */}
-      <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#075985]" />
-                Tiến trình Phê duyệt Dịch vụ từ Nhà cung cấp (Providers)
-              </h3>
-              {isAllProvidersApproved ? (
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  Đã đủ điều kiện duyệt booking
-                </span>
-              ) : rejectedProviders.length > 0 ? (
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
-                  <XCircle className="w-3.5 h-3.5 text-red-600" />
-                  Có đối tác từ chối
-                </span>
-              ) : (
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-                  Chờ {pendingProviders.length} nhà cung cấp duyệt
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500">
-              Quy tắc hệ thống: Agency chỉ được bấm <strong className="text-emerald-700">"Duyệt Booking"</strong> khi toàn bộ khách sạn và nhà hàng đối tác trên sàn đã xác nhận phòng/bàn.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
-              Đã duyệt: {confirmedProviders.length}/{platformProviderItems.length}
-            </span>
-            {pendingProviders.length > 0 && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
-                Chờ duyệt: {pendingProviders.length}
-              </span>
-            )}
-            {customProviderItems.length > 0 && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200">
-                Tự nhập ngoài sàn: {customProviderItems.length}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Status Callout Banner */}
-        {booking.status === "pending" && (
-          <div>
-            {!isAllProvidersApproved && pendingProviders.length > 0 ? (
-              <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
-                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-amber-950">
-                    Chờ {pendingProviders.length} nhà cung cấp xác nhận dịch vụ trước khi có thể duyệt đơn:
-                  </p>
-                  <p className="text-amber-800 text-[11px] leading-relaxed">
-                    Hệ thống đã tự động gửi thông báo booking đến đối tác. Nút <strong>"Duyệt Booking"</strong> tạm thời bị khóa cho tới khi các đơn vị dưới đây bấm xác nhận còn phòng/bàn.
-                  </p>
-                </div>
-              </div>
-            ) : rejectedProviders.length > 0 ? (
-              <div className="p-3.5 rounded-xl bg-red-50/90 border border-red-300 text-xs text-red-900 flex items-start gap-2.5 shadow-2xs">
-                <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-red-950">
-                    Có {rejectedProviders.length} dịch vụ bị nhà cung cấp từ chối!
-                  </p>
-                  <p className="text-red-800 text-[11px] leading-relaxed">
-                    Vui lòng bấm nút <strong>"Cập nhật / Đổi dịch vụ"</strong> để chọn nhà hàng/khách sạn thay thế khác cho khách hàng.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5 shadow-2xs">
-                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-emerald-950">
-                    Tất cả nhà cung cấp trên sàn đã xác nhận dịch vụ thành công!
-                  </p>
-                  <p className="text-emerald-800 text-[11px] leading-relaxed">
-                    Bạn có thể kiểm tra lại thông tin bên dưới và bấm nút <strong className="text-emerald-700">"Duyệt Booking"</strong> ở góc trên bên phải để kích hoạt đơn và gửi yêu cầu thanh toán cho khách.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Provider Cards List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
-          {providerItems.map((item) => {
-            const isHotel = item.type === "hotel";
-
-            return (
-              <div
-                key={item.id}
-                className={`p-4 rounded-xl border transition-all space-y-3 shadow-2xs ${
-                  item.isCustom
-                    ? "border-purple-300 bg-purple-50/30 hover:bg-purple-50/50"
-                    : item.status === "confirmed"
-                    ? "border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40"
-                    : item.status === "rejected"
-                    ? "border-red-200 bg-red-50/20 hover:bg-red-50/40"
-                    : "border-amber-200 bg-amber-50/20 hover:bg-amber-50/40"
-                }`}
-              >
-                {/* Header: Category Badge + Status Badge */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide border flex items-center gap-1 ${
-                      isHotel
-                        ? "bg-blue-100 text-blue-800 border-blue-200"
-                        : "bg-emerald-100 text-emerald-800 border-emerald-200"
-                    }`}
-                  >
-                    {isHotel ? <Building2 className="w-3 h-3" /> : <Utensils className="w-3 h-3" />}
-                    {item.title}
-                  </span>
-
-                  {item.isCustom ? (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                      <Sparkles className="w-3 h-3 text-purple-600" />
-                      Khách tự điền ngoài sàn
-                    </span>
-                  ) : item.status === "confirmed" ? (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                      <CheckCircle className="w-3 h-3 text-emerald-600" />
-                      Đã xác nhận giữ chỗ
-                    </span>
-                  ) : item.status === "rejected" ? (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-2xs">
-                      <XCircle className="w-3 h-3 text-red-600" />
-                      Từ chối giữ chỗ
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-                      Chờ Provider phê duyệt
-                    </span>
-                  )}
-                </div>
-
-                {/* Service Details */}
-                <div className="space-y-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="font-extrabold text-sm text-gray-900">
-                      {item.selectedName} {item.stars ? `(${item.stars}★)` : ""}
-                    </h4>
-                    {item.priceDifference !== undefined && item.priceDifference !== 0 && (
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                        item.priceDifference > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
-                      }`}>
-                        {item.priceDifference > 0 ? `+${formatVND(item.priceDifference)}` : formatVND(item.priceDifference)}
-                      </span>
-                    )}
-                  </div>
-
-                  {item.originalName && item.originalName !== item.selectedName && (
-                    <p className="text-[11px] text-gray-400">
-                      Tiêu chuẩn tour: <span className="line-through">{item.originalName}</span>
-                    </p>
-                  )}
-
-                  {/* Provider Info */}
-                  <div className="text-xs text-gray-600 pt-1 space-y-0.5">
-                    {item.isCustom ? (
-                      <div className="p-2 rounded-lg bg-purple-100/60 border border-purple-200 text-purple-950 text-[11px] space-y-1">
-                        <p className="font-semibold flex items-center gap-1 text-purple-900">
-                          <Info className="w-3.5 h-3.5 text-purple-700 flex-shrink-0" />
-                          Dịch vụ khách tự đề xuất ngoài hệ thống:
-                        </p>
-                        <p className="text-purple-800 leading-relaxed text-[11px]">
-                          Không có tài khoản Provider trên sàn để duyệt tự động. Agency tự liên hệ xác nhận trực tiếp qua điện thoại hoặc địa chỉ (không chặn tiến trình duyệt booking).
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-[11px]">
-                          <strong className="text-gray-700">Đơn vị cung ứng:</strong>{" "}
-                          <span className="font-semibold text-gray-900">{item.providerName || "Đối tác Nền tảng"}</span>
-                          {item.providerPhone && (
-                            <span className="text-gray-500 ml-1.5">({item.providerPhone})</span>
-                          )}
-                        </p>
-                        {item.address && (
-                          <p className="text-[11px] text-gray-500 flex items-start gap-1">
-                            <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0 mt-0.5" />
-                            <span className="line-clamp-1">{item.address}</span>
-                          </p>
-                        )}
-                      </>
-                    )}
-
-                    {/* Status note / time */}
-                    {item.status === "confirmed" && item.confirmedAt && (
-                      <p className="text-[11px] text-emerald-700 font-medium pt-0.5 flex items-center gap-1">
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        Xác nhận lúc: <strong>{item.confirmedAt}</strong>
-                      </p>
-                    )}
-                    {item.status === "rejected" && item.rejectionReason && (
-                      <p className="text-[11px] text-red-700 font-medium pt-0.5 flex items-start gap-1">
-                        <XCircle className="w-3 h-3 text-red-600 flex-shrink-0 mt-0.5" />
-                        Lý do từ chối: <strong>{item.rejectionReason}</strong>
-                      </p>
-                    )}
-                    {item.status === "pending" && !item.isCustom && (
-                      <p className="text-[11px] text-amber-700 font-medium pt-0.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-amber-600" />
-                        Đã gửi yêu cầu giữ chỗ. Đang chờ đối tác duyệt xác nhận.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer Action Buttons */}
-                <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-                  {item.isCustom ? (
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                        item.selectedName + " " + (item.destination || "")
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-semibold bg-white hover:bg-purple-100/70 border border-purple-300 px-3 py-1.5 rounded-lg shadow-2xs transition-colors"
-                      title="Tìm kiếm địa chỉ và đánh giá của khách sạn / quán ăn này trên Google Maps"
-                    >
-                      <Navigation className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Tìm trên Google Maps</span>
-                      <ExternalLink className="w-3 h-3 text-purple-400" />
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setViewingServiceId(item.serviceId || "service-1")}
-                      className="inline-flex items-center gap-1.5 text-xs text-indigo-700 hover:text-indigo-900 font-semibold bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                      title="Xem bài viết giới thiệu, hình ảnh, tiện nghi và bản đồ của dịch vụ này"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Xem bài viết &amp; Bản đồ</span>
-                    </button>
-                  )}
-
-                  {!item.isCustom && item.providerPhone && (
-                    <a
-                      href={`tel:${item.providerPhone.replace(/\s+/g, "")}`}
-                      className="text-[11px] text-gray-500 hover:text-[#075985] flex items-center gap-1"
-                    >
-                      <Phone className="w-3 h-3 text-gray-400" />
-                      Gọi điện: {item.providerPhone}
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2323,12 +1874,13 @@ export function AgencyBookingDetailPage({
                       Quy trình duyệt booking &amp; Thỏa thuận liên minh
                     </p>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      Công ty chủ trì duyệt booking khi xác nhận cty và đối tác có thể dẫn dắt đoàn. Sau khi duyệt, Chủ trì có thể chủ động tạo các đợt yêu cầu thanh toán (chia đợt đặt cọc hoặc thanh toán toàn bộ tùy thỏa thuận với khách hàng).
+                      Công ty chủ trì kiểm tra xác nhận dịch vụ và báo giá khách đã đồng ý trước khi duyệt booking. Sau đó tiếp tục hợp đồng và lịch thanh toán của booking.
                     </p>
                   </div>
                   {isCurrentCompanyLead && (
                     <Button
                       onClick={handleApproveHappyCase}
+                      disabled={!approvalEligibility.canApprove} title={approvalEligibility.reason}
                       className="bg-[#075985] hover:bg-[#F97316] text-white text-xs font-bold h-9 px-4 shrink-0 shadow-sm flex items-center gap-1.5 rounded-xl"
                     >
                       <Zap className="w-4 h-4 text-yellow-300" />
@@ -2770,6 +2322,10 @@ export function AgencyBookingDetailPage({
             const customHotelChanges = hotelChanges;
 
             let accommodationList: Array<{
+              itemId?: string;
+              serviceId?: string;
+              supplierSource?: string;
+              supplier?: import("@/app/types").TourSupplierSnapshot;
               destination: string;
               nights: number;
               hotelName: string;
@@ -2790,6 +2346,10 @@ export function AgencyBookingDetailPage({
                   (hc) => hc.destination === dest || hc.destination === h.destination || tour.hotels!.length === 1
                 );
                 return {
+                  itemId: h.id,
+                  serviceId: change ? change.serviceId : h.serviceId,
+                  supplierSource: change?.isCustom || change?.mode === "custom" ? "AGENCY_SUPPLIER" : h.supplierSource,
+                  supplier: change ? { address: change.address, contactPhone: change.providerPhone } : h.supplier,
                   destination: dest,
                   nights: h.nights || 1,
                   hotelName: change ? change.newHotelName : h.name,
@@ -2819,6 +2379,10 @@ export function AgencyBookingDetailPage({
                 const nights = tour.itinerary?.filter((d) => (d.destinationCity || tour.destination) === dest).length || 1;
 
                 return {
+                  itemId: defaultHotel?.id,
+                  serviceId: change ? change.serviceId : defaultHotel?.serviceId,
+                  supplierSource: change?.isCustom || change?.mode === "custom" ? "AGENCY_SUPPLIER" : defaultHotel?.supplierSource,
+                  supplier: change ? { address: change.address, contactPhone: change.providerPhone } : defaultHotel?.supplier,
                   destination: dest,
                   nights: Math.max(1, nights > 1 ? nights - 1 : nights),
                   hotelName: change ? change.newHotelName : (defaultHotel?.name || "Khách sạn tiêu chuẩn theo tour"),
@@ -2932,54 +2496,10 @@ export function AgencyBookingDetailPage({
                             <span className="text-right font-medium">{acc.note}</span>
                           </div>
                         )}
-                        {acc.isChanged && (acc.mode === "provider" || acc.providerId) && (
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                            <span className="text-gray-500">Thông tin đối tác cung cấp:</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setViewingServiceId(acc.providerId || "service-1")}
-                                className="inline-flex items-center gap-1.5 text-indigo-700 hover:text-indigo-900 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
-                                title="Xem bài viết, hình ảnh và vị trí bản đồ của khách sạn này"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                                Xem bài viết &amp; Bản đồ
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenProviderProfile(acc.providerId, {
-                                  serviceName: acc.hotelName,
-                                  category: "hotel",
-                                  destination: acc.destination,
-                                })}
-                                className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 text-xs bg-white hover:bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
-                              >
-                                Hồ sơ đối tác
-                                <ExternalLink className="w-3 h-3 text-gray-400" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {acc.mode === "custom" && (
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                            <div className="text-xs text-purple-900 flex items-center gap-1.5 font-medium">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                              <span>Khách tự đề xuất ngoài hệ thống (Không có Provider duyệt tự động)</span>
-                            </div>
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                                acc.hotelName + " " + acc.destination
-                              )}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-semibold bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-lg border border-purple-300 transition-colors shadow-2xs"
-                            >
-                              <Navigation className="w-3.5 h-3.5 text-purple-600" />
-                              Tìm trên Google Maps
-                              <ExternalLink className="w-3 h-3 text-purple-400" />
-                            </a>
-                          </div>
-                        )}
+                        <BookingSupplierConfirmation state={currentQuotationState}
+                          slot={{ kind: "hotel", itemId: acc.itemId, serviceId: acc.serviceId }}
+                          supplierSource={acc.supplierSource} supplier={acc.supplier || { address: acc.address }}
+                          onOpenService={setViewingServiceId} />
                       </div>
                     </div>
                   ))}
@@ -2988,174 +2508,8 @@ export function AgencyBookingDetailPage({
             );
           })()}
 
-          {/* ======================================================== */}
-          {/* 1. BOOKING-LEVEL INCIDENTS CARD (booking_incidents)      */}
-          {/* ======================================================== */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-600" />
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                    Nhật ký Sự cố Tour (`booking_incidents`)
-                    <span className="text-xs normal-case px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                      {incidents.length} sự cố
-                    </span>
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Quản lý các sự cố phát sinh của đoàn liên kết trực tiếp vào mã booking #{booking.id}. (Không gắn cố định tại điểm tham quan).
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {incidents.length === 0 ? (
-              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 text-emerald-900 flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                <div className="text-xs space-y-0.5">
-                  <p className="font-bold">Đoàn đang vận hành an toàn</p>
-                  <p className="text-emerald-700 text-[11px]">
-                    Chưa có sự cố nào được ghi nhận cho đơn tour này. Hướng dẫn viên sẽ báo cáo trực tiếp từ ứng dụng di động nếu phát sinh vấn đề trên đường tour.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {incidents.map((inc) => {
-                  const categoryLabels: Record<IncidentCategory, { label: string; icon: string; style: string }> = {
-                    HEALTH: { label: "Y tế & Sức khỏe", icon: "🏥", style: "bg-rose-50 text-rose-800 border-rose-200" },
-                    VEHICLE: { label: "Phương tiện vận chuyển", icon: "🚗", style: "bg-amber-50 text-amber-800 border-amber-200" },
-                    WEATHER: { label: "Thời tiết & Thiên tai", icon: "⛈️", style: "bg-sky-50 text-sky-800 border-sky-200" },
-                    CUSTOMER: { label: "Khách hàng & Thành viên", icon: "👥", style: "bg-[#F0F9FF] text-purple-800 border-[#F97316]/30" },
-                    SECURITY: { label: "An ninh & Trật tự", icon: "🛡️", style: "bg-indigo-50 text-indigo-800 border-indigo-200" },
-                    SCHEDULE: { label: "Lịch trình & Thời gian", icon: "⏰", style: "bg-orange-50 text-orange-800 border-orange-200" },
-                    OTHER: { label: "Sự cố khác", icon: "📋", style: "bg-gray-50 text-gray-800 border-gray-200" },
-                  };
-                  const cat = categoryLabels[inc.incidentType] || categoryLabels.OTHER;
-
-                  const statusBadges = {
-                    REPORTED: { label: "Mới báo cáo", color: "bg-amber-100 text-amber-800 border-amber-300" },
-                    IN_PROGRESS: { label: "Đang xử lý", color: "bg-[#E0F2FE] text-blue-800 border-blue-300" },
-                    RESOLVED: { label: "Đã giải quyết", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-                  };
-                  const st = statusBadges[inc.status];
-
-                  return (
-                    <div
-                      key={inc.id}
-                      className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
-                        inc.status === "RESOLVED"
-                          ? "bg-white border-gray-200"
-                          : inc.status === "IN_PROGRESS"
-                          ? "bg-[#F0F9FF]/30 border-[#CBD5E1] shadow-2xs"
-                          : "bg-amber-50/40 border-amber-300 shadow-2xs"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${cat.style}`}>
-                              {cat.icon} {cat.label}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${st.color}`}>
-                              {st.label}
-                            </span>
-                          </div>
-                          <h4 className="font-bold text-gray-900 text-sm mt-1">{inc.title}</h4>
-                        </div>
-                        <span className="text-[11px] text-gray-500 font-medium">
-                          {inc.reportedAt}
-                        </span>
-                      </div>
-
-                      <p className="text-gray-700 leading-relaxed bg-white/90 p-3 rounded-lg border border-gray-100 text-xs">
-                        {inc.description}
-                      </p>
-
-                      {/* Evidence Photo Preview */}
-                      {inc.evidenceUrls && inc.evidenceUrls.length > 0 && (
-                        <div className="space-y-1.5">
-                          <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
-                            <Camera className="w-3.5 h-3.5 text-[#075985]" />
-                            Ảnh minh chứng hiện trường ({inc.evidenceUrls.length}):
-                          </span>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {inc.evidenceUrls.map((url, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  setProofPreviewData({
-                                    title: inc.title,
-                                    image: url,
-                                    time: inc.reportedAt,
-                                    note: inc.description,
-                                    guideName: inc.reportedByName,
-                                  });
-                                  setPreviewProofModalOpen(true);
-                                }}
-                                className="relative group w-20 h-16 rounded-lg overflow-hidden border border-gray-200 shadow-2xs"
-                              >
-                                <img src={url} alt="Minh chứng" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <Eye className="w-4 h-4 text-white" />
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Resolution Note if resolved */}
-                      {inc.resolutionNote && (
-                        <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-950 space-y-1 text-xs">
-                          <p className="font-bold flex items-center gap-1.5 text-emerald-900">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            Kết quả xử lý &amp; khắc phục:
-                            {inc.resolvedAt && (
-                              <span className="text-[11px] font-normal text-emerald-700 ml-auto">
-                                (Hoàn thành lúc {inc.resolvedAt})
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-emerald-800 leading-relaxed text-[11px]">{inc.resolutionNote}</p>
-                        </div>
-                      )}
-
-                      {/* Footer Info & Quick Status Actions */}
-                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap text-[11px]">
-                        <div className="text-gray-500">
-                          Báo cáo bởi: <strong className="text-gray-800">{inc.reportedByName}</strong>
-                          {inc.agencyName && <> • Đơn vị: <strong className="text-[#EA580C]">{inc.agencyName}</strong></>}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 ml-auto">
-                          {inc.status === "REPORTED" && (
-                            <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              ⏳ Đang chờ HDV hiện trường cập nhật
-                            </span>
-                          )}
-                          {inc.status === "IN_PROGRESS" && (
-                            <span className="text-[11px] font-semibold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded border border-[#CBD5E1]">
-                              ⚙️ Đang xử lý tại hiện trường
-                            </span>
-                          )}
-                          {inc.status === "RESOLVED" && (
-                            <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              <Check className="w-3.5 h-3.5" /> Đã hoàn tất xử lý
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
           {/* TOUR FULL ITINERARY (MATCHING chitietlichtrinh.png & TourDetailPage.tsx) */}
-          {booking.tour.itinerary && booking.tour.itinerary.length > 0 && (
+          {booking.tour.itinerary && (
             <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
               {/* Header with Sub-Tabs */}
               <div className="border-b border-gray-200 pb-3 flex items-center justify-between gap-3 flex-wrap">
@@ -3167,14 +2521,15 @@ export function AgencyBookingDetailPage({
                     </h2>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Theo dõi check-in thực tế của từng hướng dẫn viên tại các điểm đến và chi tiết lịch trình của đoàn.
+                    Theo dõi lịch trình, tiến độ check-in và sự cố phát sinh trong chuyến đi.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl">
+                <div className="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-xl" aria-label="Thông tin vận hành tour">
                   <button
                     type="button"
                     onClick={() => setItinerarySubTab("standard")}
+                    aria-pressed={itinerarySubTab === "standard"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       itinerarySubTab === "standard"
                         ? "bg-white text-[#075985] shadow-2xs"
@@ -3187,6 +2542,7 @@ export function AgencyBookingDetailPage({
                   <button
                     type="button"
                     onClick={() => setItinerarySubTab("live_checkin")}
+                    aria-pressed={itinerarySubTab === "live_checkin"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       itinerarySubTab === "live_checkin"
                         ? "bg-white text-[#EA580C] shadow-2xs"
@@ -3199,8 +2555,189 @@ export function AgencyBookingDetailPage({
                       {attractionCheckins.filter((c) => c.attendanceStatus === "CHECKED_IN").length}/{attractionCheckins.length}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setItinerarySubTab("incidents")}
+                    aria-pressed={itinerarySubTab === "incidents"}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      itinerarySubTab === "incidents"
+                        ? "bg-white text-rose-700 shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    Nhật ký sự cố Tour
+                    <span className="ml-1 px-1.5 rounded-full text-[10px] bg-rose-100 text-rose-800">
+                      {incidents.length}
+                    </span>
+                  </button>
                 </div>
               </div>
+
+              {itinerarySubTab === "incidents" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-rose-600" />
+                      <div>
+                        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                          Nhật ký sự cố Tour
+                          <span className="text-xs normal-case px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            {incidents.length} sự cố
+                          </span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Theo dõi sự cố phát sinh và báo cáo của hướng dẫn viên trong chuyến đi.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {incidents.length === 0 ? (
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 text-emerald-900 flex items-center gap-3">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div className="text-xs space-y-0.5">
+                        <p className="font-bold">Đoàn đang vận hành an toàn</p>
+                        <p className="text-emerald-700 text-[11px]">
+                          Chưa có sự cố nào được ghi nhận cho đơn tour này. Hướng dẫn viên sẽ báo cáo trực tiếp từ ứng dụng di động nếu phát sinh vấn đề trên đường tour.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {incidents.map((inc) => {
+                        const categoryLabels: Record<IncidentCategory, { label: string; icon: string; style: string }> = {
+                          HEALTH: { label: "Y tế & Sức khỏe", icon: "🏥", style: "bg-rose-50 text-rose-800 border-rose-200" },
+                          VEHICLE: { label: "Phương tiện vận chuyển", icon: "🚗", style: "bg-amber-50 text-amber-800 border-amber-200" },
+                          WEATHER: { label: "Thời tiết & Thiên tai", icon: "⛈️", style: "bg-sky-50 text-sky-800 border-sky-200" },
+                          CUSTOMER: { label: "Khách hàng & Thành viên", icon: "👥", style: "bg-[#F0F9FF] text-purple-800 border-[#F97316]/30" },
+                          SECURITY: { label: "An ninh & Trật tự", icon: "🛡️", style: "bg-indigo-50 text-indigo-800 border-indigo-200" },
+                          SCHEDULE: { label: "Lịch trình & Thời gian", icon: "⏰", style: "bg-orange-50 text-orange-800 border-orange-200" },
+                          OTHER: { label: "Sự cố khác", icon: "📋", style: "bg-gray-50 text-gray-800 border-gray-200" },
+                        };
+                        const cat = categoryLabels[inc.incidentType] || categoryLabels.OTHER;
+
+                        const statusBadges = {
+                          REPORTED: { label: "Mới báo cáo", color: "bg-amber-100 text-amber-800 border-amber-300" },
+                          IN_PROGRESS: { label: "Đang xử lý", color: "bg-[#E0F2FE] text-blue-800 border-blue-300" },
+                          RESOLVED: { label: "Đã giải quyết", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+                        };
+                        const st = statusBadges[inc.status];
+
+                        return (
+                          <div
+                            key={inc.id}
+                            className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
+                              inc.status === "RESOLVED"
+                                ? "bg-white border-gray-200"
+                                : inc.status === "IN_PROGRESS"
+                                ? "bg-[#F0F9FF]/30 border-[#CBD5E1] shadow-2xs"
+                                : "bg-amber-50/40 border-amber-300 shadow-2xs"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${cat.style}`}>
+                                    {cat.icon} {cat.label}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${st.color}`}>
+                                    {st.label}
+                                  </span>
+                                </div>
+                                <h4 className="font-bold text-gray-900 text-sm mt-1">{inc.title}</h4>
+                              </div>
+                              <span className="text-[11px] text-gray-500 font-medium">
+                                {inc.reportedAt}
+                              </span>
+                            </div>
+
+                            <p className="text-gray-700 leading-relaxed bg-white/90 p-3 rounded-lg border border-gray-100 text-xs">
+                              {inc.description}
+                            </p>
+
+                            {/* Evidence Photo Preview */}
+                            {inc.evidenceUrls && inc.evidenceUrls.length > 0 && (
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
+                                  <Camera className="w-3.5 h-3.5 text-[#075985]" />
+                                  Ảnh minh chứng hiện trường ({inc.evidenceUrls.length}):
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {inc.evidenceUrls.map((url, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setProofPreviewData({
+                                          title: inc.title,
+                                          image: url,
+                                          time: inc.reportedAt,
+                                          note: inc.description,
+                                          guideName: inc.reportedByName,
+                                        });
+                                        setPreviewProofModalOpen(true);
+                                      }}
+                                      className="relative group w-20 h-16 rounded-lg overflow-hidden border border-gray-200 shadow-2xs"
+                                    >
+                                      <img src={url} alt="Minh chứng" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Eye className="w-4 h-4 text-white" />
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Resolution Note if resolved */}
+                            {inc.resolutionNote && (
+                              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-950 space-y-1 text-xs">
+                                <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  Kết quả xử lý &amp; khắc phục:
+                                  {inc.resolvedAt && (
+                                    <span className="text-[11px] font-normal text-emerald-700 ml-auto">
+                                      (Hoàn thành lúc {inc.resolvedAt})
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-emerald-800 leading-relaxed text-[11px]">{inc.resolutionNote}</p>
+                              </div>
+                            )}
+
+                            {/* Footer Info & Quick Status Actions */}
+                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap text-[11px]">
+                              <div className="text-gray-500">
+                                Báo cáo bởi: <strong className="text-gray-800">{inc.reportedByName}</strong>
+                                {inc.agencyName && <> • Đơn vị: <strong className="text-[#EA580C]">{inc.agencyName}</strong></>}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 ml-auto">
+                                {inc.status === "REPORTED" && (
+                                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                    ⏳ Đang chờ HDV hiện trường cập nhật
+                                  </span>
+                                )}
+                                {inc.status === "IN_PROGRESS" && (
+                                  <span className="text-[11px] font-semibold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded border border-[#CBD5E1]">
+                                    ⚙️ Đang xử lý tại hiện trường
+                                  </span>
+                                )}
+                                {inc.status === "RESOLVED" && (
+                                  <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    <Check className="w-3.5 h-3.5" /> Đã hoàn tất xử lý
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* VIEW 1: LIVE CHECK-IN TRACKER */}
               {itinerarySubTab === "live_checkin" && (() => {
@@ -4009,31 +3546,6 @@ export function AgencyBookingDetailPage({
                                             </div>
 
                                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                                              {isChanged && (mealChange?.isCustom || mealChange?.mode === "custom") ? (
-                                                <a
-                                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                                                    mealChange?.newMealName || "Nhà hàng"
-                                                  )}`}
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                  className="text-xs text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs"
-                                                  title="Tìm quán ăn này trên Google Maps"
-                                                >
-                                                  <Navigation className="w-3 h-3 text-purple-600" />
-                                                  <span>Google Maps</span>
-                                                  <ExternalLink className="w-2.5 h-2.5 text-purple-400" />
-                                                </a>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setViewingServiceId(mealChange?.serviceId || defaultMeal.serviceId || "service-fnb-dalat-1")}
-                                                  className="text-xs text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                                                  title="Xem bài viết & bản đồ quán ăn này"
-                                                >
-                                                  <Eye className="w-3 h-3 text-indigo-600" />
-                                                  <span>Xem bài viết</span>
-                                                </button>
-                                              )}
                                               <button
                                                 type="button"
                                                 onClick={() => {
@@ -4064,6 +3576,13 @@ export function AgencyBookingDetailPage({
                                               </div>
                                             </div>
                                           </div>
+                                          <BookingSupplierConfirmation state={currentQuotationState}
+                                            slot={{ kind: "meal", itemId: defaultMeal.id,
+                                              serviceId: isChanged ? mealChange?.serviceId : defaultMeal.serviceId }}
+                                            supplierSource={isChanged ? (mealChange?.isCustom || mealChange?.mode === "custom"
+                                              ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER") : defaultMeal.supplierSource}
+                                            supplier={isChanged ? { address: mealChange?.address, contactPhone: mealChange?.providerPhone } : defaultMeal.supplier}
+                                            onOpenService={setViewingServiceId} />
                                         </div>
                                       </div>
                                     );
@@ -5935,18 +5454,6 @@ export function AgencyBookingDetailPage({
         </DialogContent>
       </Dialog>
 
-      {/* Provider Profile Modal (B2B contacts & Google Map) */}
-      <ProviderProfileModal
-        provider={selectedProvider}
-        isOpen={providerModalOpen}
-        onClose={() => {
-          setProviderModalOpen(false);
-          setSelectedProvider(null);
-          setProviderServiceContext(undefined);
-        }}
-        serviceContext={providerServiceContext}
-      />
-
       {/* ======================================================== */}
       {/* MODAL: ĐIỀU CHỈNH DỊCH VỤ TRỰC TIẾP (KHÁCH SẠN / ĂN UỐNG / ĐIỂM ĐẾN) */}
       {/* ======================================================== */}
@@ -6103,10 +5610,11 @@ export function AgencyBookingDetailPage({
 
       {/* MODAL: XEM BÀI VIẾT CHI TIẾT & BẢN ĐỒ DỊCH VỤ PROVIDER */}
       {viewingServiceId && (() => {
-        const targetService =
-          mockServices.find((s) => s.id === viewingServiceId || s.providerId === viewingServiceId) ||
-          mockServices.find((s) => (s.name.toLowerCase().includes(viewingServiceId.toLowerCase()) || viewingServiceId.toLowerCase().includes(s.name.toLowerCase()))) ||
-          mockServices[0];
+        const targetService = services.find((service) => service.id === viewingServiceId);
+        if (!targetService) return <Dialog open onOpenChange={() => setViewingServiceId(null)}>
+          <DialogContent><DialogHeader><DialogTitle>Bài đăng không còn khả dụng</DialogTitle></DialogHeader>
+            <p className="text-sm text-gray-600">Bài đăng này hiện không có trong danh sách dịch vụ trên sàn.</p>
+          </DialogContent></Dialog>;
 
         return (
           <ServiceBlogDetailModal
