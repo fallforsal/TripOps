@@ -697,10 +697,26 @@ public sealed partial class TourFlowTests
             await using var app = new App(sqlServer: connectionString);
             await ProvincePersistenceScenario(app);
             await SupplierArchiveScenario(app);
+            using (var customer = await app.Login("customer"))
+            using (var agency = await app.Login("agency"))
+            {
+                var design = await Read<DesignRequestDto>(await customer.PostAsJsonAsync(
+                    "/api/v1/tour-design-requests", new CreateDesignRequestInput(
+                        "agency", "SQL customer", "sql-customer@example.test", "0900000000", "Da Lat",
+                        DateTime.UtcNow.Date.AddDays(10), DateTime.UtcNow.Date.AddDays(11), 4,
+                        BusinessName: "SQL business")), HttpStatusCode.Created);
+                Assert.Equal(design.Id, Assert.Single(await Read<DesignRequestDto[]>(
+                    await agency.GetAsync("/api/v1/agency/tour-design-requests"))).Id);
+                Assert.Equal(design.Id, Assert.Single(await Read<DesignRequestDto[]>(
+                    await customer.GetAsync("/api/v1/tour-design-requests"))).Id);
+            }
             await app.Inspect(async db => {
                 Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", db.Database.ProviderName);
                 Assert.Contains("20261101130000_AddTourProvinces", await db.Database.GetAppliedMigrationsAsync());
                 Assert.Contains("20261102085451_RemoveBookingSnapshotsAndProposalEvents", await db.Database.GetAppliedMigrationsAsync());
+                Assert.Contains("20261104083345_AddBookingQuotationsAndMultiplePlans", await db.Database.GetAppliedMigrationsAsync());
+                Assert.Equal(2, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.tables WHERE name IN ('booking_quotations', 'booking_supplier_requests')").SingleAsync());
+                Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT CAST(is_unique AS int) AS Value FROM sys.indexes WHERE name='IX_tours_design_request_id' AND object_id=OBJECT_ID('tours')").SingleAsync());
                 Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.tables WHERE name IN ('booking_snapshots', 'booking_proposal_events')").SingleAsync());
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='tour_provinces' AND COLUMN_NAME='province_code' AND DATA_TYPE='nvarchar' AND CHARACTER_MAXIMUM_LENGTH=32 AND IS_NULLABLE='NO'").SingleAsync());
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM sys.foreign_keys WHERE name='FK_tour_provinces_tours_tour_id' AND parent_object_id=OBJECT_ID('tour_provinces') AND referenced_object_id=OBJECT_ID('tours')").SingleAsync());

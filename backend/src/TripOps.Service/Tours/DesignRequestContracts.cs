@@ -1,0 +1,29 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace TripOps.Service.Tours;
+
+public sealed record CreateDesignRequestInput(
+    [Required, StringLength(36)] string AgencyId,
+    [Required, StringLength(150)] string ContactName,
+    [Required, EmailAddress, StringLength(191)] string ContactEmail,
+    [Required, StringLength(30)] string ContactPhone,
+    [Required, StringLength(255)] string Destination,
+    DateTime DepartureDate, DateTime ReturnDate,
+    [Range(1, 1000)] int NumberOfPeople,
+    [Range(typeof(decimal), "0", "9999999999")] decimal? BudgetPerPerson = null,
+    [StringLength(50)] string? HotelStars = null,
+    [StringLength(10000)] string? AdditionalInfo = null,
+    [StringLength(255)] string? BusinessName = null,
+    [EmailAddress, StringLength(191)] string? BusinessEmail = null,
+    [StringLength(30)] string? BusinessPhone = null);
+
+public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email);
+
+public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId, string AgencyName,
+    string ContactName, string ContactEmail, string ContactPhone, string Destination,
+    DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
+    string? HotelStars, string? AdditionalInfo, string? BusinessName, string? BusinessEmail,
+    string? BusinessPhone, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
+    decimal? QuotedPricePerPerson);
+
+public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action);

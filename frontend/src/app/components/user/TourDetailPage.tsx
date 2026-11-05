@@ -69,6 +69,7 @@ interface TourDetailPageProps {
   currentUser?: { id: string; name: string } | null;
   onBack: () => void;
   onBookNow?: (tour: Tour, customData?: TourDetailCustomData) => void;
+  onOpenRequest?: () => void;
   onShowLogin?: () => void;
   isAdmin?: boolean;
   onToggleHideTour?: (tourId: string, reason?: string) => void;
@@ -2259,6 +2260,7 @@ export function TourDetailPage({
   currentUser,
   onBack,
   onBookNow,
+  onOpenRequest,
   onShowLogin,
   isAdmin,
   onToggleHideTour,
@@ -2505,8 +2507,12 @@ export function TourDetailPage({
                   )}
                 </div>
                 <p className="text-xs text-purple-200 leading-relaxed">
-                  Chương trình tour này đã được thiết kế riêng theo mong muốn của quý khách. Lịch trình, khách sạn và các dịch vụ cố định không chỉnh sửa trực tiếp trên hệ thống. Nếu quý khách muốn thay đổi bất kỳ nội dung nào, vui lòng liên hệ công ty du lịch để thống nhất và tạo phiên bản mới.
+                  Đây là phương án Agency đã gửi. Bạn có thể mở yêu cầu thiết kế, sửa bản riêng của mình và gửi lại để Agency kiểm tra dịch vụ, báo giá và tạo phiên bản mới.
                 </p>
+                {onOpenRequest && <button type="button" onClick={onOpenRequest}
+                  className="rounded border border-purple-200 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
+                  Mở yêu cầu để tùy biến và trao đổi
+                </button>}
                 {tour.changeNote && (
                   <div className="bg-black/30 rounded-lg p-2.5 text-xs text-amber-300 italic border border-white/10">
                     Ghi chú phiên bản v{tour.version || 1}: "{tour.changeNote}"

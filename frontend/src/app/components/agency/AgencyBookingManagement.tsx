@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
+import { useMemo, useState } from "react";
 import { Booking, User, PaymentRequest } from "@/app/types";
 import {
+  ArrowUpDown,
   Calendar,
   CheckCircle,
   XCircle,
@@ -147,6 +149,21 @@ function ContractModal({
   );
 }
 
+
+function formatDisplayDate(dateStr?: string) {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 export function AgencyBookingManagement({
   bookings,
   guides,
@@ -167,21 +184,29 @@ export function AgencyBookingManagement({
   const [rejectReason, setRejectReason] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   // Payment request form state
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDescription, setPaymentDescription] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
 
-  const filtered = bookings
-    .filter((b) => (filterStatus === "all" ? true : b.status === filterStatus))
-    .filter(
-      (b) =>
-        (b.contactName ?? b.userName).toLowerCase().includes(search.toLowerCase()) ||
-        b.tour.name.toLowerCase().includes(search.toLowerCase()) ||
-        b.id.toLowerCase().includes(search.toLowerCase()) ||
-        (b.contactPhone ?? "").includes(search)
-    );
+  const filtered = useMemo(() => {
+    return bookings
+      .filter((b) => (filterStatus === "all" ? true : b.status === filterStatus))
+      .filter(
+        (b) =>
+          (b.contactName ?? b.userName).toLowerCase().includes(search.toLowerCase()) ||
+          b.tour.name.toLowerCase().includes(search.toLowerCase()) ||
+          b.id.toLowerCase().includes(search.toLowerCase()) ||
+          (b.contactPhone ?? "").includes(search)
+      )
+      .sort((a, b) => {
+        const timeA = new Date(a.bookingDate || 0).getTime();
+        const timeB = new Date(b.bookingDate || 0).getTime();
+        return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+      });
+  }, [bookings, filterStatus, search, sortOrder]);
 
   const pendingCount = bookings.filter((b) => b.status === "pending").length;
 
@@ -256,7 +281,20 @@ export function AgencyBookingManagement({
             <table className="w-full text-left text-sm text-gray-600">
               <thead className="bg-[#F0F9FF]/80 text-xs font-bold text-gray-600 uppercase border-b border-[#CBD5E1] tracking-wider">
                 <tr>
-                  <th scope="col" className="px-4 py-3.5">Mã đơn & Ngày đặt</th>
+                  <th scope="col" className="px-4 py-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>Mã đơn & Ngày đặt</span>
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-[#075985] bg-white border border-[#CBD5E1] hover:bg-[#F0F9FF] transition-colors cursor-pointer"
+                        title={sortOrder === "desc" ? "Sắp xếp: Mới nhất trước. Bấm để đổi sang Cũ nhất trước" : "Sắp xếp: Cũ nhất trước. Bấm để đổi sang Mới nhất trước"}
+                      >
+                        <ArrowUpDown className="w-3 h-3" />
+                        <span>{sortOrder === "desc" ? "Mới nhất" : "Cũ nhất"}</span>
+                      </button>
+                    </div>
+                  </th>
                   <th scope="col" className="px-4 py-3.5">Khách hàng</th>
                   <th scope="col" className="px-4 py-3.5">Thông tin Tour & Khởi hành</th>
                   <th scope="col" className="px-4 py-3.5">Tổng tiền & Thanh toán</th>
@@ -291,7 +329,7 @@ export function AgencyBookingManagement({
                         </span>
                         <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {booking.bookingDate || "2026-01-20"}
+                          {formatDisplayDate(booking.bookingDate)}
                         </div>
                       </td>
 
@@ -316,13 +354,13 @@ export function AgencyBookingManagement({
 
                       {/* Tour & Khởi hành */}
                       <td className="px-4 py-4 align-top max-w-[260px]">
-                        <p className="font-semibold text-gray-900 text-sm line-clamp-1 group-hover:text-[#075985] transition-colors">
+                        <p className="font-semibold text-gray-900 text-sm line-clamp-1 group-hover:text-[#075985] transition-colors" title={booking.tour.name}>
                           {booking.tour.name}
                         </p>
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
                           <span className="inline-flex items-center gap-1 text-blue-800 font-medium bg-[#F0F9FF] px-2 py-0.5 rounded border border-blue-100">
                             <Calendar className="w-3 h-3 text-[#075985]" />
-                            Khởi hành: {booking.tourStartDate || "Chưa chọn"}
+                            Khởi hành: {formatDisplayDate(booking.tourStartDate)}
                           </span>
                           <span className="text-gray-400">· {booking.tour.duration}</span>
                         </div>
@@ -412,51 +450,15 @@ export function AgencyBookingManagement({
                       </td>
 
                       {/* Thao tác */}
-                      <td className="px-4 py-4 align-top text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {/* Nút Xem chi tiết chuyển sang PAGE RIÊNG */}
+                      <td className="px-4 py-4 align-middle text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end">
                           <Button
                             size="sm"
-                            className="bg-[#075985] hover:bg-[#F97316] text-white font-medium text-xs h-8 px-3 shadow-sm flex items-center gap-1.5"
+                            className="w-[120px] h-8 bg-[#075985] hover:bg-[#0C4A6E] text-white font-medium text-xs shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer rounded-[6px]"
                             onClick={() => onViewBookingDetail?.(booking)}
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            Xem chi tiết
-                          </Button>
-
-                          {/* Quick Approve / Reject for Pending */}
-                          {booking.status === "pending" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-8 px-2 text-xs"
-                                title="Phê duyệt ngay"
-                                onClick={() => onApproveBooking(booking.id)}
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-2 text-xs"
-                                title="Từ chối đơn"
-                                onClick={() => setRejectTarget(booking.id)}
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Quick contract */}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-gray-500 hover:text-gray-800 h-8 px-2"
-                            title="Xem mẫu hợp đồng"
-                            onClick={() => setContractBooking(booking)}
-                          >
-                            <FileText className="w-3.5 h-3.5" />
+                            <span>Xem chi tiết</span>
                           </Button>
                         </div>
                       </td>
@@ -589,10 +591,11 @@ export function AgencyBookingManagement({
                 </div>
                 <div>
                   <Label className="text-sm">Hạn thanh toán <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="date"
+                  <VietnameseDatePicker
                     value={paymentDueDate}
-                    onChange={(e) => setPaymentDueDate(e.target.value)}
+                    onChange={setPaymentDueDate}
+                    min={new Date().toLocaleDateString("sv-SE")}
+                    placeholder="Chọn hạn thanh toán"
                     className="mt-1"
                   />
                 </div>

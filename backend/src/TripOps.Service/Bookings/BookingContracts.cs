@@ -81,7 +81,104 @@ public sealed record BookingDto(
     IReadOnlyList<BookingDayDto>? SnapshotDays = null,
     IReadOnlyList<BookingHotelDto>? SnapshotHotels = null,
     IReadOnlyList<PaymentScheduleItemDto>? PaymentSchedule = null,
-    IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null);
+    IReadOnlyList<PaymentTransactionDto>? PaymentTransactions = null,
+    CancellationRequestDto? Cancellation = null,
+    ContractDto? Contract = null);
+
+/// <summary>
+/// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.
+/// RequiredBeforePayment: khách phải ký (tải bản đã ký) thì mới thanh toán được.
+/// </summary>
+public sealed record ContractDto(
+    int Id, int Version, string ContractNo, decimal TotalAmount, string Status,
+    DateTime? SignedAt, string? SignedFileType, string? SignMethod, string? ReviewNote, DateTime? ReviewedAt, DateTime? CreatedAt,
+    bool RequiredBeforePayment);
+
+/// <summary>Mã phiên ký trực tuyến (chỉ trả một lần). FE ghép thành đường dẫn #/sign/{Token} cho QR hoặc ký ngay trên máy tính.</summary>
+public sealed record SignSessionStartDto(string Token, DateTime ExpiresAt, string ContractNo, int Version);
+
+/// <summary>
+/// Trạng thái phiên ký cho trang ký (không lộ thông tin nhạy cảm). Status: open | completed | expired.
+/// DevelopmentOtp: chỉ có ở môi trường Development khi chưa cấu hình SMTP, để demo.
+/// </summary>
+public sealed record SignSessionDto(
+    string Status, string ContractNo, int Version, string TourName, DateTime StartDate, string CustomerName,
+    string MaskedEmail, decimal TotalAmount, DateTime ExpiresAt, DateTime? OtpSentAt, DateTime? OtpExpiresAt,
+    DateTime? CompletedAt, string? DevelopmentOtp = null);
+
+/// <summary>Xác nhận ký: ảnh chữ ký PNG (data URL), mã OTP từ email và xác nhận đã đọc hợp đồng.</summary>
+public sealed record WebSignRequest(
+    [Required, StringLength(800_000)] string SignaturePng,
+    [Required, StringLength(10)] string Otp,
+    bool Agreed);
+
+/// <summary>Agency kiểm tra bản ký: verify (hợp lệ) hoặc resign (yêu cầu ký lại, bắt buộc ghi lý do).</summary>
+public sealed record ContractReviewRequest(
+    [Required, AllowedValues("verify", "resign")] string Decision,
+    [StringLength(1000)] string? Note);
+
+/// <summary>
+/// Yêu cầu hủy/hoàn tiền mới nhất của đơn (không kèm số tài khoản ngân hàng để Agency không thấy).
+/// Reason: CUSTOMER_REQUEST | WEATHER_FORCE_MAJEURE | SERVICE_QUALITY | OTHER (khách) · TOUR_CANCELLED (Agency hủy)
+/// · PAYMENT_OVERDUE (quá hạn thanh toán, khách mất số đã trả).
+/// Status: Pending | Approved (Admin đã duyệt, đang chi hộ qua payOS) | Completed (đã hoàn, đơn đã hủy) | Rejected.
+/// </summary>
+public sealed record CancellationRequestDto(
+    int Id, string Reason, string ReasonDetail, string Status, string RequestedByRole,
+    decimal FeePercent, decimal Fee, decimal PaidAmount, decimal SuggestedRefund, decimal? ApprovedRefundAmount,
+    bool HasRefundAccount, string? RefundTransactionCode, string? AdminNote, string? RejectionReason,
+    DateTime CreatedAt, DateTime? ReviewedAt, DateTime? CompletedAt);
+
+/// <summary>
+/// Báo giá hủy do backend tính theo chính sách chung. Mode: immediate (chưa trả tiền, hủy ngay không cần Admin)
+/// | customer (khách hủy, theo bảng phí) | agency (Agency hủy, hoàn 100%) | overdue (quá hạn thanh toán, mất số đã trả).
+/// </summary>
+public sealed record CancellationQuoteDto(
+    int BookingId, string Mode, int DaysBeforeDeparture, bool CoolingOff, decimal FeePercent,
+    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation);
+
+public sealed record CustomerCancellationRequest(
+    [Required, AllowedValues("CUSTOMER_REQUEST", "WEATHER_FORCE_MAJEURE", "SERVICE_QUALITY", "OTHER")] string Reason,
+    [Required, StringLength(2000, MinimumLength = 3)] string ReasonDetail,
+    [StringLength(100)] string? BankName,
+    [StringLength(50)] string? AccountNumber,
+    [StringLength(150)] string? AccountHolder);
+
+/// <summary>Khách bổ sung tài khoản nhận hoàn (ví dụ khi Agency hủy tour).</summary>
+public sealed record RefundAccountRequest(
+    [Required, StringLength(100)] string BankName,
+    [Required, StringLength(50)] string AccountNumber,
+    [Required, StringLength(150)] string AccountHolder);
+
+/// <summary>
+/// Admin duyệt hủy. RefundAmount mặc định = số gợi ý theo chính sách; khác số gợi ý thì bắt buộc ghi chú.
+/// TransactionCode (mã giao dịch ngân hàng) bắt buộc khi RefundAmount &gt; 0.
+/// </summary>
+public sealed record RefundApprovalRequest(
+    [Range(typeof(decimal), "0", "9999999999")] decimal RefundAmount,
+    [StringLength(100)] string? TransactionCode,
+    [StringLength(1000)] string? Note);
+
+/// <summary>Admin duyệt và hoàn tự động qua chi hộ payOS. Khác số gợi ý thì bắt buộc ghi chú.</summary>
+public sealed record RefundPayoutRequest(
+    [Range(typeof(decimal), "1", "9999999999")] decimal RefundAmount,
+    [StringLength(1000)] string? Note);
+
+/// <summary>Kênh chuyển tiền payOS: đã cấu hình chưa, số dư hiện tại (Error khi không đọc được).</summary>
+public sealed record PayoutAccountDto(bool Configured, string? AccountNumber, string? AccountName, decimal? Balance, string? Error);
+
+public sealed record RefundRejectionRequest([Required, StringLength(1000, MinimumLength = 3)] string Reason);
+
+/// <summary>Một yêu cầu hủy/hoàn tiền trong màn hình Admin (có tài khoản nhận tiền).</summary>
+public sealed record AdminRefundDto(
+    int Id, int BookingId, string BookingCode, string? TourName, DateTime StartDate,
+    string CustomerName, string? CustomerEmail, string? CustomerPhone, string? AgencyName,
+    string Reason, string ReasonDetail, string Status, string RequestedByRole,
+    decimal TotalAmount, decimal FeePercent, decimal Fee, decimal PaidAmount, decimal SuggestedRefund, decimal? ApprovedRefundAmount,
+    string? BankName, string? AccountNumber, string? AccountHolder,
+    string? RefundTransactionCode, string? AdminNote, string? RejectionReason,
+    DateTime CreatedAt, DateTime? ReviewedAt, DateTime? CompletedAt,
+    string? BankBin = null, string? PayoutState = null, string? LastPayoutError = null);
 
 /// <summary>
 /// Một đợt trong lịch thanh toán (backend tính, frontend chỉ hiển thị). Stage: "deposit" (cọc) | "balance" (phần còn lại sau tour).

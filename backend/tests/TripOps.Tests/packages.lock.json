@@ -603,6 +603,11 @@
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
+      "QuestPDF": {
+        "type": "Transitive",
+        "resolved": "2025.7.4",
+        "contentHash": "XeiWilwLnqP2BIvDG+vh1+fjUoNWczPee5qifw8VppVOH7+vmxgoxG/KANcKftgqAfXiRQ++sXOSLPZRvXxD2g=="
+      },
       "SQLite": {
         "type": "Transitive",
         "resolved": "3.53.4",
@@ -740,6 +745,7 @@
       "tripops.service": {
         "type": "Project",
         "dependencies": {
+          "QuestPDF": "[2025.7.4, )",
           "TripOps.Data": "[1.0.0, )"
         }
       }

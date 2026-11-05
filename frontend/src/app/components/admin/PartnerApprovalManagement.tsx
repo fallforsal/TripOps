@@ -426,6 +426,7 @@ export function PartnerApprovalManagement() {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider">
                   <th className="py-3.5 px-4">Doanh nghiệp</th>
+                  <th className="py-3.5 px-4">Loại hình</th>
                   <th className="py-3.5 px-4">Người đại diện</th>
                   <th className="py-3.5 px-4">Trụ sở</th>
                   <th className="py-3.5 px-4">Trạng thái</th>
@@ -441,33 +442,31 @@ export function PartnerApprovalManagement() {
                     className="hover:bg-sky-50/30 transition-colors group"
                   >
                     {/* Cột 1: Thông tin Doanh nghiệp */}
-                    <td className="py-4 px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900 group-hover:text-[#075985] transition-colors">
-                            {item.businessName}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1 ${
-                              item.type === "agency"
-                                ? "bg-amber-100 text-amber-900 border border-amber-200"
-                                : "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                            }`}
-                          >
-                            {item.type === "agency" ? (
-                              <Compass className="w-3 h-3" />
-                            ) : (
-                              <Store className="w-3 h-3" />
-                            )}
-                            <span>
-                              {item.type === "agency"
-                                ? "Công ty lữ hành"
-                                : "Nhà cung cấp"}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-                    </td>
+<td className="py-4 px-4">
+  <span className="font-extrabold text-sm text-slate-900 group-hover:text-[#075985] transition-colors">
+    {item.businessName}
+  </span>
+</td>
+
+{/* Cột 2: Loại hình */}
+<td className="py-4 px-4">
+  <span
+    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap ${
+      item.type === "agency"
+        ? "bg-amber-100 text-amber-900 border border-amber-200"
+        : "bg-emerald-100 text-emerald-900 border border-emerald-200"
+    }`}
+  >
+    {item.type === "agency" ? (
+      <Compass className="w-3 h-3" />
+    ) : (
+      <Store className="w-3 h-3" />
+    )}
+    <span>
+      {item.type === "agency" ? "Công ty lữ hành" : "Nhà cung cấp"}
+    </span>
+  </span>
+</td>
 
                     {/* Cột 2: Người đại diện */}
                     <td className="py-4 px-4">
@@ -561,7 +560,7 @@ export function PartnerApprovalManagement() {
                               <span>
                                 {item.status === "suspended"
                                   ? "Kích hoạt lại"
-                                  : "Thay đổi trạng thái"}
+                                  : "Đình chỉ doanh nghiệp"}
                               </span>
                             </Button>
                           </>

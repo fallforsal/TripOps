@@ -1,4 +1,7 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
+import { BookingQuotationPanel } from "@/app/components/common/BookingQuotationPanel";
+import type { Tour } from "@/app/types";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
 import { defaultSystemBankAccount, mockServices } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
@@ -51,9 +54,14 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { CancelTourModal } from "./CancelTourModal";
+import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import { ContractCard } from "@/app/components/common/ContractCard";
+import type { ContractDto, RefundAccountInput, SignSessionStartDto } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
+  plans?: Tour[];
+  onPlanChanged?: () => void;
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
   booking: Booking;
   systemBank?: SystemBankAccount;
@@ -70,6 +78,14 @@ interface UserBookingDetailPageProps {
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
   onNavigateToComplaint?: (booking: Booking) => void;
   onNavigateToReview?: (booking: Booking) => void;
+  /** Khách bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
+  onUpdateRefundAccount?: (bookingId: string, input: RefundAccountInput) => Promise<boolean>;
+  /** Khách tải bản hợp đồng đã ký (bắt buộc trước thanh toán đầu tiên). */
+  onUploadSignedContract?: (bookingId: string, file: File) => Promise<boolean>;
+  /** Khách ký trực tuyến: tạo mã một lần cho QR. */
+  onStartWebSign?: (bookingId: string) => Promise<SignSessionStartDto | null>;
+  /** Hỏi lại trạng thái hợp đồng khi đang chờ ký trên điện thoại. */
+  onRefreshContract?: (bookingId: string) => Promise<ContractDto | null>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -132,6 +148,8 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function UserBookingDetailPage({
+  plans = [],
+  onPlanChanged,
   booking,
   systemBank = defaultSystemBankAccount,
   onBack,
@@ -144,6 +162,10 @@ export function UserBookingDetailPage({
   onNavigateToComplaint,
   onNavigateToReview,
   onSubmitRefundRequest,
+  onUpdateRefundAccount,
+  onUploadSignedContract,
+  onStartWebSign,
+  onRefreshContract,
 }: UserBookingDetailPageProps) {
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
@@ -346,15 +368,20 @@ export function UserBookingDetailPage({
 
   const contractNo = `HD-${booking.id.replace("booking-", "").toUpperCase()}`;
   const today = new Date().toLocaleDateString("vi-VN");
-  // Chặn hủy đơn đã có tiền: hủy kèm hoàn tiền phải do Admin xem xét (máy chủ cũng chặn, trả 409).
+  // Chưa có tiền: hủy ngay. Đã có tiền: gửi yêu cầu hủy, phí theo chính sách chung, đơn chỉ hủy khi Admin duyệt.
   const paidSoFar = booking.paidAmount ?? 0;
   const hasPendingGatewayPayment = (booking.paymentTransactions ?? []).some((t) => t.status === "pending");
-  const cancellableStatus = booking.status === "pending" || booking.status === "confirmed";
-  const canCancel = cancellableStatus && paidSoFar === 0 && !hasPendingGatewayPayment;
+  const cancellation = booking.cancellation;
+  const cancellationPending = cancellation?.status === "Pending" || cancellation?.status === "Reviewing";
+  const cancellableStatus =
+    booking.status === "pending" || booking.status === "confirmed" || booking.status === "paid" || booking.status === "deposited";
+  const canCancel = cancellableStatus && !cancellationPending && !hasPendingGatewayPayment;
   const cancelBlockedReason = canCancel
-    ? null
-    : paidSoFar > 0 && booking.status !== "cancelled" && booking.status !== "completed"
-      ? "Đơn đã có khoản thanh toán nên bạn không thể tự hủy. Hủy kèm hoàn tiền sẽ do Admin xem xét."
+    ? paidSoFar > 0
+      ? "Đơn đã có khoản thanh toán: bạn gửi yêu cầu hủy, phí hủy tính theo chính sách chung và đơn chỉ bị hủy sau khi Admin duyệt."
+      : null
+    : cancellationPending
+      ? "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán."
       : hasPendingGatewayPayment && cancellableStatus
         ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
         : null;
@@ -362,11 +389,13 @@ export function UserBookingDetailPage({
   const deadlineText = (pr: PaymentRequest) =>
     pr.dueAt ? formatVietnamDeadline(pr.dueAt) : pr.dueDate ? `hết ngày ${pr.dueDate.split("-").reverse().join("/")}` : "—";
   const stageLabel = (pr: PaymentRequest) =>
-    pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán";
+    pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại"
+      : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán";
   const canPayRequest = (pr: PaymentRequest) =>
     // Quá hạn: không cho thanh toán khoản thu đã hết hạn (backend cũng chặn).
     // Đợt 1 trước; Đợt 2 chỉ "pending" (mở thu) khi đã đủ cọc — backend quyết định trạng thái.
-    (pr.stage === "deposit" || pr.stage === "balance") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0;
+    (pr.stage === "deposit" || pr.stage === "balance" || pr.stage === "full") && booking.status === "confirmed" && pr.status === "pending" && pr.amount > 0
+    && !cancellationPending && !booking.travelContract?.requiredBeforePayment;
   const transactionStatusLabel: Record<string, { label: string; color: string }> = {
     success: { label: "Thành công", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     pending: { label: "Đang chờ thanh toán", color: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -401,7 +430,12 @@ export function UserBookingDetailPage({
 
   return (
     <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
+      <div className="w-full min-w-0 px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
+        <BookingQuotationPanel bookingId={booking.id} agency={false} plans={plans}
+          currentTourId={booking.tourId} currentStartDate={booking.tourStartDate} passengers={booking.passengers || []}
+          currentTourSnapshot={booking.tour} currentSpecialRequests={booking.bookingNotes}
+          canChange={(booking.status === "pending" || booking.status === "confirmed") && booking.paymentStatus === "unpaid"}
+          onChanged={onPlanChanged} />
         <p className="p-3 bg-amber-50 text-amber-900 rounded-lg text-sm">Thanh toán cọc qua payOS (chuyển khoản/VietQR). Lưu ý: payOS không có môi trường thử nghiệm — chuyển khoản qua payOS là giao dịch tiền thật.</p>
         {/* PAYMENT SUCCESS TOAST */}
         {paymentSuccessToast && (
@@ -456,12 +490,12 @@ export function UserBookingDetailPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
               {booking.status === "completed" && onNavigateToReview && (
                 <Button
                   variant="outline"
                   onClick={() => onNavigateToReview(booking)}
-                  className="text-xs h-9 gap-1.5 border-[#075985] text-[#075985] hover:bg-[#F0F9FF] font-semibold rounded-[6px]"
+                  className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-[#075985] bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] font-semibold rounded-[6px] text-xs transition-colors"
                 >
                   <Star className="w-3.5 h-3.5 fill-[#B45309] text-[#B45309]" />
                   Viết đánh giá tour
@@ -472,7 +506,7 @@ export function UserBookingDetailPage({
                 <Button
                   variant="outline"
                   onClick={() => onNavigateToComplaint(booking)}
-                  className="text-xs h-9 gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-50 font-semibold rounded-[6px]"
+                  className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-amber-200 text-amber-800 bg-amber-50/40 hover:bg-amber-100/70 hover:border-amber-300 font-semibold rounded-[6px] text-xs transition-colors"
                 >
                   <Flag className="w-3.5 h-3.5 text-amber-600" />
                   Gửi khiếu nại
@@ -482,7 +516,7 @@ export function UserBookingDetailPage({
               <Button
                 variant="outline"
                 onClick={() => setContractModalOpen(true)}
-                className="text-xs h-9 gap-1.5 border-gray-300 hover:bg-gray-100 font-semibold rounded-[6px]"
+                className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 font-semibold rounded-[6px] text-xs transition-colors"
               >
                 <FileText className="w-4 h-4 text-[#075985]" />
                 Xem hợp đồng dịch vụ
@@ -492,7 +526,7 @@ export function UserBookingDetailPage({
                 <Button
                   variant="outline"
                   onClick={() => setShowCancelModal(true)}
-                  className="text-xs h-9 gap-1.5 border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold rounded-[6px]"
+                  className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-rose-200 text-rose-700 bg-rose-50/40 hover:bg-rose-100/70 hover:border-rose-300 font-semibold rounded-[6px] text-xs transition-colors"
                 >
                   <XCircle className="w-4 h-4 text-rose-600" />
                   Yêu cầu hủy tour
@@ -503,9 +537,9 @@ export function UserBookingDetailPage({
         </div>
 
         {/* 2-Columns Main Layout (Similar to Company Booking Detail Page) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 min-[1800px]:grid-cols-[minmax(0,1fr)_360px] gap-6">
           {/* LEFT 2 COLUMNS: TOUR SUMMARY, PASSENGERS, TIMELINE */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* TOUR OVERVIEW CARD */}
             <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs">
               <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-center">
@@ -844,14 +878,25 @@ export function UserBookingDetailPage({
               </div>
 
               {displayPassengers.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                <div className="w-full overflow-x-auto" role="region" aria-label="Danh sách hành khách" tabIndex={0}>
+                  <table className="w-full min-w-[1120px] text-sm [&_td]:align-top [&_th]:align-top">
+                    <colgroup>
+                      <col className="w-10" />
+                      <col className="w-40" />
+                      <col className="w-44" />
+                      <col className="w-36" />
+                      <col className="w-20" />
+                      <col className="w-32" />
+                      <col />
+                      <col className="w-28" />
+                      <col className="w-24" />
+                    </colgroup>
                     <thead>
                       <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[11px]">
                         <th className="px-3 py-2.5 text-left rounded-l-lg">#</th>
                         <th className="px-3 py-2.5 text-left">Họ &amp; Tên</th>
                         <th className="px-3 py-2.5 text-left">Số CCCD / Passport / Định danh</th>
-                        <th className="px-3 py-2.5 text-left">Ngày sinh / Tuổi</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Ngày sinh / Tuổi</th>
                         <th className="px-3 py-2.5 text-left">Giới tính</th>
                         <th className="px-3 py-2.5 text-left">Loại khách</th>
                         <th className="px-3 py-2.5 text-left">Ghi chú riêng</th>
@@ -871,7 +916,7 @@ export function UserBookingDetailPage({
                         return (
                           <tr key={p.id} className={`hover:bg-gray-50 ${p.status === "INACTIVE" ? "bg-rose-50/40 opacity-75" : ""}`}>
                             <td className="px-3 py-2.5 text-gray-400 font-mono">{idx + 1}</td>
-                            <td className="px-3 py-2.5 font-bold text-gray-900">
+                            <td className="px-3 py-2.5 min-w-40 font-semibold text-gray-900">
                               <div className="flex flex-col">
                                 <span className={p.status === "INACTIVE" ? "line-through text-gray-500" : ""}>
                                   {p.fullName}
@@ -893,20 +938,20 @@ export function UserBookingDetailPage({
                               </div>
                             </td>
                             <td className="px-3 py-2.5">
-                              {p.idNumber ? (
+                              {p.idNumber !== undefined && p.idNumber !== null && String(p.idNumber).trim() !== "" ? (
                                 <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                                  {p.idNumber}
+                                  {String(p.idNumber)}
                                 </span>
                               ) : (
                                 <span className="text-gray-400 italic">—</span>
                               )}
                             </td>
                             <td className="px-3 py-2.5 text-gray-600">
-                              <span>{p.dateOfBirth || "—"}</span>
+                              <span className="block whitespace-nowrap">{p.dateOfBirth ? (p.dateOfBirth.includes("-") ? p.dateOfBirth.split("-").reverse().join("/") : p.dateOfBirth) : "—"}</span>
                               {(() => {
                                 const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
                                 return age !== null ? (
-                                  <span className="ml-1.5 text-xs text-teal-700 font-semibold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                                  <span className="mt-1 inline-flex whitespace-nowrap text-xs text-slate-500">
                                     {age} tuổi
                                   </span>
                                 ) : null;
@@ -924,21 +969,32 @@ export function UserBookingDetailPage({
                                 {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 max-w-[220px]">
-                              {p.roommateNote ? (
-                                <div className="text-teal-900 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 text-[11px] mb-1 font-medium leading-tight">
-                                  🛏️ {p.roommateNote}
-                                </div>
-                              ) : null}
-                              {p.notes ? (
-                                <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block text-[11px]">
-                                  📝 {p.notes}
-                                </span>
-                              ) : !p.roommateNote ? (
-                                <span className="text-gray-400 italic">—</span>
-                              ) : null}
+                            <td className="px-3 py-2.5 min-w-[260px]">
+                              <div className="space-y-2 text-sm leading-6 break-words">
+                                {p.roommateNote && (
+                                  <div>
+                                    <span className="block text-xs font-medium text-slate-500">Xếp phòng</span>
+                                    <span className="text-slate-700">{p.roommateNote}</span>
+                                  </div>
+                                )}
+                                {p.dietaryNote && (
+                                  <div>
+                                    <span className="block text-xs font-medium text-slate-500">Ăn uống / Dị ứng</span>
+                                    <span className="text-slate-700">{p.dietaryNote}</span>
+                                  </div>
+                                )}
+                                {p.notes && (
+                                  <div>
+                                    <span className="block text-xs font-medium text-slate-500">Ghi chú cá nhân</span>
+                                    <span className="text-slate-700">{p.notes}</span>
+                                  </div>
+                                )}
+                                {!p.roommateNote && !p.dietaryNote && !p.notes && (
+                                  <span className="text-gray-400 italic">—</span>
+                                )}
+                              </div>
                             </td>
-                            <td className="px-3 py-2.5 text-right font-bold text-[#075985]">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-right font-bold text-[#075985]">
                               {p.price === 0 ? "Miễn phí" : formatVND(p.price)}
                             </td>
                             <td className="px-3 py-2.5 text-center">
@@ -1773,7 +1829,7 @@ export function UserBookingDetailPage({
                               className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs h-8 gap-1.5 shadow-xs"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
-                              {pr.stage === "balance" ? "Thanh toán đợt 2" : "Thanh toán cọc"} ({formatVND(pr.amount)})
+                              {pr.stage === "balance" ? "Thanh toán đợt 2" : pr.stage === "full" ? "Thanh toán toàn bộ" : "Thanh toán cọc"} ({formatVND(pr.amount)})
                             </Button>
                           ) : null}
                         </div>
@@ -1894,6 +1950,23 @@ export function UserBookingDetailPage({
               )}
             </div>
 
+            {booking.travelContract && (
+              <ContractCard
+                bookingId={booking.id}
+                contract={booking.travelContract}
+                onUploadSigned={onUploadSignedContract ? (file) => onUploadSignedContract(booking.id, file) : undefined}
+                onStartWebSign={onStartWebSign ? () => onStartWebSign(booking.id) : undefined}
+                onRefresh={onRefreshContract ? () => onRefreshContract(booking.id) : undefined}
+              />
+            )}
+
+            {cancellation && (
+              <CancellationStatusCard
+                cancellation={cancellation}
+                onSaveRefundAccount={onUpdateRefundAccount ? (input) => onUpdateRefundAccount(booking.id, input) : undefined}
+              />
+            )}
+
             {/* CONTRACT & ACTIONS CARD */}
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-3">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
@@ -2001,13 +2074,11 @@ export function UserBookingDetailPage({
             onCancelBooking(id, reason);
             setShowCancelModal(false);
           }}
-          onSubmitRefundRequest={(data) => {
-            if (onSubmitRefundRequest) {
-              onSubmitRefundRequest(data);
-            } else {
-              onCancelBooking(data.bookingId, `[Yêu cầu hoàn tiền]: ${data.reasonDetail}`);
-            }
-            setShowCancelModal(false);
+          onSubmitRefundRequest={async (data) => {
+            // Đơn đã có tiền: chỉ gửi yêu cầu hủy; máy chủ tính phí, Admin duyệt mới hủy.
+            const ok = onSubmitRefundRequest ? await onSubmitRefundRequest(data) : false;
+            if (ok !== false) setShowCancelModal(false);
+            return ok;
           }}
           onConfirm={(reason) => {
             onCancelBooking(booking.id, reason);
@@ -2018,7 +2089,7 @@ export function UserBookingDetailPage({
 
       {/* ELECTRONIC CONTRACT MODAL */}
       <Dialog open={contractModalOpen} onOpenChange={setContractModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto bg-white rounded-xl border border-slate-300 p-6 shadow-xl text-slate-800">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#075985]" />
@@ -2111,7 +2182,8 @@ export function UserBookingDetailPage({
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
                   <CreditCard className="w-5 h-5 text-[#075985]" />
-                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại" : "Thanh toán đặt cọc"}
+                  {selectedPaymentRequest.stage === "balance" ? "Thanh toán đợt 2 – phần còn lại"
+                    : selectedPaymentRequest.stage === "full" ? "Thanh toán toàn bộ (tour sát ngày)" : "Thanh toán đặt cọc"}
                 </DialogTitle>
               </DialogHeader>
 
@@ -2230,11 +2302,13 @@ export function UserBookingDetailPage({
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Ngày sinh <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <VietnameseDatePicker
                   value={pDob}
-                  onChange={(e) => setPDob(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  onChange={setPDob}
+                  isBirthDate
+                  max={new Date().toLocaleDateString("sv-SE")}
+                  placeholder="Chọn ngày sinh"
+                  className="py-2 rounded-lg"
                 />
               </div>
 

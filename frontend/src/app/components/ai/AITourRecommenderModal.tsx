@@ -2,19 +2,10 @@ import { useState } from "react";
 import { Tour } from "@/app/types";
 import {
   Sparkles,
-  Search,
   MapPin,
-  Calendar,
-  Users,
-  DollarSign,
-  HeartHandshake,
   CheckCircle2,
-  ArrowRight,
   RefreshCw,
-  Compass,
   Star,
-  ChevronRight,
-  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -24,6 +15,34 @@ import {
   DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
+
+function PreferenceSelect({ id, label, value, onChange, options }: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="min-w-0 space-y-2">
+      <label htmlFor={id} className="block text-sm font-medium text-slate-700">{label}</label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id} className="w-full min-h-12 data-[size=default]:h-auto rounded-md border-slate-300 bg-white py-2 text-left text-sm whitespace-normal [&_[data-slot=select-value]]:line-clamp-none [&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:leading-5">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="max-h-72 max-w-[calc(100vw-2rem)] bg-white">
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value} className="py-2.5 [&_[data-slot=select-item-text]]:whitespace-normal">
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 interface AITourRecommenderModalProps {
   isOpen: boolean;
@@ -166,155 +185,90 @@ export function AITourRecommenderModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl border-0 shadow-2xl">
-        {/* Header with AI Gradient */}
-        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white p-6 relative overflow-hidden">
-          <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
-              <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider bg-white/25 px-2 py-0.5 rounded-full text-yellow-200">
-                  AI Tour Assistant
-                </span>
-                <span className="text-xs text-white/80">· Dành cho khách hàng & doanh nghiệp</span>
-              </div>
-              <h2 className="text-xl font-extrabold mt-0.5">Trợ Lý AI Tư Vấn & Gợi Ý Tour Thông Minh</h2>
-            </div>
-          </div>
-          <p className="text-xs text-white/90 mt-2 max-w-xl">
-            Nhập nhanh mong muốn của đoàn bạn, AI của nền tảng sẽ đối chiếu toàn bộ các tour đã kiểm định để gợi ý hành trình tối ưu nhất về giá, lịch trình và trải nghiệm!
-          </p>
-        </div>
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto gap-0 p-0 rounded-xl border border-slate-200 bg-white">
+        <DialogHeader className="border-b border-slate-200 px-5 py-5 pr-12 text-left sm:px-6 sm:pr-12">
+          <DialogTitle className="text-xl font-semibold leading-7 text-slate-900">Tìm tour cùng AI</DialogTitle>
+          <DialogDescription className="text-sm leading-6 text-slate-600">
+            Chọn nhu cầu của đoàn để tìm những tour phù hợp.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="p-6 space-y-6 bg-slate-50">
+        <div className="p-5 sm:p-6">
           {!results ? (
             /* Input Form */
-            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5 items-start">
                 {/* Destination */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-                    Khu vực / Điểm đến mong muốn
-                  </label>
-                  <select
-                    value={destinationGroup}
-                    onChange={(e) => setDestinationGroup(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  >
-                    <option value="all">🌟 Bất kỳ điểm đến nào (Để AI gợi ý)</option>
-                    <option value="beach">🏝️ Biển đảo (Phú Quốc, Nha Trang, Hạ Long)</option>
-                    <option value="mountain">⛰️ Vùng cao Tây Bắc (Hà Giang, Sapa)</option>
-                    <option value="dalat">🌸 Đà Lạt - Phố núi ngàn hoa</option>
-                    <option value="heritage">🏮 Miền Trung di sản (Đà Nẵng, Hội An, Huế)</option>
-                  </select>
-                </div>
+                <PreferenceSelect id="ai-destination" label="Điểm đến" value={destinationGroup} onChange={setDestinationGroup} options={[
+                  { value: "all", label: "Để AI gợi ý điểm đến" },
+                  { value: "beach", label: "Biển đảo" },
+                  { value: "mountain", label: "Vùng cao và Tây Bắc" },
+                  { value: "dalat", label: "Đà Lạt" },
+                  { value: "heritage", label: "Miền Trung và di sản" },
+                ]} />
 
                 {/* Budget */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                    Ngân sách dự kiến mỗi người
-                  </label>
-                  <select
-                    value={budgetRange}
-                    onChange={(e) => setBudgetRange(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  >
-                    <option value="all">💰 Mọi mức giá</option>
-                    <option value="under3">Tiết kiệm (Dưới 3.000.000đ)</option>
-                    <option value="3to6">Tiêu chuẩn (3.000.000đ - 6.000.000đ)</option>
-                    <option value="6to10">Cao cấp (6.000.000đ - 10.000.000đ)</option>
-                    <option value="over10">VIP / Nghỉ dưỡng sang trọng (Trên 10.000.000đ)</option>
-                  </select>
-                </div>
+                <PreferenceSelect id="ai-budget" label="Ngân sách / người" value={budgetRange} onChange={setBudgetRange} options={[
+                  { value: "all", label: "Mọi mức giá" },
+                  { value: "under3", label: "Dưới 3.000.000đ" },
+                  { value: "3to6", label: "3.000.000đ – 6.000.000đ" },
+                  { value: "6to10", label: "6.000.000đ – 10.000.000đ" },
+                  { value: "over10", label: "Trên 10.000.000đ" },
+                ]} />
 
                 {/* Group type */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#075985]" />
-                    Đặc thù đoàn & Mục đích chuyến đi
-                  </label>
-                  <select
-                    value={groupType}
-                    onChange={(e) => setGroupType(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  >
-                    <option value="company">🏢 Doanh nghiệp / Teambuilding & Gala Dinner</option>
-                    <option value="family">👨‍👩‍👧‍👦 Gia đình nhiều thế hệ (Nghỉ dưỡng nhẹ nhàng)</option>
-                    <option value="adventure">🧗 Bạn bè trẻ / Khám phá & Trekking</option>
-                    <option value="couples">✨ Cặp đôi / Nghỉ dưỡng riêng tư cao cấp</option>
-                  </select>
-                </div>
+                <PreferenceSelect id="ai-group" label="Loại đoàn" value={groupType} onChange={setGroupType} options={[
+                  { value: "company", label: "Doanh nghiệp / Team building" },
+                  { value: "family", label: "Gia đình / Nghỉ dưỡng" },
+                  { value: "adventure", label: "Bạn bè / Khám phá" },
+                  { value: "couples", label: "Cặp đôi / Nghỉ dưỡng" },
+                ]} />
 
                 {/* Duration */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[#F97316]" />
-                    Thời lượng tour
-                  </label>
-                  <select
-                    value={durationPref}
-                    onChange={(e) => setDurationPref(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  >
-                    <option value="all">⏱️ Thời lượng linh hoạt</option>
-                    <option value="short">2 Ngày 1 Đêm (Cuối tuần)</option>
-                    <option value="medium">3 Ngày 2 Đêm</option>
-                    <option value="long">4 Ngày 3 Đêm trở lên</option>
-                  </select>
-                </div>
+                <PreferenceSelect id="ai-duration" label="Thời lượng" value={durationPref} onChange={setDurationPref} options={[
+                  { value: "all", label: "Thời lượng linh hoạt" },
+                  { value: "short", label: "2 ngày 1 đêm" },
+                  { value: "medium", label: "3 ngày 2 đêm" },
+                  { value: "long", label: "Từ 4 ngày 3 đêm" },
+                ]} />
               </div>
 
               {/* Free-text wishes */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5 text-pink-600" />
-                  Yêu cầu hoặc sở thích đặc biệt (AI tự động trích xuất từ khóa)
+                <label htmlFor="ai-custom-wish" className="block text-sm font-medium text-slate-700 mb-2">
+                  Yêu cầu thêm <span className="font-normal text-slate-500">(tùy chọn)</span>
                 </label>
-                <input
-                  type="text"
+                <Textarea
+                  id="ai-custom-wish"
+                  rows={3}
                   value={customWish}
                   onChange={(e) => setCustomWish(e.target.value)}
-                  placeholder="Ví dụ: Cần khách sạn 4 sao view biển, ăn hải sản, xe đời mới đón tại sân bay..."
-                  className="w-full text-xs rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  placeholder="Ví dụ: Khách sạn 4 sao gần biển, có bữa chay và xe đón tại sân bay."
+                  className="w-full resize-y rounded-md border-slate-300 bg-white px-3 py-3 text-sm leading-6 focus-visible:ring-[#075985]"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end">
+              <div className="border-t border-slate-200 pt-5 flex justify-end">
                 <Button
                   onClick={handleAnalyze}
                   disabled={isAnalyzing}
-                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2"
+                  className="h-11 w-full sm:w-auto bg-[#075985] hover:bg-[#0C4A6E] text-white font-semibold text-sm px-6 rounded-md"
                 >
-                  {isAnalyzing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>AI đang phân tích & đối chiếu tour...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 text-yellow-300" />
-                      <span>Tìm Tour Phù Hợp Với AI</span>
-                    </>
-                  )}
+                  {isAnalyzing ? "Đang tìm tour…" : "Tìm tour phù hợp"}
                 </Button>
               </div>
             </div>
           ) : (
             /* Results View */
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-xl p-3 px-4">
-                <div className="flex items-center gap-2 text-indigo-900 text-xs font-semibold">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
+              <div className="flex items-center justify-between bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl p-3 px-4">
+                <div className="flex items-center gap-2 text-[#0C4A6E] text-xs font-semibold">
+                  <Sparkles className="w-4 h-4 text-[#075985]" />
                   <span>AI đã phân tích và tìm thấy {results.length} tour tối ưu nhất cho đoàn của bạn!</span>
                 </div>
                 <button
                   onClick={handleReset}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline flex items-center gap-1"
+                  className="text-xs text-[#075985] hover:text-[#0C4A6E] font-bold underline flex items-center gap-1"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Điều chỉnh tiêu chí
@@ -339,7 +293,7 @@ export function AITourRecommenderModal({
                       }
                     }}
                     aria-label={`Xem chi tiết tour ${tour.name}`}
-                    className="bg-white rounded-xl border border-slate-200 hover:border-indigo-400 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="bg-white rounded-xl border border-slate-200 hover:border-[#075985] overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#075985]"
                   >
                     <div>
                       {/* Image & Match Score Badge */}
@@ -349,11 +303,11 @@ export function AITourRecommenderModal({
                           alt={tour.name}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-2.5 right-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1">
+                        <div className="absolute top-2.5 right-2.5 bg-[#075985] text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-yellow-300" />
                           <span>{matchScore}% Phù hợp</span>
                         </div>
-                        <div className="absolute bottom-2.5 left-2.5 bg-black/70 backdrop-blur-xs text-white text-[11px] px-2 py-0.5 rounded font-semibold flex items-center gap-1">
+                        <div className="absolute bottom-2.5 left-2.5 bg-black/75 text-white text-[11px] px-2 py-0.5 rounded font-semibold flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-blue-400" />
                           <span>{tour.destination}</span>
                         </div>
@@ -362,7 +316,7 @@ export function AITourRecommenderModal({
                       {/* Content */}
                       <div className="p-4 space-y-2">
                         <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span className="font-semibold text-indigo-600">{tour.companyName || "Công ty lữ hành"}</span>
+                          <span className="font-semibold text-[#075985]">{tour.companyName || "Công ty lữ hành"}</span>
                           <span className="flex items-center gap-1 text-amber-500 font-bold">
                             <Star className="w-3 h-3 fill-amber-400" />
                             {tour.rating}
@@ -374,9 +328,9 @@ export function AITourRecommenderModal({
                         </h4>
 
                         {/* AI insight box */}
-                        <div className="bg-gradient-to-br from-indigo-50/70 to-purple-50/70 border border-indigo-100/80 rounded-lg p-2.5 text-[11px] text-slate-700">
-                          <p className="font-semibold text-indigo-800 flex items-center gap-1 mb-1">
-                            <Sparkles className="w-3 h-3 text-indigo-600" />
+                        <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-lg p-2.5 text-[11px] text-slate-700">
+                          <p className="font-semibold text-[#0C4A6E] flex items-center gap-1 mb-1">
+                            <Sparkles className="w-3 h-3 text-[#075985]" />
                             Phân tích từ AI:
                           </p>
                           <p className="line-clamp-2 italic text-slate-600">{aiSummary}</p>
@@ -427,7 +381,7 @@ export function AITourRecommenderModal({
                                 onClose();
                                 onBookTour(tour);
                               }}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3"
+                              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3"
                             >
                               Đặt ngay
                             </Button>

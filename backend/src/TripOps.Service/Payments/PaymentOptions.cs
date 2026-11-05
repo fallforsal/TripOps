@@ -17,6 +17,13 @@ public static class PaymentRules
     /// <summary>Hạn Đợt 2 (UTC): 00:00 ngày khởi hành (giờ VN) lùi 7 ngày = hết ngày (khởi hành − 8).</summary>
     public static DateTime BalanceDeadline(DateTime startDate) => VietnamMidnightUtc(startDate) - BalanceLeadTime;
 
+    /// <summary>
+    /// Tour sát ngày: khi Agency duyệt mà hạn Đợt 2 không còn sau hạn cọc (duyệt + 24 giờ), không chia hai đợt nữa
+    /// mà thu một lần 100% với hạn duyệt + 24 giờ. Ví dụ khởi hành 30/11, duyệt 14:00 25/11 → thu toàn bộ trước 14:00 26/11.
+    /// </summary>
+    public static bool FullPaymentAtApproval(DateTime startDate, DateTime approvedAtUtc) =>
+        BalanceDeadline(startDate) <= approvedAtUtc + DepositWindow;
+
     /// <summary>Việt Nam dùng GMT+7 cố định (không có giờ mùa hè).</summary>
     public static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 

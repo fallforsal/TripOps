@@ -1,4 +1,7 @@
+import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState, useMemo } from "react";
+import { BookingQuotationPanel } from "@/app/components/common/BookingQuotationPanel";
+import type { Tour } from "@/app/types";
 import {
   Booking,
   User,
@@ -93,8 +96,12 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
+import { ContractCard } from "@/app/components/common/ContractCard";
+import { getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
+  plans?: Tour[];
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -112,6 +119,10 @@ interface AgencyBookingDetailPageProps {
   onUpdateBookingAgencies?: (bookingId: string, agencies: BookingAgencyShare[]) => void;
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
   onUpdateIncidents?: (bookingId: string, incidents: BookingIncident[]) => void;
+  /** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì gửi yêu cầu chờ Admin duyệt. */
+  onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
+  /** Agency kiểm tra bản hợp đồng khách đã ký. */
+  onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -177,6 +188,7 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function AgencyBookingDetailPage({
+  plans = [],
   booking,
   guides,
   companyName,
@@ -194,8 +206,42 @@ export function AgencyBookingDetailPage({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
+  onCancelBooking,
+  onReviewContract,
 }: AgencyBookingDetailPageProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
+  const [agencyCancelOpen, setAgencyCancelOpen] = useState(false);
+  const [agencyCancelReason, setAgencyCancelReason] = useState("");
+  const [agencyCancelQuote, setAgencyCancelQuote] = useState<CancellationQuoteDto | null>(null);
+  const [agencyCancelError, setAgencyCancelError] = useState("");
+  const [agencyCancelling, setAgencyCancelling] = useState(false);
+  const agencyCancellationPending =
+    booking.cancellation?.status === "Pending" || booking.cancellation?.status === "Reviewing";
+  const openAgencyCancel = async () => {
+    setAgencyCancelOpen(true);
+    setAgencyCancelQuote(null);
+    setAgencyCancelError("");
+    try {
+      setAgencyCancelQuote(await getAgencyCancellationQuote(Number(booking.id)));
+    } catch (err) {
+      setAgencyCancelError(err instanceof Error ? err.message : "Không tải được thông tin hủy.");
+    }
+  };
+  const submitAgencyCancel = async () => {
+    if (agencyCancelReason.trim().length < 3) {
+      setAgencyCancelError("Vui lòng nhập lý do hủy (gửi cho khách và Admin).");
+      return;
+    }
+    if (!onCancelBooking) return;
+    setAgencyCancelling(true);
+    const ok = await onCancelBooking(booking.id, agencyCancelReason.trim());
+    setAgencyCancelling(false);
+    if (ok) {
+      setAgencyCancelOpen(false);
+      setAgencyCancelReason("");
+    }
+  };
   const [rejectReason, setRejectReason] = useState("");
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -1616,6 +1662,9 @@ export function AgencyBookingDetailPage({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      <BookingQuotationPanel bookingId={booking.id} agency plans={plans}
+        currentTourId={booking.tourId} currentTourSnapshot={booking.tour}
+        canChange={booking.status === "pending" && booking.paymentStatus === "unpaid"} />
       {/* Top Header & Actions Bar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -4217,6 +4266,28 @@ export function AgencyBookingDetailPage({
               )}
             </div>
 
+            {booking.travelContract && (
+              <ContractCard
+                bookingId={booking.id}
+                contract={booking.travelContract}
+                onReview={onReviewContract ? (decision, note) => onReviewContract(booking.id, decision, note) : undefined}
+              />
+            )}
+
+            {booking.cancellation && <CancellationStatusCard cancellation={booking.cancellation} />}
+
+            {onCancelBooking && isCurrentCompanyLead && !agencyCancellationPending &&
+              (booking.status === "confirmed" || booking.status === "paid" || booking.status === "deposited") && (
+                <Button
+                  variant="outline"
+                  onClick={openAgencyCancel}
+                  className="w-full border-red-300 text-red-600 hover:bg-red-50 gap-1.5 text-xs font-semibold h-9"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Hủy đơn này
+                </Button>
+              )}
+
             {/* Lịch thanh toán: hệ thống tự tạo khi duyệt đơn — công ty chỉ xem (không tạo yêu cầu thu thủ công) */}
             <div className="p-3 bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl text-[11px] text-blue-900 leading-relaxed">
               <div className="font-bold flex items-center gap-1.5 text-blue-900">
@@ -4239,7 +4310,8 @@ export function AgencyBookingDetailPage({
                       <div className="flex justify-between items-start gap-2">
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">
-                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại" : "Đợt thanh toán"}
+                            {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại"
+                              : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán"}
                           </span>
                           <p className="font-semibold text-gray-800">{pr.description}</p>
                         </div>
@@ -4489,6 +4561,58 @@ export function AgencyBookingDetailPage({
                 }}
               >
                 Xác nhận từ chối
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: AGENCY HỦY ĐƠN ĐÃ DUYỆT */}
+      <Dialog open={agencyCancelOpen} onOpenChange={setAgencyCancelOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Hủy đơn đặt tour</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2 text-xs">
+            {!agencyCancelQuote && !agencyCancelError && <p className="text-gray-500">Đang tính hệ quả hủy...</p>}
+            {agencyCancelQuote && (
+              <div
+                className={`rounded-xl border p-3 space-y-1 ${
+                  agencyCancelQuote.mode === "overdue" ? "border-amber-300 bg-amber-50" : "border-[#CBD5E1] bg-[#F0F9FF]/70"
+                }`}
+              >
+                <p className="font-semibold">{agencyCancelQuote.explanation}</p>
+                {agencyCancelQuote.mode !== "immediate" && (
+                  <p>
+                    Khách đã trả <strong>{formatVND(agencyCancelQuote.paidAmount)}</strong> · hoàn lại{" "}
+                    <strong>{formatVND(agencyCancelQuote.refundAmount)}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+            <Label className="text-xs">
+              Lý do hủy (gửi cho khách và Admin) <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              value={agencyCancelReason}
+              onChange={(e) => {
+                setAgencyCancelReason(e.target.value);
+                setAgencyCancelError("");
+              }}
+              placeholder="VD: Không đủ số khách tối thiểu, thời tiết xấu, khách không thanh toán đợt 2..."
+              rows={3}
+            />
+            {agencyCancelError && <p className="text-[11px] text-red-600">{agencyCancelError}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAgencyCancelOpen(false)}>
+                Đóng
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!agencyCancelQuote || agencyCancelling}
+                onClick={submitAgencyCancel}
+              >
+                {agencyCancelQuote?.mode === "immediate" ? "Hủy đơn ngay" : "Gửi yêu cầu hủy cho Admin"}
               </Button>
             </div>
           </div>
@@ -4822,11 +4946,12 @@ export function AgencyBookingDetailPage({
                   <Label className="text-xs font-semibold text-gray-700">
                     Hạn chót thanh toán <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    type="date"
+                  <VietnameseDatePicker
                     value={paymentDueDate}
-                    onChange={(e) => setPaymentDueDate(e.target.value)}
-                    className="mt-1 text-xs"
+                    onChange={setPaymentDueDate}
+                    min={new Date().toLocaleDateString("sv-SE")}
+                    placeholder="Chọn hạn thanh toán"
+                    className="mt-1 py-2 rounded-lg"
                   />
                 </div>
 
@@ -5064,11 +5189,13 @@ export function AgencyBookingDetailPage({
 
               <div className="space-y-1">
                 <label className="font-bold text-gray-700">Ngày sinh *</label>
-                <input
-                  type="date"
+                <VietnameseDatePicker
                   value={passengerDob}
-                  onChange={(e) => handlePassengerDobChange(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs focus:border-blue-500 focus:outline-hidden"
+                  onChange={handlePassengerDobChange}
+                  isBirthDate
+                  max={new Date().toLocaleDateString("sv-SE")}
+                  placeholder="Chọn ngày sinh"
+                  className="py-1.5 rounded-lg"
                 />
                 {passengerDob && (
                   <span className="text-[10px] text-gray-500 block">

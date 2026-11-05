@@ -299,7 +299,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
 
     private TourDto Dto(Tour t) => new(t.Id, t.AgencyId ?? "", t.Code, State(t.Status), State(t.Visibility),
         t.IsRequest == true, t.IsAiGenerated == true, t.Version ?? 1, Configuration(t),
-        t.CreatedAt ?? DateTime.UnixEpoch, t.UpdatedAt ?? t.CreatedAt ?? DateTime.UnixEpoch);
+        t.CreatedAt ?? DateTime.UnixEpoch, t.UpdatedAt ?? t.CreatedAt ?? DateTime.UnixEpoch, t.DesignRequestId);
 
     private void Apply(Tour tour, TourConfiguration c)
     {
@@ -375,6 +375,30 @@ public sealed class TourService(TourRepository repository, AccountService accoun
 
     public async Task<TourDto> Create(string actor, TourConfiguration config, CancellationToken ct)
         => await CreateDraft(actor, config, false, ct);
+    public async Task<TourDto> CreateForRequest(string actor, int requestId, TourConfiguration config, CancellationToken ct)
+    {
+        await Agency(actor, ct);
+        var request = await repository.DesignRequest(actor, requestId, ct) ?? throw new TourException(404, "Yêu cầu thiết kế không tồn tại.");
+        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.Contacted, "Yêu cầu không còn ở trạng thái có thể thiết kế.");
+        await Validate(config, false, ct, actor);
+        var tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
+            IsRequest = true, DesignRequestId = requestId, IsSharedToCustomer = false };
+        Apply(tour, config); repository.Add(tour);
+        request.Status = CustomRequestStatus.Contacted; request.UpdatedAt = DateTime.UtcNow;
+        return await Save(tour, actor, "Created from customer request", ct);
+    }
+    public async Task<TourDto> CustomerRequestTour(string actor, int requestId, CancellationToken ct)
+    {
+        var user = await accounts.Current(actor, ct);
+        Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
+        return Dto(await repository.CustomerRequestTour(actor, requestId, ct) ?? throw new TourException(404, "Tour chưa sẵn sàng cho khách xem."));
+    }
+    public async Task<IReadOnlyList<TourDto>> CustomerRequestTours(string actor, int requestId, CancellationToken ct)
+    {
+        var user = await accounts.Current(actor, ct);
+        Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
+        return (await repository.CustomerRequestTours(actor, requestId, ct)).Select(Dto).ToArray();
+    }
 
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
@@ -390,7 +414,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         await Validate(request.Configuration, false, ct, actor);
         if(!string.IsNullOrWhiteSpace(request.Configuration.Code) && await repository.CodeExists(request.Configuration.Code.Trim().ToUpperInvariant(),id,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
         await Baseline(tour, actor, ct);
-        Apply(tour, request.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
+        Apply(tour, request.Configuration); ResetApproval(tour); if (tour.IsRequest == true) tour.IsSharedToCustomer = false; tour.Version = (tour.Version ?? 1) + 1;
         return await Save(tour, actor, request.ChangeNote, ct);
     }
     public async Task<TourDto> Get(string actor, int id, bool admin, CancellationToken ct)
@@ -494,7 +518,8 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         tour.Version = (tour.Version ?? 1) + 1;
         switch (action)
         {
-            case "complete": tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Hidden; break;
+            case "complete": tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Hidden;
+                if (tour.IsRequest == true) tour.IsSharedToCustomer = true; break;
             case "publish": ResetApproval(tour); tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Public; break;
             case "hide": tour.Visibility = TourVisibility.Hidden; break;
             case "delete": tour.Status = TourStatus.Deleted; tour.Visibility = TourVisibility.Hidden;

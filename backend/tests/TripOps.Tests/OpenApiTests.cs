@@ -50,7 +50,7 @@ public sealed class OpenApiTests
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers/{id}" && o.Method == "delete");
         Assert.DoesNotContain(operations, o => o.Path.Contains("WeatherForecast"));
         Assert.DoesNotContain(operations, o => o.Path.Contains("/snapshots") ||
-            o.Path.EndsWith("/proposals") || o.Path.Contains("/booking-notifications"));
+            (o.Path.Contains("/bookings/") && o.Path.EndsWith("/proposals")) || o.Path.Contains("/booking-notifications"));
         Assert.Equal(operations.Length, operations.Select(o => o.Operation.GetProperty("operationId").GetString()).Distinct().Count());
     }
 

@@ -17,6 +17,7 @@ import {
   BookUser,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 
 interface AgencyLayoutProps {
   children: React.ReactNode;
@@ -102,7 +103,7 @@ export function AgencyLayout({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+      <nav className="tripops-sidebar-nav flex-1 p-3 space-y-1.5 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
@@ -120,15 +121,16 @@ export function AgencyLayout({
                   : "text-[#475569] hover:bg-[#F0F9FF] hover:text-[#075985]"
               }`}
               title={collapsed ? item.label : undefined}
+              aria-current={isActive ? "page" : undefined}
             >
               <Icon
                 className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${
-                  isActive ? "text-[#F97316]" : "text-[#475569] group-hover:text-[#075985]"
+                  isActive ? "text-white" : "text-[#475569] group-hover:text-[#075985]"
                 }`}
               />
               {!collapsed && (
                 <div className="flex-1 flex items-center justify-between min-w-0">
-                  <span className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
+                  <span data-slot="sidebar-label" className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
                   {item.badge !== undefined && item.badge > 0 && (
                     <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#EA580C] text-white">
                       {item.badge}
@@ -141,23 +143,12 @@ export function AgencyLayout({
         })}
       </nav>
 
-      {/* Logout */}
-      {onLogout && (
-        <div className="p-3 border-t border-[#CBD5E1]">
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Đăng xuất</span>}
-          </button>
-        </div>
-      )}
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#F0F9FF] flex font-sans antialiased text-[#0F172A]">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-sans antialiased text-[#0F172A]">
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:flex flex-col bg-white border-r border-[#CBD5E1] transition-all duration-300 fixed left-0 top-0 bottom-0 z-30 ${

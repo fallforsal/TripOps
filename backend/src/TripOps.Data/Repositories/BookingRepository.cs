@@ -20,12 +20,14 @@ public sealed class BookingRepository(TripOpsDbContext db)
     }
     private IQueryable<Booking> Details() => db.Bookings
         .Include(b => b.Customer)
-        .Include(b => b.Tour!).ThenInclude(t => t.Agency)
+        .Include(b => b.Tour!).ThenInclude(t => t.Agency).ThenInclude(a => a.BusinessProfile)
         .Include(b => b.Participants!).ThenInclude(p => p.AssignedGuide)
         .Include(b => b.AssignedGuides!).ThenInclude(ag => ag.Guide)
         .Include(b => b.Incidents)
         .Include(b => b.PaymentTransactions)
         .Include(b => b.PaymentRequests)
+        .Include(b => b.RefundRequests)
+        .Include(b => b.Contracts)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
@@ -109,7 +111,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return (rows, total);
     }
 
-    public Task<Tour?> FindPublicTour(int tourId, CancellationToken ct) =>
+    public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>
         db.Tours.Include(t => t.PricingTiers)
             .Include(t => t.Agency)
             .Include(t => t.Timelines).ThenInclude(t => t.Attractions)
@@ -117,7 +119,9 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(t => t.Accommodations).AsSplitQuery()
             .SingleOrDefaultAsync(t => t.Id == tourId &&
                                        t.Status == TourStatus.Completed &&
-                                       t.Visibility == TourVisibility.Public && t.IsRequest != true &&
+                                       ((t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
+                                        (t.IsRequest == true && t.IsSharedToCustomer == true && t.DesignRequestId.HasValue &&
+                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId))) &&
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
@@ -136,6 +140,20 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
     public void Add(Booking booking) => db.Bookings.Add(booking);
+    public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginCreate(CancellationToken ct) =>
+        db.Database.BeginTransactionAsync(ct);
+
+    /// <summary>Đơn của một phiên ký trực tuyến (tìm theo mã băm của mã phiên).</summary>
+    public Task<int?> BookingIdForSignToken(string tokenHash, CancellationToken ct) =>
+        db.ContractSignSessions.Where(s => s.TokenHash == tokenHash).Select(s => (int?)s.Contract.BookingId).SingleOrDefaultAsync(ct);
+
+    public Task<ContractSignSession?> FindSignSession(string tokenHash, CancellationToken ct) =>
+        db.ContractSignSessions.SingleOrDefaultAsync(s => s.TokenHash == tokenHash, ct);
+
+    public Task<List<ContractSignSession>> OpenSignSessions(int contractId, DateTime now, CancellationToken ct) =>
+        db.ContractSignSessions.Where(s => s.ContractId == contractId && s.CompletedAt == null && s.ExpiresAt > now).ToListAsync(ct);
+
+    public void AddSignSession(ContractSignSession session) => db.ContractSignSessions.Add(session);
 
     /// <summary>
     /// Mở giao dịch DB và khóa dòng booking (UPDATE giả) để các thao tác tiền trên cùng một đơn chạy tuần tự:
@@ -154,6 +172,25 @@ public sealed class BookingRepository(TripOpsDbContext db)
 
     public Task<PaymentTransaction?> FindTransaction(string code, CancellationToken ct) =>
         db.PaymentTransactions.AsNoTracking().SingleOrDefaultAsync(t => t.TransactionCode == code, ct);
+
+    /// <summary>Yêu cầu hủy/hoàn tiền cho màn hình Admin, mới nhất trước (chờ duyệt lên đầu).</summary>
+    public Task<List<RefundRequest>> ListRefunds(RefundStatus? status, CancellationToken ct)
+    {
+        IQueryable<RefundRequest> query = db.RefundRequests.AsNoTracking()
+            .Include(r => r.Booking).ThenInclude(b => b.Customer)
+            .Include(r => r.Booking).ThenInclude(b => b.Tour!).ThenInclude(t => t.Agency)
+            .Include(r => r.Booking).ThenInclude(b => b.PaymentTransactions)
+            .AsSplitQuery();
+        if (status is { } value)
+            query = query.Where(r => r.Status == value);
+        return query
+            .OrderBy(r => r.Status == RefundStatus.Pending ? 0 : 1).ThenByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+            .Take(500)
+            .ToListAsync(ct);
+    }
+
+    public Task<int?> RefundBookingId(int refundId, CancellationToken ct) =>
+        db.RefundRequests.Where(r => r.Id == refundId).Select(r => (int?)r.BookingId).SingleOrDefaultAsync(ct);
 
     public void AddIncident(BookingIncident incident) => db.BookingIncidents.Add(incident);
 
