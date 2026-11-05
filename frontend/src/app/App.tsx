@@ -1746,9 +1746,7 @@ function Application() {
                 }
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              onSubmit={(data) => {
-                handleBookingSubmit(data);
-              }}
+              onSubmit={handleBookingSubmit}
               onViewMyBookings={() => {
                 handleNavigate("my-bookings");
               }}
