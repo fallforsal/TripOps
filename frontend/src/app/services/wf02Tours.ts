@@ -85,6 +85,7 @@ export type ApiTour = {
   status: "draft" | "completed" | "deleted";
   visibility: "hidden" | "public";
   isRequest: boolean;
+  designRequestId?: number | null;
   isAiGenerated: boolean;
   version: number;
   configuration: TourConfiguration;
@@ -135,7 +136,7 @@ export type AgencySupplier = {
   referencePrice?: number | null; conditions?: string | null; notes?: string | null;
   status: string;
 };
-export type SupplierInput = Omit<AgencySupplier, "id" | "status">;
+export type SupplierInput = Omit<AgencySupplier, "id" | "status"> & { status?: string };
 export const agencySuppliers = (type?: "HOTEL" | "RESTAURANT", search = "", signal?: AbortSignal) =>
   http<AgencySupplier[]>(`/agency/suppliers?${type ? `type=${type}&` : ""}search=${encodeURIComponent(search)}`, { signal });
 export const getAgencySupplier = (id: number) =>
@@ -338,6 +339,7 @@ export function fromConfiguration(
     createdAt?: string;
     updatedAt?: string;
     isRequest?: boolean;
+    designRequestId?: number | null;
   } = {},
 ): Tour {
   const c = configuration;
@@ -480,6 +482,7 @@ export function fromConfiguration(
     status: options.status || "completed",
     visibility: options.visibility || "public",
     is_request: options.isRequest || false,
+    customRequestId: options.designRequestId == null ? undefined : String(options.designRequestId),
     version,
     tourType: options.isRequest ? "custom_request" : "public",
   };
@@ -492,6 +495,7 @@ export const fromApiTour = (tour: ApiTour) =>
     createdAt: tour.createdAt,
     updatedAt: tour.updatedAt,
     isRequest: tour.isRequest,
+    designRequestId: tour.designRequestId,
   });
 const fromPublicTour = (tour: PublicTour) =>
   fromConfiguration(tour.id, tour.code, tour.version, tour.configuration);
