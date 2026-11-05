@@ -72,4 +72,13 @@ public sealed class PartnerApplicationsController(AccountService accounts) : Con
     [EndpointSummary("Reject a pending business profile with a reason")]
     [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Reject(int id, RejectRequest request, CancellationToken ct) => Ok(await accounts.Review(id, false, request.Reason, ct));
+    [HttpPost("{id:int}/suspend")]
+    [EndpointSummary("Suspend an approved Agency or Provider business profile")]
+    [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Suspend(int id, CancellationToken ct) => Ok(await accounts.SetSuspended(id, true, ct));
+
+    [HttpPost("{id:int}/activate")]
+    [EndpointSummary("Reactivate a suspended Agency or Provider business profile")]
+    [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Activate(int id, CancellationToken ct) => Ok(await accounts.SetSuspended(id, false, ct));
 }
