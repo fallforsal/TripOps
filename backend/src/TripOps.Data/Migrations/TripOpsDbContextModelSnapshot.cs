@@ -1755,6 +1755,80 @@ namespace TripOps.Data.Migrations
                     b.ToTable("complaints", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.ContractSignSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int>("OtpAttempts")
+                        .HasColumnType("int")
+                        .HasColumnName("otp_attempts");
+
+                    b.Property<DateTime?>("OtpExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("otp_expires_at");
+
+                    b.Property<string>("OtpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("otp_hash");
+
+                    b.Property<int>("OtpSendCount")
+                        .HasColumnType("int")
+                        .HasColumnName("otp_send_count");
+
+                    b.Property<DateTime?>("OtpSentAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("otp_sent_at");
+
+                    b.Property<string>("SignerIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)")
+                        .HasColumnName("signer_ip");
+
+                    b.Property<string>("SignerUserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("signer_user_agent");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("contract_sign_sessions", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.Feedback", b =>
                 {
                     b.Property<int>("Id")
@@ -3973,6 +4047,17 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Target");
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.ContractSignSession", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.BookingContract", "Contract")
+                        .WithMany("SignSessions")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.Feedback", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.User", "Agency")
@@ -4359,6 +4444,11 @@ namespace TripOps.Data.Migrations
                     b.Navigation("RefundRequests");
 
                     b.Navigation("Timelines");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingContract", b =>
+                {
+                    b.Navigation("SignSessions");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimeline", b =>

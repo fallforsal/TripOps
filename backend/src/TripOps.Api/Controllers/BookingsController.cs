@@ -79,6 +79,13 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
         return Ok(await bookings.UploadSignedContract(Actor, id, stream.ToArray(), ct));
     }
 
+    [HttpPost("{id:int}/contract/sign-sessions")]
+    [EndpointSummary("Start online contract signing: returns a one-time token (15 minutes) for the QR code or for signing on this device")]
+    [ProducesResponseType<SignSessionStartDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartSignSession(int id, CancellationToken ct) =>
+        Ok(await bookings.StartSignSession(Actor, id, ct));
+
     [HttpGet("{id:int}/cancellation-quote")]
     [EndpointSummary("Preview the cancellation fee and refund computed by the platform policy at this moment")]
     [ProducesResponseType<CancellationQuoteDto>(StatusCodes.Status200OK)]

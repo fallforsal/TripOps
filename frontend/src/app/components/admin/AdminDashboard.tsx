@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Tour,
   Booking,
@@ -12,7 +12,6 @@ import { AdminLayout } from "./AdminLayout";
 import { AdminDashboardOverview } from "./AdminDashboardOverview";
 import { AdminFinancialManagement } from "./AdminFinancialManagement";
 import { ServicePostApproval } from "./ServicePostApproval";
-import { AdminServiceApprovalPage } from "./AdminServiceApprovalPage";
 import { ProviderManagement } from "./ProviderManagement";
 import { UserManagement } from "./UserManagement";
 import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
@@ -109,6 +108,19 @@ export function AdminDashboard({
   onSyncPayout,
   onLogout,
 }: AdminDashboardProps) {
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?admin\/([^/?]+)/);
+      if (match) {
+        setActiveSection(match[1] === "service-approvals" || match[1] === "services" ? "approve-posts" : match[1]);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   const [activeSection, setActiveSection] =
     useState<string>("partner-approvals");
 
@@ -174,19 +186,13 @@ export function AdminDashboard({
         );
 
       case "service-approvals":
-        return (
-          <AdminServiceApprovalPage
-            services={services}
-            onApproveService={onApproveService || (() => {})}
-            onRejectService={onRejectService || (() => {})}
-          />
-        );
-
       case "services":
       case "approve-posts":
         return (
           <ServicePostApproval
             services={services}
+            onApproveService={onApproveService}
+            onRejectService={onRejectService}
             onToggleHideService={onToggleHideService}
             onDeleteService={onDeleteService}
           />
@@ -215,7 +221,10 @@ export function AdminDashboard({
   return (
     <AdminLayout
       activeSection={activeSection}
-      onNavigate={setActiveSection}
+      onNavigate={(section) => {
+        setActiveSection(section);
+        window.location.hash = `#/admin/${section}`;
+      }}
       onLogout={onLogout}
       pendingToursCount={pendingToursCount}
       pendingRefundsCount={refundRequests.filter((r) => r.status === "PENDING").length}

@@ -1,3 +1,4 @@
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 import { useState } from "react";
 import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
@@ -18,7 +19,6 @@ import {
   Compass,
   FileText,
   RotateCcw,
-  ClipboardCheck,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -55,12 +55,6 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
-      id: "service-approvals",
-      label: "Phê duyệt Bài đăng",
-      icon: ClipboardCheck,
-      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
-    },
-    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
@@ -70,6 +64,7 @@ export function AdminLayout({
       id: "approve-posts",
       label: "Quản lý Bài đăng",
       icon: FileText,
+      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
     },
     {
       id: "refund-requests",
@@ -95,7 +90,7 @@ export function AdminLayout({
   ];
 
   const SidebarContent = () => (
-    <>
+    <div className="flex flex-col h-full">
       {/* Logo/Header */}
       <div className="p-6 border-b border-[#CBD5E1]">
         <div className="flex items-center justify-between">
@@ -137,7 +132,7 @@ export function AdminLayout({
       </div>
 
       {/* Menu Items */}
-      <nav className="tripops-sidebar-nav p-4 space-y-2">
+      <nav className="tripops-sidebar-nav p-4 space-y-2 flex-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
@@ -179,19 +174,10 @@ export function AdminLayout({
             </button>
           );
         })}
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-gray-700 hover:bg-gray-100"
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0 text-gray-600" />
-            {!collapsed && (
-              <span data-slot="sidebar-label" className="font-medium">Đăng xuất</span>
-            )}
-          </button>
-        )}
+        
       </nav>
-    </>
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
+    </div>
   );
 
   return (

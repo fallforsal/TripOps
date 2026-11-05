@@ -55,6 +55,27 @@ public DateTime? ReviewedAt { get; set; }
 public string? ReviewNote { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public virtual Booking Booking { get; set; } = null!;
+public virtual ICollection<ContractSignSession> SignSessions { get; set; } = new List<ContractSignSession>();
+}
+
+/// <summary>
+/// Phiên ký hợp đồng trực tuyến (mở bằng mã QR hoặc ngay trên máy tính). Mã phiên chỉ lưu dạng băm SHA-256,
+/// dùng một lần, hết hạn sau 15 phút; xác nhận ký bằng OTP gửi về email tài khoản khách.
+/// </summary>
+public class ContractSignSession : BaseEntity<int> {
+public int ContractId { get; set; }
+public string TokenHash { get; set; } = string.Empty;
+public DateTime ExpiresAt { get; set; }
+public string? OtpHash { get; set; }
+public DateTime? OtpExpiresAt { get; set; }
+public DateTime? OtpSentAt { get; set; }
+public int OtpSendCount { get; set; }
+public int OtpAttempts { get; set; }
+public DateTime? CompletedAt { get; set; }
+public string? SignerIp { get; set; }
+public string? SignerUserAgent { get; set; }
+public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+public virtual BookingContract Contract { get; set; } = null!;
 }
 
 public class BookingParticipant : BaseEntity<int> {

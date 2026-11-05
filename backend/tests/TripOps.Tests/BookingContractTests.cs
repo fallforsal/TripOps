@@ -51,12 +51,17 @@ public sealed partial class BookingFlowTests
 
         var signed = await Read<BookingDto>(await UploadContract(customer, booking.Id, SignedPdf));
         Assert.Equal(BookingService.ContractSigned, signed.Contract!.Status);
-        Assert.False(signed.Contract.RequiredBeforePayment);
         Assert.Equal("upload", signed.Contract.SignMethod);
         var copy = await agency.GetAsync($"/api/v1/files/contracts/{booking.Id}/signed");
         Assert.Equal(SignedPdf, await copy.Content.ReadAsByteArrayAsync());
 
-        // Ký xong là thanh toán được, không cần chờ Agency kiểm tra.
+        // Bản tự tải lên không tự chứng minh được đã ký thật: chờ Agency xác nhận mới mở thanh toán.
+        Assert.True(signed.Contract.RequiredBeforePayment);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(1500000, "DEP-UPLOADED", null))).StatusCode);
+        var verified = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/contract/review",
+            new ContractReviewRequest("verify", null)));
+        Assert.False(verified.Contract!.RequiredBeforePayment);
         await Read<BookingDto>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "DEP-SIGNED", null)));
 
         using var scope = app.Services.CreateScope();

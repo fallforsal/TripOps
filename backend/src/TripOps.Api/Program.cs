@@ -36,6 +36,10 @@ builder.Services.AddRateLimiter(options => {
     options.AddPolicy("payment-sync", context => RateLimitPartition.GetFixedWindowLimiter(
         $"{context.Connection.RemoteIpAddress}:{context.Request.RouteValues["id"]}",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 12, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Trang ký hợp đồng không cần đăng nhập (chỉ có mã phiên): giới hạn theo IP để chống dò mã/OTP.
+    options.AddPolicy("contract-signing", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 40, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {

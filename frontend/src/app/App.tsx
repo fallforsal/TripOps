@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
 import { ServiceCatalogueProvider } from "@/app/contexts/ServiceCatalogue";
+import { SignContractPage } from "@/app/components/sign/SignContractPage";
+import { parseSignRoute } from "@/app/services/contractSigning";
 import { companyFromUser } from "@/app/services/authService";
 import {
   agencyTours,
@@ -58,6 +60,8 @@ import {
   fromAdminRefund,
   uploadSignedContract,
   reviewContract,
+  startSignSession,
+  type SignSessionStartDto,
   type RefundAccountInput,
   type CancellationReason,
 } from "@/app/services/wf05Bookings";
@@ -169,6 +173,7 @@ function Application() {
   const [currentPage, setCurrentPage] = useState<string>("home");
   const [previousPage, setPreviousPage] = useState<string>("home");
   const [tours, setTours] = useState<Tour[]>([]);
+  const [toursLoaded, setToursLoaded] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -233,7 +238,8 @@ function Application() {
   }, [tourNotice]);
   useEffect(() => {
     let active = true;
-    refreshTours().then(() => refreshCustomRequests()).catch((e) => active && setApiError(e.message));
+    refreshTours().then(() => refreshCustomRequests()).catch((e) => active && setApiError(e.message))
+      .finally(() => active && setToursLoaded(true));
     return () => {
       active = false;
     };
@@ -371,7 +377,13 @@ function Application() {
     setCurrentUser(null);
     setShowLogin(false);
     setShowRegister(false);
+    setSelectedUserBooking(null);
+    setSelectedTour(null);
+    setBookingTour(null);
     setCurrentPage("home");
+    // Đăng xuất ở bất kỳ vai trò nào cũng về trang chủ ngay; thay địa chỉ (không thêm lịch sử) để nút Back không mở lại trang cần đăng nhập.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    window.scrollTo({ top: 0 });
   };
 
   const { navigateForward, restoreHistoryPosition, goBack } =
@@ -430,6 +442,22 @@ function Application() {
         if (foundB) {
           setSelectedUserBooking(foundB);
           setCurrentPage("user-booking-detail");
+        } else {
+          const numId = Number(bId);
+          if (Number.isSafeInteger(numId) && numId > 0) {
+            setCurrentPage("user-booking-detail");
+            getBookingDetail(numId)
+              .then((dto) => {
+                const converted = fromApiBooking(dto, tours, currentUser);
+                setSelectedUserBooking(converted);
+              })
+              .catch(() => {
+                if (bookings.length > 0) {
+                  toast.error("Không tìm thấy đơn đặt tour.");
+                  setCurrentPage("my-bookings");
+                }
+              });
+          }
         }
       } else if (rawHash === "custom-tour") {
         setCurrentPage("custom-tour");
@@ -735,6 +763,25 @@ function Application() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không tải được bản hợp đồng đã ký.");
       return false;
+    }
+  };
+
+  /** Khách bắt đầu ký trực tuyến: tạo mã một lần để hiện QR (mã cũ hết hiệu lực). */
+  const handleStartWebSign = async (bookingId: string): Promise<SignSessionStartDto | null> => {
+    try {
+      return await startSignSession(Number(bookingId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tạo được mã ký hợp đồng.");
+      return null;
+    }
+  };
+
+  /** Hỏi lại máy chủ trạng thái đơn (khi đang chờ khách ký trên điện thoại). Trả về hợp đồng mới nhất. */
+  const handleRefreshContract = async (bookingId: string) => {
+    try {
+      return applyServerBooking(await getBookingDetail(Number(bookingId))).travelContract ?? null;
+    } catch {
+      return null;
     }
   };
 
@@ -1434,6 +1481,16 @@ function Application() {
     setTourNotice(`Đã khôi phục v${versionNumber} thành bản nháp mới.`);
   };
 
+  // Auth restoring loading screen
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
+        <div className="w-10 h-10 border-4 border-[#075985]/20 border-t-[#075985] rounded-full animate-spin mb-4" />
+        <p className="text-sm font-semibold text-slate-600">Đang khôi phục phiên làm việc...</p>
+      </div>
+    );
+  }
+
   // Show register screen
   if (showRegister) {
     return (
@@ -1656,7 +1713,7 @@ function Application() {
 
       <main
         className={
-          currentPage === "home"
+          currentPage === "home" || currentPage === "user-booking-detail"
             ? "flex-1 w-full min-w-0"
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
@@ -1732,6 +1789,7 @@ function Application() {
             onBookTour={(t) => handleOpenBookingForm(t)}
             onOpenAIAdvisor={() => setShowAIAdvisor(true)}
             onSearchTours={(criteria) => handleNavigate("book-tours", criteria)}
+            loading={!toursLoaded}
           />
         ) : currentPage === "book-tours" ? (
           <BookToursPage
@@ -1779,6 +1837,8 @@ function Application() {
               onSubmitRefundRequest={handleCreateRefundRequest}
               onUpdateRefundAccount={handleUpdateRefundAccount}
               onUploadSignedContract={handleUploadSignedContract}
+              onStartWebSign={handleStartWebSign}
+              onRefreshContract={handleRefreshContract}
               onBack={() => {
                 goBack(() => handleNavigate("my-bookings"));
               }}
@@ -1854,6 +1914,7 @@ function Application() {
             onViewTour={handleViewTour}
             onBookTour={(t) => handleOpenBookingForm(t)}
             onOpenAIAdvisor={() => setShowAIAdvisor(true)}
+            loading={!toursLoaded}
           />
         )}
       </main>
@@ -1877,7 +1938,20 @@ function Application() {
   );
 }
 
+/** Trang ký hợp đồng từ mã QR (#/sign/{mã}) chạy riêng, không cần đăng nhập. */
+function useSignToken(): string | null {
+  const [token, setToken] = useState(() => parseSignRoute(window.location.hash));
+  useEffect(() => {
+    const onHash = () => setToken(parseSignRoute(window.location.hash));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return token;
+}
+
 export default function App() {
+  const signToken = useSignToken();
+  if (signToken) return <SignContractPage token={signToken} />;
   return (
     <ServiceCatalogueProvider>
       <Application />

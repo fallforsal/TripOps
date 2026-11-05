@@ -48,12 +48,16 @@ public sealed partial class BookingService
     }
 
     /// <summary>Chặn thanh toán đầu tiên khi khách chưa ký hợp đồng đúng giá (đơn đã có tiền từ trước thì không chặn).</summary>
+    /// <summary>
+    /// Chặn thanh toán đầu tiên cho tới khi hợp đồng đúng giá được ký hợp lệ:
+    /// ký trực tuyến (có OTP) thì mở ngay; bản tự tải lên thì phải chờ Agency xác nhận (không tự nhận biết được đã ký thật chưa).
+    /// </summary>
     private static bool ContractBlocksPayment(Booking booking)
     {
         if (PaidAmount(booking) > 0) return false;
         var current = CurrentContract(booking);
-        return current is null || current.TotalAmount != booking.TotalAmount
-            || current.Status is not (ContractSigned or ContractVerified);
+        if (current is null || current.TotalAmount != booking.TotalAmount) return true;
+        return !(current.Status == ContractVerified || (current.Status == ContractSigned && current.SignMethod == SignMethodWeb));
     }
 
     private static ContractDto? ContractOf(Booking booking)
@@ -120,8 +124,7 @@ public sealed partial class BookingService
             throw new BookingException(409, "Chỉ ký hợp đồng cho đơn đã được duyệt và chưa khởi hành.");
         var now = UtcNow;
         var contract = EnsureContract(booking, now);
-        if (contract.Status == ContractVerified)
-            throw new BookingException(409, "Hợp đồng đã được công ty lữ hành xác nhận, không cần ký lại.");
+        EnsureWebSignable(contract); // đã xác nhận hoặc đã ký trực tuyến thì không thay bằng bản tải lên
 
         var name = $"v{contract.Version.ToString(CultureInfo.InvariantCulture)}-{Guid.NewGuid():N}{extension}";
         var path = ContractPath(booking.Id, name);
@@ -132,7 +135,7 @@ public sealed partial class BookingService
         contract.SignedFileType = type;
         contract.SignedFileSha256 = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
         contract.SignedAt = now;
-        contract.SignMethod = "upload";
+        contract.SignMethod = SignMethodUpload;
         contract.Status = ContractSigned;
         contract.ReviewedBy = null;
         contract.ReviewedAt = null;

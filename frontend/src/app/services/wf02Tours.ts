@@ -222,7 +222,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
         {
           supplierSource: meal.supplierSource || (meal.isCustom || !meal.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
           agencySupplierId: meal.agencySupplierId || null,
-          supplier: meal.supplier || (meal.isCustom ? { address: meal.description, area: day.destinationCity || destination, referencePrice: meal.pricePerPerson, conditions: meal.description } : null),
+          supplier: meal.supplier || (meal.isCustom ? { area: day.destinationCity || destination, referencePrice: meal.pricePerPerson, conditions: meal.description } : null),
           mealType: meal.type,
           restaurantName: (meal.serviceName || meal.description || "").trim(),
           serviceId:

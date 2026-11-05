@@ -91,9 +91,17 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         var query = db.BusinessProfiles.AsNoTracking().Where(p =>
             (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider));
         if (!string.IsNullOrWhiteSpace(userId)) query = query.Where(p => p.UserId == userId);
-        if (!string.IsNullOrWhiteSpace(status)) {
-            if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state)) throw new AccountException(400, "Trạng thái không hợp lệ.");
-            query = query.Where(p => p.Status == state);
+        //if (!string.IsNullOrWhiteSpace(status)) {
+        //    if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state)) throw new AccountException(400, "Trạng thái không hợp lệ.");
+        //    query = query.Where(p => p.Status == state);
+        //}
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<BusinessProfileStatus>(status, true, out var state) || !Enum.IsDefined(state))
+                throw new AccountException(400, "Trạng thái không hợp lệ.");
+            query = state == BusinessProfileStatus.Approved
+                ? query.Where(p => p.Status == BusinessProfileStatus.Approved || p.Status == BusinessProfileStatus.Suspended)
+                : query.Where(p => p.Status == state);
         }
         if (role is "agency" or "provider") { var r = role == "agency" ? UserRole.TravelAgency : UserRole.Provider; query = query.Where(p => p.User.Role == r); }
         if (!string.IsNullOrWhiteSpace(search)) { var q = search.Trim(); query = query.Where(p => p.BusinessName!.Contains(q) || p.TaxCode!.Contains(q) || p.User.Name.Contains(q) || p.User.Email.Contains(q) || p.User.Phone!.Contains(q)); }
@@ -112,6 +120,22 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
                 .SetProperty(p => p.RejectionReason, approve ? null : reason!.Trim())
                 .SetProperty(p => p.ApprovedAt, approve ? (DateTime?)now : null).SetProperty(p => p.UpdatedAt, now), ct);
         if (count == 0) throw new AccountException(409, "Hồ sơ không tồn tại hoặc đã được xử lý. Vui lòng tải lại.");
+        return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+    }
+
+    public async Task<ProfileDto> SetSuspended(int id, bool suspend, CancellationToken ct)
+    {
+        var from = suspend ? BusinessProfileStatus.Approved : BusinessProfileStatus.Suspended;
+        var to = suspend ? BusinessProfileStatus.Suspended : BusinessProfileStatus.Approved;
+        var now = DateTime.UtcNow;
+        var count = await db.BusinessProfiles
+            .Where(p => p.Id == id && p.Status == from &&
+                (p.User.Role == UserRole.TravelAgency || p.User.Role == UserRole.Provider))
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, to).SetProperty(p => p.UpdatedAt, now), ct);
+        if (count == 0)
+            throw new AccountException(409, suspend
+                ? "Chỉ có thể đình chỉ hồ sơ đang hoạt động. Vui lòng tải lại."
+                : "Chỉ có thể kích hoạt lại hồ sơ đang bị đình chỉ. Vui lòng tải lại.");
         return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
     }
 }

@@ -12,10 +12,12 @@ public sealed record CostLine(string SlotKey, string Source, string Name, decima
 public sealed record QuotationView(int Id, int BookingId, int Version, int TourId, int TourVersion,
     string Status, decimal EstimatedSale, decimal? TotalCost, decimal? AgencyProfit,
     decimal SaleTotal, IReadOnlyList<CostLine>? Costs, string Reason, DateTime CreatedAt,
-    DateTime? SentAt, DateTime? AcceptedAt);
+    DateTime? SentAt, DateTime? AcceptedAt, bool RequiresCustomerAcceptance = false);
 public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, string SlotKey,
     string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
-    decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note);
+    decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note,
+    DateTime? RespondedAt = null, string? ProviderId = null, string? ProviderName = null,
+    string? ProviderPhone = null, string? FullAddress = null);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note);
 public sealed record AgencyCostInput(string SlotKey, decimal UnitCost);
 public sealed record ExtraCostInput(string Name, decimal Quantity, string Unit, decimal UnitCost);
@@ -282,22 +284,28 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
         await Owned(actor, bookingId, agency, ct);
         var rows = await db.BookingQuotations.AsNoTracking().Where(q => q.BookingId == bookingId)
             .OrderByDescending(q => q.Version).ToListAsync(ct);
+        var requiresAcceptance = await RequiresAcceptance(bookingId, ct);
         return rows.Where(q => agency || q.SentAt.HasValue)
-            .Select(q => View(q, agency)).ToArray();
+            .Select(q => View(q, agency) with { RequiresCustomerAcceptance = requiresAcceptance }).ToArray();
     }
+    private IQueryable<ProviderRequestView> RequestViews(IQueryable<BookingSupplierRequest> requests) =>
+        from r in requests
+        join service in db.Services.AsNoTracking() on r.ServiceId equals service.Id
+        select new ProviderRequestView(r.Id, r.BookingId, r.ServiceId, r.SlotKey, r.ServiceName,
+            r.ServiceDateFrom, r.ServiceDateTo, r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost,
+            r.Status, r.Note, r.RespondedAt, r.ProviderId,
+            service.Provider.BusinessProfile != null ? service.Provider.BusinessProfile.BusinessName : service.Provider.Name,
+            service.Provider.Phone, service.FullAddress);
+
     public async Task<IReadOnlyList<ProviderRequestView>> ProviderRequests(string actor, CancellationToken ct) =>
-        await db.BookingSupplierRequests.AsNoTracking().Where(r => r.ProviderId == actor)
-            .OrderByDescending(r => r.CreatedAt).Select(r => new ProviderRequestView(r.Id, r.BookingId,
-                r.ServiceId, r.SlotKey, r.ServiceName, r.ServiceDateFrom, r.ServiceDateTo,
-                r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost, r.Status, r.Note))
+        await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.ProviderId == actor)
+            .OrderByDescending(r => r.CreatedAt))
             .ToListAsync(ct);
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)
     {
         await Owned(actor, bookingId, true, ct);
-        return await db.BookingSupplierRequests.AsNoTracking().Where(r => r.BookingId == bookingId)
-            .OrderByDescending(r => r.CreatedAt).Select(r => new ProviderRequestView(r.Id, r.BookingId,
-                r.ServiceId, r.SlotKey, r.ServiceName, r.ServiceDateFrom, r.ServiceDateTo,
-                r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost, r.Status, r.Note))
+        return await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.BookingId == bookingId)
+            .OrderByDescending(r => r.CreatedAt))
             .ToListAsync(ct);
     }
     public async Task<ProviderRequestView> Respond(string actor, int requestId, ProviderReply input, CancellationToken ct)
@@ -318,9 +326,7 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
         request.QuotedCost = input.Decision == "confirm" ? input.QuotedCost : null;
         request.Note = input.Note?.Trim(); request.RespondedAt = DateTime.UtcNow;
         await Revise(request.BookingId, $"Provider {request.ServiceName} {request.Status.ToLowerInvariant()}", request, ct);
-        return new(request.Id, request.BookingId, request.ServiceId, request.SlotKey,
-            request.ServiceName, request.ServiceDateFrom, request.ServiceDateTo,
-            request.Quantity, request.Unit, request.EstimatedCost, request.QuotedCost, request.Status, request.Note);
+        return await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.Id == request.Id)).SingleAsync(ct);
     }
     private async Task<BookingQuotation> Revise(int bookingId, string reason,
         BookingSupplierRequest? response, CancellationToken ct)
@@ -425,6 +431,9 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
             !await db.BookingSupplierRequests.AnyAsync(r => r.BookingId == bookingId && r.Status != "Confirmed" && r.Status != "Superseded", ct),
             "Cần xác nhận dịch vụ và báo giá hiện hành trước khi duyệt booking.");
     }
+    public async Task<bool> RequiresAcceptance(int bookingId, CancellationToken ct) =>
+        await db.Bookings.AnyAsync(b => b.Id == bookingId && b.DesignRequestId.HasValue, ct) ||
+        await HasPlatformRequests(bookingId, ct) || await HasAgencySuppliers(bookingId, ct);
     public Task<bool> HasPlatformRequests(int bookingId, CancellationToken ct) =>
         db.BookingSupplierRequests.AnyAsync(r => r.BookingId == bookingId && r.Status != "Superseded", ct);
     public async Task<bool> HasAgencySuppliers(int bookingId, CancellationToken ct)

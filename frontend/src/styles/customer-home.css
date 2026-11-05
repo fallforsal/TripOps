@@ -875,10 +875,22 @@
   align-items: center;
   background: transparent;
   color: var(--home-primary);
-  padding: 8px;
+  padding: 8px 12px;
   font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--home-radius);
+  cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.trip-header .trip-ai-trigger:hover {
+  background: var(--home-accent-soft);
+  color: var(--home-primary-strong);
+}
+.trip-header .trip-ai-trigger:focus-visible {
+  outline: 2px solid var(--home-primary);
+  outline-offset: 2px;
 }
 .trip-ai-trigger svg {
   width: 16px;

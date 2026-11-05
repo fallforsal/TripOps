@@ -130,6 +130,7 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<RefundRequest>().Property(e => e.Status).HasDefaultValue(RefundStatus.Pending);
         modelBuilder.Entity<RefundRequest>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingContract>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
+        modelBuilder.Entity<ContractSignSession>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<SystemBankAccount>().Property(e => e.IsDefault).HasDefaultValue(true);
         modelBuilder.Entity<SystemBankAccount>().Property(e => e.Status).HasDefaultValue("ACTIVE");
         modelBuilder.Entity<SystemBankAccount>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");

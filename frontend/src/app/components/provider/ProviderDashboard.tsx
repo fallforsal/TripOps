@@ -59,6 +59,21 @@ export function ProviderDashboard({
   >("overview");
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?provider\/([^/?]+)(?:\/([^/?]+))?/);
+      if (match) {
+        const sec = match[1] as any;
+        const sId = match[2] || null;
+        setActiveSection(sec);
+        if (sId) setSelectedServiceId(sId);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [pendingBookingCount, setPendingBookingCount] = useState(0);
   useEffect(() => {

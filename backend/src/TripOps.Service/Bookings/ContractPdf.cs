@@ -17,6 +17,9 @@ public sealed record ContractData(
     decimal TotalAmount,
     IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule);
 
+/// <summary>Chữ ký trực tuyến của Bên B (ảnh PNG khách vẽ) và thông tin xác thực ghi vào bản đã ký.</summary>
+public sealed record ContractSignature(byte[] Png, DateTime SignedAtVietnam, string MaskedEmail, string SessionRef);
+
 /// <summary>
 /// Tạo hợp đồng lữ hành nội địa dạng PDF (QuestPDF). Nội dung theo Luật Du lịch 2017 Điều 39: chương trình,
 /// giá và cách thanh toán, điều kiện hủy và trách nhiệm tài chính, bất khả kháng, bảo hiểm.
@@ -36,7 +39,7 @@ public static class ContractPdf
     private static string Money(decimal value) => value.ToString("N0", Vi) + " đ";
     private static string Date(DateTime value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    public static byte[] Generate(ContractData d) => Document.Create(document =>
+    public static byte[] Generate(ContractData d, ContractSignature? signature = null) => Document.Create(document =>
     {
         document.Page(page =>
         {
@@ -111,10 +114,54 @@ public static class ContractPdf
                 col.Item().Text("Đợt 1 (đặt cọc) bằng 50% tổng giá trị, hạn 24 giờ kể từ khi Bên A duyệt. Đợt 2 (phần còn lại) hạn hết ngày trước ngày khởi hành 8 ngày. " +
                     "Tour được duyệt sát ngày khởi hành thì thanh toán một lần 100% trong 24 giờ.");
 
-                Section(col, "ĐIỀU 3. HỦY HỢP ĐỒNG VÀ HOÀN TIỀN");
-                col.Item().Text("a) Bên B hủy: phí hủy tính trên tổng giá trị tour theo số ngày còn lại trước khởi hành tại lúc gửi yêu cầu: " +
-                    "trong 72 giờ sau khi thanh toán và còn từ 15 ngày: 0%; còn từ 30 ngày: 0%; 15–29 ngày: 25%; 8–14 ngày: 50%; 3–7 ngày: 75%; " +
-                    "1–2 ngày: 90%; ngày khởi hành hoặc không tham gia: 100%. Số tiền hoàn = số đã thanh toán − phí hủy (không âm).");
+                col.Item().ShowEntire().Column(cancellation =>
+                {
+                    cancellation.Spacing(6);
+                    Section(cancellation, "ĐIỀU 3. HỦY HỢP ĐỒNG VÀ HOÀN TIỀN");
+                    cancellation.Item().Text("a) Bên B hủy hợp đồng").Bold();
+                    cancellation.Item().Text("Phí hủy tính trên tổng giá trị tour, căn cứ số ngày còn lại trước ngày khởi hành tại thời điểm gửi yêu cầu hủy.");
+                    cancellation.Item().Background(Colors.Grey.Lighten4).Padding(8).Text(text =>
+                    {
+                        text.Span("Trường hợp miễn phí hủy (0%): ").Bold();
+                        text.Span("gửi yêu cầu trong 72 giờ sau khi thanh toán và còn từ 15 ngày trở lên trước ngày khởi hành.");
+                    });
+                    cancellation.Item().Text("Ngoài trường hợp miễn phí nêu trên, áp dụng bảng phí sau:");
+                    cancellation.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(2);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(6)
+                                .Text("Thời điểm hủy trước ngày khởi hành").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(6).AlignCenter()
+                                .Text("Phí hủy (% tổng giá trị tour)").Bold();
+                        });
+                        foreach (var (period, fee) in new[]
+                        {
+                            ("Từ 30 ngày trở lên", "0%"),
+                            ("Từ 15 đến 29 ngày", "25%"),
+                            ("Từ 8 đến 14 ngày", "50%"),
+                            ("Từ 3 đến 7 ngày", "75%"),
+                            ("Từ 1 đến 2 ngày", "90%"),
+                            ("Ngày khởi hành hoặc không tham gia", "100%")
+                        })
+                        {
+                            table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2)
+                                .Padding(6).Text(period);
+                            table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2)
+                                .Padding(6).AlignCenter().Text(fee).Bold();
+                        }
+                    });
+                    cancellation.Item().PaddingTop(2).Text(text =>
+                    {
+                        text.Span("Số tiền hoàn = Số tiền đã thanh toán - Phí hủy.").Bold();
+                        text.Span(" Số tiền hoàn tối thiểu là 0 đ.");
+                    });
+                });
                 col.Item().Text("b) Bên A hủy tour: Bên B được hoàn 100% số tiền đã thanh toán.");
                 col.Item().Text("c) Bên B không thanh toán đủ đúng hạn: Bên A có quyền hủy hợp đồng và Bên B mất số tiền đã thanh toán (Bộ luật Dân sự 2015, Điều 328 về đặt cọc).");
                 col.Item().Text("d) Hợp đồng chỉ chấm dứt khi Quản trị viên TripOps duyệt yêu cầu hủy. Tiền hoàn được chuyển trong 7 ngày làm việc kể từ khi duyệt.");
@@ -131,24 +178,48 @@ public static class ContractPdf
                 col.Item().Text("Bên A thực hiện đúng chương trình, chất lượng dịch vụ đã cam kết và thông báo kịp thời mọi thay đổi. " +
                     "Bên B cung cấp thông tin chính xác, thanh toán đúng hạn và tuân thủ hướng dẫn của hướng dẫn viên.");
 
-                Section(col, "ĐIỀU 7. HIỆU LỰC");
-                col.Item().Text("Hợp đồng có hiệu lực khi Bên B ký và tải bản đã ký lên TripOps. Tranh chấp được giải quyết bằng thương lượng; " +
-                    "không thương lượng được thì đưa ra Tòa án có thẩm quyền. Hợp đồng lập bằng tiếng Việt, mỗi bên lưu một bản điện tử trên TripOps.");
-
-                col.Item().PaddingTop(16).Row(row =>
+                col.Item().ShowEntire().Column(closing =>
                 {
-                    row.RelativeItem().Column(a =>
+                    closing.Spacing(6);
+                    Section(closing, "ĐIỀU 7. HIỆU LỰC");
+                    closing.Item().Text("Hợp đồng có hiệu lực khi Bên B ký (ký trực tuyến hoặc tải bản đã ký lên TripOps). Tranh chấp được giải quyết bằng thương lượng; " +
+                        "không thương lượng được thì đưa ra Tòa án có thẩm quyền. Hợp đồng lập bằng tiếng Việt, mỗi bên lưu một bản điện tử trên TripOps.");
+
+                    closing.Item().PaddingTop(16).Row(row =>
                     {
-                        a.Item().AlignCenter().Text("ĐẠI DIỆN BÊN A").Bold();
-                        a.Item().AlignCenter().Text("(Đã xác nhận điện tử khi duyệt đơn trên TripOps)").Italic().FontSize(8);
-                        a.Item().PaddingTop(30).AlignCenter().Text(d.AgencyName);
+                        row.RelativeItem().Column(a =>
+                        {
+                            a.Item().AlignCenter().Text("ĐẠI DIỆN BÊN A").Bold();
+                            a.Item().AlignCenter().Text("(Đã xác nhận điện tử khi duyệt đơn trên TripOps)").Italic().FontSize(8);
+                            a.Item().PaddingTop(30).AlignCenter().Text(d.AgencyName);
+                        });
+                        row.RelativeItem().Column(b =>
+                        {
+                            b.Item().AlignCenter().Text("BÊN B").Bold();
+                            if (signature is null)
+                            {
+                                b.Item().AlignCenter().Text("(Ký và ghi rõ họ tên)").Italic().FontSize(8);
+                                b.Item().PaddingTop(30).AlignCenter().Text(d.CustomerName);
+                            }
+                            else
+                            {
+                                b.Item().AlignCenter().Text("(Đã ký trực tuyến trên TripOps)").Italic().FontSize(8);
+                                b.Item().Height(55).AlignCenter().Image(signature.Png).FitArea();
+                                b.Item().AlignCenter().Text(d.CustomerName);
+                            }
+                        });
                     });
-                    row.RelativeItem().Column(b =>
-                    {
-                        b.Item().AlignCenter().Text("BÊN B").Bold();
-                        b.Item().AlignCenter().Text("(Ký và ghi rõ họ tên)").Italic().FontSize(8);
-                        b.Item().PaddingTop(30).AlignCenter().Text(d.CustomerName);
-                    });
+
+                    if (signature is not null)
+                        closing.Item().PaddingTop(10).Border(0.5f).BorderColor(Colors.Grey.Lighten1).Background(Colors.Grey.Lighten4).Padding(8).Column(audit =>
+                        {
+                            audit.Spacing(2);
+                            audit.Item().Text("XÁC NHẬN KÝ ĐIỆN TỬ").Bold().FontSize(9);
+                            audit.Item().Text($"Bên B ({d.CustomerName}) đã đọc và ký hợp đồng số {d.ContractNo}, phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)}, " +
+                                $"lúc {signature.SignedAtVietnam.ToString("HH:mm:ss dd/MM/yyyy", CultureInfo.InvariantCulture)} (giờ Việt Nam).").FontSize(8);
+                            audit.Item().Text($"Xác thực bằng mã OTP gửi tới email {signature.MaskedEmail}. Mã phiên ký: {signature.SessionRef}.").FontSize(8);
+                            audit.Item().Text("Chữ ký điện tử theo Luật Giao dịch điện tử 2023. Mã băm SHA-256 của file này được TripOps lưu để kiểm tra file không bị sửa.").FontSize(8);
+                        });
                 });
             });
 
