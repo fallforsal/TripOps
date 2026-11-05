@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   RotateCcw,
@@ -40,12 +40,20 @@ import {
   DialogFooter,
 } from "@/app/components/ui/dialog";
 import { RefundRequest, RefundStatus, RefundReasonType } from "@/app/types";
+import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 
 interface AdminRefundManagementProps {
   refundRequests: RefundRequest[];
-  onApproveRefund: (refundId: string, bankTransactionCode: string, note?: string) => void;
+  /** refundAmount: số tiền thực hoàn (mặc định = số gợi ý theo chính sách). Trả false nếu máy chủ từ chối. */
+  onApproveRefund: (refundId: string, bankTransactionCode: string, note?: string, refundAmount?: number) => void | Promise<boolean | void>;
   onRejectRefund: (refundId: string, reason: string) => void;
   onReviewRefund: (refundId: string, note?: string) => void;
+  /** Kênh chuyển tiền payOS (null = chưa tải). */
+  payoutAccount?: PayoutAccountDto | null;
+  /** Duyệt và hoàn tự động qua chi hộ payOS (tiền thật). Trả false nếu máy chủ từ chối. */
+  onPayoutRefund?: (refundId: string, refundAmount: number, note?: string) => Promise<boolean>;
+  /** Tra cứu payOS cho lệnh chi đang chạy. */
+  onSyncPayout?: (refundId: string) => Promise<void>;
 }
 
 const BANK_CODE_MAP: Record<string, string> = {
@@ -69,14 +77,15 @@ const REASON_LABELS: Record<RefundReasonType, { label: string; color: string }> 
   WEATHER_FORCE_MAJEURE: { label: "Thời tiết / Bất khả kháng", color: "bg-amber-50 text-amber-700 border-amber-200" },
   SERVICE_QUALITY: { label: "Chất lượng dịch vụ", color: "bg-purple-50 text-purple-700 border-purple-200" },
   DUPLICATE_PAYMENT: { label: "Thanh toán trùng lặp", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-  TOUR_CANCELLED: { label: "Tour bị hủy từ Cty", color: "bg-orange-50 text-orange-700 border-orange-200" },
+  TOUR_CANCELLED: { label: "Agency hủy tour", color: "bg-orange-50 text-orange-700 border-orange-200" },
+  PAYMENT_OVERDUE: { label: "Quá hạn thanh toán", color: "bg-rose-50 text-rose-700 border-rose-200" },
   OTHER: { label: "Lý do khác", color: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
 const REJECTION_PRESETS = [
-  "Khách thông báo hủy sau khi đoàn đã xuất phát (No-show), không đủ điều kiện hoàn trả theo quy chế sàn.",
-  "Hủy sát giờ khởi hành (trong vòng 48h), chính sách nền tảng quy định không hoàn tiền (0%).",
-  "Thông tin tài khoản ngân hàng hoặc tên chủ tài khoản không chính xác, vui lòng cung cấp lại.",
+  "Khách và đơn vị lữ hành đã thỏa thuận tiếp tục tour, khách rút yêu cầu hủy.",
+  "Agency đã tìm đủ khách / sắp xếp được dịch vụ, tour vẫn khởi hành như lịch.",
+  "Thông tin tài khoản ngân hàng hoặc tên chủ tài khoản không chính xác, vui lòng gửi lại yêu cầu.",
   "Đã thỏa thuận với đơn vị lữ hành dời chuyến khởi hành sang đợt tiếp theo.",
 ];
 
@@ -89,7 +98,17 @@ export function AdminRefundManagement({
   onApproveRefund,
   onRejectRefund,
   onReviewRefund,
+  payoutAccount,
+  onPayoutRefund,
+  onSyncPayout,
 }: AdminRefundManagementProps) {
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const syncPayout = async (id: string) => {
+    if (!onSyncPayout) return;
+    setSyncingId(id);
+    await onSyncPayout(id);
+    setSyncingId(null);
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | RefundStatus>("ALL");
   const [reasonFilter, setReasonFilter] = useState<"ALL" | RefundReasonType>("ALL");
@@ -102,6 +121,17 @@ export function AdminRefundManagement({
   // Form states for approval
   const [bankTransCode, setBankTransCode] = useState("");
   const [approvalNote, setApprovalNote] = useState("");
+  const [approveAmount, setApproveAmount] = useState("");
+  const [approving, setApproving] = useState(false);
+  /** payout = chi tự động qua payOS; manual = Admin đã chuyển khoản tay và nhập mã giao dịch. */
+  const [approveMethod, setApproveMethod] = useState<"payout" | "manual">("manual");
+  const payoutReady = Boolean(payoutAccount?.configured && onPayoutRefund);
+  useEffect(() => {
+    setApproveAmount(approvingRefund ? String(approvingRefund.suggestedRefundAmount ?? approvingRefund.approvedRefundAmount) : "");
+    setApproveMethod(
+      approvingRefund && payoutReady && approvingRefund.bankBin && approvingRefund.refundAccountNumber ? "payout" : "manual",
+    );
+  }, [approvingRefund, payoutReady]);
   const [approvalError, setApprovalError] = useState("");
 
   // Form states for rejection
@@ -156,14 +186,38 @@ export function AdminRefundManagement({
   }, [refundRequests, searchTerm, statusFilter, reasonFilter]);
 
   // Confirm approve
-  const handleConfirmApprove = () => {
+  const handleConfirmApprove = async () => {
     if (!approvingRefund) return;
-    if (!bankTransCode.trim()) {
+    const amount = Number(approveAmount.replace(/[^\d]/g, "") || "0");
+    const suggested = approvingRefund.suggestedRefundAmount ?? approvingRefund.approvedRefundAmount;
+    if (amount > approvingRefund.originalPaidAmount) {
+      setApprovalError(`Số tiền hoàn không được vượt số khách đã trả (${formatVND(approvingRefund.originalPaidAmount)}).`);
+      return;
+    }
+    if (amount !== suggested && !approvalNote.trim()) {
+      setApprovalError("Số tiền khác số gợi ý theo chính sách: vui lòng ghi lý do vào ô ghi chú.");
+      return;
+    }
+    if (amount > 0 && !approvingRefund.refundAccountNumber) {
+      setApprovalError("Khách chưa cung cấp tài khoản nhận hoàn tiền.");
+      return;
+    }
+    const usePayout = approveMethod === "payout" && amount > 0;
+    if (usePayout && !approvingRefund.bankBin) {
+      setApprovalError("Ngân hàng của khách chưa hỗ trợ chi tự động: hãy chuyển tay và nhập mã giao dịch.");
+      return;
+    }
+    if (!usePayout && amount > 0 && !bankTransCode.trim()) {
       setApprovalError("Vui lòng nhập Mã giao dịch ngân hàng / Ủy nhiệm chi.");
       return;
     }
 
-    onApproveRefund(approvingRefund.id, bankTransCode.trim(), approvalNote.trim() || undefined);
+    setApproving(true);
+    const ok = usePayout && onPayoutRefund
+      ? await onPayoutRefund(approvingRefund.id, amount, approvalNote.trim() || undefined)
+      : await onApproveRefund(approvingRefund.id, bankTransCode.trim(), approvalNote.trim() || undefined, amount);
+    setApproving(false);
+    if (ok === false) return;
     setApprovingRefund(null);
     setBankTransCode("");
     setApprovalNote("");
@@ -205,6 +259,25 @@ export function AdminRefundManagement({
 
         {/* Live Status Pill */}
         <div className="flex items-center gap-3">
+          {payoutAccount && (
+            <div
+              className={`p-3 rounded-2xl border shadow-2xs text-[11px] ${
+                payoutAccount.configured && !payoutAccount.error
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-slate-50 border-slate-200 text-slate-600"
+              }`}
+            >
+              <div className="font-medium">Kênh chi hộ payOS</div>
+              <div className="text-sm font-black">
+                {!payoutAccount.configured
+                  ? "Chưa cấu hình (chỉ chuyển tay)"
+                  : payoutAccount.error
+                    ? "Không đọc được số dư"
+                    : `Số dư: ${formatVND(payoutAccount.balance ?? 0)}`}
+              </div>
+              {payoutAccount.error && <div className="max-w-[220px] truncate" title={payoutAccount.error}>{payoutAccount.error}</div>}
+            </div>
+          )}
           <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center gap-3">
             <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-amber-500/10 text-amber-700">
               <Clock className="w-4 h-4" />
@@ -514,6 +587,18 @@ export function AdminRefundManagement({
                           <span>Đang kiểm tra</span>
                         </span>
                       )}
+                      {item.status === "APPROVED" && (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-[#075985] border border-sky-300">
+                            <Clock className="w-3.5 h-3.5 text-[#075985] animate-spin" />
+                            <span>Đang chi hộ payOS</span>
+                          </span>
+                          {item.payoutState && <div className="text-[10px] text-slate-400 font-mono">{item.payoutState}</div>}
+                        </div>
+                      )}
+                      {item.status === "PENDING" && item.lastPayoutError && (
+                        <div className="mt-1 max-w-[220px] text-[10px] text-rose-600 leading-snug">{item.lastPayoutError}</div>
+                      )}
                       {item.status === "COMPLETED" && (
                         <div className="space-y-0.5">
                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
@@ -548,7 +633,19 @@ export function AdminRefundManagement({
                           <span>Chi tiết</span>
                         </Button>
 
-                        {item.status !== "COMPLETED" && item.status !== "REJECTED" && (
+                        {item.status === "APPROVED" && onSyncPayout && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={syncingId === item.id}
+                            onClick={() => syncPayout(item.id)}
+                            className="h-8 px-3 text-xs border-sky-300 text-[#075985] hover:bg-sky-50 rounded-xl font-bold cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>{syncingId === item.id ? "Đang kiểm tra..." : "Kiểm tra chi hộ"}</span>
+                          </Button>
+                        )}
+                        {item.status !== "COMPLETED" && item.status !== "REJECTED" && item.status !== "APPROVED" && (
                           <>
                             <Button
                               type="button"
@@ -899,7 +996,10 @@ export function AdminRefundManagement({
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               Khách hàng: <strong className="text-slate-900">{approvingRefund?.customerName}</strong> ·{" "}
-              Số tiền: <strong className="text-emerald-700">{formatVND(approvingRefund?.approvedRefundAmount || 0)}</strong>
+              Gợi ý theo chính sách:{" "}
+              <strong className="text-emerald-700">
+                {formatVND(approvingRefund?.suggestedRefundAmount ?? approvingRefund?.approvedRefundAmount ?? 0)}
+              </strong>
             </DialogDescription>
           </DialogHeader>
 
@@ -910,15 +1010,84 @@ export function AdminRefundManagement({
                 <span>Tài khoản nhận tiền:</span>
               </div>
               <p className="text-[11px] text-emerald-800">
-                {approvingRefund?.refundBankName} · STK: <strong>{approvingRefund?.refundAccountNumber}</strong> (
-                {approvingRefund?.refundAccountHolder})
+                {approvingRefund?.refundAccountNumber ? (
+                  <>
+                    {approvingRefund.refundBankName} · STK: <strong>{approvingRefund.refundAccountNumber}</strong> (
+                    {approvingRefund.refundAccountHolder})
+                  </>
+                ) : (
+                  "Khách chưa cung cấp tài khoản nhận hoàn tiền."
+                )}
               </p>
             </div>
 
-            {/* Ô nhập mã giao dịch ngân hàng */}
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 space-y-0.5">
+              <p>
+                Đã thanh toán: <strong>{formatVND(approvingRefund?.originalPaidAmount || 0)}</strong> · Phí hủy:{" "}
+                <strong>{formatVND(approvingRefund?.refundFee || 0)}</strong>
+                {approvingRefund?.feePercent !== undefined ? ` (${approvingRefund.feePercent}%)` : ""}
+              </p>
+              <p>Duyệt xong đơn sẽ chuyển sang "Đã hủy". Chuyển khoản trước rồi nhập mã giao dịch bên dưới.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-900">Cách hoàn tiền</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={!payoutReady || !approvingRefund?.bankBin || !approvingRefund?.refundAccountNumber}
+                  onClick={() => setApproveMethod("payout")}
+                  className={`p-2.5 rounded-xl border text-left text-[11px] disabled:opacity-50 disabled:cursor-not-allowed ${
+                    approveMethod === "payout" ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <strong className="block">Chi tự động qua payOS</strong>
+                  {!payoutReady
+                    ? "Chưa cấu hình kênh chi hộ"
+                    : !approvingRefund?.bankBin
+                      ? "Ngân hàng khách chưa hỗ trợ"
+                      : "payOS chuyển thẳng vào tài khoản khách"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApproveMethod("manual")}
+                  className={`p-2.5 rounded-xl border text-left text-[11px] ${
+                    approveMethod === "manual" ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <strong className="block">Đã chuyển khoản tay</strong>
+                  Nhập mã giao dịch từ app ngân hàng
+                </button>
+              </div>
+              {approveMethod === "payout" && (
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  Đây là chuyển tiền thật. Đơn chỉ chuyển sang "Đã hủy" khi payOS báo chuyển thành công; nếu lỗi, yêu cầu quay lại chờ duyệt.
+                </p>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-900">
-                Mã tham chiếu ngân hàng / Mã giao dịch (bank_transaction_code) <span className="text-rose-600">*</span>
+                Số tiền thực hoàn (VND) <span className="text-rose-600">*</span>
+              </Label>
+              <Input
+                value={approveAmount}
+                inputMode="numeric"
+                onChange={(e) => {
+                  setApproveAmount(e.target.value.replace(/[^\d]/g, ""));
+                  setApprovalError("");
+                }}
+                className="text-xs h-10 font-bold"
+              />
+              <p className="text-[11px] text-slate-500">
+                Đổi khác số gợi ý (ví dụ bất khả kháng) thì bắt buộc ghi lý do. Nhập 0 nếu không hoàn tiền.
+              </p>
+            </div>
+
+            {/* Ô nhập mã giao dịch ngân hàng (chỉ khi chuyển tay) */}
+            <div className={`space-y-1.5 ${approveMethod === "payout" ? "hidden" : ""}`}>
+              <Label className="text-xs font-bold text-slate-900">
+                Mã giao dịch ngân hàng của khoản hoàn <span className="text-rose-600">(bắt buộc khi số hoàn &gt; 0)</span>
               </Label>
               <Input
                 value={bankTransCode}
@@ -931,7 +1100,6 @@ export function AdminRefundManagement({
                   approvalError ? "border-rose-500 focus:ring-rose-500" : ""
                 }`}
               />
-              {approvalError && <p className="text-[11px] text-rose-600 font-semibold">{approvalError}</p>}
             </div>
 
             {/* Ghi chú duyệt */}
@@ -943,10 +1111,11 @@ export function AdminRefundManagement({
                 value={approvalNote}
                 onChange={(e) => setApprovalNote(e.target.value)}
                 rows={2}
-                placeholder="Ghi chú xác nhận chuyển khoản..."
+                placeholder="Bắt buộc khi số tiền khác số gợi ý (ví dụ bất khả kháng)..."
                 className="text-xs bg-slate-50 focus:bg-white resize-none"
               />
             </div>
+            {approvalError && <p className="text-[11px] text-rose-600 font-semibold">{approvalError}</p>}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
@@ -961,10 +1130,13 @@ export function AdminRefundManagement({
             <Button
               type="button"
               onClick={handleConfirmApprove}
+              disabled={approving}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl gap-1.5 cursor-pointer shadow-xs"
             >
               <Check className="w-4 h-4" />
-              <span>Xác nhận Hoàn tất giải ngân</span>
+              <span>
+                {approving ? "Đang xử lý..." : approveMethod === "payout" ? "Chuyển tiền qua payOS" : "Xác nhận đã chuyển khoản"}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

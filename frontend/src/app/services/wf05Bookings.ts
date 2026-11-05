@@ -1,5 +1,6 @@
 import { http } from "@/app/lib/http";
 import type { PaymentOutcome } from "./payos";
+import { buildSignPageUrl } from "./contractSigning";
 
 export interface ParticipantInput {
   fullName: string;
@@ -131,11 +132,209 @@ export interface BookingDto {
   /** Lịch thanh toán thật từ máy chủ (rỗng khi đơn còn chờ duyệt). */
   paymentSchedule?: PaymentScheduleItemDto[];
   paymentTransactions?: PaymentTransactionDto[];
+  /** Yêu cầu hủy/hoàn tiền mới nhất (không kèm số tài khoản). */
+  cancellation?: CancellationRequestDto | null;
+  /** Hợp đồng lữ hành hiện hành (lập khi Agency duyệt). */
+  contract?: ContractDto | null;
+}
+
+/** Hợp đồng hiện hành. requiredBeforePayment: phải ký (tải bản đã ký) thì mới thanh toán được. */
+export interface ContractDto {
+  id: number;
+  version: number;
+  contractNo: string;
+  totalAmount: number;
+  status: "AwaitingSignature" | "Signed" | "Verified" | "ResignRequested";
+  signedAt?: string | null;
+  signedFileType?: string | null;
+  signMethod?: string | null;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt?: string | null;
+  requiredBeforePayment: boolean;
+}
+
+const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+/** Đường dẫn tải PDF hợp đồng (document) hoặc bản khách đã ký (signed); trình duyệt gửi kèm cookie đăng nhập. */
+export function contractFileUrl(bookingId: number | string, kind: "document" | "signed"): string {
+  return `${apiBase}/api/v1/files/contracts/${bookingId}/${kind}`;
+}
+
+/** Mã phiên ký trực tuyến (chỉ nhận một lần), dùng cho QR hoặc ký ngay trên máy này. */
+export interface SignSessionStartDto {
+  token: string;
+  expiresAt: string;
+  contractNo: string;
+  version: number;
+}
+
+/** Trạng thái phiên ký trên trang ký (không cần đăng nhập). */
+export interface SignSessionDto {
+  status: "open" | "completed" | "expired";
+  contractNo: string;
+  version: number;
+  tourName: string;
+  startDate: string;
+  customerName: string;
+  maskedEmail: string;
+  totalAmount: number;
+  expiresAt: string;
+  otpSentAt?: string | null;
+  otpExpiresAt?: string | null;
+  completedAt?: string | null;
+  /** Chỉ có ở môi trường Development khi chưa cấu hình SMTP (để demo). */
+  developmentOtp?: string | null;
+}
+
+/** Khách bắt đầu ký trực tuyến (tạo mã QR mới; mã cũ hết hiệu lực). */
+export async function startSignSession(id: number): Promise<SignSessionStartDto> {
+  return await http<SignSessionStartDto>(`/bookings/${id}/contract/sign-sessions`, { method: "POST" });
+}
+
+export async function getSignSession(token: string): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}`);
+}
+
+/** Gửi OTP 6 số về email tài khoản (hiệu lực 5 phút, gửi lại sau 60 giây). */
+export async function sendSignOtp(token: string): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}/otp`, { method: "POST" });
+}
+
+/** Xác nhận ký: ảnh chữ ký PNG (data URL) + OTP + đã đọc hợp đồng. */
+export async function completeWebSign(
+  token: string,
+  input: { signaturePng: string; otp: string; agreed: boolean },
+): Promise<SignSessionDto> {
+  return await http<SignSessionDto>(`/contract-signing/${encodeURIComponent(token)}/sign`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** PDF trên trang ký: bản chưa ký khi phiên mở, bản đã ký sau khi hoàn tất. */
+export function signingDocumentUrl(token: string): string {
+  return `${apiBase}/api/v1/files/contracts/signing/${encodeURIComponent(token)}/document`;
+}
+
+/** Đường dẫn trang ký đặt trong QR. Khi triển khai, đặt VITE_PUBLIC_APP_URL = tên miền chính thức. */
+export function signPageUrl(token: string): string {
+  return buildSignPageUrl(token, window.location.origin, window.location.pathname, import.meta.env?.VITE_PUBLIC_APP_URL);
+}
+
+/** Khách tải bản hợp đồng đã ký (PDF, PNG, JPG ≤ 10 MB). */
+export async function uploadSignedContract(id: number, file: File): Promise<BookingDto> {
+  const form = new FormData();
+  form.append("file", file);
+  return await http<BookingDto>(`/bookings/${id}/contract/signed`, { method: "POST", body: form });
+}
+
+/** Agency kiểm tra bản ký: verify (hợp lệ) hoặc resign (yêu cầu ký lại, kèm lý do). */
+export async function reviewContract(id: number, decision: "verify" | "resign", note?: string): Promise<BookingDto> {
+  return await http<BookingDto>(`/agency/bookings/${id}/contract/review`, {
+    method: "POST",
+    body: JSON.stringify({ decision, note }),
+  });
+}
+
+/** Lý do yêu cầu hủy. TOUR_CANCELLED = Agency hủy; PAYMENT_OVERDUE = khách quá hạn thanh toán. */
+export type CancellationReason =
+  | "CUSTOMER_REQUEST"
+  | "WEATHER_FORCE_MAJEURE"
+  | "SERVICE_QUALITY"
+  | "OTHER"
+  | "TOUR_CANCELLED"
+  | "PAYMENT_OVERDUE";
+
+export interface CancellationRequestDto {
+  id: number;
+  reason: CancellationReason;
+  reasonDetail: string;
+  status: "Pending" | "Reviewing" | "Completed" | "Rejected" | "Approved";
+  requestedByRole: "customer" | "agency";
+  feePercent: number;
+  fee: number;
+  paidAmount: number;
+  suggestedRefund: number;
+  approvedRefundAmount?: number | null;
+  hasRefundAccount: boolean;
+  refundTransactionCode?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  completedAt?: string | null;
+}
+
+/** Báo giá hủy do backend tính theo chính sách chung. */
+export interface CancellationQuoteDto {
+  bookingId: number;
+  mode: "immediate" | "customer" | "agency" | "overdue";
+  daysBeforeDeparture: number;
+  coolingOff: boolean;
+  feePercent: number;
+  totalAmount: number;
+  paidAmount: number;
+  fee: number;
+  refundAmount: number;
+  explanation: string;
+}
+
+export interface RefundAccountInput {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+export interface AdminRefundDto {
+  id: number;
+  bookingId: number;
+  bookingCode: string;
+  tourName?: string | null;
+  startDate: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  agencyName?: string | null;
+  reason: CancellationReason;
+  reasonDetail: string;
+  status: "Pending" | "Reviewing" | "Completed" | "Rejected" | "Approved";
+  requestedByRole: "customer" | "agency";
+  totalAmount: number;
+  feePercent: number;
+  fee: number;
+  paidAmount: number;
+  suggestedRefund: number;
+  approvedRefundAmount?: number | null;
+  bankName?: string | null;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+  refundTransactionCode?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  completedAt?: string | null;
+  /** Mã BIN của ngân hàng khách (null = không chi tự động được, phải chuyển tay). */
+  bankBin?: string | null;
+  /** Trạng thái lệnh chi hộ đang chạy (PROCESSING...). */
+  payoutState?: string | null;
+  lastPayoutError?: string | null;
+}
+
+/** Kênh chuyển tiền payOS: đã cấu hình chưa và số dư. */
+export interface PayoutAccountDto {
+  configured: boolean;
+  accountNumber?: string | null;
+  accountName?: string | null;
+  balance?: number | null;
+  error?: string | null;
 }
 
 export interface PaymentScheduleItemDto {
   id?: number | null;
-  stage: "deposit" | "balance";
+  /** full = tour sát ngày khởi hành: thanh toán toàn bộ một lần, không có đợt 2. */
+  stage: "deposit" | "balance" | "full";
   description: string;
   amount: number;
   outstanding: number;
@@ -274,7 +473,81 @@ export async function cancelBooking(
   });
 }
 
+/** Phí hủy và số tiền hoàn tại thời điểm này (backend tính). */
+export async function getCancellationQuote(id: number): Promise<CancellationQuoteDto> {
+  return await http<CancellationQuoteDto>(`/bookings/${id}/cancellation-quote`);
+}
+
+/** Gửi yêu cầu hủy cho đơn đã thanh toán. Đơn chỉ bị hủy khi Admin duyệt. */
+export async function requestCancellation(
+  id: number,
+  input: { reason: CancellationReason; reasonDetail: string } & Partial<RefundAccountInput>,
+): Promise<BookingDto> {
+  return await http<BookingDto>(`/bookings/${id}/cancellation-requests`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
+export async function updateRefundAccount(id: number, input: RefundAccountInput): Promise<BookingDto> {
+  return await http<BookingDto>(`/bookings/${id}/cancellation-requests/refund-account`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 // 2. Agency APIs (WF05 & WF06)
+export async function getAgencyCancellationQuote(id: number): Promise<CancellationQuoteDto> {
+  return await http<CancellationQuoteDto>(`/agency/bookings/${id}/cancellation-quote`);
+}
+
+/** Agency hủy đơn: chưa có tiền thì hủy ngay; đã có tiền thì tạo yêu cầu chờ Admin duyệt. */
+export async function agencyCancelBooking(id: number, reason: string): Promise<BookingDto> {
+  return await http<BookingDto>(`/agency/bookings/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// 4. Admin: yêu cầu hủy/hoàn tiền
+export async function getAdminRefunds(status?: string): Promise<AdminRefundDto[]> {
+  return await http<AdminRefundDto[]>(`/admin/refunds${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+}
+
+export async function approveAdminRefund(
+  id: number,
+  input: { refundAmount: number; transactionCode?: string; note?: string },
+): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPayoutAccount(): Promise<PayoutAccountDto> {
+  return await http<PayoutAccountDto>(`/admin/refunds/payout-account`);
+}
+
+/** Duyệt và hoàn tự động qua chi hộ payOS (tiền thật). Đơn chỉ hủy khi payOS báo thành công. */
+export async function payoutAdminRefund(id: number, input: { refundAmount: number; note?: string }): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/payout`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function syncAdminPayout(id: number): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/payout/sync`, { method: "POST" });
+}
+
+export async function rejectAdminRefund(id: number, reason: string): Promise<AdminRefundDto> {
+  return await http<AdminRefundDto>(`/admin/refunds/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export async function getAgencyBookings(
   status?: string,
   search?: string,
@@ -390,4 +663,4 @@ export async function reportIncident(
   });
 }
 
-export { fromApiBooking } from "./bookingAdapter";
+export { fromApiBooking, fromAdminRefund } from "./bookingAdapter";

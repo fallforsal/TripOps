@@ -124,16 +124,16 @@ export function AgencyCoHostManagement({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-purple-800 via-indigo-800 to-blue-800 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
+      <div className="bg-[#075985] rounded-xl p-6 text-white shadow-sm relative overflow-hidden">
         <div className="relative z-10 max-w-2xl space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-semibold text-purple-100">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-sky-100 border border-white/20">
             <Handshake className="w-4 h-4 text-amber-300" />
             <span>Mạng Lưới Liên Minh Du Lịch (Co-Hosting)</span>
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">
             Hợp Tác Dẫn Tour &amp; Phân Chia Chặng
           </h2>
-          <p className="text-purple-100 text-xs sm:text-sm leading-relaxed">
+          <p className="text-sky-100 text-xs sm:text-sm leading-relaxed">
             Kết nối các đơn vị lữ hành chuyên tuyến để nhận khách hoặc cùng phụ trách các chặng chuyên môn. Dòng tiền thanh toán được bảo chứng an toàn qua Tài khoản Ký quỹ (Escrow) của Sàn và quyết toán minh bạch.
           </p>
         </div>
@@ -148,7 +148,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("incoming")}
           className={`bg-white rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
             activeTab === "incoming"
-              ? "border-purple-500 ring-2 ring-purple-100"
+              ? "border-[#075985] ring-2 ring-[#BAE6FD]"
               : "border-gray-200"
           }`}
         >
@@ -179,7 +179,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("active")}
           className={`bg-white rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
             activeTab === "active"
-              ? "border-purple-500 ring-2 ring-purple-100"
+              ? "border-[#075985] ring-2 ring-[#BAE6FD]"
               : "border-gray-200"
           }`}
         >
@@ -203,7 +203,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("outgoing")}
           className={`bg-white rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
             activeTab === "outgoing"
-              ? "border-purple-500 ring-2 ring-purple-100"
+              ? "border-[#075985] ring-2 ring-[#BAE6FD]"
               : "border-gray-200"
           }`}
         >
@@ -230,7 +230,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("incoming")}
           className={`pb-3 px-4 text-xs font-bold transition-all relative flex items-center gap-2 ${
             activeTab === "incoming"
-              ? "text-[#EA580C] border-b-2 border-purple-600"
+              ? "text-[#075985] border-b-2 border-[#075985]"
               : "text-gray-500 hover:text-gray-900"
           }`}
         >
@@ -246,7 +246,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("active")}
           className={`pb-3 px-4 text-xs font-bold transition-all relative flex items-center gap-2 ${
             activeTab === "active"
-              ? "text-[#EA580C] border-b-2 border-purple-600"
+              ? "text-[#075985] border-b-2 border-[#075985]"
               : "text-gray-500 hover:text-gray-900"
           }`}
         >
@@ -257,7 +257,7 @@ export function AgencyCoHostManagement({
           onClick={() => setActiveTab("outgoing")}
           className={`pb-3 px-4 text-xs font-bold transition-all relative flex items-center gap-2 ${
             activeTab === "outgoing"
-              ? "text-[#EA580C] border-b-2 border-purple-600"
+              ? "text-[#075985] border-b-2 border-[#075985]"
               : "text-gray-500 hover:text-gray-900"
           }`}
         >
@@ -291,7 +291,7 @@ export function AgencyCoHostManagement({
                 return (
                   <div
                     key={req.id}
-                    className="bg-white border-2 border-[#F97316]/30 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all"
+                    className="bg-white border-2 border-[#F97316]/30 rounded-xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all"
                   >
                     {/* Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
@@ -336,7 +336,7 @@ export function AgencyCoHostManagement({
                     </div>
 
                     {/* Customer & Tour details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#F0F9FF]/50 p-3.5 rounded-xl border border-purple-100 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#F0F9FF]/50 p-3.5 rounded-xl border border-slate-200 text-xs">
                       <div>
                         <span className="text-gray-500 font-medium block">Điểm đến &amp; Tuyến đường</span>
                         <p className="font-bold text-gray-900 mt-0.5 flex items-center gap-1">
@@ -373,7 +373,7 @@ export function AgencyCoHostManagement({
                           </span>
                         )}
                       </div>
-                      <p className="text-sm font-semibold text-purple-950">
+                      <p className="text-sm font-semibold text-slate-900">
                         {myInvite?.assignedSegments || "Phụ trách điều phối dịch vụ tại điểm đến"}
                       </p>
                       {myInvite?.notes && (
@@ -431,7 +431,7 @@ export function AgencyCoHostManagement({
                 return (
                   <div
                     key={t.id}
-                    className="bg-white border-2 border-[#F97316]/30 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all"
+                    className="bg-white border-2 border-[#F97316]/30 rounded-xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
                       <div>
@@ -512,7 +512,7 @@ export function AgencyCoHostManagement({
                 return (
                   <div
                     key={req.id}
-                    className="bg-white border border-[#F97316]/30 rounded-2xl p-5 shadow-xs space-y-4 hover:shadow-sm transition-all"
+                    className="bg-white border border-[#F97316]/30 rounded-xl p-5 shadow-xs space-y-4 hover:shadow-sm transition-all"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
@@ -521,7 +521,7 @@ export function AgencyCoHostManagement({
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
                               isMeLead
                                 ? "bg-[#E0F2FE] text-blue-800"
-                                : "bg-[#F97316]/15 text-purple-800"
+                                : "bg-[#F0F9FF] text-[#075985] border border-[#BAE6FD]"
                             }`}
                           >
                             {isMeLead ? "Bạn là Đơn vị Chủ trì (Lead)" : "Bạn là Đối tác Chuyên môn (Partner)"}
@@ -590,7 +590,7 @@ export function AgencyCoHostManagement({
                       })}
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-purple-100">
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
                       {onEditTourSegment && (
                         <Button
                           size="sm"
@@ -615,7 +615,7 @@ export function AgencyCoHostManagement({
                 return (
                   <div
                     key={t.id}
-                    className="bg-white border border-[#F97316]/30 rounded-2xl p-5 shadow-xs space-y-4 hover:shadow-sm transition-all"
+                    className="bg-white border border-[#F97316]/30 rounded-xl p-5 shadow-xs space-y-4 hover:shadow-sm transition-all"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
@@ -624,12 +624,12 @@ export function AgencyCoHostManagement({
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
                               isMeLead
                                 ? "bg-[#E0F2FE] text-blue-800"
-                                : "bg-[#F97316]/15 text-purple-800"
+                                : "bg-[#F0F9FF] text-[#075985] border border-[#BAE6FD]"
                             }`}
                           >
                             {isMeLead ? "Bạn là Đơn vị Chủ trì (Lead)" : "Bạn là Đối tác Chuyên môn (Partner)"}
                           </span>
-                          <span className="bg-[#F97316]/15 text-purple-900 text-xs font-mono font-bold px-2 py-0.5 rounded">
+                          <span className="bg-[#F0F9FF] text-[#075985] border border-[#BAE6FD] text-xs font-mono font-bold px-2 py-0.5 rounded">
                             v{t.version || 1}
                           </span>
                         </div>
@@ -726,7 +726,7 @@ export function AgencyCoHostManagement({
                 return (
                   <div
                     key={req.id}
-                    className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-3"
+                    className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-3"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
@@ -767,7 +767,7 @@ export function AgencyCoHostManagement({
                     <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs space-y-1">
                       <p className="font-semibold text-gray-800">
                         Đối tác được mời:{" "}
-                        <strong className="text-purple-900">{partnerInvite?.companyName}</strong>
+                        <strong className="text-slate-900">{partnerInvite?.companyName}</strong>
                       </p>
                       <p className="text-gray-600">
                         Phân công: {partnerInvite?.assignedSegments}
@@ -789,7 +789,7 @@ export function AgencyCoHostManagement({
       {/* MODAL: TỪ CHỐI LỜI MỜI */}
       {rejectModalItem && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4">
             <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-500" />
               Từ chối lời mời hợp tác

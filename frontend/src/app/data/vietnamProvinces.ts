@@ -460,6 +460,39 @@ export function searchVietnamProvinces(query: string): VietnamProvinceItem[] {
   });
 }
 
+/** Chữ thường, bỏ khoảng trắng thừa, giữ dấu (để "hà" chỉ khớp "Hà", không khớp "Hạ"/"Hải"). */
+function normalizeKeepAccents(value: string): string {
+  return value.normalize("NFC").toLocaleLowerCase("vi").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Gợi ý điểm đến khi người dùng đang gõ (ô "Bạn muốn đi đâu?" ở trang chủ).
+ * - Chưa gõ gì: không gợi ý.
+ * - Tên tỉnh/thành bắt đầu bằng chữ đã gõ được xếp trước ("H" → Hà Nội, Hà Giang, Hải Phòng, Huế...).
+ * - Từ 2 ký tự: thêm tỉnh có một từ trong tên hoặc một địa danh nổi tiếng bắt đầu bằng chữ đã gõ ("Sa" → Lào Cai vì có Sa Pa).
+ * - Gõ không dấu thì so không dấu ("ha" khớp Hà, Hạ, Hải); gõ có dấu thì so có dấu ("hà" chỉ khớp Hà).
+ */
+export function suggestDestinations(query: string, limit = 12): VietnamProvinceItem[] {
+  const raw = normalizeKeepAccents(query);
+  if (!raw) return [];
+  const accented = normalizeSearchToken(raw) !== raw;
+  const fold = (value: string) => (accented ? normalizeKeepAccents(value) : normalizeSearchToken(value));
+  const q = accented ? raw : normalizeSearchToken(raw);
+  const startsWord = (text: string) => text.split(/[\s,.\-–()]+/).some((word, index) => index > 0 && word.startsWith(q));
+
+  const first: VietnamProvinceItem[] = [];
+  const second: VietnamProvinceItem[] = [];
+  for (const province of VIETNAM_PROVINCES) {
+    const name = fold(province.name.replace(/^TP\.\s*/i, ""));
+    if (name.startsWith(q)) first.push(province);
+    else if (q.length >= 2 && (startsWord(name) || province.popularDestinations.some((place) => {
+      const p = fold(place);
+      return p.startsWith(q) || startsWord(p);
+    }))) second.push(province);
+  }
+  return [...first, ...second].slice(0, limit);
+}
+
 /**
  * Gợi ý danh sách tỉnh/thành từ chuỗi "Điểm đến chính" (VD: "Đà Lạt - Nha Trang" -> [Lâm Đồng, Khánh Hòa]).
  * LƯU Ý NGHIỆP VỤ: Hàm này CHỈ dùng để hiển thị chip gợi ý cho người dùng bấm xác nhận,

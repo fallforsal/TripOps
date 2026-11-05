@@ -108,6 +108,9 @@ public virtual Tour Tour { get; set; } = null!;
 public class TourDesignRequest : BaseEntity<int> {
 public string? CustomerId { get; set; }
 public string? AgencyId { get; set; }
+public string? BusinessName { get; set; }
+public string? BusinessEmail { get; set; }
+public string? BusinessPhone { get; set; }
 public string ContactName { get; set; } = string.Empty;
 public string ContactEmail { get; set; } = string.Empty;
 public string ContactPhone { get; set; } = string.Empty;

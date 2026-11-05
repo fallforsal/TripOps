@@ -133,7 +133,33 @@ public sealed partial class BookingFlowTests
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         var decision = await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null));
         decision.EnsureSuccessStatusCode();
-        return (customer, agency, (await decision.Content.ReadFromJsonAsync<BookingDto>())!);
+        var approved = (await decision.Content.ReadFromJsonAsync<BookingDto>())!;
+        await SignContract(customer, approved.Id); // ký hợp đồng là điều kiện để thanh toán đợt đầu
+        return (customer, agency, approved);
+    }
+
+    private static readonly byte[] SignedPdf = "%PDF-1.4\n% hop dong da ky (test)\n"u8.ToArray();
+
+    /// <summary>Khách tải bản hợp đồng đã ký (PDF giả lập) lên.</summary>
+    private static async Task<HttpResponseMessage> UploadContract(HttpClient customer, int bookingId, byte[] content, string fileName = "hop-dong-da-ky.pdf")
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "file", fileName);
+        return await customer.PostAsync($"/api/v1/bookings/{bookingId}/contract/signed", form);
+    }
+
+    /// <summary>Ảnh chữ ký PNG 120×40 (nét vẽ giả lập) như trang ký gửi lên.</summary>
+    private const string SignaturePng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAYAAAA16j4lAAAAjUlEQVR42u3YMQ6AQAzEwDydnwdKRAESXBEtU7i10Lo5Ut1dyMUIAkNgCAyBITAEhsACQ2AIDIEhMATGTeCqrdcK+Wb5DuGZFR/IN8l3EX6V8w3zPUnfyPnm+IwZ7jNmuM+Y4b7yUMn2ld+ObF85ImT7nPPcoiEwBIbAEBgCQ2CBITAEhsAQGAJD4N+yA0S58ayA+aWaAAAAAElFTkSuQmCC";
+
+    /// <summary>Khách ký trực tuyến: tạo phiên ký, nhận OTP (Development chưa cấu hình SMTP thì OTP trả về), vẽ chữ ký và xác nhận.</summary>
+    private static async Task SignContract(HttpClient customer, int bookingId)
+    {
+        var start = await Read<SignSessionStartDto>(await customer.PostAsync($"/api/v1/bookings/{bookingId}/contract/sign-sessions", null));
+        var otp = await Read<SignSessionDto>(await customer.PostAsync($"/api/v1/contract-signing/{start.Token}/otp", null));
+        await Read<SignSessionDto>(await customer.PostAsJsonAsync($"/api/v1/contract-signing/{start.Token}/sign",
+            new WebSignRequest(SignaturePng, otp.DevelopmentOtp!, true)));
     }
 
     private static long OrderCode(string transactionCode) => long.Parse(transactionCode["PAYOS-".Length..]);
@@ -293,11 +319,53 @@ public sealed partial class BookingFlowTests
         var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
         Assert.Equal("Overdue", current.PaymentSchedule![1].Status);
         Assert.Equal("Confirmed", current.Status); // không tự hủy
+    }
 
-        // Duyệt quá sát ngày khởi hành: hạn Đợt 2 không sau hạn cọc → có cảnh báo để chốt quy tắc.
-        clock.Fixed = null;
-        var (_, _, late) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(5) });
-        Assert.NotNull(late.PaymentSchedule![1].Warning);
+    [Fact]
+    public async Task Tour_approved_close_to_departure_is_paid_once_in_full_within_24_hours()
+    {
+        var departure = new DateTime(2026, 11, 30);
+        // Duyệt 14:00 25/11 giờ VN: hạn Đợt 2 (hết 22/11) đã qua → thu 100% trước 14:00 26/11.
+        Assert.True(PaymentRules.FullPaymentAtApproval(departure, new DateTime(2026, 11, 25, 7, 0, 0, DateTimeKind.Utc)));
+        // Duyệt 14:00 21/11: hạn cọc 14:00 22/11 vẫn trước hạn Đợt 2 → vẫn chia hai đợt.
+        Assert.False(PaymentRules.FullPaymentAtApproval(departure, new DateTime(2026, 11, 21, 7, 0, 0, DateTimeKind.Utc)));
+        // Duyệt 18:00 22/11: hạn cọc 18:00 23/11 sau hạn Đợt 2 → thu một lần.
+        Assert.True(PaymentRules.FullPaymentAtApproval(departure, new DateTime(2026, 11, 22, 11, 0, 0, DateTimeKind.Utc)));
+
+        var payOs = new FakePayOs();
+        using var app = PayOsApp(payOs, new TestClock()); await app.Initialize();
+        var (customer, agency, booking) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(5) });
+        var item = Assert.Single(booking.PaymentSchedule!);
+        Assert.Equal("full", item.Stage);
+        Assert.Equal(booking.TotalAmount, item.Amount);
+        Assert.Equal(booking.TotalAmount, item.Outstanding);
+        Assert.Equal("Pending", item.Status);
+        Assert.NotNull(item.Warning);
+        Assert.True(item.DueAt!.Value.ToUniversalTime() <= DateTime.UtcNow + PaymentRules.DepositWindow);
+
+        // Duyệt lặp: không tạo thêm đợt, không đổi hạn.
+        var again = (await (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision",
+            new BookingDecisionRequest("approve", null))).Content.ReadFromJsonAsync<BookingDto>())!;
+        Assert.Equal(item.DueAt, Assert.Single(again.PaymentSchedule!).DueAt);
+
+        // Trả thiếu (chỉ 50%) bị từ chối: phải trả đúng toàn bộ.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
+            new BookingDepositRequest(booking.TotalAmount / 2, "HALF", null))).StatusCode);
+
+        var checkout = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null)).Content.ReadFromJsonAsync<PayOsCheckoutDto>())!;
+        Assert.Equal(booking.TotalAmount, checkout.Amount);
+        var orderCode = OrderCode(checkout.TransactionCode);
+        Assert.StartsWith("TT", payOs.Links[orderCode].Description);
+        payOs.Pay(orderCode);
+        var synced = (await (await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos/sync", null)).Content.ReadFromJsonAsync<PaymentSyncResultDto>())!;
+        Assert.Equal("paid", synced.Outcome);
+        Assert.Equal("Paid", synced.Booking.Status);
+        Assert.Equal("Paid", Assert.Single(synced.Booking.PaymentSchedule!).Status);
+
+        using var check = app.Services.CreateScope();
+        var requests = await check.ServiceProvider.GetRequiredService<TripOpsDbContext>().PaymentRequests.AsNoTracking()
+            .Where(r => r.BookingId == booking.Id).ToListAsync();
+        Assert.Equal("deposit", Assert.Single(requests).Stage);
     }
 
     // ------------------------------------------------------------- payOS

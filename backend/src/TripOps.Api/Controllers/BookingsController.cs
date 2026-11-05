@@ -65,6 +65,45 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(int id, BookingCancellationRequest request, CancellationToken ct) =>
         Ok(await bookings.Cancel(Actor, id, request, ct));
+
+    [HttpPost("{id:int}/contract/signed"), RequestSizeLimit(11 * 1024 * 1024)]
+    [EndpointSummary("Upload the signed travel contract (PDF, PNG or JPG up to 10 MB); required before the first payment")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadSignedContract(int id, IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length is <= 0 or > 10 * 1024 * 1024)
+            throw new BookingException(400, "File hợp đồng đã ký phải là PDF, PNG hoặc JPG, tối đa 10 MB.");
+        using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        return Ok(await bookings.UploadSignedContract(Actor, id, stream.ToArray(), ct));
+    }
+
+    [HttpPost("{id:int}/contract/sign-sessions")]
+    [EndpointSummary("Start online contract signing: returns a one-time token (15 minutes) for the QR code or for signing on this device")]
+    [ProducesResponseType<SignSessionStartDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartSignSession(int id, CancellationToken ct) =>
+        Ok(await bookings.StartSignSession(Actor, id, ct));
+
+    [HttpGet("{id:int}/cancellation-quote")]
+    [EndpointSummary("Preview the cancellation fee and refund computed by the platform policy at this moment")]
+    [ProducesResponseType<CancellationQuoteDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancellationQuote(int id, CancellationToken ct) =>
+        Ok(await bookings.CustomerCancellationQuote(Actor, id, ct));
+
+    [HttpPost("{id:int}/cancellation-requests")]
+    [EndpointSummary("Request cancellation of a paid booking; the booking is cancelled only after an Admin approves the refund")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequestCancellation(int id, CustomerCancellationRequest request, CancellationToken ct) =>
+        Ok(await bookings.RequestCustomerCancellation(Actor, id, request, ct));
+
+    [HttpPut("{id:int}/cancellation-requests/refund-account")]
+    [EndpointSummary("Provide or update the bank account that receives the refund of a pending cancellation")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateRefundAccount(int id, RefundAccountRequest request, CancellationToken ct) =>
+        Ok(await bookings.UpdateRefundAccount(Actor, id, request, ct));
 }
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/bookings")]
@@ -96,6 +135,24 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Decide(int id, BookingDecisionRequest request, CancellationToken ct) =>
         Ok(await bookings.Decide(Actor, id, request, ct));
+
+    [HttpGet("{id:int}/cancellation-quote")]
+    [EndpointSummary("Preview what cancelling this booking means for the customer (immediate, full refund, or forfeited when overdue)")]
+    [ProducesResponseType<CancellationQuoteDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancellationQuote(int id, CancellationToken ct) =>
+        Ok(await bookings.AgencyCancellationQuote(Actor, id, ct));
+
+    [HttpPost("{id:int}/contract/review")]
+    [EndpointSummary("Agency checks the customer's signed contract: verify it or ask the customer to sign again")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReviewContract(int id, ContractReviewRequest request, CancellationToken ct) =>
+        Ok(await bookings.ReviewContract(Actor, id, request, ct));
+
+    [HttpPost("{id:int}/cancel")]
+    [EndpointSummary("Agency cancels a booking: immediately when unpaid, otherwise as a request an Admin must approve")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Cancel(int id, BookingCancellationRequest request, CancellationToken ct) =>
+        Ok(await bookings.AgencyCancel(Actor, id, request, ct));
 
     [HttpPost("{id:int}/guide-assignments")]
     [EndpointSummary("Assign a Tour Guide to the booking")]

@@ -9,6 +9,8 @@ namespace TripOps.Service.Bookings;
 //  - Đợt 1 – đặt cọc: tạo khi Agency duyệt, 50% tổng giá trị, hạn = lúc duyệt + 24 giờ (PaymentRules).
 //  - Đợt 2 – phần còn lại: mở sau khi đủ cọc, hạn chót = hết ngày (khởi hành − 8), tức trước khởi hành 1 tuần
 //    (= tổng nghĩa vụ − tiền đã ghi nhận − phần cọc còn thiếu, không mặc định 50%).
+//  - Tour sát ngày (lúc duyệt, hạn Đợt 2 không còn sau hạn cọc): một khoản thu 100%, hạn = duyệt + 24 giờ.
+//    Lưu như đợt "deposit" có số tiền = tổng giá trị; lịch thanh toán trả stage "full".
 // Cổng thanh toán: payOS (không có sandbox — tiền thật). "DEMO" chỉ còn để thử nhanh trong Development.
 // Giao dịch VNPAY cũ được giữ làm lịch sử, không tạo mới.
 public sealed partial class BookingService
@@ -77,7 +79,7 @@ public sealed partial class BookingService
         try
         {
             // Nội dung ngắn (≤ 9 ký tự) theo giới hạn của payOS cho tài khoản không liên kết.
-            link = await PayOs.CreateLink(orderCode, (long)amount, $"{(stage.Stage == BalanceStage ? "TT" : "COC")}{booking.Id}",
+            link = await PayOs.CreateLink(orderCode, (long)amount, $"{(stage.Stage == BalanceStage || IsFullPayment(booking, stage) ? "TT" : "COC")}{booking.Id}",
                 new DateTimeOffset(DateTime.SpecifyKind(linkExpires, DateTimeKind.Utc)), ct);
         }
         catch (PayOsException exception)
@@ -140,9 +142,9 @@ public sealed partial class BookingService
             ? error
             : outcome switch
             {
-                "paid" => "payOS đã xác nhận nhận tiền cọc.",
+                "paid" => "payOS đã xác nhận đã nhận tiền.",
                 "pending" => "payOS chưa ghi nhận thanh toán. Nếu bạn vừa chuyển khoản, vui lòng chờ ít phút rồi kiểm tra lại.",
-                "cancelled" => "Giao dịch đã bị hủy trên payOS. Bạn có thể thanh toán lại khi đợt cọc còn hạn.",
+                "cancelled" => "Giao dịch đã bị hủy trên payOS. Bạn có thể thanh toán lại khi khoản thu còn hạn.",
                 "expired" => "Link thanh toán đã hết hạn mà chưa nhận tiền.",
                 "review" => "payOS báo có tiền nhưng số tiền không khớp. Giao dịch đã được lưu để đối soát.",
                 "failed" => "Giao dịch không thành công.",
@@ -291,7 +293,7 @@ public sealed partial class BookingService
         var stage = PayableStage(booking, customerId, now);
         var outstanding = Outstanding(booking, stage);
         if (Money(request.Amount) != outstanding)
-            throw new BookingException(422, $"Số tiền của {StageName(stage)} phải đúng {outstanding.ToString("N0", Vietnamese)}đ.");
+            throw new BookingException(422, $"Số tiền của {StageName(booking, stage)} phải đúng {outstanding.ToString("N0", Vietnamese)}đ.");
 
         booking.PaymentTransactions.Add(new PaymentTransaction
         {
@@ -322,6 +324,10 @@ public sealed partial class BookingService
     {
         if (booking.Status == BookingStatus.Pending)
             throw new BookingException(409, "Đơn đang chờ công ty lữ hành duyệt. Bạn chỉ thanh toán sau khi đơn được duyệt.");
+        if (OpenCancellation(booking) is not null)
+            throw new BookingException(409, "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán.");
+        if (ContractBlocksPayment(booking))
+            throw new BookingException(409, "Vui lòng tải hợp đồng, ký và tải bản đã ký lên trước khi thanh toán.");
         if (booking.Status != BookingStatus.Confirmed)
             throw new BookingException(422, booking.Status == BookingStatus.Paid
                 ? "Đơn đã được thanh toán đủ."
@@ -336,11 +342,18 @@ public sealed partial class BookingService
         if (stage.Status == PaymentRequestStatus.Paid || Outstanding(booking, stage) == 0)
             throw new BookingException(409, "Đơn đã được thanh toán đủ.");
         if (Deadline(stage) is { } due && now > due)
-            throw new BookingException(409, $"{char.ToUpper(StageName(stage)[0])}{StageName(stage)[1..]} đã quá hạn thanh toán ({VietnamText(due)}). Không thể tạo thanh toán mới cho khoản thu đã hết hạn.");
+            throw new BookingException(409, $"{Capitalize(StageName(booking, stage))} đã quá hạn thanh toán ({VietnamText(due)}). Không thể tạo thanh toán mới cho khoản thu đã hết hạn.");
         return stage;
     }
 
-    private static string StageName(PaymentRequest request) => request.Stage == BalanceStage ? "đợt 2 (phần còn lại)" : "đợt cọc";
+    private static string StageName(Booking booking, PaymentRequest request) =>
+        request.Stage == BalanceStage ? "đợt 2 (phần còn lại)" : IsFullPayment(booking, request) ? "khoản thanh toán toàn bộ" : "đợt cọc";
+
+    private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpper(text[0], Vietnamese) + text[1..];
+
+    /// <summary>Khoản thu một lần 100% của tour sát ngày (lưu ở stage "deposit" với số tiền = tổng giá trị).</summary>
+    private static bool IsFullPayment(Booking booking, PaymentRequest request) =>
+        request.Stage == DepositStage && booking.TotalAmount > 0 && request.Amount >= Money(booking.TotalAmount);
 
     /// <summary>
     /// Bảo đảm có Đợt 2 – phần còn lại (gọi trong giao dịch đã khóa đơn). Hạn = hết ngày (khởi hành − 8) giờ Việt Nam.
@@ -368,7 +381,7 @@ public sealed partial class BookingService
     }
 
     /// <summary>
-    /// Tạo Đợt 1 – đặt cọc khi Agency duyệt (gọi trong giao dịch đã khóa đơn). Đã có đợt cọc hiệu lực thì trả lại nguyên trạng:
+    /// Tạo Đợt 1 – đặt cọc khi Agency duyệt (gọi trong giao dịch đã khóa đơn). Tour sát ngày: khoản này là 100% tổng giá trị. Đã có đợt cọc hiệu lực thì trả lại nguyên trạng:
     /// không đổi số tiền, không gia hạn. Khoản "Đặt cọc 30%" kiểu cũ (stage NULL) chưa trả chuyển sang Cancelled — không xóa;
     /// tiền đã ghi nhận trước đó được trừ vào đợt cọc (chỉ thu phần còn thiếu).
     /// </summary>
@@ -378,6 +391,7 @@ public sealed partial class BookingService
         if (active is not null) return active;
 
         var dueAt = approvedAt + PaymentRules.DepositWindow;
+        var full = PaymentRules.FullPaymentAtApproval(booking.StartDate, approvedAt);
         foreach (var legacy in booking.PaymentRequests.Where(p => p.Stage == null
                      && p.Status is null or PaymentRequestStatus.Pending or PaymentRequestStatus.Overdue))
             legacy.Status = PaymentRequestStatus.Cancelled;
@@ -385,8 +399,8 @@ public sealed partial class BookingService
         var request = new PaymentRequest
         {
             Stage = DepositStage,
-            Description = $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
-            Amount = PlannedDeposit(booking),
+            Description = full ? "Thanh toán toàn bộ (tour sát ngày)" : $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
+            Amount = full ? Money(booking.TotalAmount) : PlannedDeposit(booking),
             DueAt = dueAt,
             DueDate = PaymentRules.VietnamDate(dueAt),
             Status = PaymentRequestStatus.Pending,
@@ -497,9 +511,13 @@ public sealed partial class BookingService
             depositDeadline = Deadline(deposit);
             var status = deposit.Status == PaymentRequestStatus.Paid || depositOutstanding == 0 ? "Paid"
                 : depositDeadline is { } due && now > due ? "Overdue" : "Pending";
-            items.Add(new(deposit.Id, DepositStage, deposit.Description, deposit.Amount, status == "Paid" ? 0 : depositOutstanding,
+            var full = IsFullPayment(booking, deposit);
+            items.Add(new(deposit.Id, full ? "full" : DepositStage, deposit.Description, deposit.Amount, status == "Paid" ? 0 : depositOutstanding,
                 deposit.DueDate, Utc(depositDeadline), status, Utc(deposit.PaidAt),
-                depositDeadline is { } d && d > departure ? "Hạn cọc rơi sau thời điểm khởi hành." : null));
+                depositDeadline is { } d && d > departure ? "Hạn thanh toán rơi sau thời điểm khởi hành."
+                : full ? "Tour sát ngày khởi hành: thanh toán toàn bộ một lần, không chia hai đợt." : null));
+            // Tour sát ngày: không có Đợt 2.
+            if (full) return items;
         }
         else
         {

@@ -1,0 +1,38 @@
+/**
+ * Ngân hàng hỗ trợ hoàn tiền tự động (chi hộ payOS) — tên khớp danh sách mã BIN ở backend (VietnamBanks).
+ * Nguồn mã BIN: Ngân hàng Nhà nước Việt Nam. Ngân hàng ngoài danh sách: Admin chuyển khoản tay.
+ */
+export const VIETNAM_BANKS: { name: string; bin: string }[] = [
+  { name: "Vietcombank", bin: "970436" },
+  { name: "VietinBank", bin: "970415" },
+  { name: "BIDV", bin: "970418" },
+  { name: "Agribank", bin: "970405" },
+  { name: "Techcombank", bin: "970407" },
+  { name: "MB Bank", bin: "970422" },
+  { name: "ACB", bin: "970416" },
+  { name: "VPBank", bin: "970432" },
+  { name: "TPBank", bin: "970423" },
+  { name: "Sacombank", bin: "970403" },
+  { name: "HDBank", bin: "970437" },
+  { name: "VIB", bin: "970441" },
+  { name: "SHB", bin: "970443" },
+  { name: "Eximbank", bin: "970431" },
+  { name: "MSB", bin: "970426" },
+  { name: "OCB", bin: "970448" },
+  { name: "SeABank", bin: "970440" },
+  { name: "LPBank", bin: "970449" },
+  { name: "Nam A Bank", bin: "970428" },
+  { name: "Bac A Bank", bin: "970409" },
+  { name: "ABBANK", bin: "970425" },
+  { name: "BVBank", bin: "970454" },
+  { name: "KienlongBank", bin: "970452" },
+  { name: "PVcomBank", bin: "970412" },
+  { name: "Saigonbank", bin: "970400" },
+  { name: "SCB", bin: "970429" },
+  { name: "NCB", bin: "970419" },
+  { name: "Viet A Bank", bin: "970427" },
+  { name: "BaoViet Bank", bin: "970438" },
+  { name: "PGBank", bin: "970430" },
+  { name: "DongA Bank", bin: "970406" },
+  { name: "VietBank", bin: "970433" },
+];

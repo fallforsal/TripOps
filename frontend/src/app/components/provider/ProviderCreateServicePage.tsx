@@ -66,6 +66,7 @@ interface CategoryMeta {
   capacityUnit: string;
   capacityPlaceholder: string;
   defaultCapacity: string;
+  defaultOperatingHours: string;
   defaultPolicies: string[];
   policySuggestions: string[];
   policyPlaceholder: string;
@@ -96,6 +97,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityUnit: "phòng",
     capacityPlaceholder: "VD: 45",
     defaultCapacity: "45",
+    defaultOperatingHours: "Nhận phòng: 14:00 - Trả phòng: 12:00",
     defaultPolicies: [
       "Nhận phòng (Check-in) từ 14:00 - Trả phòng (Check-out) trước 12:00",
       "Miễn phí phòng ngủ & buffet sáng FOC cho HDV/Trưởng đoàn (tỷ lệ 15 khách trả phí/1 suất)",
@@ -159,6 +161,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityUnit: "khách",
     capacityPlaceholder: "VD: 150",
     defaultCapacity: "150",
+    defaultOperatingHours: "07:30 - 22:00 hàng ngày",
     defaultPolicies: [
       "Khung giờ đón khách đoàn: 10:00 - 22:00 hàng ngày",
       "Set menu đoàn 6 - 8 món tiêu chuẩn, định lượng đầy đủ cho 6-8 khách/bàn",
@@ -222,6 +225,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityUnit: "ghế",
     capacityPlaceholder: "VD: 16",
     defaultCapacity: "16",
+    defaultOperatingHours: "Phục vụ 24/7",
     defaultPolicies: [
       "Cam kết đời xe mới 2022 - 2024, điều hòa mát sâu, nội thất sạch sẽ",
       "Giá đã bao gồm toàn bộ xăng dầu, phí cầu đường cao tốc và lương tài xế",
@@ -282,6 +286,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     capacityUnit: "khách",
     capacityPlaceholder: "VD: 500",
     defaultCapacity: "300",
+    defaultOperatingHours: "07:30 - 17:00 hàng ngày",
     defaultPolicies: [
       "Giờ mở cửa đón khách: 07:30 - 17:30 (Ngừng bán vé lúc 17:00)",
       "Quyền lợi vé bao gồm vào cổng toàn khu và các điểm check-in nội khu",
@@ -362,7 +367,7 @@ export function ProviderCreateServicePage({
 
   const currentConfig = CATEGORY_CONFIGS[category];
 
-  // Common Form Fields - Dùng placeholder, không tự điền trước theo yêu cầu
+  // Common form fields; operating hours start with an editable category default.
   const [name, setName] = useState(initialService?.name || "");
   const [subCategory, setSubCategory] = useState(
     initialService?.subCategory || currentConfig.subCategories[0]
@@ -376,7 +381,7 @@ export function ProviderCreateServicePage({
   const [stars, setStars] = useState(initialService?.stars?.toString() || "4");
   const [description, setDescription] = useState(initialService?.description || "");
   const [operatingHours, setOperatingHours] = useState(
-    initialService?.operatingHours || ""
+    initialService?.operatingHours || currentConfig.defaultOperatingHours
   );
 
   // Policies (stored as string[])
@@ -447,10 +452,15 @@ export function ProviderCreateServicePage({
     }
   }, [province]);
 
-  // Handle category switch - Giữ nguyên các trường người dùng nhập, chỉ cập nhật placeholder
+  // Keep custom hours when switching categories; replace untouched defaults.
   const handleSelectCategory = (newCat: ServiceCategory) => {
     setCategory(newCat);
     const cfg = CATEGORY_CONFIGS[newCat];
+    setOperatingHours((hours) =>
+      !hours.trim() || hours === currentConfig.defaultOperatingHours
+        ? cfg.defaultOperatingHours
+        : hours
+    );
     if (!isEditing) {
       setSubCategory(cfg.subCategories[0]);
       // Tuyệt đối không tự động ghi đè hoặc tự nhập trước tên, giá, số phòng, tiện ích, chính sách
@@ -535,12 +545,14 @@ export function ProviderCreateServicePage({
 
     if (!name.trim()) {
       alert("Vui lòng nhập tên dịch vụ / cơ sở.");
+      setViewMode("form");
       setCurrentStep(2);
       return;
     }
 
     if (images.length === 0) {
       alert("Vui lòng tải lên ít nhất 1 hình ảnh.");
+      setViewMode("form");
       setCurrentStep(1);
       return;
     }
@@ -653,8 +665,8 @@ export function ProviderCreateServicePage({
       {saveError && <div role="alert" className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">{saveError}</div>}
       {(saving || uploading) && <p role="status" className="text-sm text-sky-800">{uploading ? "Đang tải ảnh lên Cloudinary…" : "Đang lưu bài đăng…"}</p>}
       {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 min-w-0">
           <Button
             variant="outline"
             size="sm"
@@ -675,7 +687,7 @@ export function ProviderCreateServicePage({
         </div>
 
         {/* Form vs Preview Switcher Tabs */}
-        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl w-full sm:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 rounded-xl w-full xl:w-auto justify-end shrink-0">
           <button
             type="button"
             onClick={() => setViewMode("form")}
@@ -700,6 +712,16 @@ export function ProviderCreateServicePage({
             <Eye className="w-3.5 h-3.5" />
             Xem trước (Preview)
           </button>
+          <Button
+            type="button"
+            onClick={() => handleSubmit()}
+            disabled={saving || uploading}
+            size="sm"
+            className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold rounded-lg text-xs gap-1.5"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            {saving || uploading ? "Đang gửi…" : isEditing ? "Cập nhật bài đăng" : "Gửi duyệt ngay"}
+          </Button>
         </div>
       </div>
 
@@ -1307,13 +1329,14 @@ export function ProviderCreateServicePage({
                   <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
                     Gợi ý tiện ích theo ngành (Bấm để thêm nhanh):
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-2">
                     {currentConfig.amenities.map((sug) => {
                       const isAdded = amenities.includes(sug);
                       return (
                         <button
                           key={sug}
                           type="button"
+                          aria-pressed={isAdded}
                           onClick={() => {
                             if (isAdded) {
                               handleRemoveAmenity(sug);
@@ -1321,14 +1344,14 @@ export function ProviderCreateServicePage({
                               handleAddAmenity(sug);
                             }
                           }}
-                          className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all flex items-center gap-1 ${
+                          className={`w-full min-h-12 text-xs leading-relaxed px-3 py-2.5 rounded-lg border text-left transition-colors flex items-start gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${
                             isAdded
                               ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold"
                               : "bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 border-gray-200"
                           }`}
                         >
-                          <span>{isAdded ? "✓" : "+"}</span>
-                          <span>{sug}</span>
+                          <span aria-hidden="true" className="w-4 shrink-0 text-center">{isAdded ? "✓" : "+"}</span>
+                          <span className="min-w-0 break-words">{sug}</span>
                         </button>
                       );
                     })}
@@ -1409,13 +1432,14 @@ export function ProviderCreateServicePage({
                   <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
                     Gợi ý chính sách thực tế theo ngành du lịch (Bấm để thêm nhanh vào danh sách):
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-2">
                     {currentConfig.policySuggestions.map((sug) => {
                       const isAdded = policies.includes(sug);
                       return (
                         <button
                           key={sug}
                           type="button"
+                          aria-pressed={isAdded}
                           onClick={() => {
                             if (isAdded) {
                               setPolicies(policies.filter((p) => p !== sug));
@@ -1423,14 +1447,14 @@ export function ProviderCreateServicePage({
                               handleAddPolicy(sug);
                             }
                           }}
-                          className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all flex items-center gap-1 ${
+                          className={`w-full min-h-16 text-xs leading-relaxed px-3 py-2.5 rounded-lg border text-left transition-colors flex items-start gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-700 focus-visible:ring-offset-2 ${
                             isAdded
                               ? "bg-blue-100 text-[#075985] border-blue-300 font-semibold"
                               : "bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-[#075985] border-gray-200"
                           }`}
                         >
-                          <span>{isAdded ? "✓" : "+"}</span>
-                          <span>{sug}</span>
+                          <span aria-hidden="true" className="w-4 shrink-0 text-center">{isAdded ? "✓" : "+"}</span>
+                          <span className="min-w-0 break-words">{sug}</span>
                         </button>
                       );
                     })}
@@ -1581,15 +1605,6 @@ export function ProviderCreateServicePage({
                   <ChevronLeft className="w-4 h-4" />
                   Quay lại: Thông tin & Giá
                 </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleSubmit()}
-                  disabled={saving || uploading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-6 shadow-xs gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {isEditing ? "Cập nhật bài đăng" : "Hoàn tất & Gửi duyệt"}
-                </Button>
               </div>
             </div>
           )}
@@ -1601,47 +1616,12 @@ export function ProviderCreateServicePage({
       {/* ========================================================= */}
       {viewMode === "preview" && (
         <div className="space-y-4">
-          {/* Top Banner Alert for Live Preview */}
-          <div className="p-4 bg-gradient-to-r from-[#075985] to-[#0369a1] text-white rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                <Eye className="w-5 h-5 text-blue-200" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm">
-                  Chế độ mô phỏng trực tiếp (Live Preview)
-                </h3>
-                <p className="text-xs text-blue-100">
-                  Giao diện hiển thị giống 100% trang chi tiết bài đăng trong mục Quản lý dịch vụ
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setViewMode("form")}
-                size="sm"
-                className="bg-white text-[#075985] hover:bg-blue-50 font-bold rounded-xl text-xs"
-              >
-                <Edit3 className="w-4 h-4 mr-1.5" />
-                Quay lại chỉnh sửa
-              </Button>
-              <Button
-                onClick={() => handleSubmit()}
-                disabled={saving || uploading}
-                size="sm"
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                {isEditing ? "Cập nhật bài đăng" : "Gửi duyệt ngay"}
-              </Button>
-            </div>
-          </div>
-
           {/* Render the EXACT ProviderServiceDetailPage from Service Management (Quản lý ảnh already removed) */}
           <ProviderServiceDetailPage
             service={previewServiceObj}
             onBack={() => setViewMode("form")}
             backTitle="Quay lại biểu mẫu đăng bài"
+            isPreview
           />
         </div>
       )}

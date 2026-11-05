@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TripOps.Data;
@@ -27,6 +28,13 @@ public sealed partial class BookingFlowTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            // Không để khóa chi hộ thật trong user-secrets của máy dev lọt vào test (chi hộ là tiền thật).
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PayOsPayout:ClientId"] = "",
+                ["PayOsPayout:ApiKey"] = "",
+                ["PayOsPayout:ChecksumKey"] = "",
+            }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
@@ -58,7 +66,7 @@ public sealed partial class BookingFlowTests
             guide.PasswordHash = hasher.HashPassword(guide, "Password123!");
             db.Users.Add(guide);
 
-            foreach (var (id, role) in new[] { ("customer2", UserRole.User), ("guide2", UserRole.TourGuide), ("agency2", UserRole.TravelAgency) })
+            foreach (var (id, role) in new[] { ("customer2", UserRole.User), ("guide2", UserRole.TourGuide), ("agency2", UserRole.TravelAgency), ("admin1", UserRole.Admin) })
             {
                 var other = new User { Id = id, Name = id, Email = $"{id}@example.test", Role = role, Status = UserStatus.Active };
                 other.PasswordHash = hasher.HashPassword(other, "Password123!");
@@ -247,7 +255,11 @@ public sealed partial class BookingFlowTests
                 Assert.Equal(TripOps.Service.Payments.PaymentRules.BalanceDeadline(createRequest.StartDate), balance.DueAt!.Value.ToUniversalTime());
             });
 
-        // 5. Customer đặt cọc (mô phỏng Development) đúng số tiền của đợt cọc
+        // 5. Chưa ký hợp đồng thì chưa thanh toán được; ký (tải bản đã ký) rồi đặt cọc đúng số tiền của đợt cọc
+        Assert.True(approved.Contract!.RequiredBeforePayment);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit",
+            new BookingDepositRequest(2500000, "VQR-UNSIGNED", null))).StatusCode);
+        await SignContract(customer, bookingId);
         var depositRes = await customer.PostAsJsonAsync($"/api/v1/bookings/{bookingId}/deposit", new BookingDepositRequest(2500000, "VQR001", null));
         Assert.Equal(HttpStatusCode.OK, depositRes.StatusCode);
         var deposited = await depositRes.Content.ReadFromJsonAsync<BookingDto>();
@@ -352,6 +364,7 @@ public sealed partial class BookingFlowTests
         created.EnsureSuccessStatusCode();
         var booking = (await created.Content.ReadFromJsonAsync<BookingDto>())!;
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).EnsureSuccessStatusCode();
+        await SignContract(customer, booking.Id);
         var payment = new BookingDepositRequest(1500000, "IDEMPOTENT-DEMO", "https://example.test/proof.png");
         for (var attempt = 0; attempt < 2; attempt++)
         {

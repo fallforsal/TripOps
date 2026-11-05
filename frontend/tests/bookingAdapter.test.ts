@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fromApiBooking } from "../src/app/services/bookingAdapter.ts";
+import { fromAdminRefund, fromApiBooking } from "../src/app/services/bookingAdapter.ts";
 import { formatVietnamDateTime, formatVietnamDeadline, isPayOsUrl } from "../src/app/services/payos.ts";
 import type { BookingDto } from "../src/app/services/wf05Bookings.ts";
 
@@ -150,6 +150,69 @@ test("server deadline, overdue and not-issued deposit states are mapped without 
     { id: null, stage: "deposit", description: "Đặt cọc 50%", amount: 5000000, outstanding: 5000000, status: "NotIssued" },
   ] });
   assert.equal(legacy.paymentRequests?.[0].status, "not_issued");
+});
+
+test("a tour approved close to departure has one full payment and no balance stage", () => {
+  const booking = fromApiBooking({
+    ...dto, status: "Confirmed",
+    paymentSchedule: [
+      { id: 11, stage: "full", description: "Thanh toán toàn bộ (tour sát ngày)", amount: 10000000, outstanding: 10000000, dueDate: "2026-11-26T00:00:00", dueAt: "2026-11-26T07:00:00Z", status: "Pending", warning: "Tour sát ngày khởi hành: thanh toán toàn bộ một lần, không chia hai đợt." },
+    ],
+  });
+  assert.equal(booking.paymentRequests?.length, 1);
+  assert.equal(booking.paymentRequests?.[0].stage, "full");
+  assert.equal(booking.paymentRequests?.[0].amount, 10000000);
+  assert.equal(booking.depositPaid, false);
+  const paid = fromApiBooking({ ...dto, status: "Paid", paymentSchedule: [
+    { id: 11, stage: "full", description: "Thanh toán toàn bộ (tour sát ngày)", amount: 10000000, outstanding: 0, status: "Paid", paidAt: "2026-11-25T08:00:00Z" },
+  ] });
+  assert.equal(paid.depositPaid, true);
+});
+
+test("cancellation request from the server is kept as is on the booking", () => {
+  const booking = fromApiBooking({
+    ...dto, status: "Confirmed", paidAmount: 5000000, paymentStatus: "PartiallyPaid",
+    cancellation: {
+      id: 3, reason: "CUSTOMER_REQUEST", reasonDetail: "Bận việc", status: "Pending", requestedByRole: "customer",
+      feePercent: 25, fee: 2500000, paidAmount: 5000000, suggestedRefund: 2500000, hasRefundAccount: true,
+      createdAt: "2026-11-03T08:00:00Z",
+    },
+  });
+  assert.equal(booking.cancellation?.status, "Pending");
+  assert.equal(booking.cancellation?.suggestedRefund, 2500000);
+});
+
+test("travel contract from the server is exposed for signing before payment", () => {
+  const booking = fromApiBooking({
+    ...dto, status: "Confirmed",
+    contract: { id: 4, version: 1, contractNo: "HD-BK-TEST-1", totalAmount: 10000000, status: "AwaitingSignature", requiredBeforePayment: true },
+  });
+  assert.equal(booking.travelContract?.contractNo, "HD-BK-TEST-1");
+  assert.equal(booking.travelContract?.requiredBeforePayment, true);
+});
+
+test("admin refund rows use the server amounts and map statuses", () => {
+  const row = fromAdminRefund({
+    id: 7, bookingId: 101, bookingCode: "BK-TEST", tourName: "Tour", startDate: "2026-11-20T00:00:00",
+    customerName: "Customer", reason: "PAYMENT_OVERDUE", reasonDetail: "Không trả đợt 2", status: "Pending",
+    requestedByRole: "agency", totalAmount: 10000000, feePercent: 100, fee: 5000000, paidAmount: 5000000,
+    suggestedRefund: 0, createdAt: "2026-11-13T01:00:00Z",
+  });
+  assert.equal(row.status, "PENDING");
+  assert.equal(row.approvedRefundAmount, 0);
+  assert.equal(row.suggestedRefundAmount, 0);
+  assert.equal(row.refundFee, 5000000);
+  assert.equal(row.refundAccountNumber, "");
+  const done = fromAdminRefund({
+    id: 8, bookingId: 102, bookingCode: "BK-2", startDate: "2026-12-20T00:00:00", customerName: "C",
+    reason: "TOUR_CANCELLED", reasonDetail: "Agency hủy", status: "Completed", requestedByRole: "agency",
+    totalAmount: 6000000, feePercent: 0, fee: 0, paidAmount: 3000000, suggestedRefund: 3000000,
+    approvedRefundAmount: 3000000, refundTransactionCode: "FT1", bankName: "MB", accountNumber: "123456", accountHolder: "C",
+    createdAt: "2026-11-03T01:00:00Z",
+  });
+  assert.equal(done.status, "COMPLETED");
+  assert.equal(done.bankTransactionCode, "FT1");
+  assert.equal(done.refundPercentage, 100);
 });
 
 test("balance deadline at 00:00 is shown as the end of the previous day", () => {

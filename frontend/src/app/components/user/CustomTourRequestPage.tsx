@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CustomTourRequest, TourCompany, User } from "@/app/types";
 import {
   Send,
@@ -20,12 +20,13 @@ interface CustomTourRequestPageProps {
   companies: TourCompany[];
   currentUser: User | null;
   onBack: () => void;
-  onSubmit: (data: Omit<CustomTourRequest, "id" | "createdAt" | "status">) => void;
+  onSubmit: (data: Omit<CustomTourRequest, "id" | "createdAt" | "status">) => Promise<void>;
   onShowLogin: () => void;
   onViewMyRequests?: () => void;
 }
 
 const TODAY = new Date().toISOString().split("T")[0];
+const formatDateDisplay = (value: string) => value.split("-").reverse().join("/");
 
 export function CustomTourRequestPage({
   companies,
@@ -53,7 +54,12 @@ export function CustomTourRequestPage({
   });
 
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  useEffect(() => {
+    setForm((previous) => companies.some((c) => c.id === previous.targetCompanyId)
+      ? previous : { ...previous, targetCompanyId: companies[0]?.id ?? "" });
+  }, [companies]);
 
   // Auto-format currency VND helper
   const formatCurrencyVND = (digits: string): string => {
@@ -105,7 +111,7 @@ export function CustomTourRequestPage({
 
   const selectedCompany = companies.find((c) => c.id === form.targetCompanyId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -124,8 +130,15 @@ export function CustomTourRequestPage({
       setErrorMsg("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
       return;
     }
+    if (!form.targetCompanyId || !companies.some((c) => c.id === form.targetCompanyId)) {
+      setErrorMsg("Vui lòng chọn Agency nhận yêu cầu."); return;
+    }
+    if (form.returnDate < form.departureDate || form.departureDate < TODAY) {
+      setErrorMsg("Ngày đi và ngày về không hợp lệ."); return;
+    }
 
-    onSubmit({
+    setSubmitting(true);
+    try { await onSubmit({
       userId: currentUser.id,
       businessName: form.businessName.trim() || undefined,
       businessEmail: form.businessEmail.trim() || undefined,
@@ -142,9 +155,9 @@ export function CustomTourRequestPage({
       additionalInfo: form.additionalInfo.trim() || undefined,
       targetCompanyId: form.targetCompanyId,
       targetCompanyName: selectedCompany?.name ?? "",
-    });
-
-    setSubmitted(true);
+    }); setSubmitted(true); }
+    catch (error) { setErrorMsg(error instanceof Error ? error.message : "Không thể gửi yêu cầu."); }
+    finally { setSubmitting(false); }
   };
 
   if (submitted) {
@@ -176,7 +189,7 @@ export function CustomTourRequestPage({
             </div>
             <div className="flex justify-between">
               <span className="text-[#475569]">Thời gian dự kiến:</span>
-              <strong className="font-semibold">{form.departureDate} đến {form.returnDate}</strong>
+              <strong className="font-semibold">{formatDateDisplay(form.departureDate)} đến {formatDateDisplay(form.returnDate)}</strong>
             </div>
             {form.budgetPerPerson ? (
               <div className="flex justify-between">
@@ -392,7 +405,15 @@ export function CustomTourRequestPage({
               </label>
               <VietnameseDatePicker
                 value={form.departureDate}
-                onChange={(d) => setForm((p) => ({ ...p, departureDate: d }))}
+                onChange={(d) =>
+                  setForm((p) => ({
+                    ...p,
+                    departureDate: d,
+                    returnDate: d && p.returnDate && p.returnDate < d ? d : p.returnDate,
+                  }))
+                }
+                min={TODAY}
+                placeholder="dd/MM/yyyy"
                 className="h-9 text-xs bg-white"
               />
             </div>
@@ -404,6 +425,8 @@ export function CustomTourRequestPage({
               <VietnameseDatePicker
                 value={form.returnDate}
                 onChange={(d) => setForm((p) => ({ ...p, returnDate: d }))}
+                min={form.departureDate || TODAY}
+                placeholder="dd/MM/yyyy"
                 className="h-9 text-xs bg-white"
               />
             </div>
@@ -496,10 +519,11 @@ export function CustomTourRequestPage({
             </Button>
             <Button
               type="submit"
+              disabled={submitting}
               className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-5 rounded-[6px] font-semibold flex items-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Gửi yêu cầu thiết kế</span>
+              <span>{submitting ? "Đang gửi..." : "Gửi yêu cầu thiết kế"}</span>
             </Button>
           </div>
         </div>

@@ -144,6 +144,10 @@ Table tours {
   is_ai_generated boolean [default: false]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+
+  indexes {
+    design_request_id [note: 'Một yêu cầu có thể có nhiều Tour plan']
+  }
 }
 
 Table tour_pricing_tiers {
@@ -264,6 +268,9 @@ Table tour_design_requests {
   // 1. CHỌN CÔNG TY DU LỊCH (Agency/Business Profile nhận yêu cầu)
   user_id varchar(36) // FK trỏ tới users.id (người dùng gửi form, có thể null nếu cho phép khách vãng lai)
   agency_id varchar(36) [note: 'Công ty nhận yêu cầu ban đầu; không thay thế Host trong bảng phân công']
+  business_name varchar(255)
+  business_email varchar(191)
+  business_phone varchar(30)
   // 2. ĐẠI DIỆN ĐẶT TOUR
   contact_name varchar(150) [not null] // Người liên hệ, đại diện đặt tour (*)
   contact_email varchar(191) [not null] // Email cá nhân người đại diện (*)
@@ -281,7 +288,7 @@ Table tour_design_requests {
   special_requirements text // Các điểm tham quan, hoạt động tour, lửa trại... hay ghi chú khác
 
   // 5. TRẠNG THÁI XỬ LÝ CỦA HỆ THỐNG
-  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED
+  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED, REJECTED
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
@@ -289,6 +296,33 @@ Table tour_design_requests {
 // ============================================================================
 // LỊCH SỬ PHIÊN BẢN & SAO LƯU TOUR (VERSION CONTROL & ROLLBACK)
 // ============================================================================
+Table tour_plan_proposals {
+  id int [pk, increment]
+  request_id int [not null]
+  tour_id int [not null]
+  customer_id varchar(36) [not null]
+  agency_id varchar(36) [not null]
+  base_tour_version int [not null]
+  proposal_json json [not null, note: 'SQL Server nvarchar(max); bản sao chỉnh của khách, không tự thay đổi Tour']
+  message varchar(2000) [not null]
+  status varchar(30) [not null]
+  agency_reply varchar(2000)
+  created_at timestamp [not null, note: 'SQL Server datetime2']
+  responded_at timestamp
+
+  indexes {
+    (request_id, created_at)
+    (agency_id, status)
+    customer_id
+    tour_id
+  }
+}
+
+Ref: tour_plan_proposals.request_id > tour_design_requests.id
+Ref: tour_plan_proposals.tour_id > tours.id
+Ref: tour_plan_proposals.customer_id > users.id
+Ref: tour_plan_proposals.agency_id > users.id
+
 Table tour_versions {
   id int [pk, increment]
   tour_id int [not null, note: 'FK tới tours.id']
@@ -620,6 +654,56 @@ Table payment_transactions {
 // ============================================================================
 // 3. NHẬT KÝ ĐIỀU CHỈNH TĂNG / GIẢM GIÁ TOUR DO PHÁT SINH
 // ============================================================================
+Table booking_supplier_requests {
+  id int [pk, increment]
+  booking_id int [not null]
+  service_id int [not null]
+  provider_id varchar(36) [not null]
+  slot_key varchar(100) [not null]
+  service_name varchar(255) [not null]
+  service_date_from date
+  service_date_to date
+  quantity decimal(12, 2) [not null]
+  unit varchar(30) [not null]
+  estimated_cost decimal(12, 2) [not null]
+  quoted_cost decimal(12, 2)
+  status varchar(30) [not null]
+  note varchar(1000)
+  created_at timestamp [not null]
+  responded_at timestamp
+  indexes {
+    (provider_id, status)
+    (booking_id, slot_key)
+  }
+}
+Ref: booking_supplier_requests.booking_id > bookings.id
+Ref: booking_supplier_requests.service_id > services.id
+Ref: booking_supplier_requests.provider_id > users.id
+
+Table booking_quotations {
+  id int [pk, increment]
+  booking_id int [not null]
+  version int [not null]
+  tour_id int [not null]
+  tour_version int [not null]
+  status varchar(30) [not null]
+  estimated_sale decimal(12, 2) [not null]
+  total_cost decimal(12, 2) [not null]
+  agency_profit decimal(12, 2) [not null]
+  sale_total decimal(12, 2) [not null]
+  lines_json text [not null, note: 'Snapshot bất biến của từng dòng chi phí']
+  reason varchar(1000) [not null]
+  created_at timestamp [not null]
+  sent_at timestamp
+  accepted_at timestamp
+  indexes {
+    (booking_id, version) [unique]
+  }
+}
+Ref: booking_quotations.booking_id > bookings.id
+Ref: booking_quotations.tour_id > tours.id
+
+
 Table booking_price_adjustments {
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
@@ -908,6 +992,49 @@ Table complaints {
     Ref: refund_requests.booking_id > bookings.id
     Ref: refund_requests.requested_by > users.id
     Ref: refund_requests.reviewed_by > users.id
+    // Hợp đồng lữ hành (Luật Du lịch 2017 Điều 39): sinh khi Agency duyệt, khách ký rồi tải bản đã ký lên.
+    // Giá đổi sau khi duyệt thì tạo phiên bản mới (bản cũ Superseded) và khách ký lại.
+    Table booking_contracts {
+      id int [pk, increment]
+      booking_id int [not null, note: 'FK tới bookings.id']
+      version int [not null, note: 'Phiên bản hợp đồng của booking, bắt đầu từ 1']
+      contract_no varchar(50) [not null, note: 'Số hợp đồng, ví dụ HD-BK123-1']
+      total_amount decimal(12, 2) [not null, note: 'Tổng giá trị tour tại thời điểm lập hợp đồng']
+      status varchar(30) [not null, note: 'AwaitingSignature, Signed, Verified, ResignRequested, Superseded']
+      signed_file_name varchar(260) [note: 'Tên file bản đã ký lưu trên máy chủ']
+      signed_file_type varchar(50) [note: 'application/pdf, image/png, image/jpeg']
+      signed_file_sha256 varchar(64) [note: 'Mã băm SHA-256 của bản đã ký để chứng minh không bị sửa']
+      signed_at timestamp
+      sign_method varchar(20) [note: 'upload (tải bản ký lên) hoặc web (ký trên web)']
+      reviewed_by varchar(36) [note: 'FK tới users.id - Agency kiểm tra bản ký']
+      reviewed_at timestamp
+      review_note varchar(1000)
+      created_at timestamp [default: `now()`]
+      indexes {
+        (booking_id, version) [unique]
+      }
+    }
+    Ref: booking_contracts.booking_id > bookings.id
+    Ref: booking_contracts.reviewed_by > users.id
+
+    // Phiên ký hợp đồng trực tuyến: mở bằng QR (điện thoại) hoặc trên máy tính; một lần dùng, hết hạn 15 phút, xác nhận bằng OTP email.
+    Table contract_sign_sessions {
+      id int [pk, increment]
+      contract_id int [not null, note: 'FK tới booking_contracts.id']
+      token_hash varchar(64) [not null, unique, note: 'SHA-256 của mã phiên trong QR (không lưu mã gốc)']
+      expires_at timestamp [not null]
+      otp_hash varchar(64) [note: 'SHA-256 của OTP đã gửi email']
+      otp_expires_at timestamp
+      otp_sent_at timestamp
+      otp_send_count int [not null, default: 0]
+      otp_attempts int [not null, default: 0, note: 'Số lần nhập sai OTP; quá 5 lần thì khóa phiên']
+      completed_at timestamp [note: 'Thời điểm khách xác nhận ký']
+      signer_ip varchar(45)
+      signer_user_agent varchar(300)
+      created_at timestamp [default: `now()`]
+    }
+    Ref: contract_sign_sessions.contract_id > booking_contracts.id
+
 
 
     // ============================================================================

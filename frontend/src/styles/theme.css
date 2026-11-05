@@ -3,18 +3,18 @@
 :root {
   --font-size: 16px;
   --background: #F8FAFC;
-  --foreground: #0F172A;
+  --foreground: #1E293B;
   --card: #FFFFFF;
-  --card-foreground: #0F172A;
+  --card-foreground: #1E293B;
   --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
+  --popover-foreground: #1E293B;
   --primary: #075985;
   --primary-hover: #0C4A6E;
   --primary-dark: #082F49;
   --primary-light: #F0F9FF;
   --primary-foreground: #FFFFFF;
   --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
+  --secondary-foreground: #1E293B;
   --muted: #F8FAFC;
   --muted-foreground: #475569;
   --accent: #0369A1;
@@ -75,4 +75,12 @@
   --sidebar-accent-foreground: #F8FAFC;
   --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-ring: #38BDF8;
+}
+
+/* Map token shadcn còn thiếu: nền popover/thẻ trắng (trước đây lớp bg-popover/bg-card không sinh ra nên trong suốt). */
+@theme inline {
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
 }

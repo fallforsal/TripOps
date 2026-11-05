@@ -1,3 +1,4 @@
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 import { useState } from "react";
 import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
@@ -95,7 +96,7 @@ export function AdminLayout({
   ];
 
   const SidebarContent = () => (
-    <>
+    <div className="flex flex-col h-full">
       {/* Logo/Header */}
       <div className="p-6 border-b border-[#CBD5E1]">
         <div className="flex items-center justify-between">
@@ -137,13 +138,14 @@ export function AdminLayout({
       </div>
 
       {/* Menu Items */}
-      <nav className="p-4 space-y-2">
+      <nav className="tripops-sidebar-nav p-4 space-y-2 flex-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           return (
             <button
               key={item.id}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => {
                 onNavigate(item.id);
                 setMobileOpen(false);
@@ -159,7 +161,7 @@ export function AdminLayout({
               />
               {!collapsed && (
                 <div className="flex items-center justify-between flex-1">
-                  <span className="font-medium">
+                  <span data-slot="sidebar-label" className="font-medium">
                     {item.label}
                   </span>
                   {item.badge !== undefined && (
@@ -178,19 +180,10 @@ export function AdminLayout({
             </button>
           );
         })}
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-gray-700 hover:bg-gray-100"
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0 text-gray-600" />
-            {!collapsed && (
-              <span className="font-medium">Đăng xuất</span>
-            )}
-          </button>
-        )}
+        
       </nav>
-    </>
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
+    </div>
   );
 
   return (

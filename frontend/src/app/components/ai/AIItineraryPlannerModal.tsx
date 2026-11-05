@@ -287,10 +287,10 @@ export function AIItineraryPlannerModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 rounded-2xl border-0 shadow-2xl">
         {/* Header with AI Gradient */}
-        <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white p-6 relative overflow-hidden">
-          <div className="absolute -right-8 -bottom-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="bg-[#075985] text-white p-6 relative overflow-hidden">
+          
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
+            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner">
               <Sparkles className="w-6 h-6 text-amber-300 animate-pulse" />
             </div>
             <div>
@@ -349,7 +349,7 @@ export function AIItineraryPlannerModal({
                 {/* Duration */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <Calendar className="w-3.5 h-3.5 text-[#075985]" />
                     Số ngày lịch trình
                   </label>
                   <select
@@ -419,7 +419,7 @@ export function AIItineraryPlannerModal({
                 <Button
                   onClick={handleGenerate}
                   disabled={isGenerating || !destination.trim()}
-                  className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2"
+                  className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold text-xs px-6 py-2.5 rounded-lg shadow-sm transition-colors flex items-center gap-2"
                 >
                   {isGenerating ? (
                     <>
@@ -455,7 +455,7 @@ export function AIItineraryPlannerModal({
               {/* Proposed Tour Header */}
               <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">
+                  <span className="text-[10px] uppercase font-bold text-[#075985] tracking-wider">
                     Tên Tour Đề Xuất
                   </span>
                   <h3 className="text-base font-extrabold text-slate-900 mt-0.5">{generatedData.name}</h3>
@@ -481,7 +481,7 @@ export function AIItineraryPlannerModal({
               {/* Day-by-day Itinerary Accordions */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <Layers className="w-4 h-4 text-[#075985]" />
                   Chi tiết {generatedData.itinerary.length} ngày lịch trình đề xuất
                 </h4>
 
@@ -511,7 +511,7 @@ export function AIItineraryPlannerModal({
                           <div className="text-xs">
                             <span className="font-bold text-slate-800 block">{loc.name}</span>
                             <span className="text-slate-500 text-[11px] block">{loc.address}</span>
-                            {loc.notes && <span className="text-indigo-600 text-[11px] block mt-0.5">📌 {loc.notes}</span>}
+                            {loc.notes && <span className="text-[#075985] text-[11px] block mt-0.5">📌 {loc.notes}</span>}
                           </div>
                         </div>
                       ))}
@@ -538,7 +538,7 @@ export function AIItineraryPlannerModal({
                 </Button>
                 <Button
                   onClick={handleApply}
-                  className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2"
+                  className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold text-xs px-6 py-2.5 rounded-lg shadow-sm transition-colors flex items-center gap-2"
                 >
                   <Check className="w-4 h-4" />
                   <span>Áp Dụng Vào Form Tour Ngay</span>

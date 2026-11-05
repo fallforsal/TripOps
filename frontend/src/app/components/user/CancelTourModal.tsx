@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   XCircle,
@@ -21,6 +21,8 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Booking, RefundReasonType } from "@/app/types";
+import { getCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
+import { VIETNAM_BANKS } from "@/app/data/vietnamBanks";
 
 interface CancelTourModalProps {
   bookingId: string;
@@ -48,25 +50,11 @@ interface CancelTourModalProps {
     refundBankName: string;
     refundAccountNumber: string;
     refundAccountHolder: string;
-  }) => void;
+  }) => void | boolean | Promise<boolean | void>;
 }
 
-const COMMON_BANKS = [
-  "Vietcombank",
-  "MB Bank",
-  "Techcombank",
-  "BIDV",
-  "VietinBank",
-  "ACB",
-  "TPBank",
-  "VPBank",
-  "Agribank",
-  "Sacombank",
-  "HD Bank",
-  "VIB",
-  "SHB",
-  "Khác",
-];
+// Ngân hàng chi hộ tự động được (khớp mã BIN ở máy chủ); "Khác" thì Admin chuyển khoản tay.
+const COMMON_BANKS = [...VIETNAM_BANKS.map((b) => b.name), "Khác"];
 
 const REASON_OPTIONS: { value: RefundReasonType; label: string; desc: string }[] = [
   {
@@ -85,15 +73,20 @@ const REASON_OPTIONS: { value: RefundReasonType; label: string; desc: string }[]
     desc: "Thay đổi khách sạn, lịch trình hoặc hướng dẫn viên",
   },
   {
-    value: "DUPLICATE_PAYMENT",
-    label: "Đặt trùng đơn / Thanh toán lặp",
-    desc: "Thanh toán 2 lần hoặc trùng với thành viên khác trong đoàn",
-  },
-  {
     value: "OTHER",
     label: "Lý do khác",
     desc: "Lý do riêng biệt cần Ban Quản trị xem xét",
   },
+];
+
+const CANCELLATION_TIERS: { label: string; fee: string; match: (q: CancellationQuoteDto) => boolean }[] = [
+  { label: "Trong 72 giờ sau khi thanh toán và còn ít nhất 15 ngày", fee: "0%", match: (q) => q.coolingOff },
+  { label: "Còn từ 30 ngày trở lên", fee: "0%", match: (q) => !q.coolingOff && q.daysBeforeDeparture >= 30 },
+  { label: "Còn 15–29 ngày", fee: "25%", match: (q) => !q.coolingOff && q.daysBeforeDeparture >= 15 && q.daysBeforeDeparture < 30 },
+  { label: "Còn 8–14 ngày", fee: "50%", match: (q) => q.daysBeforeDeparture >= 8 && q.daysBeforeDeparture < 15 },
+  { label: "Còn 3–7 ngày", fee: "75%", match: (q) => q.daysBeforeDeparture >= 3 && q.daysBeforeDeparture < 8 },
+  { label: "Còn 1–2 ngày", fee: "90%", match: (q) => q.daysBeforeDeparture >= 1 && q.daysBeforeDeparture < 3 },
+  { label: "Ngày khởi hành hoặc tour đã bắt đầu", fee: "100%", match: (q) => q.daysBeforeDeparture <= 0 },
 ];
 
 const QUICK_UNPAID_REASONS = [
@@ -117,26 +110,10 @@ export function CancelTourModal({
   onImmediateCancel,
   onSubmitRefundRequest,
 }: CancelTourModalProps) {
-  // Xác định trạng thái đã thanh toán hay chưa theo nghiệp vụ:
-  // "vì khi booking họ chưa có thanh toán liền mà phải chờ agency duyệt và tạo yêu cầu thanh toán
-  // nên nếu agency chưa duyệt hoặc chưa thanh toán thì cho hủy liền không cần admin phê duyệt nữa"
-  // Xác định có tiền thực đóng hay chưa theo BOOKING_STATUS_MATRIX.md:
-  // - Nếu chưa thanh toán (unpaid) và chưa đóng cọc: Cho hủy liền không mất phí (0đ), không cần Admin duyệt!
-  // - Nếu đã đặt cọc (status === "deposited" || paymentStatus === "partially_paid")
-  //   hoặc đã thanh toán đủ (status === "paid" || paymentStatus === "paid"):
-  //   -> Kích hoạt form Hoàn tiền (Refund Request) qua Admin!
-  const hasPaidMoney =
-    booking?.status === "deposited" ||
-    booking?.status === "paid" ||
-    booking?.paymentStatus === "paid" ||
-    booking?.paymentStatus === "partially_paid" ||
-    Boolean(booking?.depositPaid && (booking?.depositAmount || 0) > 0);
-
+  // Đơn chưa có tiền (chưa duyệt hoặc chưa thanh toán): hủy liền, không mất phí, không cần Admin duyệt.
+  // Đơn đã có tiền: gửi yêu cầu hủy; phí và số hoàn do máy chủ tính theo chính sách chung, đơn chỉ hủy khi Admin duyệt.
+  const hasPaidMoney = (booking?.paidAmount ?? 0) > 0;
   const canCancelImmediately = !hasPaidMoney;
-  const isDepositOnly = booking?.status === "deposited" || booking?.paymentStatus === "partially_paid";
-  const actualPaidAmount = isDepositOnly
-    ? (booking?.depositAmount || Math.round((booking?.totalPrice || 0) * 0.3))
-    : (booking?.totalPrice || booking?.depositAmount || 0);
 
   // State cho hủy ngay (Unpaid)
   const [unpaidReason, setUnpaidReason] = useState("");
@@ -154,36 +131,31 @@ export function CancelTourModal({
   const [paidErrors, setPaidErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Tính số ngày còn lại đến ngày khởi hành để áp dụng chính sách hoàn hủy
-  const departureDateStr = booking?.tourStartDate || booking?.tour?.departureDates?.[0]?.date || "2026-11-20";
-  const { daysRemaining, refundPercentage, refundFee, approvedRefundAmount } = useMemo(() => {
-    const depDate = new Date(departureDateStr);
-    const today = new Date();
-    depDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.ceil((depDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const paidAmount = actualPaidAmount;
-
-    let percent = 0;
-    if (diffDays >= 7) {
-      percent = 100;
-    } else if (diffDays >= 3) {
-      percent = 50;
-    } else {
-      percent = 0;
-    }
-
-    const approved = (paidAmount * percent) / 100;
-    const fee = paidAmount - approved;
-
-    return {
-      daysRemaining: diffDays,
-      refundPercentage: percent,
-      refundFee: fee,
-      approvedRefundAmount: approved,
+  // Báo giá hủy do máy chủ tính tại thời điểm này (không tự tính ở trình duyệt).
+  const [quote, setQuote] = useState<CancellationQuoteDto | null>(null);
+  const [quoteError, setQuoteError] = useState("");
+  useEffect(() => {
+    if (!hasPaidMoney) return;
+    let active = true;
+    getCancellationQuote(Number(bookingId))
+      .then((result) => {
+        if (active) setQuote(result);
+      })
+      .catch((err) => {
+        if (active) setQuoteError(err instanceof Error ? err.message : "Không tải được phí hủy từ máy chủ.");
+      });
+    return () => {
+      active = false;
     };
-  }, [departureDateStr, booking]);
+  }, [bookingId, hasPaidMoney]);
+
+  const daysRemaining = quote?.daysBeforeDeparture ?? 0;
+  const actualPaidAmount = quote?.paidAmount ?? booking?.paidAmount ?? 0;
+  const refundFee = quote?.fee ?? 0;
+  const approvedRefundAmount = quote?.refundAmount ?? 0;
+  const refundPercentage = actualPaidAmount > 0 ? Math.round((approvedRefundAmount * 100) / actualPaidAmount) : 0;
+  const needsBankAccount = approvedRefundAmount > 0;
+  const departureDateStr = booking?.tourStartDate || "";
 
   // Xử lý HỦY LIỀN (Chưa thanh toán)
   const handleImmediateSubmit = () => {
@@ -200,19 +172,23 @@ export function CancelTourModal({
   };
 
   // Xử lý NỘP ĐƠN HOÀN TIỀN (Đã thanh toán)
-  const handleRefundSubmit = () => {
+  const handleRefundSubmit = async () => {
     const errors: { [key: string]: string } = {};
 
-    if (!reasonDetail.trim()) {
+    if (!quote) {
+      setQuoteError(quoteError || "Chưa tải được phí hủy từ máy chủ. Vui lòng thử lại.");
+      return;
+    }
+    if (reasonDetail.trim().length < 3) {
       errors.reasonDetail = "Vui lòng nhập mô tả chi tiết lý do hủy.";
     }
-    if (!accountNumber.trim()) {
-      errors.accountNumber = "Vui lòng nhập số tài khoản ngân hàng nhận tiền.";
+    if (needsBankAccount && !/^\d{6,30}$/.test(accountNumber.replace(/\s/g, ""))) {
+      errors.accountNumber = "Số tài khoản chỉ gồm 6–30 chữ số.";
     }
-    if (!accountHolder.trim()) {
+    if (needsBankAccount && !accountHolder.trim()) {
       errors.accountHolder = "Vui lòng nhập tên chủ tài khoản thụ hưởng.";
     }
-    if (bankName === "Khác" && !customBankName.trim()) {
+    if (needsBankAccount && bankName === "Khác" && !customBankName.trim()) {
       errors.bankName = "Vui lòng nhập tên ngân hàng thụ hưởng.";
     }
 
@@ -227,7 +203,7 @@ export function CancelTourModal({
     const originalPaid = actualPaidAmount;
 
     if (onSubmitRefundRequest) {
-      onSubmitRefundRequest({
+      const ok = await onSubmitRefundRequest({
         bookingId,
         bookingCode: booking?.id ? `BK-${booking.id}` : undefined,
         tourId: booking?.tourId,
@@ -244,9 +220,10 @@ export function CancelTourModal({
         refundFee,
         refundPercentage,
         refundBankName: finalBankName,
-        refundAccountNumber: accountNumber.trim(),
+        refundAccountNumber: accountNumber.replace(/\s/g, ""),
         refundAccountHolder: accountHolder.trim().toUpperCase(),
       });
+      if (ok === false) setIsSubmitting(false);
     } else if (onConfirm) {
       onConfirm(`[Yêu cầu hoàn tiền ${refundPercentage}%]: ${reasonDetail.trim()}`);
     }
@@ -433,16 +410,16 @@ export function CancelTourModal({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-[11px] text-slate-500 font-medium block">
-                      {isDepositOnly ? "Tiền cọc đã đóng" : "Đã thanh toán đủ"}
+                      Bạn đã thanh toán
                     </span>
                     <span className="font-bold text-slate-900 text-sm mt-0.5 block">
-                      {formatVND(booking?.totalPrice || booking?.depositAmount || 0)}
+                      {formatVND(actualPaidAmount)}
                     </span>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                     <span className="text-[11px] text-slate-500 font-medium block">
-                      Phí hủy tour / phạt giữ lại
+                      Phí hủy ({quote ? `${quote.feePercent}% giá tour` : "đang tính"})
                     </span>
                     <span className="font-bold text-rose-600 text-sm mt-0.5 block">
                       {refundFee > 0 ? `- ${formatVND(refundFee)}` : "0đ (Miễn phí)"}
@@ -459,19 +436,28 @@ export function CancelTourModal({
                   </div>
                 </div>
 
+                {quoteError && (
+                  <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5">{quoteError}</p>
+                )}
+                {quote && (
+                  <p className="text-[11px] text-slate-700 bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 leading-relaxed">
+                    {quote.explanation}
+                  </p>
+                )}
+
                 <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-50/80 p-3 rounded-xl border border-slate-200/80">
-                  <strong>Quy định hủy tour nền tảng TripOps:</strong>
+                  <strong>Chính sách hủy chung của TripOps</strong> (phí tính trên tổng giá trị tour, theo số ngày còn lại trước khởi hành lúc bạn gửi yêu cầu):
                   <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
-                    <li className={daysRemaining >= 7 ? "text-emerald-700 font-bold" : ""}>
-                      Hủy trước ≥ 7 ngày: Hoàn 100% số tiền đã thanh toán (0đ phí).
-                    </li>
-                    <li className={daysRemaining >= 3 && daysRemaining < 7 ? "text-amber-700 font-bold" : ""}>
-                      Hủy trước 3 - 6 ngày: Hoàn 50% số tiền đã thanh toán.
-                    </li>
-                    <li className={daysRemaining < 3 ? "text-rose-700 font-bold" : ""}>
-                      Hủy trong vòng 2 ngày / cận giờ: Không hoàn tiền (0%).
-                    </li>
+                    {CANCELLATION_TIERS.map((tier) => (
+                      <li
+                        key={tier.label}
+                        className={quote && tier.match(quote) ? "text-amber-800 font-bold" : ""}
+                      >
+                        {tier.label}: phí {tier.fee}
+                      </li>
+                    ))}
                   </ul>
+                  <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn chỉ bị hủy sau khi Admin duyệt.</p>
                 </div>
               </div>
 
@@ -619,7 +605,9 @@ export function CancelTourModal({
                 </div>
 
                 <p className="text-[11px] text-slate-500 italic">
-                  ℹ️ Số tiền hoàn trả sẽ được Ban Quản trị TripOps chuyển trực tiếp về tài khoản trên sau khi kiểm tra hợp lệ trong vòng 24h làm việc.
+                  ℹ️ {needsBankAccount
+                    ? "Ban Quản trị TripOps chuyển khoản hoàn về tài khoản trên trong vòng 7 ngày làm việc kể từ khi duyệt."
+                    : "Theo chính sách, yêu cầu này không có khoản hoàn nên không bắt buộc nhập tài khoản."}
                 </p>
               </div>
             </div>
@@ -639,7 +627,7 @@ export function CancelTourModal({
               <Button
                 type="button"
                 onClick={handleRefundSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !quote}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-10 px-6 rounded-xl gap-2 cursor-pointer shadow-xs"
               >
                 <Send className="w-4 h-4" />

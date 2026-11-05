@@ -5,6 +5,11 @@
     <ProjectReference Include="..\TripOps.Data\TripOps.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Tạo PDF hợp đồng lữ hành. Giấy phép Community (miễn phí cho đồ án/doanh nghiệp nhỏ). -->
+    <PackageReference Include="QuestPDF" Version="2025.7.4" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

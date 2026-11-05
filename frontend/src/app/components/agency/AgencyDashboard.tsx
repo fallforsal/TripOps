@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Tour,
   Booking,
@@ -54,6 +54,8 @@ interface AgencyDashboardProps {
   onUpdateBookingAgencies?: (bookingId: string, agencies: BookingAgencyShare[]) => void;
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
   onUpdateIncidents?: (bookingId: string, incidents: BookingIncident[]) => void;
+  onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
+  onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
   onUpdateCustomRequest?: (id: string, update: Partial<CustomTourRequest>) => void;
   onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
@@ -87,6 +89,8 @@ export function AgencyDashboard({
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
   onUpdateIncidents,
+  onCancelBooking,
+  onReviewContract,
   onUpdateCustomRequest,
   onRestoreTourVersion,
   onViewTour,
@@ -95,6 +99,22 @@ export function AgencyDashboard({
 }: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  // Hash routing for reload / Back / Forward
+  useEffect(() => {
+    const handleHash = () => {
+      const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
+      if (match) {
+        const sec = match[1];
+        const bId = match[2] || null;
+        setActiveSection(sec);
+        if (bId) setSelectedBookingId(bId);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   const [editingCoHostItem, setEditingCoHostItem] = useState<{
     tour?: Tour | null;
     customRequest?: CustomTourRequest | null;
@@ -144,6 +164,7 @@ export function AgencyDashboard({
     setActiveSection(section);
     setSelectedBookingId(null);
     setEditingCoHostItem(null);
+    window.location.hash = `#/agency/${section}`;
   };
 
   const handleEditTourSegment = (item: Tour | CustomTourRequest) => {
@@ -274,6 +295,7 @@ export function AgencyDashboard({
         if (currentSelectedBooking) {
           return (
             <AgencyBookingDetailPage
+              plans={tours.filter((t) => t.customRequestId && t.customRequestId === currentSelectedBooking.tour?.customRequestId)}
               booking={currentSelectedBooking}
               guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}
@@ -291,6 +313,8 @@ export function AgencyDashboard({
               onUpdateBookingAgencies={onUpdateBookingAgencies}
               onUpdateAttractionCheckins={onUpdateAttractionCheckins}
               onUpdateIncidents={onUpdateIncidents}
+              onCancelBooking={onCancelBooking}
+              onReviewContract={onReviewContract}
             />
           );
         }

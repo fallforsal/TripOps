@@ -9,12 +9,12 @@ import {
   X,
   Building2,
   Plus,
-  PlusCircle,
   BedDouble,
   ClipboardList,
 } from "lucide-react";
 import { User } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
+import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
 
 interface ProviderLayoutProps {
   children: React.ReactNode;
@@ -47,7 +47,6 @@ export function ProviderLayout({
       icon: ClipboardList,
       badge: pendingRequestsCount,
     },
-    { id: "create", label: "Đăng Dịch vụ Mới", icon: PlusCircle },
     { id: "profile", label: "Hồ sơ Doanh nghiệp", icon: Building2 },
   ];
 
@@ -113,7 +112,7 @@ export function ProviderLayout({
               onCreateService();
               setMobileOpen(false);
             }}
-            className={`w-full bg-[#075985] hover:bg-[#F97316] text-white shadow-md rounded-xl transition-all ${
+            className={`w-full bg-[#075985] hover:bg-[#0C4A6E] text-white shadow-md rounded-xl transition-all ${
               collapsed ? "px-0 justify-center h-10 w-10 mx-auto" : "h-10 justify-start px-3"
             }`}
           >
@@ -124,7 +123,7 @@ export function ProviderLayout({
       )}
 
       {/* Navigation Links */}
-      <nav className="p-3 space-y-1.5 flex-1 overflow-y-auto">
+      <nav className="tripops-sidebar-nav p-3 space-y-1.5 flex-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
@@ -136,9 +135,10 @@ export function ProviderLayout({
                 setMobileOpen(false);
               }}
               title={collapsed ? item.label : undefined}
+              aria-current={isActive ? "page" : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 isActive
-                  ? "bg-[#F97316] text-white shadow-md shadow-orange-500/20 font-semibold"
+                  ? "bg-[#075985] text-white shadow-md shadow-sky-900/10 font-semibold"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 font-medium"
               } ${collapsed ? "justify-center px-0" : ""}`}
             >
@@ -148,7 +148,7 @@ export function ProviderLayout({
                 }`}
               />
               {!collapsed && (
-                <span className="text-sm flex-1 text-left truncate">
+                <span data-slot="sidebar-label" className="text-sm flex-1 text-left truncate">
                   {item.label}
                 </span>
               )}
@@ -156,7 +156,7 @@ export function ProviderLayout({
                 <span
                   className={`text-[10px] font-black px-2 py-0.5 rounded-full ml-auto ${
                     isActive
-                      ? "bg-white text-[#F97316]"
+                      ? "bg-white text-[#075985]"
                       : "bg-amber-500 text-white animate-pulse"
                   }`}
                 >
@@ -183,30 +183,12 @@ export function ProviderLayout({
         </div>
       )}
 
-      {/* User / Logout Footer */}
-      {onLogout && (
-        <div className="p-3 border-t border-[#CBD5E1]">
-          <button
-            onClick={onLogout}
-            title={collapsed ? "Đăng xuất" : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-rose-50 hover:text-rose-600 transition-all ${
-              collapsed ? "justify-center px-0" : ""
-            }`}
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0 text-gray-400 group-hover:text-rose-600" />
-            {!collapsed && (
-              <span className="font-medium text-sm">
-                Đăng xuất
-              </span>
-            )}
-          </button>
-        </div>
-      )}
+      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#F0F9FF] flex">
+    <div className="min-h-screen bg-[#F8FAFC] flex">
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:block fixed top-0 bottom-0 left-0 z-30 transition-all duration-300 ${
@@ -254,7 +236,7 @@ export function ProviderLayout({
             <Button
               size="sm"
               onClick={onCreateService}
-              className="bg-[#F97316] hover:bg-[#F97316] text-white text-xs"
+              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs"
             >
               <Plus className="w-4 h-4 mr-1" />
               Đăng dịch vụ

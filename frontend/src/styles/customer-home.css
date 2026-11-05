@@ -1,12 +1,12 @@
-/* Customer presentation only. Other role layouts keep their existing tokens. */
+/* Customer presentation shares the application colors, preserving its layout. */
 :where(.trip-home, .trip-header, .trip-footer) {
-  --home-primary: #0f766e;
-  --home-primary-hover: #115e59;
-  --home-ink: #172523;
-  --home-muted: #62706c;
-  --home-line: #e5eae7;
-  --home-warm: #fafbf9;
-  --home-soft: #f4f7f5;
+  --home-primary: #075985;
+  --home-primary-hover: #0c4a6e;
+  --home-ink: #1e293b;
+  --home-muted: #64748b;
+  --home-line: #e2e8f0;
+  --home-warm: #f8fafc;
+  --home-soft: #f0f9ff;
   --home-radius: 8px;
   --home-card-radius: 12px;
   --home-search-radius: 16px;
@@ -38,7 +38,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.13em;
   line-height: 1.7;
@@ -146,7 +146,7 @@
   align-items: center;
   gap: 8px;
   color: var(--home-muted);
-  font-size: 12px;
+  font-size: 13px;
   margin-top: 40px;
 }
 .home-hero-note svg {
@@ -187,7 +187,7 @@
 }
 .home-hero-photo figcaption small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--home-muted);
   font-weight: 400;
   margin-top: 4px;
@@ -200,7 +200,7 @@
   background: #152c36a6;
   padding: 6px 10px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.12em;
 }
 .home-search-wrap {
@@ -229,7 +229,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 20px;
   font-weight: 600;
   color: var(--home-ink);
@@ -284,7 +284,7 @@
   align-items: center;
   gap: 12px 24px;
   padding-top: 20px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--home-muted);
 }
 .home-quick-search button {
@@ -394,7 +394,7 @@
   color: var(--home-ink);
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
 }
 .home-destination-caption {
@@ -412,7 +412,7 @@
 }
 .home-destination-caption small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--home-muted);
   margin-top: 4px;
 }
@@ -478,7 +478,7 @@
   background: white;
   padding: 5px 10px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
 }
 .home-photo-arrow {
@@ -508,7 +508,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--home-muted);
 }
 .home-tour-agency > span {
@@ -545,7 +545,7 @@
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--home-muted);
   margin-top: 12px;
   margin-bottom: 24px;
@@ -569,7 +569,7 @@
   gap: 12px;
 }
 .home-price-caption {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--home-muted);
 }
 .home-tour-price {
@@ -589,7 +589,7 @@
   border: 1px solid var(--home-line);
   border-radius: var(--home-radius);
   color: var(--home-primary);
-  font-size: 12px;
+  font-size: 13px;
 }
 .trip-home .home-book-button:hover {
   border-color: var(--home-primary);
@@ -644,7 +644,7 @@
   background: white;
   padding: 16px;
   border-radius: var(--home-radius);
-  font-size: 12px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -744,7 +744,7 @@
   height: 24px;
 }
 .home-step-top > span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--home-muted);
 }
 .home-steps h3 {
@@ -834,7 +834,7 @@
   color: var(--home-primary);
 }
 .trip-brand small {
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0.12em;
   color: var(--home-muted);
 }
@@ -867,7 +867,7 @@
 .trip-header .trip-login {
   height: 38px;
   padding-inline: 16px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .trip-header .trip-ai-trigger {
   display: inline-flex;
@@ -875,10 +875,22 @@
   align-items: center;
   background: transparent;
   color: var(--home-primary);
-  padding: 8px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--home-radius);
+  cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.trip-header .trip-ai-trigger:hover {
+  background: var(--home-accent-soft);
+  color: var(--home-primary-strong);
+}
+.trip-header .trip-ai-trigger:focus-visible {
+  outline: 2px solid var(--home-primary);
+  outline-offset: 2px;
 }
 .trip-ai-trigger svg {
   width: 16px;
@@ -891,7 +903,7 @@
   padding: 4px;
   border-radius: var(--home-radius);
   color: var(--home-ink);
-  font-size: 12px;
+  font-size: 13px;
 }
 .trip-account-avatar {
   width: 32px;
@@ -1017,7 +1029,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  font-size: 11px;
+  font-size: 13px;
   color: #b7c9d0;
 }
 .trip-footer-bottom span {
@@ -1070,11 +1082,11 @@
     font-size: 14px;
   }
   .home-hero-note {
-    font-size: 11px;
+    font-size: 13px;
     margin-top: 24px;
   }
   .home-eyebrow {
-    font-size: 10px;
+    font-size: 13px;
     letter-spacing: 0.08em;
   }
   .home-hero-actions {
@@ -1108,7 +1120,7 @@
     font-size: 18px;
   }
   .home-destination-caption small {
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.7;
   }
   .home-tour-grid {
@@ -1145,7 +1157,7 @@
     font-size: 20px;
   }
   .trip-brand small {
-    font-size: 8px;
+    font-size: 13px;
   }
   .trip-brand {
     gap: 8px;
@@ -1160,7 +1172,7 @@
   .trip-header .trip-login {
     padding-inline: 12px;
     height: 36px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .trip-account-name {
     display: none;
@@ -1193,10 +1205,10 @@
   .trip-home .home-primary-button {
     height: 44px;
     padding-inline: 16px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .home-text-link {
-    font-size: 12px;
+    font-size: 13px;
   }
   .home-hero-note {
     display: none;
@@ -1209,10 +1221,10 @@
     bottom: 16px;
     left: 16px;
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .home-hero-photo figcaption small {
-    font-size: 10px;
+    font-size: 13px;
   }
   .home-image-index {
     top: 12px;
@@ -1233,7 +1245,7 @@
     border-bottom: 1px solid var(--home-line) !important;
   }
   .home-search-field label {
-    font-size: 12px;
+    font-size: 13px;
   }
   .trip-home .home-search-input,
   .trip-home .home-date-trigger {
@@ -1242,7 +1254,7 @@
   .home-quick-search {
     gap: 8px 16px;
     padding-top: 16px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .home-quick-search > span {
     width: 100%;
@@ -1285,14 +1297,14 @@
     font-size: 18px;
   }
   .home-destination-caption small {
-    font-size: 10px;
+    font-size: 13px;
   }
   .home-destination-caption > svg {
     width: 16px;
     height: 16px;
   }
   .home-destination-region {
-    font-size: 9px;
+    font-size: 13px;
     padding: 4px 6px;
     left: 8px;
     top: 8px;
@@ -1344,11 +1356,11 @@
     font-size: 17px;
   }
   .home-ai-section p {
-    font-size: 12px;
+    font-size: 13px;
   }
   .trip-home .home-ai-button {
     margin-left: 56px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .home-how-section {
     padding-top: 48px;
@@ -1377,10 +1389,10 @@
   .trip-footer-bottom {
     align-items: flex-start;
     flex-direction: column;
-    font-size: 10px;
+    font-size: 13px;
   }
   .trip-footer-links {
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -390,8 +390,8 @@ export interface PaymentRequest {
   status: "pending" | "paid" | "overdue" | "cancelled" | "scheduled" | "not_issued";
   createdAt: string;
   paidAt?: string;
-  /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại. */
-  stage?: "deposit" | "balance";
+  /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại, full = tour sát ngày trả toàn bộ một lần. */
+  stage?: "deposit" | "balance" | "full";
   /** Tổng tiền của đợt. */
   totalAmount?: number;
   /** Hạn chính xác (ISO UTC) do backend tính. */
@@ -632,6 +632,10 @@ export interface Booking {
   remainingAmount?: number;
   paymentRequests?: PaymentRequest[];
   paymentTransactions?: PaymentTransactionView[];
+  /** Yêu cầu hủy/hoàn tiền mới nhất do máy chủ trả về (đơn chỉ bị hủy khi Admin duyệt). */
+  cancellation?: import("@/app/services/wf05Bookings").CancellationRequestDto;
+  /** Hợp đồng lữ hành hiện hành (máy chủ lập khi Agency duyệt, có bản PDF và bản khách đã ký). */
+  travelContract?: import("@/app/services/wf05Bookings").ContractDto;
   // Price adjustments by company
   originalTotalPrice?: number;
   priceAdjustmentNote?: string;
@@ -953,6 +957,7 @@ export type RefundReasonType =
   | "SERVICE_QUALITY"
   | "WEATHER_FORCE_MAJEURE"
   | "DUPLICATE_PAYMENT"
+  | "PAYMENT_OVERDUE"
   | "OTHER";
 
 export type RefundStatus =
@@ -997,6 +1002,18 @@ export interface RefundRequest {
   reviewNote?: string;
   rejectionReason?: string;
   bankTransactionCode?: string; // Mã tham chiếu ủy nhiệm chi / giao dịch ngân hàng
+  /** Số hoàn gợi ý theo chính sách (máy chủ tính lúc khách/Agency gửi yêu cầu). */
+  suggestedRefundAmount?: number;
+  /** % phí hủy trên tổng giá trị tour (Agency hủy = 0, quá hạn thanh toán = 100% số đã trả). */
+  feePercent?: number;
+  totalAmount?: number;
+  agencyName?: string;
+  requestedByRole?: "customer" | "agency";
+  /** Mã BIN ngân hàng khách; không có thì chỉ chuyển tay được. */
+  bankBin?: string;
+  /** Lệnh chi hộ payOS đang chạy (PROCESSING...). */
+  payoutState?: string;
+  lastPayoutError?: string;
 
   createdAt: string;
   reviewedAt?: string;
