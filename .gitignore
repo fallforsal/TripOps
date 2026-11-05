@@ -471,3 +471,7 @@ backend/src/TripOps.Api/App_Data/
 *.bacpac
 /output/
 /auth-register-flow.*
+
+# Bỏ qua chính xác file appsettings.json và tất cả file appsettings theo môi trường
+**/appsettings.json
+**/appsettings.*.json
