@@ -26,6 +26,7 @@ import {
   FileText,
   Eye,
   EyeOff,
+  PauseCircle,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -140,10 +141,16 @@ export function ProviderServiceDetailPage({
           </span>
         );
       case "approved":
+        if (service.isPaused) return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200">
+            <PauseCircle className="w-3.5 h-3.5" />
+            Đã duyệt · Provider tạm ngừng
+          </span>
+        );
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            {service.isPaused ? "Đã duyệt · Provider tạm ngừng" : isAdmin ? "Đang hiển thị công khai trên sàn" : "Đã phê duyệt (Đang hoạt động)"}
+            {isAdmin ? "Đang hiển thị công khai trên sàn" : "Đã phê duyệt (Đang hoạt động)"}
           </span>
         );
       case "rejected":
@@ -385,7 +392,7 @@ export function ProviderServiceDetailPage({
         </div>
       </div>}
       {/* Admin Hidden Notice Banner */}
-      {service.isPaused && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm">
+      {service.isPaused && <div role="status" className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-800 text-sm">
         Nhà cung cấp đang tạm ngừng cung cấp dịch vụ này. Bài đăng không xuất hiện trên sàn cho đến khi Provider mở lại và trạng thái kiểm duyệt là đã duyệt.
       </div>}
       {service.status === "hidden" && (
