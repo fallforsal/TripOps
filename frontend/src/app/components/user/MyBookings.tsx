@@ -11,6 +11,7 @@ import {
   XCircle,
   X,
   FileText,
+  ImageOff,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Booking } from "@/app/types";
@@ -25,6 +26,30 @@ interface MyBookingsProps {
   onViewBookingDetail: (booking: Booking) => void;
   onSubmitRefundRequest?: (data: any) => void | boolean | Promise<boolean | void>;
   onNavigateToExplore?: () => void;
+}
+
+const getTourImage = (tour?: Booking["tour"]): string | undefined => {
+  const t = tour as any;
+  return t?.image || t?.thumbnail || t?.imageUrl || t?.coverImage || t?.images?.[0] || undefined;
+};
+
+function TourThumbnail({ src, alt }: { src?: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="w-full sm:w-40 h-40 sm:h-auto sm:min-h-[8.5rem] shrink-0 rounded-[6px] overflow-hidden bg-[#F1F5F9] border border-[#E2E8F0] flex items-center justify-center">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <ImageOff className="w-6 h-6 text-[#94A3B8]" />
+      )}
+    </div>
+  );
 }
 
 export function MyBookings({
@@ -109,16 +134,14 @@ export function MyBookings({
               <button
                 key={tab.id}
                 onClick={() => setFilterStatus(tab.id)}
-                className={`px-3 py-1.5 rounded-[4px] text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  isActive
+                className={`px-3 py-1.5 rounded-[4px] text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${isActive
                     ? "bg-[#075985] text-white"
                     : "bg-[#F8FAFC] text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
-                }`}
+                  }`}
               >
                 <span>{tab.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                  isActive ? "bg-white/20 text-white" : "bg-[#CBD5E1] text-[#0F172A]"
-                }`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive ? "bg-white/20 text-white" : "bg-[#CBD5E1] text-[#0F172A]"
+                  }`}>
                   {count}
                 </span>
               </button>
@@ -135,109 +158,112 @@ export function MyBookings({
             return (
               <div
                 key={booking.id}
-                className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors space-y-4"
+                className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors flex flex-col sm:flex-row gap-4"
               >
-                {/* Header row: Booking ID, Tour Company & Status Badges */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F1F5F9]">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono font-bold text-[#075985] bg-[#F0F9FF] px-2.5 py-1 rounded-[4px] border border-[#BAE6FD]">
-                      {booking.id}
-                    </span>
-                    <span className="text-xs text-[#475569] flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-[#075985]" />
-                      <strong>{booking.companyName || tour?.companyName || "Travel Agency"}</strong>
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">
-                      • Ngày tạo: {booking.bookingDate}
-                    </span>
-                  </div>
-
-                  {/* Two distinct status badges: Booking Status & Payment Status */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-[#475569]">Tiến trình:</span>
-                      <StatusBadge type="booking" status={booking.status} size="sm" />
+                <TourThumbnail src={getTourImage(tour)} alt={tour?.name || "Ảnh tour"} />
+                <div className="flex-1 min-w-0 space-y-4">
+                  {/* Header row: Booking ID, Tour Company & Status Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F1F5F9]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono font-bold text-[#075985] bg-[#F0F9FF] px-2.5 py-1 rounded-[4px] border border-[#BAE6FD]">
+                        {booking.id}
+                      </span>
+                      <span className="text-xs text-[#475569] flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-[#075985]" />
+                        <strong>{booking.companyName || tour?.companyName || "Travel Agency"}</strong>
+                      </span>
+                      <span className="text-xs text-[#94A3B8]">
+                        • Ngày tạo: {booking.bookingDate}
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-[#475569]">Thanh toán:</span>
-                      <StatusBadge
-                        type="payment"
-                        status={booking.paymentStatus || (booking.depositPaid ? "partially_paid" : "unpaid")}
-                        size="sm"
-                      />
+                    {/* Two distinct status badges: Booking Status & Payment Status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-[#475569]">Tiến trình:</span>
+                        <StatusBadge type="booking" status={booking.status} size="sm" />
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-[#475569]">Thanh toán:</span>
+                        <StatusBadge
+                          type="payment"
+                          status={booking.paymentStatus || (booking.depositPaid ? "partially_paid" : "unpaid")}
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Tour Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                  <div className="md:col-span-8 space-y-2">
-                    <h3
-                      onClick={() => onViewBookingDetail(booking)}
-                      className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors leading-snug"
-                    >
-                      {tour?.name || "Chương trình tour theo đoàn"}
-                    </h3>
+                  {/* Tour Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    <div className="md:col-span-8 space-y-2">
+                      <h3
+                        onClick={() => onViewBookingDetail(booking)}
+                        className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors leading-snug"
+                      >
+                        {tour?.name || "Chương trình tour theo đoàn"}
+                      </h3>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-[#075985]" />
-                        <span>{tour?.destination || "Điểm đến thỏa thuận"}</span>
-                      </span>
-
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-[#075985]" />
-                        <span>Khởi hành: <strong>{booking.tourStartDate}</strong></span>
-                      </span>
-
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-[#075985]" />
-                        <span>{booking.numberOfGuests} khách</span>
-                      </span>
-
-                      {tour?.duration && (
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
                         <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-[#075985]" />
-                          <span>{tour.duration}</span>
+                          <MapPin className="w-3.5 h-3.5 text-[#075985]" />
+                          <span>{tour?.destination || "Điểm đến thỏa thuận"}</span>
                         </span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Price & Action */}
-                  <div className="md:col-span-4 flex flex-col md:items-end justify-between gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
-                    <div className="md:text-right">
-                      <span className="text-[11px] text-[#475569] block">Tổng tiền booking:</span>
-                      <span className="text-lg font-bold text-[#075985]">
-                        {formatVND(booking.totalPrice)}
-                      </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-[#075985]" />
+                          <span>Khởi hành: <strong>{booking.tourStartDate}</strong></span>
+                        </span>
+
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5 text-[#075985]" />
+                          <span>{booking.numberOfGuests} khách</span>
+                        </span>
+
+                        {tour?.duration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-[#075985]" />
+                            <span>{tour.duration}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {/* Chỉ tự hủy được đơn chưa có tiền (đơn đã có tiền: hủy kèm hoàn tiền do Admin xem xét). */}
-                      {(booking.status === "pending" || booking.status === "confirmed") &&
-                        (booking.paidAmount ?? 0) === 0 &&
-                        !(booking.paymentTransactions ?? []).some((t) => t.status === "pending") && (
+                    {/* Price & Action */}
+                    <div className="md:col-span-4 flex flex-col md:items-end justify-between gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
+                      <div className="md:text-right">
+                        <span className="text-[11px] text-[#475569] block">Tổng tiền booking:</span>
+                        <span className="text-lg font-bold text-[#075985]">
+                          {formatVND(booking.totalPrice)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Chỉ tự hủy được đơn chưa có tiền (đơn đã có tiền: hủy kèm hoàn tiền do Admin xem xét). */}
+                        {(booking.status === "pending" || booking.status === "confirmed") &&
+                          (booking.paidAmount ?? 0) === 0 &&
+                          !(booking.paymentTransactions ?? []).some((t) => t.status === "pending") && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCancelModalBooking(booking)}
+                              className="border-[#CBD5E1] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs h-8 px-3 rounded-[6px]"
+                            >
+                              Hủy tour
+                            </Button>
+                          )}
+
                         <Button
                           type="button"
-                          variant="outline"
                           size="sm"
-                          onClick={() => setCancelModalBooking(booking)}
-                          className="border-[#CBD5E1] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs h-8 px-3 rounded-[6px]"
+                          onClick={() => onViewBookingDetail(booking)}
+                          className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-medium"
                         >
-                          Hủy tour
+                          Xem chi tiết
                         </Button>
-                      )}
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onViewBookingDetail(booking)}
-                        className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-medium"
-                      >
-                        Xem chi tiết
-                      </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
