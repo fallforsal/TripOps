@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Image as ImageIcon,
   Filter,
+  Clock,
+  PauseCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -31,19 +33,28 @@ import { ProviderServiceDetailPage } from "@/app/components/provider/ProviderSer
 import { toast } from "sonner";
 import { ProviderProfileLink } from "./ProviderProfileLink";
 import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
+import { RejectServiceModal } from "./RejectServiceModal";
+import { matchesServicePostFilter, servicePostCounts, servicePostState, servicePostStates, type ServicePostFilter } from "@/app/lib/servicePostStatus";
+
+const STATUS_FILTERS: ServicePostFilter[] = ["all", "pending", "approved", "paused", "hidden", "rejected"];
+const STATUS_ICONS = { pending: Clock, approved: CheckCircle2, paused: PauseCircle, hidden: EyeOff, rejected: XCircle };
 
 interface ServicePostApprovalProps {
   services: Service[];
+  onApproveService?: (serviceId: string) => void | Promise<void>;
+  onRejectService?: (serviceId: string, reason: string) => void | Promise<void>;
   onToggleHideService?: (serviceId: string, reason?: string) => void | Promise<void>;
   onDeleteService?: (serviceId: string) => void | Promise<void>;
 }
 
 export function ServicePostApproval({
   services,
+  onApproveService,
+  onRejectService,
   onToggleHideService,
   onDeleteService,
 }: ServicePostApprovalProps) {
-  const [selectedStatus, setSelectedStatus] = useState<"all" | "approved" | "hidden">("all");
+  const [selectedStatus, setSelectedStatus] = useState<ServicePostFilter>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceForDetail, setSelectedServiceForDetail] = useState<Service | null>(null);
@@ -52,26 +63,14 @@ export function ServicePostApproval({
   const [hidingService, setHidingService] = useState<Service | null>(null);
   const [hideReason, setHideReason] = useState("");
   const [deletingService, setDeletingService] = useState<Service | null>(null);
+  const [rejectingService, setRejectingService] = useState<Service | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Only manage approved and hidden services on marketplace
-  const marketServices = useMemo(() => {
-    return services.filter((s) => s.status === "approved" || s.status === "hidden");
-  }, [services]);
-
-  const activeCount = useMemo(() => {
-    return services.filter((s) => s.status === "approved" && !s.isPaused).length;
-  }, [services]);
-
-  const hiddenCount = useMemo(() => {
-    return services.filter((s) => s.status === "hidden").length;
-  }, [services]);
+  const counts = useMemo(() => servicePostCounts(services), [services]);
 
   const filteredServices = useMemo(() => {
-    return marketServices.filter((service) => {
-      // Status filter
-      if (selectedStatus === "approved" && (service.status !== "approved" || service.isPaused)) return false;
-      if (selectedStatus === "hidden" && service.status !== "hidden") return false;
+    return services.filter((service) => {
+      if (!matchesServicePostFilter(service, selectedStatus)) return false;
 
       // Category filter
       if (selectedCategory !== "all") {
@@ -94,7 +93,33 @@ export function ServicePostApproval({
 
       return true;
     });
-  }, [marketServices, selectedStatus, selectedCategory, searchQuery]);
+  }, [services, selectedStatus, selectedCategory, searchQuery]);
+
+  const handleApprove = async (service: Service) => {
+    if (busyId || !onApproveService) return;
+    setBusyId(service.id);
+    try {
+      await onApproveService(service.id);
+      if (selectedServiceForDetail?.id === service.id) setSelectedServiceForDetail(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể phê duyệt bài đăng.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!rejectingService || !onRejectService) throw new Error("Không thể từ chối bài đăng.");
+    const id = rejectingService.id;
+    setBusyId(id);
+    try {
+      await onRejectService(id, reason);
+      if (selectedServiceForDetail?.id === id) setSelectedServiceForDetail(null);
+      setRejectingService(null);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handleConfirmHide = async () => {
     if (!hidingService) return;
@@ -216,10 +241,18 @@ export function ServicePostApproval({
   if (selectedServiceForDetail) {
     return (
       <ProviderServiceDetailPage
-        service={selectedServiceForDetail}
+        service={services.find((item) => item.id === selectedServiceForDetail.id) || selectedServiceForDetail}
         isAdmin={true}
         onBack={() => setSelectedServiceForDetail(null)}
         backTitle="Quay lại danh sách quản lý"
+        onApprove={onApproveService ? async (id) => {
+          await onApproveService(id);
+          setSelectedServiceForDetail(null);
+        } : undefined}
+        onReject={onRejectService ? async (id, reason) => {
+          await onRejectService(id, reason);
+          setSelectedServiceForDetail(null);
+        } : undefined}
         onToggleHide={onToggleHideService}
         onDelete={onDeleteService ? async (id) => {
           await onDeleteService(id);
@@ -237,7 +270,7 @@ export function ServicePostApproval({
           Quản Lý Bài Đăng Dịch Vụ
         </h1>
         <p className="text-xs text-gray-500">
-          Giám sát các bài đăng dịch vụ (khách sạn, ăn uống, xe tour, vé tham quan) do Nhà cung cấp đăng tải. Xem chi tiết, tạm ẩn nếu sai lệch hoặc xóa bài đăng vi phạm.
+          Xem xét, phê duyệt và quản lý bài đăng dịch vụ của Nhà cung cấp. Theo dõi bài chờ duyệt, đang hiển thị, tạm ngừng hoặc bị ẩn trên cùng một trang.
         </p>
       </div>
 
@@ -282,45 +315,19 @@ export function ServicePostApproval({
             />
           </div>
 
-          <div className="flex items-center gap-1.5 w-full md:w-auto">
-            <button
-              onClick={() => setSelectedStatus("all")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                selectedStatus === "all"
-                  ? "bg-gray-900 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              Tất cả ({marketServices.length})
-            </button>
-
-            <button
-              onClick={() => setSelectedStatus("approved")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                selectedStatus === "approved"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <span>Đang hiển thị</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedStatus === "approved" ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
-                {activeCount}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setSelectedStatus("hidden")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                selectedStatus === "hidden"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <span>Đã tạm ẩn</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedStatus === "hidden" ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
-                {hiddenCount}
-              </span>
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto" aria-label="Lọc trạng thái bài đăng">
+            {STATUS_FILTERS.map((status) => (
+              <button key={status} type="button" onClick={() => setSelectedStatus(status)}
+                aria-pressed={selectedStatus === status}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  selectedStatus === status ? "bg-[#075985] text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}>
+                <span>{status === "all" ? "Tất cả" : servicePostStates[status].label}</span>
+                <span className={`px-1.5 rounded-full text-[10px] ${selectedStatus === status ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+                  {counts[status]}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -330,8 +337,8 @@ export function ServicePostApproval({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1400px] table-fixed text-left border-collapse [&_td]:align-middle">
             <colgroup>
-              <col className="w-[3%]" /><col className="w-[30%]" /><col className="w-[14%]" /><col className="w-[8%]" />
-              <col className="w-[10%]" /><col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[10%]" />
+              <col className="w-[3%]" /><col className="w-[26%]" /><col className="w-[14%]" /><col className="w-[8%]" />
+              <col className="w-[10%]" /><col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50/70 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
@@ -364,6 +371,9 @@ export function ServicePostApproval({
                 filteredServices.map((service, index) => {
                   const imageCount = service.images?.length || 1;
                   const isHidden = service.status === "hidden";
+                  const state = servicePostState(service);
+                  const status = servicePostStates[state];
+                  const StatusIcon = STATUS_ICONS[state];
 
                   return (
                     <tr
@@ -436,20 +446,11 @@ export function ServicePostApproval({
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          {isHidden ? (
-                            <>
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                <EyeOff className="w-3 h-3 text-amber-600" />
-                                Đã tạm ẩn
-                              </span>
-                              <ServiceModerationReason service={service} />
-                            </>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              {service.isPaused ? "Provider tạm ngừng" : "Đang hiển thị"}
-                            </span>
-                          )}
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${status.tone}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {status.label}
+                          </span>
+                          <ServiceModerationReason service={service} />
                         </div>
                       </td>
 
@@ -468,6 +469,20 @@ export function ServicePostApproval({
                           </Button>
 
                           {/* Tạm ẩn hoặc Mở lại */}
+                          {service.status === "pending" && <>
+                            <Button variant="ghost" size="sm" disabled={!!busyId || !onApproveService}
+                              className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => void handleApprove(service)} title="Phê duyệt bài đăng"
+                              aria-label={`Phê duyệt bài ${service.name}`}>
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" disabled={!!busyId || !onRejectService}
+                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                              onClick={() => setRejectingService(service)} title="Từ chối bài đăng"
+                              aria-label={`Từ chối bài ${service.name}`}>
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                          </>}
                           {isHidden ? (
                             <Button
                               variant="ghost"
@@ -479,17 +494,17 @@ export function ServicePostApproval({
                             >
                               <CheckCircle2 className="w-4 h-4" />
                             </Button>
-                          ) : (
+                          ) : service.status === "approved" ? (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                               onClick={() => setHidingService(service)}
-                              title="Tạm ẩn bài đăng (xàm / vi phạm)"
+                              title="Tạm ẩn bài đăng vi phạm"
                             >
                               <EyeOff className="w-4 h-4" />
                             </Button>
-                          )}
+                          ) : null}
 
                           {/* Xóa bài đăng */}
                           <Button
@@ -521,6 +536,9 @@ export function ServicePostApproval({
           </span>
         </div>
       </div>
+
+      <RejectServiceModal isOpen={!!rejectingService} onClose={() => setRejectingService(null)}
+        serviceName={rejectingService?.name} onConfirm={handleReject} />
 
       {/* Hide Modal - Solid Crisp styling */}
       <Dialog open={!!hidingService} onOpenChange={() => setHidingService(null)}>
