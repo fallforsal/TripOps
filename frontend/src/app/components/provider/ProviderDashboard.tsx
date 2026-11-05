@@ -57,29 +57,30 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
   const isHotel = r.slotKey.startsWith("hotel:");
   const day = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
   const isChild = (tier: string | null) => /tr[eẻ]|em b[eé]|child|infant/i.test(tier || "");
-  const children = r.guests.filter((g) => isChild(g.tierName)).length;
+  const guests = r.guests ?? []; // máy chủ bản cũ chưa trả danh sách đoàn
+  const children = guests.filter((g) => isChild(g.tierName)).length;
   const meal = r.mealType === "breakfast" || r.mealType === "lunch" || r.mealType === "dinner" ? r.mealType : undefined;
   const status = STATUS_MAP[r.status] ?? "pending";
   return {
     id: String(r.id),
     bookingId: String(r.bookingId),
-    bookingCode: r.bookingCode,
-    tourName: r.tourName,
+    bookingCode: r.bookingCode || `#${r.bookingId}`,
+    tourName: r.tourName || `Booking #${r.bookingId}`,
     serviceId: String(r.serviceId),
     serviceName: r.serviceName,
     providerId,
     agencyId: "",
-    agencyName: r.agencyName,
-    agencyContactName: r.agencyName,
+    agencyName: r.agencyName || "Công ty lữ hành",
+    agencyContactName: r.agencyName || "Công ty lữ hành",
     agencyPhone: r.agencyPhone || "",
     agencyEmail: r.agencyEmail || "",
     checkInDate: day(r.serviceDateFrom),
     checkOutDate: day(r.serviceDateTo || r.serviceDateFrom),
     numberOfNights: isHotel ? Number(r.quantity) || 1 : 0,
-    numberOfGuests: r.guests.length || Number(r.quantity) || 0,
-    adultGuests: r.guests.length - children,
+    numberOfGuests: guests.length || Number(r.quantity) || 0,
+    adultGuests: guests.length - children,
     childGuests: children,
-    passengers: r.guests.map((g, i) => ({
+    passengers: guests.map((g, i) => ({
       id: i + 1,
       participantIndex: i + 1,
       fullName: g.fullName,
@@ -100,7 +101,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
     cancellationReason: status === "cancelled" ? r.cancelReason || "Booking đã bị hủy" : undefined,
     cancelledAt: r.cancelledAt || undefined,
     cancelledByName: status === "cancelled" ? "Booking đã hủy" : undefined,
-    createdAt: r.createdAt,
+    createdAt: r.createdAt || new Date().toISOString(),
     respondedAt: r.respondedAt || undefined,
   };
 }
@@ -148,7 +149,10 @@ export function ProviderDashboard({
     setApiRequests(rows.map((r) => toGroupRequest(r, currentUser.id)));
   };
   useEffect(() => {
-    void loadRequests().catch(() => setApiRequests([]));
+    void loadRequests().catch((error) => {
+      setApiRequests([]);
+      toast.error(error instanceof Error ? `Không tải được yêu cầu dịch vụ: ${error.message}` : "Không tải được yêu cầu dịch vụ.");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.id]);
 

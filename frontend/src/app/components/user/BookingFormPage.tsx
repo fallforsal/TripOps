@@ -695,7 +695,7 @@ export function BookingFormPage({
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-16">
       {/* Header */}
       <div className="bg-white border-b border-[#CBD5E1] sticky top-0 z-20">
-        <div className={`${step === 3 ? "max-w-7xl" : "max-w-4xl"} mx-auto px-6 py-3 flex items-center gap-3`}>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
           <button
             onClick={onBack}
             className="p-1.5 hover:bg-[#F1F5F9] rounded-[6px] transition-colors"
@@ -711,7 +711,7 @@ export function BookingFormPage({
         </div>
       </div>
 
-      <div className={`${step === 3 ? "max-w-7xl" : "max-w-4xl"} mx-auto px-6 py-6 space-y-6`}>
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Step indicator */}
         <div className="flex items-center gap-0 bg-white border border-[#CBD5E1] rounded-[6px] p-2">
           {STEPS.map((s, idx) => {
@@ -1786,7 +1786,7 @@ export function BookingFormPage({
                     <span className="text-sm">0đ</span>
                   </div>
                   <p className="text-xs text-[#075985] leading-relaxed bg-white/70 p-3 rounded-lg border border-[#075985]/15/70">
-                    💡 <strong>Lưu ý quan trọng:</strong> Vì các dịch vụ như
+                    <strong>Lưu ý quan trọng:</strong> Vì các dịch vụ như
                     khách sạn và chỗ ăn uống có thể có giá thay đổi theo thời
                     điểm thực tế, công ty du lịch sẽ liên hệ trực tiếp với các
                     đơn vị cung cấp đối tác ở ngoài hệ thống để hỏi và chốt giá
@@ -1819,7 +1819,7 @@ export function BookingFormPage({
                 onClick={handleConfirm}
                 className="bg-teal-600 hover:bg-teal-700 text-white gap-2 px-8 shadow-sm text-sm font-bold disabled:opacity-50"
               >
-                Gửi yêu cầu đặt tour (Thanh toán sau)
+                Gửi yêu cầu đặt tour
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
