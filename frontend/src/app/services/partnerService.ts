@@ -37,4 +37,12 @@ export const partnerService = {
       method: "POST",
       body: JSON.stringify({ reason }),
     }),
+  suspend: (id: number) =>
+    http<BusinessProfile>(`/admin/partner-applications/${id}/suspend`, {
+      method: "POST",
+    }),
+    activate: (id: number) =>
+    http<BusinessProfile>(`/admin/partner-applications/${id}/activate`, {
+      method: "POST",
+    }),
 };
