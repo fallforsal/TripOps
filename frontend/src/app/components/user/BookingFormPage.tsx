@@ -695,7 +695,7 @@ export function BookingFormPage({
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-16">
       {/* Header */}
       <div className="bg-white border-b border-[#CBD5E1] sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center gap-3">
+        <div className={`${step === 3 ? "max-w-7xl" : "max-w-4xl"} mx-auto px-6 py-3 flex items-center gap-3`}>
           <button
             onClick={onBack}
             className="p-1.5 hover:bg-[#F1F5F9] rounded-[6px] transition-colors"
@@ -711,7 +711,7 @@ export function BookingFormPage({
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
+      <div className={`${step === 3 ? "max-w-7xl" : "max-w-4xl"} mx-auto px-6 py-6 space-y-6`}>
         {/* Step indicator */}
         <div className="flex items-center gap-0 bg-white border border-[#CBD5E1] rounded-[6px] p-2">
           {STEPS.map((s, idx) => {
@@ -1532,12 +1532,11 @@ export function BookingFormPage({
                   </h3>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-full font-semibold">
-                      ✓ {guestValidation.payingGuestsCount} khách có vé tính
-                      tiền
+                      {guestValidation.payingGuestsCount} khách có vé tính tiền
                     </span>
                     {guestValidation.freeGuestsCount > 0 && (
                       <span className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-300 rounded-full font-semibold">
-                        🎁 {guestValidation.freeGuestsCount} khách miễn phí
+                        {guestValidation.freeGuestsCount} khách miễn phí
                       </span>
                     )}
                     <span className="px-2 py-0.5 bg-gray-100 text-gray-700 border border-gray-300 rounded-full font-medium">
@@ -1547,116 +1546,56 @@ export function BookingFormPage({
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[960px] text-sm [&_td]:align-top">
                     <thead>
-                      <tr className="bg-gray-100">
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          #
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Họ tên
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          CCCD / Passport
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Ngày sinh
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Giới tính
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Loại khách
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Nguyện vọng xếp phòng
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Yêu cầu ăn uống
-                        </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">
-                          Ghi chú cá nhân
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-600">
-                          Giá theo người
-                        </th>
+                      <tr className="bg-gray-50 text-gray-500 text-[11px] font-semibold uppercase tracking-wide">
+                        <th className="w-8 px-3 py-2.5 text-left rounded-l-lg">#</th>
+                        <th className="px-3 py-2.5 text-left">Hành khách</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Ngày sinh</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Giới tính</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Loại khách</th>
+                        <th className="px-3 py-2.5 text-left min-w-[160px]">Xếp phòng</th>
+                        <th className="px-3 py-2.5 text-left min-w-[160px]">Ăn uống / Dị ứng</th>
+                        <th className="px-3 py-2.5 text-left min-w-[150px]">Ghi chú</th>
+                        <th className="px-3 py-2.5 text-right whitespace-nowrap rounded-r-lg">Giá theo người</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {passengers.map((p, idx) => {
-                        const grp = AGE_GROUPS.find(
-                          (g) => g.value === p.ageGroup,
-                        );
+                        const age = calculateAge(p.dateOfBirth ?? "", tourStartDate);
+                        const dob = p.dateOfBirth && /^\d{4}-\d{2}-\d{2}/.test(p.dateOfBirth)
+                          ? p.dateOfBirth.slice(0, 10).split("-").reverse().join("/")
+                          : p.dateOfBirth || "—";
+                        const noteCell = (value?: string) =>
+                          value ? <span className="text-gray-700 leading-relaxed break-words">{value}</span> : <span className="text-gray-300">—</span>;
                         return (
                           <tr key={p.id}>
-                            <td className="px-3 py-2 text-gray-500">
-                              {idx + 1}
+                            <td className="px-3 py-3 text-gray-400 font-mono">{idx + 1}</td>
+                            <td className="px-3 py-3 min-w-[170px]">
+                              <p className="font-semibold text-gray-900">{p.fullName}</p>
+                              {p.idNumber && <p className="mt-0.5 font-mono text-xs text-gray-500">{p.idNumber}</p>}
                             </td>
-                            <td className="px-3 py-2 font-medium text-gray-900">
-                              {p.fullName}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <p className="text-gray-800">{dob}</p>
+                              {age !== null && <p className="text-xs text-gray-400">{age} tuổi</p>}
                             </td>
-                            <td className="px-3 py-2">
-                              {p.idNumber ? (
-                                <span className="font-mono text-xs text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded border border-[#CBD5E1]">
-                                  {p.idNumber}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-xs italic">
-                                  —
-                                </span>
-                              )}
+                            <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{p.gender === "male" ? "Nam" : "Nữ"}</td>
+                            <td className="px-3 py-3">
+                              <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                                p.ageGroup === "adult"
+                                  ? "bg-teal-50 text-teal-700"
+                                  : p.ageGroup === "child_2_11"
+                                  ? "bg-sky-50 text-[#075985]"
+                                  : "bg-orange-50 text-orange-700"
+                              }`}>
+                                {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em" : "Em bé"}
+                              </span>
                             </td>
-                            <td className="px-3 py-2 text-gray-600">
-                              <span>{p.dateOfBirth || "—"}</span>
-                              {(() => {
-                                const age = calculateAge(
-                                  p.dateOfBirth ?? "",
-                                  tourStartDate,
-                                );
-                                return age !== null ? (
-                                  <span className="ml-1.5 text-xs text-teal-700 font-semibold bg-[#E0F2FE] px-1.5 py-0.5 rounded border border-[#075985]/15">
-                                    {age} tuổi
-                                  </span>
-                                ) : null;
-                              })()}
-                            </td>
-                            <td className="px-3 py-2 text-gray-600">
-                              {p.gender === "male" ? "Nam" : "Nữ"}
-                            </td>
-                            <td className="px-3 py-2 text-gray-600">
-                              {grp?.label ?? p.ageGroup}
-                            </td>
-                            <td className="px-3 py-2 text-xs max-w-[180px]">
-                              {p.roommateNote ? (
-                                <span className="text-teal-900 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 inline-block line-clamp-2 font-medium">
-                                  🛏️ {p.roommateNote}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 italic">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-xs max-w-[180px]">
-                              {p.dietaryNote ? (
-                                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block line-clamp-2 font-medium">
-                                  🍽️ {p.dietaryNote}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 italic">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-xs max-w-[180px]">
-                              {p.notes ? (
-                                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block line-clamp-2">
-                                  {p.notes}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 italic">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right font-semibold text-[#075985]">
-                              {p.price === 0
-                                ? "Miễn phí"
-                                : formatVND(p.price + extraPerGuest)}
+                            <td className="px-3 py-3">{noteCell(p.roommateNote)}</td>
+                            <td className="px-3 py-3">{noteCell(p.dietaryNote)}</td>
+                            <td className="px-3 py-3">{noteCell(p.notes)}</td>
+                            <td className="px-3 py-3 text-right font-semibold text-[#075985] whitespace-nowrap">
+                              {p.price === 0 ? "Miễn phí" : formatVND(p.price + extraPerGuest)}
                             </td>
                           </tr>
                         );
@@ -1664,18 +1603,11 @@ export function BookingFormPage({
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-[#CBD5E1] bg-[#F0F9FF]">
-                        <td
-                          colSpan={9}
-                          className="px-3 py-2 font-bold text-gray-700"
-                        >
-                          Tổng cộng ({guestValidation.totalGuests} người —{" "}
-                          {guestValidation.payingGuestsCount} vé tính tiền
-                          {guestValidation.freeGuestsCount > 0
-                            ? `, ${guestValidation.freeGuestsCount} vé miễn phí`
-                            : ""}
-                          ):
+                        <td colSpan={8} className="px-3 py-2.5 text-right font-bold text-gray-700">
+                          Tổng cộng ({guestValidation.totalGuests} người — {guestValidation.payingGuestsCount} vé tính tiền
+                          {guestValidation.freeGuestsCount > 0 ? `, ${guestValidation.freeGuestsCount} vé miễn phí` : ""}):
                         </td>
-                        <td className="px-3 py-2 text-right font-bold text-[#075985] text-base">
+                        <td className="px-3 py-2.5 text-right font-bold text-[#075985] text-base whitespace-nowrap">
                           {formatVND(totalPrice)}
                         </td>
                       </tr>

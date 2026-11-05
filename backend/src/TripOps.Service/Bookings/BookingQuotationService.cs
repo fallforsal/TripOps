@@ -16,6 +16,17 @@ public sealed record QuotationView(int Id, int BookingId, int Version, int TourI
 public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, string SlotKey,
     string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
     decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note);
+/// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
+public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
+    string? RoommateNote, string? RestaurantNote);
+/// <summary>Yêu cầu dịch vụ hiển thị cho Provider: kèm thông tin booking, công ty lữ hành và đoàn khách.
+/// Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
+public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
+    string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
+    decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note,
+    DateTime CreatedAt, DateTime? RespondedAt, string BookingCode, string TourName,
+    string AgencyName, string? AgencyPhone, string? AgencyEmail, string? MealType, string? SpecialRequests,
+    string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note);
 public sealed record AgencyCostInput(string SlotKey, decimal UnitCost);
 public sealed record ExtraCostInput(string Name, decimal Quantity, string Unit, decimal UnitCost);
@@ -285,12 +296,33 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
         return rows.Where(q => agency || q.SentAt.HasValue)
             .Select(q => View(q, agency)).ToArray();
     }
-    public async Task<IReadOnlyList<ProviderRequestView>> ProviderRequests(string actor, CancellationToken ct) =>
-        await db.BookingSupplierRequests.AsNoTracking().Where(r => r.ProviderId == actor)
-            .OrderByDescending(r => r.CreatedAt).Select(r => new ProviderRequestView(r.Id, r.BookingId,
-                r.ServiceId, r.SlotKey, r.ServiceName, r.ServiceDateFrom, r.ServiceDateTo,
-                r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost, r.Status, r.Note))
-            .ToListAsync(ct);
+    public async Task<IReadOnlyList<ProviderInboxView>> ProviderRequests(string actor, CancellationToken ct)
+    {
+        // Yêu cầu đã bị thay thế (đổi kế hoạch) không còn hiệu lực nên không hiện cho Provider.
+        var rows = await db.BookingSupplierRequests.AsNoTracking()
+            .Where(r => r.ProviderId == actor && r.Status != "Superseded")
+            .Include(r => r.Booking).ThenInclude(b => b.Tour!).ThenInclude(t => t.Agency)
+            .Include(r => r.Booking).ThenInclude(b => b.Participants)
+            .AsSplitQuery().OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
+        var mealIds = rows.Select(r => r.SlotKey.StartsWith("meal:", StringComparison.Ordinal) &&
+                int.TryParse(r.SlotKey.AsSpan(5), out var id) ? id : 0).Where(id => id > 0).Distinct().ToArray();
+        var mealTypes = await db.BookingTimelineMeals.AsNoTracking().Where(m => mealIds.Contains(m.Id))
+            .ToDictionaryAsync(m => $"meal:{m.Id}", m => m.MealType, ct);
+        return rows.Select(r =>
+        {
+            var b = r.Booking;
+            var closed = b.Status is BookingStatus.Cancelled or BookingStatus.Rejected;
+            return new ProviderInboxView(r.Id, r.BookingId, r.ServiceId, r.SlotKey, r.ServiceName,
+                r.ServiceDateFrom, r.ServiceDateTo, r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost,
+                closed ? "Cancelled" : r.Status, r.Note, r.CreatedAt, r.RespondedAt, b.BookingCode,
+                b.Tour?.Name ?? "Tour", b.Tour?.Agency?.Name ?? "Công ty lữ hành", b.Tour?.Agency?.Phone,
+                b.Tour?.Agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
+                closed ? b.CancelReason : null, closed ? b.CancelledAt : null,
+                b.Participants.Where(p => p.Status != "INACTIVE").OrderBy(p => p.ParticipantIndex)
+                    .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote))
+                    .ToArray());
+        }).ToArray();
+    }
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)
     {
         await Owned(actor, bookingId, true, ct);

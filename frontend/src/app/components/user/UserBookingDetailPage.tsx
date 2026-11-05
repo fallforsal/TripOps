@@ -263,6 +263,8 @@ export function UserBookingDetailPage({
     setPAgeGroup("adult");
     setPPhone("");
     setPIdNumber("");
+    setPRoommateNote("");
+    setPDietaryNote("");
     setPNotes("");
     setPPrice(calculatePassengerPrice("adult"));
     setShowPassengerModal(true);
@@ -300,6 +302,7 @@ export function UserBookingDetailPage({
               phone: pPhone.trim(),
               idNumber: pIdNumber.trim(),
               roommateNote: pRoommateNote.trim(),
+              dietaryNote: pDietaryNote.trim(),
               notes: pNotes.trim(),
               price: computedPrice,
             }
@@ -315,6 +318,7 @@ export function UserBookingDetailPage({
         phone: pPhone.trim(),
         idNumber: pIdNumber.trim(),
         roommateNote: pRoommateNote.trim(),
+        dietaryNote: pDietaryNote.trim(),
         notes: pNotes.trim(),
         price: computedPrice,
       };
@@ -436,7 +440,6 @@ export function UserBookingDetailPage({
           currentTourSnapshot={booking.tour} currentSpecialRequests={booking.bookingNotes}
           canChange={(booking.status === "pending" || booking.status === "confirmed") && booking.paymentStatus === "unpaid"}
           onChanged={onPlanChanged} />
-        <p className="p-3 bg-amber-50 text-amber-900 rounded-lg text-sm">Thanh toán cọc qua payOS (chuyển khoản/VietQR). Lưu ý: payOS không có môi trường thử nghiệm — chuyển khoản qua payOS là giao dịch tiền thật.</p>
         {/* PAYMENT SUCCESS TOAST */}
         {paymentSuccessToast && (
           <div className="bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
@@ -445,7 +448,7 @@ export function UserBookingDetailPage({
               <div>
                 <p className="font-bold text-base">Thanh toán đợt thành công!</p>
                 <p className="text-xs text-emerald-100">
-                  Đã ghi nhận giao dịch mô phỏng để kiểm thử trạng thái booking.
+                  Hệ thống đã ghi nhận khoản thanh toán của bạn.
                 </p>
               </div>
             </div>
@@ -879,29 +882,19 @@ export function UserBookingDetailPage({
 
               {displayPassengers.length > 0 ? (
                 <div className="w-full overflow-x-auto" role="region" aria-label="Danh sách hành khách" tabIndex={0}>
-                  <table className="w-full min-w-[1120px] text-sm [&_td]:align-top [&_th]:align-top">
-                    <colgroup>
-                      <col className="w-10" />
-                      <col className="w-40" />
-                      <col className="w-44" />
-                      <col className="w-36" />
-                      <col className="w-20" />
-                      <col className="w-32" />
-                      <col />
-                      <col className="w-28" />
-                      <col className="w-24" />
-                    </colgroup>
+                  <table className="w-full min-w-[1080px] text-sm [&_td]:align-top [&_th]:align-top">
                     <thead>
-                      <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[11px]">
-                        <th className="px-3 py-2.5 text-left rounded-l-lg">#</th>
-                        <th className="px-3 py-2.5 text-left">Họ &amp; Tên</th>
-                        <th className="px-3 py-2.5 text-left">Số CCCD / Passport / Định danh</th>
-                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Ngày sinh / Tuổi</th>
-                        <th className="px-3 py-2.5 text-left">Giới tính</th>
-                        <th className="px-3 py-2.5 text-left">Loại khách</th>
-                        <th className="px-3 py-2.5 text-left">Ghi chú riêng</th>
-                        <th className="px-3 py-2.5 text-right">Giá vé</th>
-                        <th className="px-3 py-2.5 text-center rounded-r-lg">Thao tác</th>
+                      <tr className="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wide text-[11px]">
+                        <th className="w-8 px-3 py-2.5 text-left rounded-l-lg">#</th>
+                        <th className="px-3 py-2.5 text-left">Hành khách</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Ngày sinh</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Giới tính</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">Loại khách</th>
+                        <th className="px-3 py-2.5 text-left min-w-[160px]">Xếp phòng</th>
+                        <th className="px-3 py-2.5 text-left min-w-[160px]">Ăn uống / Dị ứng</th>
+                        <th className="px-3 py-2.5 text-left min-w-[150px]">Ghi chú</th>
+                        <th className="px-3 py-2.5 text-right whitespace-nowrap">Giá vé</th>
+                        <th className="w-24 px-3 py-2.5 text-center rounded-r-lg">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -912,19 +905,25 @@ export function UserBookingDetailPage({
                             ((p.participantIndex !== undefined && other.participantIndex === p.participantIndex) ||
                               (other.fullName && other.fullName.toLowerCase() === p.fullName.toLowerCase()))
                         );
+                        const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
+                        const noteCell = (value?: string) =>
+                          value ? <span className="text-slate-700 leading-relaxed break-words">{value}</span> : <span className="text-gray-300">—</span>;
 
                         return (
                           <tr key={p.id} className={`hover:bg-gray-50 ${p.status === "INACTIVE" ? "bg-rose-50/40 opacity-75" : ""}`}>
-                            <td className="px-3 py-2.5 text-gray-400 font-mono">{idx + 1}</td>
-                            <td className="px-3 py-2.5 min-w-40 font-semibold text-gray-900">
+                            <td className="px-3 py-3 text-gray-400 font-mono">{idx + 1}</td>
+                            <td className="px-3 py-3 min-w-[180px]">
                               <div className="flex flex-col">
-                                <span className={p.status === "INACTIVE" ? "line-through text-gray-500" : ""}>
+                                <span className={`font-semibold ${p.status === "INACTIVE" ? "line-through text-gray-500" : "text-gray-900"}`}>
                                   {p.fullName}
                                 </span>
-                                {p.phone && <span className="block text-[11px] font-normal text-[#075985]">{p.phone}</span>}
+                                {p.idNumber !== undefined && p.idNumber !== null && String(p.idNumber).trim() !== "" && (
+                                  <span className="mt-0.5 font-mono text-xs text-gray-500">{String(p.idNumber)}</span>
+                                )}
+                                {p.phone && <span className="text-xs text-[#075985]">{p.phone}</span>}
                                 {p.status === "INACTIVE" && (
                                   <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full w-fit">
-                                    ❌ Đã rút khỏi toàn bộ tour
+                                    Đã rút khỏi toàn bộ tour
                                   </span>
                                 )}
                                 {stageWithdrawals.map((sw) => (
@@ -932,78 +931,40 @@ export function UserBookingDetailPage({
                                     key={sw.id}
                                     className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md w-fit"
                                   >
-                                    ⚠️ Rút khỏi chặng {sw.agencyName ? `[${sw.agencyName}]` : "đối tác"}{sw.statusNote ? `: ${sw.statusNote}` : ""}
+                                    Rút khỏi chặng {sw.agencyName ? `[${sw.agencyName}]` : "đối tác"}{sw.statusNote ? `: ${sw.statusNote}` : ""}
                                   </span>
                                 ))}
                               </div>
                             </td>
-                            <td className="px-3 py-2.5">
-                              {p.idNumber !== undefined && p.idNumber !== null && String(p.idNumber).trim() !== "" ? (
-                                <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                                  {String(p.idNumber)}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 italic">—</span>
-                              )}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <span className="block text-gray-800">{p.dateOfBirth ? (p.dateOfBirth.includes("-") ? p.dateOfBirth.slice(0, 10).split("-").reverse().join("/") : p.dateOfBirth) : "—"}</span>
+                              {age !== null && <span className="block text-xs text-gray-400">{age} tuổi</span>}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-600">
-                              <span className="block whitespace-nowrap">{p.dateOfBirth ? (p.dateOfBirth.includes("-") ? p.dateOfBirth.split("-").reverse().join("/") : p.dateOfBirth) : "—"}</span>
-                              {(() => {
-                                const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
-                                return age !== null ? (
-                                  <span className="mt-1 inline-flex whitespace-nowrap text-xs text-slate-500">
-                                    {age} tuổi
-                                  </span>
-                                ) : null;
-                              })()}
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-600">{p.gender === "male" ? "Nam" : "Nữ"}</td>
-                            <td className="px-3 py-2.5">
-                              <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] ${
+                            <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{p.gender === "male" ? "Nam" : "Nữ"}</td>
+                            <td className="px-3 py-3">
+                              <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full font-medium text-[11px] ${
                                 p.ageGroup === "adult"
                                   ? "bg-teal-50 text-teal-700"
                                   : p.ageGroup === "child_2_11"
-                                  ? "bg-[#F0F9FF] text-[#075985]"
-                                  : "bg-emerald-50 text-emerald-700"
+                                  ? "bg-sky-50 text-[#075985]"
+                                  : "bg-orange-50 text-orange-700"
                               }`}>
-                                {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)"}
+                                {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em" : "Em bé"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 min-w-[260px]">
-                              <div className="space-y-2 text-sm leading-6 break-words">
-                                {p.roommateNote && (
-                                  <div>
-                                    <span className="block text-xs font-medium text-slate-500">Xếp phòng</span>
-                                    <span className="text-slate-700">{p.roommateNote}</span>
-                                  </div>
-                                )}
-                                {p.dietaryNote && (
-                                  <div>
-                                    <span className="block text-xs font-medium text-slate-500">Ăn uống / Dị ứng</span>
-                                    <span className="text-slate-700">{p.dietaryNote}</span>
-                                  </div>
-                                )}
-                                {p.notes && (
-                                  <div>
-                                    <span className="block text-xs font-medium text-slate-500">Ghi chú cá nhân</span>
-                                    <span className="text-slate-700">{p.notes}</span>
-                                  </div>
-                                )}
-                                {!p.roommateNote && !p.dietaryNote && !p.notes && (
-                                  <span className="text-gray-400 italic">—</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-right font-bold text-[#075985]">
+                            <td className="px-3 py-3">{noteCell(p.roommateNote)}</td>
+                            <td className="px-3 py-3">{noteCell(p.dietaryNote)}</td>
+                            <td className="px-3 py-3">{noteCell(p.notes)}</td>
+                            <td className="px-3 py-3 whitespace-nowrap text-right font-bold text-[#075985]">
                               {p.price === 0 ? "Miễn phí" : formatVND(p.price)}
                             </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                            <td className="px-3 py-3">
+                              <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
-                                  title="Chỉnh sửa thông tin"
+                                  title="Xem / chỉnh sửa thông tin"
                                   onClick={() => handleOpenEditPassenger(p)}
-                                  className="p-1.5 text-gray-500 hover:text-[#075985] hover:bg-[#F0F9FF] rounded-lg transition-colors"
+                                  className="p-1.5 text-gray-500 border border-gray-200 hover:text-[#075985] hover:border-sky-300 hover:bg-[#F0F9FF] rounded-lg transition-colors"
                                 >
                                   <Edit className="w-3.5 h-3.5" />
                                 </button>
@@ -1011,7 +972,7 @@ export function UserBookingDetailPage({
                                   type="button"
                                   title="Xóa khách khỏi đoàn"
                                   onClick={() => handleDeletePassenger(p.id)}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-rose-500 border border-rose-200 hover:text-rose-700 hover:border-rose-300 hover:bg-rose-50 rounded-lg transition-colors"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1023,10 +984,10 @@ export function UserBookingDetailPage({
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                        <td colSpan={7} className="px-3 py-2.5 text-right text-gray-700">
+                        <td colSpan={8} className="px-3 py-2.5 text-right text-gray-700">
                           Tổng cộng ({displayPassengers.filter(p => p.status !== "INACTIVE").length} khách tham gia thực tế):
                         </td>
-                        <td className="px-3 py-2.5 text-right text-[#075985] text-sm font-extrabold">
+                        <td className="px-3 py-2.5 text-right text-[#075985] text-sm font-extrabold whitespace-nowrap">
                           {formatVND(booking.totalPrice)}
                         </td>
                         <td></td>
@@ -1764,12 +1725,6 @@ export function UserBookingDetailPage({
                   </div>
                 )}
 
-                <div className="bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Bảo chứng thanh toán (Escrow):</strong> Tiền thanh toán của bạn sẽ được giữ an toàn tại Tài khoản Hệ thống và chỉ chuyển giao cho Công ty du lịch sau khi kết thúc tour.
-                  </span>
-                </div>
 
               </div>
 
@@ -2210,8 +2165,8 @@ export function UserBookingDetailPage({
                 <div>
                   <p className="font-bold text-amber-900">Giao dịch tiền thật qua payOS</p>
                   <p>
-                    Bạn sẽ được chuyển sang trang payOS để chuyển khoản/quét VietQR. payOS không có môi trường thử nghiệm,
-                    nên đây là giao dịch thật. Khoản này chỉ được ghi nhận khi máy chủ xác minh kết quả trực tiếp với payOS.
+                    Bạn sẽ được chuyển sang trang payOS để chuyển khoản/quét VietQR.
+                    Khoản này chỉ được ghi nhận khi máy chủ xác minh kết quả trực tiếp với payOS.
                     Đóng trang hoặc quay lại không có nghĩa là giao dịch đã bị hủy.
                   </p>
                 </div>
@@ -2234,34 +2189,6 @@ export function UserBookingDetailPage({
                 {paymentBusy ? "Đang tạo link thanh toán..." : `Thanh toán ${formatVND(selectedPaymentRequest.amount)} qua payOS`}
               </Button>
 
-              {import.meta.env.DEV && onPayPaymentRequest && (
-                <div className="border border-dashed border-gray-300 rounded-xl p-3 space-y-2">
-                  <p className="text-[11px] text-gray-500">
-                    Chỉ dành cho môi trường phát triển: ghi nhận cọc mô phỏng, không qua payOS hay ngân hàng.
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={paymentBusy}
-                    onClick={async () => {
-                      setPaymentBusy(true);
-                      try {
-                        const ok = await onPayPaymentRequest(booking.id, selectedPaymentRequest.id);
-                        if (ok !== false) {
-                          setSelectedPaymentRequest(null);
-                          setPaymentSuccessToast(true);
-                          setTimeout(() => setPaymentSuccessToast(false), 4000);
-                        }
-                      } finally {
-                        setPaymentBusy(false);
-                      }
-                    }}
-                    className="w-full text-xs h-9 gap-2"
-                  >
-                    <Check className="w-4 h-4" />
-                    [DEV] Ghi nhận cọc mô phỏng
-                  </Button>
-                </div>
-              )}
 
               <div className="flex justify-end pt-1">
                 <Button variant="outline" disabled={paymentBusy} onClick={() => setSelectedPaymentRequest(null)}>
@@ -2406,13 +2333,26 @@ export function UserBookingDetailPage({
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                Ghi chú cá nhân (Dị ứng, hỗ trợ xe lăn, v.v.)
+                Ăn uống / Dị ứng <span className="font-normal text-gray-400">(Tùy chọn)</span>
+              </label>
+              <input
+                type="text"
+                value={pDietaryNote}
+                onChange={(e) => setPDietaryNote(e.target.value)}
+                placeholder="VD: Ăn chay, dị ứng hải sản, không ăn cay..."
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Ghi chú cá nhân <span className="font-normal text-gray-400">(Tùy chọn)</span>
               </label>
               <input
                 type="text"
                 value={pNotes}
                 onChange={(e) => setPNotes(e.target.value)}
-                placeholder="VD: Ăn chay trường, cần chỗ ngồi gần cửa sổ..."
+                placeholder="VD: Hỗ trợ xe lăn, cần chỗ ngồi gần cửa sổ..."
                 className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>

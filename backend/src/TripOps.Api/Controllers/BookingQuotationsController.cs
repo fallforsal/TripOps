@@ -47,7 +47,7 @@ public sealed class ProviderBookingRequestsController(BookingQuotationService qu
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet]
     [EndpointSummary("List booking service requests addressed to the signed-in Provider")]
-    [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<IReadOnlyList<ProviderInboxView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await quotations.ProviderRequests(Actor, ct));
     [HttpPost("{id:int}/respond")]
     [EndpointSummary("Provider confirms availability and total cost or declines a booking request")]
