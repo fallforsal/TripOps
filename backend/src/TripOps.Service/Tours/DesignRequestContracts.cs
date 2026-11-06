@@ -17,7 +17,7 @@ public sealed record CreateDesignRequestInput(
     [EmailAddress, StringLength(191)] string? BusinessEmail = null,
     [StringLength(30)] string? BusinessPhone = null);
 
-public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email);
+public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email,string? LogoUrl = null);
 
 public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId, string AgencyName,
     string ContactName, string ContactEmail, string ContactPhone, string Destination,

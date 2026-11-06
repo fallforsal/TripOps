@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Client.Extensions.Msal;
 using System.Text.Json;
 using TripOps.Data;
 using TripOps.Data.Entities;
@@ -7,7 +8,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours)
+public sealed class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage)
 {
     public sealed record PlanProposalInput(int TourId, int BaseTourVersion, JsonElement Proposal, string Message);
     public sealed record PlanProposalReply(string Decision, string Message);
@@ -69,12 +70,31 @@ public sealed class DesignRequestService(TripOpsDbContext db, AccountService acc
         if ((await accounts.Current(actor, ct)).Role != UserRole.Customer)
             throw new TourException(403, "Cần tài khoản khách hàng.");
     }
-    public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct) =>
-        await db.Users.AsNoTracking().Where(u => u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active &&
-            u.BusinessProfile != null && u.BusinessProfile.Status == BusinessProfileStatus.Approved)
-            .OrderBy(u => u.BusinessProfile!.BusinessName).Select(u => new AgencyChoiceDto(u.Id,
-                u.BusinessProfile!.BusinessName ?? u.Name ?? "Agency", u.BusinessProfile.BusinessAddress ?? "", u.Phone ?? "", u.Email))
+    //public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct) =>
+    //    await db.Users.AsNoTracking().Where(u => u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active &&
+    //        u.BusinessProfile != null && u.BusinessProfile.Status == BusinessProfileStatus.Approved)
+    //        .OrderBy(u => u.BusinessProfile!.BusinessName).Select(u => new AgencyChoiceDto(u.Id,
+    //            u.BusinessProfile!.BusinessName ?? u.Name ?? "Agency", u.BusinessProfile.BusinessAddress ?? "", u.Phone ?? "", u.Email))
+    //        .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct)
+    {
+        var rows = await db.Users.AsNoTracking()
+            .Where(u => u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active &&
+                u.BusinessProfile != null && u.BusinessProfile.Status == BusinessProfileStatus.Approved)
+            .OrderBy(u => u.BusinessProfile!.BusinessName)
+            .Select(u => new {
+                u.Id,
+                Name = u.BusinessProfile!.BusinessName ?? u.Name ?? "Agency",
+                Address = u.BusinessProfile!.BusinessAddress ?? "",
+                Phone = u.Phone ?? "",
+                u.Email,
+                u.BusinessProfile!.LogoUrl
+            })
             .ToListAsync(ct);
+        return rows.Select(r => new AgencyChoiceDto(r.Id, r.Name, r.Address, r.Phone, r.Email,
+            r.LogoUrl is null ? null : storage.DeliveryUrl(r.LogoUrl))).ToArray();
+    }
 
     public async Task<DesignRequestDto> Create(string actor, CreateDesignRequestInput input, CancellationToken ct)
     {
