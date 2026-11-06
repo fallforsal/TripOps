@@ -13,10 +13,25 @@ export interface PartnerPage {
   page: number;
   pageSize: number;
 }
+// Kết quả của GET /auth/me và PUT /me/business-profile (AccountDto ở backend).
+export interface BusinessAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: "agency" | "provider";
+  businessProfile?: (BusinessProfile & { id: number }) | null;
+}
 export const partnerService = {
   submit: (form: FormData) =>
     http<BusinessProfile>("/me/business-profile/submit", {
       method: "POST",
+      body: form,
+    }),
+  me: (signal?: AbortSignal) => http<BusinessAccount>("/auth/me", { signal }),
+  updateMine: (form: FormData) =>
+    http<BusinessAccount>("/me/business-profile", {
+      method: "PUT",
       body: form,
     }),
   list: (query: URLSearchParams, signal?: AbortSignal) =>
@@ -41,7 +56,7 @@ export const partnerService = {
     http<BusinessProfile>(`/admin/partner-applications/${id}/suspend`, {
       method: "POST",
     }),
-    activate: (id: number) =>
+  activate: (id: number) =>
     http<BusinessProfile>(`/admin/partner-applications/${id}/activate`, {
       method: "POST",
     }),

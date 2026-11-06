@@ -14,4 +14,5 @@ public DateTime? ApprovedAt { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual User User { get; set; } = null!;
+public string? LogoUrl { get; set; }
 }
