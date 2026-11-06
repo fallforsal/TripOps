@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using TripOps.Service.Tours;
 using TripOps.Service.Bookings;
 
@@ -105,6 +106,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await other.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")).StatusCode);
         Assert.Equal("Draft", initial.Status);
+        Assert.True(initial.RequiresCustomerAcceptance);
         Assert.Empty(await Read<QuotationView[]>(await customer.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")));
         var priced = await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",
             new AgencyQuotationInput(500000, initial.Costs!.Where(l => l.Source == "AGENCY_SUPPLIER")
@@ -163,6 +165,14 @@ public sealed partial class TourFlowTests
     public async Task Platform_provider_confirms_real_cost_before_agency_can_send_quote()
     {
         await using var app = new App(); await app.Initialize();
+        await app.Inspect(async db => {
+            var owner = await db.Users.Include(u => u.BusinessProfile).SingleAsync(u => u.Id == "provider");
+            owner.Phone = "0900000011";
+            owner.BusinessProfile!.BusinessName = "Provider business";
+            foreach (var service in await db.Services.Where(s => s.Id == 102 || s.Id == 103).ToListAsync())
+                service.FullAddress = $"Address {service.Id}, Da Lat";
+            await db.SaveChangesAsync();
+        });
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
         using var provider = await app.Login("provider"); using var other = await app.Login("other");
         var request = await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests",
@@ -181,17 +191,42 @@ public sealed partial class TourFlowTests
                     new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
         var requests = await Read<ProviderRequestView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
         Assert.Equal(2, requests.Length);
+        Assert.All(requests, row => {
+            Assert.Equal("Provider business", row.ProviderName);
+            Assert.Equal("provider", row.ProviderId);
+            Assert.Equal("0900000011", row.ProviderPhone);
+            Assert.Equal($"Address {row.ServiceId}, Da Lat", row.FullAddress);
+            Assert.Null(row.RespondedAt);
+        });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(
             $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await other.PostAsJsonAsync($"/api/v1/provider/booking-requests/{requests[0].Id}/respond",
                 new ProviderReply("confirm", 200000, null))).StatusCode);
         foreach (var row in requests)
-            await Read<ProviderRequestView>(await provider.PostAsJsonAsync(
+        {
+            var reply = await Read<ProviderRequestView>(await provider.PostAsJsonAsync(
                 $"/api/v1/provider/booking-requests/{row.Id}/respond",
                 new ProviderReply("confirm", row.ServiceId == 102 ? 300000 : 120000, "Còn chỗ")));
+            Assert.Equal("Confirmed", reply.Status);
+            Assert.NotNull(reply.RespondedAt);
+            Assert.Equal(row.SlotKey, reply.SlotKey);
+            Assert.Equal(row.FullAddress, reply.FullAddress);
+        }
+        var agencyRequests = await Read<ProviderRequestView[]>(await agency.GetAsync(
+            $"/api/v1/bookings/{booking.Id}/quotations/supplier-requests"));
+        Assert.Equal(2, agencyRequests.Length);
+        Assert.All(agencyRequests, row => {
+            Assert.Equal("Confirmed", row.Status);
+            Assert.Equal("Còn chỗ", row.Note);
+            Assert.NotNull(row.RespondedAt);
+            Assert.Equal("Provider business", row.ProviderName);
+        });
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(
+            $"/api/v1/bookings/{booking.Id}/quotations/supplier-requests")).StatusCode);
         var current = (await Read<QuotationView[]>(await agency.GetAsync(
             $"/api/v1/bookings/{booking.Id}/quotations")))[0];
+        Assert.True(current.RequiresCustomerAcceptance);
         Assert.Equal(3, current.Version);
         Assert.Equal(420000, current.TotalCost);
         await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",

@@ -474,7 +474,7 @@ export function ServicePostManagement({
                         <div className="flex min-h-14 flex-col items-center justify-center gap-1.5 [&>span]:whitespace-nowrap">
                           {getStatusBadge(service.status)}
                           <ServiceModerationReason service={service} providerView />
-                          {service.isPaused && <Badge variant="outline" className="text-amber-800 border-amber-300">Tạm ngừng cung cấp</Badge>}
+                          {service.isPaused && <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">Tạm ngừng cung cấp</Badge>}
                         </div>
                       </td>
 

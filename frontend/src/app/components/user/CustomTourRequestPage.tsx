@@ -28,6 +28,27 @@ interface CustomTourRequestPageProps {
 const TODAY = new Date().toISOString().split("T")[0];
 const formatDateDisplay = (value: string) => value.split("-").reverse().join("/");
 
+function CompanyLogo({ src, name }: { src?: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="w-11 h-11 shrink-0 rounded-[6px] border border-[#CBD5E1] bg-white overflow-hidden">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={`Logo ${name}`}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-full h-full object-contain"
+        />
+      ) : (
+        <span className="w-full h-full flex items-center justify-center bg-[#F0F9FF] text-xs font-bold text-[#075985]">
+          {name.trim().slice(0, 2).toUpperCase()}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function CustomTourRequestPage({
   companies,
   currentUser,
@@ -138,24 +159,26 @@ export function CustomTourRequestPage({
     }
 
     setSubmitting(true);
-    try { await onSubmit({
-      userId: currentUser.id,
-      businessName: form.businessName.trim() || undefined,
-      businessEmail: form.businessEmail.trim() || undefined,
-      businessPhone: form.businessPhone.trim() || undefined,
-      contactName: form.contactName.trim(),
-      contactEmail: form.contactEmail.trim(),
-      contactPhone: form.contactPhone.trim(),
-      destinations: form.destinations.trim(),
-      departureDate: form.departureDate,
-      returnDate: form.returnDate,
-      numberOfPeople: form.numberOfPeople.trim(),
-      budgetPerPerson: form.budgetPerPerson.trim() || undefined,
-      hotelStars: form.hotelStars || undefined,
-      additionalInfo: form.additionalInfo.trim() || undefined,
-      targetCompanyId: form.targetCompanyId,
-      targetCompanyName: selectedCompany?.name ?? "",
-    }); setSubmitted(true); }
+    try {
+      await onSubmit({
+        userId: currentUser.id,
+        businessName: form.businessName.trim() || undefined,
+        businessEmail: form.businessEmail.trim() || undefined,
+        businessPhone: form.businessPhone.trim() || undefined,
+        contactName: form.contactName.trim(),
+        contactEmail: form.contactEmail.trim(),
+        contactPhone: form.contactPhone.trim(),
+        destinations: form.destinations.trim(),
+        departureDate: form.departureDate,
+        returnDate: form.returnDate,
+        numberOfPeople: form.numberOfPeople.trim(),
+        budgetPerPerson: form.budgetPerPerson.trim() || undefined,
+        hotelStars: form.hotelStars || undefined,
+        additionalInfo: form.additionalInfo.trim() || undefined,
+        targetCompanyId: form.targetCompanyId,
+        targetCompanyName: selectedCompany?.name ?? "",
+      }); setSubmitted(true);
+    }
     catch (error) { setErrorMsg(error instanceof Error ? error.message : "Không thể gửi yêu cầu."); }
     finally { setSubmitting(false); }
   };
@@ -264,16 +287,16 @@ export function CustomTourRequestPage({
                   key={c.id}
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, targetCompanyId: c.id }))}
-                  className={`text-left p-3.5 rounded-[6px] border transition-colors ${
-                    isSelected
+                  className={`flex items-center gap-3 text-left p-3.5 rounded-[6px] border transition-colors ${isSelected
                       ? "border-[#075985] bg-[#F0F9FF]"
                       : "border-[#CBD5E1] bg-white hover:border-[#075985]"
-                  }`}
+                    }`}
                 >
-                  <p className="font-semibold text-xs text-[#0F172A]">{c.name}</p>
-                  <p className="text-[11px] text-[#475569] mt-1 line-clamp-2">
-                    {c.address}
-                  </p>
+                  <CompanyLogo src={c.logo} name={c.name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-xs text-[#0F172A]">{c.name}</p>
+                    <p className="text-[11px] text-[#475569] mt-1 line-clamp-2">{c.address}</p>
+                  </div>
                 </button>
               );
             })}

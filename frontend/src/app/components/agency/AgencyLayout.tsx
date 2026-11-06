@@ -50,6 +50,7 @@ export function AgencyLayout({
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
     { id: "custom-requests", label: "Yêu cầu thiết kế riêng", icon: PenSquare },
     { id: "co-hosting", label: "Liên minh lữ hành", icon: Handshake, badge: coHostingBadgeCount },
+    { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 
   const SidebarContent = () => (

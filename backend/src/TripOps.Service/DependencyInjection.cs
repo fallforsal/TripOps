@@ -12,6 +12,12 @@ public static class DependencyInjection
         this IServiceCollection services, IConfiguration configuration)
     {
         services.AddTripOpsData(configuration);
+        services.AddMemoryCache();
+        services.AddSingleton<Locations.VietnamAdministrativeService>();
+        services.AddHttpClient(Locations.VietnamAdministrativeService.ClientName, client => {
+            client.BaseAddress = new Uri("https://provinces.open-api.vn/api/v2/");
+            client.Timeout = TimeSpan.FromSeconds(12);
+        });
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddScoped<Accounts.AccountService>();
         services.AddScoped<Guides.AgencyGuideService>();

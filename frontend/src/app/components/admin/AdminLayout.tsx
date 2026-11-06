@@ -19,7 +19,6 @@ import {
   Compass,
   FileText,
   RotateCcw,
-  ClipboardCheck,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -56,12 +55,6 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
-      id: "service-approvals",
-      label: "Phê duyệt Bài đăng",
-      icon: ClipboardCheck,
-      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
-    },
-    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
@@ -71,6 +64,7 @@ export function AdminLayout({
       id: "approve-posts",
       label: "Quản lý Bài đăng",
       icon: FileText,
+      badge: pendingServicesCount > 0 ? pendingServicesCount : undefined,
     },
     {
       id: "refund-requests",

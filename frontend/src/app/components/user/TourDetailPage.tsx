@@ -54,6 +54,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { mockUsers, mockTourCompanies } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { getProvinceName } from "@/app/data/vietnamProvinces";
+import { mealAddress } from "@/app/lib/tourServiceAddress";
 
 export interface TourDetailCustomData {
   customHotelChanges?: CustomHotelChange[];
@@ -97,7 +98,7 @@ function formatVND(n: number) {
 }
 
 // -------- Program Tab --------
-function ProgramTab({ tour }: { tour: Tour }) {
+function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(
     new Set(tour.itinerary.slice(0, 1).map((d) => d.id)),
   );
@@ -363,6 +364,7 @@ function ProgramTab({ tour }: { tour: Tour }) {
                                 const mealLabel = mealType === "breakfast" ? "Ăn sáng" : mealType === "lunch" ? "Ăn trưa" : "Ăn tối";
                                 const isBreakfast = mealType === "breakfast";
                                 const isLunch = mealType === "lunch";
+                                const address = mealAddress(meal, services);
 
                                 return (
                                   <div key={meal.id || `meal-${idx}`} className="relative flex items-start gap-2.5">
@@ -417,12 +419,21 @@ function ProgramTab({ tour }: { tour: Tour }) {
                                             +{meal.alternativeMeals.length} phương án ẩm thực
                                           </span>
                                         )}
+                                        {address && (
+                                          <a
+                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([meal.serviceName, address].filter(Boolean).join(", "))}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                          >
+                                            <MapPin className="w-3 h-3" /> Bản đồ
+                                          </a>
+                                        )}
                                       </div>
-                                      {meal.description && (
-                                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                                          {meal.description}
-                                        </p>
-                                      )}
+                                      <p className="text-xs text-gray-600 mt-1 leading-relaxed flex items-start gap-1.5">
+                                        <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                                        <span>{address || "Chưa cập nhật địa chỉ"}</span>
+                                      </p>
                                       {meal.createdByCompanyName && (
                                         <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
                                           <Building2 className="w-3 h-3 text-gray-400" />
@@ -2599,7 +2610,7 @@ export function TourDetailPage({
                 ))}
               </div>
               <div className="p-5">
-                {activeTab === "program" && <ProgramTab tour={tour} />}
+                {activeTab === "program" && <ProgramTab tour={tour} services={services} />}
                 {activeTab === "regulations" && <RegulationsTab tour={tour} />}
                 {activeTab === "pricing" && <PricingTab tour={tour} />}
                 {activeTab === "custom" && !isCustomTour && (

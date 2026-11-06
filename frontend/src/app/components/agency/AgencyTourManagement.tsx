@@ -64,7 +64,8 @@ import {
   Lock,
   Zap,
 } from "lucide-react";
-import { mockTourCompanies, mockServices } from "@/app/data/mockData";
+import { mockTourCompanies } from "@/app/data/mockData";
+import { serviceAddress } from "@/app/lib/tourServiceAddress";
 import { getSuggestionsByDestination } from "@/app/data/destinationCatalog";
 import {
   VIETNAM_PROVINCES,
@@ -135,6 +136,7 @@ export function AgencyTourManagement({
   onDuplicateTour,
   onRestoreTourVersion,
 }: AgencyTourManagementProps) {
+  const services = useServiceCatalogue();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [versionTour, setVersionTour] = useState<Tour | null>(null);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
@@ -296,7 +298,7 @@ export function AgencyTourManagement({
       <div className="w-full bg-[#F0F9FF] min-h-screen">
         <TourDetailPage
           tour={viewingTour}
-          services={mockServices}
+          services={services}
           currentUser={company as any}
           onBack={() => setViewingTour(null)}
           onDeleteTour={(id) => {
@@ -2198,6 +2200,11 @@ export function TourFormPage(props: TourFormPageProps) {
         : !meal.serviceId || !/^\d+$/.test(meal.serviceId));
 
     const refPrice = getMealRefPricePerPerson(serv);
+    const supplier = (serv as Service & { supplier?: TourMeal["supplier"] }).supplier || {
+      address: serviceAddress(serv),
+      area: serv.province,
+      ...(isCustomServ ? { referencePrice: serv.price, conditions: serv.description } : {}),
+    };
 
     if (isStandardEmpty) {
       updateMealField(dIdx, mIdx, {
@@ -2207,7 +2214,7 @@ export function TourFormPage(props: TourFormPageProps) {
         serviceId: isCustomServ ? undefined : serv.id,
         supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
         agencySupplierId: (serv as any).agencySupplierId,
-        supplier: (serv as any).supplier || (isCustomServ ? { address: serv.location, referencePrice: serv.price, conditions: serv.description } : undefined),
+        supplier,
         image: serv.image,
         providerName: serv.providerName,
         isCustom: isCustomServ,
@@ -2226,7 +2233,7 @@ export function TourFormPage(props: TourFormPageProps) {
         serviceId: isCustomServ ? undefined : serv.id,
         supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
         agencySupplierId: (serv as any).agencySupplierId,
-        supplier: (serv as any).supplier || (isCustomServ ? { address: serv.location, referencePrice: serv.price, conditions: serv.description } : undefined),
+        supplier,
         providerName: serv.providerName,
         isCustom: isCustomServ,
       };

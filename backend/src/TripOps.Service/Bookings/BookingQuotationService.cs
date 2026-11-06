@@ -12,19 +12,22 @@ public sealed record CostLine(string SlotKey, string Source, string Name, decima
 public sealed record QuotationView(int Id, int BookingId, int Version, int TourId, int TourVersion,
     string Status, decimal EstimatedSale, decimal? TotalCost, decimal? AgencyProfit,
     decimal SaleTotal, IReadOnlyList<CostLine>? Costs, string Reason, DateTime CreatedAt,
-    DateTime? SentAt, DateTime? AcceptedAt);
+    DateTime? SentAt, DateTime? AcceptedAt, bool RequiresCustomerAcceptance = false);
 public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, string SlotKey,
     string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
-    decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note);
+    decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note,
+    DateTime? RespondedAt = null, string? ProviderId = null, string? ProviderName = null,
+    string? ProviderPhone = null, string? FullAddress = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
     string? RoommateNote, string? RestaurantNote);
-/// <summary>Yêu cầu dịch vụ hiển thị cho Provider: kèm thông tin booking, công ty lữ hành và đoàn khách.
-/// Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
+/// <summary>Yêu cầu dịch vụ hiển thị cho Provider: các trường của ProviderRequestView kèm thông tin booking,
+/// công ty lữ hành và đoàn khách. Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
 public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
     string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
     decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note,
-    DateTime CreatedAt, DateTime? RespondedAt, string BookingCode, string TourName,
+    DateTime? RespondedAt, string? ProviderId, string? ProviderName, string? ProviderPhone, string? FullAddress,
+    DateTime CreatedAt, string BookingCode, string TourName,
     string AgencyName, string? AgencyPhone, string? AgencyEmail, string? MealType, string? SpecialRequests,
     string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note);
@@ -293,14 +296,27 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
         await Owned(actor, bookingId, agency, ct);
         var rows = await db.BookingQuotations.AsNoTracking().Where(q => q.BookingId == bookingId)
             .OrderByDescending(q => q.Version).ToListAsync(ct);
+        var requiresAcceptance = await RequiresAcceptance(bookingId, ct);
         return rows.Where(q => agency || q.SentAt.HasValue)
-            .Select(q => View(q, agency)).ToArray();
+            .Select(q => View(q, agency) with { RequiresCustomerAcceptance = requiresAcceptance }).ToArray();
     }
+    private IQueryable<ProviderRequestView> RequestViews(IQueryable<BookingSupplierRequest> requests) =>
+        from r in requests
+        join service in db.Services.AsNoTracking() on r.ServiceId equals service.Id
+        select new ProviderRequestView(r.Id, r.BookingId, r.ServiceId, r.SlotKey, r.ServiceName,
+            r.ServiceDateFrom, r.ServiceDateTo, r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost,
+            r.Status, r.Note, r.RespondedAt, r.ProviderId,
+            service.Provider.BusinessProfile != null ? service.Provider.BusinessProfile.BusinessName : service.Provider.Name,
+            service.Provider.Phone, service.FullAddress);
+
     public async Task<IReadOnlyList<ProviderInboxView>> ProviderRequests(string actor, CancellationToken ct)
     {
         // Yêu cầu đã bị thay thế (đổi kế hoạch) không còn hiệu lực nên không hiện cho Provider.
-        var rows = await db.BookingSupplierRequests.AsNoTracking()
-            .Where(r => r.ProviderId == actor && r.Status != "Superseded")
+        var views = (await RequestViews(db.BookingSupplierRequests.AsNoTracking()
+                .Where(r => r.ProviderId == actor && r.Status != "Superseded")).ToListAsync(ct))
+            .ToDictionary(v => v.Id);
+        var ids = views.Keys.ToArray();
+        var rows = await db.BookingSupplierRequests.AsNoTracking().Where(r => ids.Contains(r.Id))
             .Include(r => r.Booking).ThenInclude(b => b.Tour!).ThenInclude(t => t.Agency)
             .Include(r => r.Booking).ThenInclude(b => b.Participants)
             .AsSplitQuery().OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
@@ -310,11 +326,13 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
             .ToDictionaryAsync(m => $"meal:{m.Id}", m => m.MealType, ct);
         return rows.Select(r =>
         {
+            var v = views[r.Id];
             var b = r.Booking;
             var closed = b.Status is BookingStatus.Cancelled or BookingStatus.Rejected;
-            return new ProviderInboxView(r.Id, r.BookingId, r.ServiceId, r.SlotKey, r.ServiceName,
-                r.ServiceDateFrom, r.ServiceDateTo, r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost,
-                closed ? "Cancelled" : r.Status, r.Note, r.CreatedAt, r.RespondedAt, b.BookingCode,
+            return new ProviderInboxView(v.Id, v.BookingId, v.ServiceId, v.SlotKey, v.ServiceName,
+                v.ServiceDateFrom, v.ServiceDateTo, v.Quantity, v.Unit, v.EstimatedCost, v.QuotedCost,
+                closed ? "Cancelled" : v.Status, v.Note, v.RespondedAt, v.ProviderId, v.ProviderName,
+                v.ProviderPhone, v.FullAddress, r.CreatedAt, b.BookingCode,
                 b.Tour?.Name ?? "Tour", b.Tour?.Agency?.Name ?? "Công ty lữ hành", b.Tour?.Agency?.Phone,
                 b.Tour?.Agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
                 closed ? b.CancelReason : null, closed ? b.CancelledAt : null,
@@ -326,10 +344,8 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)
     {
         await Owned(actor, bookingId, true, ct);
-        return await db.BookingSupplierRequests.AsNoTracking().Where(r => r.BookingId == bookingId)
-            .OrderByDescending(r => r.CreatedAt).Select(r => new ProviderRequestView(r.Id, r.BookingId,
-                r.ServiceId, r.SlotKey, r.ServiceName, r.ServiceDateFrom, r.ServiceDateTo,
-                r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost, r.Status, r.Note))
+        return await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.BookingId == bookingId)
+            .OrderByDescending(r => r.CreatedAt))
             .ToListAsync(ct);
     }
     public async Task<ProviderRequestView> Respond(string actor, int requestId, ProviderReply input, CancellationToken ct)
@@ -350,9 +366,7 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
         request.QuotedCost = input.Decision == "confirm" ? input.QuotedCost : null;
         request.Note = input.Note?.Trim(); request.RespondedAt = DateTime.UtcNow;
         await Revise(request.BookingId, $"Provider {request.ServiceName} {request.Status.ToLowerInvariant()}", request, ct);
-        return new(request.Id, request.BookingId, request.ServiceId, request.SlotKey,
-            request.ServiceName, request.ServiceDateFrom, request.ServiceDateTo,
-            request.Quantity, request.Unit, request.EstimatedCost, request.QuotedCost, request.Status, request.Note);
+        return await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.Id == request.Id)).SingleAsync(ct);
     }
     private async Task<BookingQuotation> Revise(int bookingId, string reason,
         BookingSupplierRequest? response, CancellationToken ct)
@@ -457,6 +471,9 @@ public sealed class BookingQuotationService(TripOpsDbContext db)
             !await db.BookingSupplierRequests.AnyAsync(r => r.BookingId == bookingId && r.Status != "Confirmed" && r.Status != "Superseded", ct),
             "Cần xác nhận dịch vụ và báo giá hiện hành trước khi duyệt booking.");
     }
+    public async Task<bool> RequiresAcceptance(int bookingId, CancellationToken ct) =>
+        await db.Bookings.AnyAsync(b => b.Id == bookingId && b.DesignRequestId.HasValue, ct) ||
+        await HasPlatformRequests(bookingId, ct) || await HasAgencySuppliers(bookingId, ct);
     public Task<bool> HasPlatformRequests(int bookingId, CancellationToken ct) =>
         db.BookingSupplierRequests.AnyAsync(r => r.BookingId == bookingId && r.Status != "Superseded", ct);
     public async Task<bool> HasAgencySuppliers(int bookingId, CancellationToken ct)
