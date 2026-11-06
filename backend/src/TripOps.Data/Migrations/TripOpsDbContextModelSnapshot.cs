@@ -3529,6 +3529,12 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(500)")
                         .HasColumnName("avatar");
 
+                    b.Property<string>("BanReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("BannedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")

@@ -1666,7 +1666,7 @@ function Application() {
               onDeleteService={undefined}
               onApproveProvider={handleApproveProvider}
               onRejectProvider={handleRejectProvider}
-              onUpdateUserStatus={handleUpdateUserStatus}
+              //onUpdateUserStatus={handleUpdateUserStatus}
               onApproveCompany={handleApproveCompany}
               onRejectCompany={handleRejectCompany}
               refundRequests={refundRequests}

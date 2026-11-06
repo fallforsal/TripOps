@@ -104,5 +104,25 @@ public sealed class PartnerApplicationsController(AccountService accounts) : Con
     [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Activate(int id, CancellationToken ct) => Ok(await accounts.SetSuspended(id, false, ct));
 }
-
+[ApiController, Authorize(Roles = "admin"), Route("api/v1/admin/accounts")]
+[Tags("Account Management")]
+public sealed class AdminAccountsController(AccountService accounts) : ControllerBase
+{
+    [HttpGet]
+    [EndpointSummary("List customer, Agency, Provider and Guide accounts with filters")]
+    [ProducesResponseType<AdminAccountPageDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(CancellationToken ct, string? role = null, string? status = null,
+        string? search = null, int page = 1, int pageSize = 20)
+        => Ok(await accounts.AdminAccounts(role, status, search, page, pageSize, ct));
+    [HttpPost("{id}/ban")]
+    [EndpointSummary("Ban an account with a required reason")]
+    [ProducesResponseType<AdminAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Ban(string id, BanAccountRequest request, CancellationToken ct)
+        => Ok(await accounts.SetBanned(id, true, request.Reason, ct));
+    [HttpPost("{id}/unban")]
+    [EndpointSummary("Revoke an account ban")]
+    [ProducesResponseType<AdminAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Unban(string id, CancellationToken ct)
+        => Ok(await accounts.SetBanned(id, false, null, ct));
+}
 
