@@ -252,6 +252,45 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
+    public async Task Provider_sees_hotel_and_restaurant_requests_with_group_details_and_cancelled_bookings_close_them()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
+        using var provider = await app.Login("provider");
+        var request = await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests",
+            new CreateDesignRequestInput("agency", "Customer", "customer@example.test", "0900000000", "Da Lat",
+                DateTime.UtcNow.Date.AddDays(10), DateTime.UtcNow.Date.AddDays(11), 2)), HttpStatusCode.Created);
+        var config = Complete() with { Timelines = [new TimelineInput(1, "Arrival",
+            Meals: [new MealInput("lunch", "Restaurant", ServiceId: 103)],
+            Accommodations: [new AccommodationInput("Hotel", "Da Lat", ServiceId: 102)]),
+            new TimelineInput(2, "Departure")] };
+        var draft = await Read<TourDto>(await agency.PostAsJsonAsync(
+            $"/api/v1/agency/tour-design-requests/{request.Id}/tours", config), HttpStatusCode.Created);
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Version)));
+        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
+            new CreateBookingRequest(draft.Id, DateTime.UtcNow.Date.AddDays(10), "Customer", "0900000000",
+                "customer@example.test", null, [new ParticipantInput("One", null, null, null, null, null),
+                    new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
+
+        var inbox = await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        Assert.Equal(2, inbox.Length);
+        Assert.All(inbox, r => Assert.Equal("Pending", r.Status));
+        Assert.All(inbox, r => Assert.Equal(booking.BookingCode, r.BookingCode));
+        Assert.All(inbox, r => Assert.Equal(2, r.Guests.Count));
+        Assert.Contains(inbox, r => r.SlotKey.StartsWith("hotel:", StringComparison.Ordinal));
+        Assert.Contains(inbox, r => r.SlotKey.StartsWith("meal:", StringComparison.Ordinal) && r.MealType == "lunch");
+
+        // Khách hủy đơn khi nhà cung cấp chưa xác nhận: yêu cầu bên Provider cũng hủy theo, không phản hồi được nữa.
+        await Read<BookingDto>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancel",
+            new BookingCancellationRequest("Đổi kế hoạch")));
+        inbox = await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        Assert.All(inbox, r => Assert.Equal("Cancelled", r.Status));
+        Assert.All(inbox, r => Assert.Equal("Đổi kế hoạch", r.CancelReason));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await provider.PostAsJsonAsync(
+            $"/api/v1/provider/booking-requests/{inbox[0].Id}/respond", new ProviderReply("confirm", 100000, null))).StatusCode);
+    }
+
+    [Fact]
     public async Task Rejected_platform_hotel_requires_agency_replacement_and_new_quotation()
     {
         await using var app = new App(); await app.Initialize();

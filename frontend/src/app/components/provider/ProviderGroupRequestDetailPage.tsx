@@ -416,7 +416,7 @@ export function ProviderGroupRequestDetailPage({
 
                 <div className="flex items-center justify-between text-xs text-gray-700">
                   <span className="text-gray-500">Hạng phòng gợi ý:</span>
-                  <span className="font-semibold text-gray-900 truncate max-w-[180px]">{request.roomTypeRequested || "Deluxe / Superior"}</span>
+                  <span className="font-semibold text-gray-900 truncate max-w-[180px]">{request.roomTypeRequested || "Theo danh sách đoàn"}</span>
                 </div>
               </div>
             )}

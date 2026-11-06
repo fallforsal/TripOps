@@ -48,6 +48,7 @@ Table business_profiles {
   business_address text
   business_license_url text
   description text
+  LogoUrl text [note: 'Ảnh logo doanh nghiệp; tên cột theo migration FixTourPendingChanges']
   status varchar(50)
   rejection_reason text
   approved_at timestamp
