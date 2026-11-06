@@ -253,6 +253,15 @@ function Application() {
       .catch((e) => { if (active) setApiError(e.message); });
     return () => { active = false; };
   }, []);
+  //để company (trạng thái, logo) theo kịp currentUser sau khi lưu hồ sơ doanh nghiệp.
+  useEffect(() => {
+  if (currentUser?.role !== "agency") return;
+  setCompanies((previous) => [
+    ...previous.filter((item) => item.id !== currentUser.id),
+    companyFromUser(currentUser),
+  ]);
+}, [currentUser]);
+
   async function refreshCustomRequests() {
     if (currentUser?.role === "agency") {
       setCustomTourRequests(await agencyDesignRequests());
@@ -388,6 +397,7 @@ function Application() {
 
   const { navigateForward, restoreHistoryPosition, goBack } =
     useHistoryScroll();
+
 
   // URL Hash Sync for direct testing and browser back/forward
   useEffect(() => {

@@ -18,7 +18,7 @@ public sealed record ProfileRequest(
     [StringLength(5000)] string? Description);
 public sealed record ProfileDto(int Id, string UserId, string? BusinessName, string? TaxCode,
     string? BusinessAddress, string? BusinessLicenseUrl, string? Description, string Status,
-    string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt);
+    string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt, string? LogoUrl);
 public sealed record AccountDto(string Id, string Name, string Email, string? Phone,
     string Role, ProfileDto? BusinessProfile);
 public sealed record PartnerDto(ProfileDto Profile, string Name, string Email, string? Phone, string Role);

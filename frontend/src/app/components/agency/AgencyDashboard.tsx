@@ -26,6 +26,7 @@ import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
+import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -368,6 +369,10 @@ export function AgencyDashboard({
             onViewTour={onViewTour}
           />
         );
+      
+      case "business-account":
+  return <BusinessAccountContainer />;
+
       case "co-hosting":
         if (editingCoHostItem) {
           return (

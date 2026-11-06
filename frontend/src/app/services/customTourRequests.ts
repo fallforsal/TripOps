@@ -13,7 +13,7 @@ type RequestDto = {
   designedTourId: number | null; currentVersion: number | null;
   quotedPricePerPerson: number | null;
 };
-type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string };
+type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
@@ -32,6 +32,7 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
 export const requestAgencies = async (): Promise<TourCompany[]> =>
   (await http<AgencyChoice[]>("/tour-design-requests/agencies")).map((a) => ({
     id: a.id, name: a.name, address: a.address, phone: a.phone, email: a.email,
+    logo: a.logoUrl || undefined,
     taxCode: "", adminId: a.id, createdAt: "", status: "approved" as const,
   }));
 export const customerDesignRequests = async () =>
