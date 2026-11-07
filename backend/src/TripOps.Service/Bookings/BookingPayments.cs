@@ -41,6 +41,7 @@ public sealed partial class BookingService
 
         var now = UtcNow;
         var stage = PayableStage(booking, customerId, now);
+        await quotationsForPayment.ValidatePayment(booking.Id, stage.QuotationId, ct);
         var amount = Outstanding(booking, stage);
 
         var reusable = booking.PaymentTransactions
@@ -204,7 +205,15 @@ public sealed partial class BookingService
                 payment.PaidAt = now;
                 payment.GatewayTransactionNo = reference;
                 payment.ReviewNote = notes.Count == 0 ? null : string.Join(" ", notes);
+                try { await quotationsForPayment.ValidatePayment(booking.Id, request?.QuotationId, ct); }
+                catch (BookingException)
+                {
+                    payment.Status = PaymentTransactionStatus.NeedsReview;
+                    payment.ReviewNote = "Tiền nhận cho báo giá đã hết hiệu lực; cần đối soát.";
+                    break;
+                }
                 ApplyPayment(booking, request, now);
+                Repo.NotifyPayment(booking);
                 break;
             }
             case "PAID":
@@ -291,6 +300,7 @@ public sealed partial class BookingService
 
         var now = UtcNow;
         var stage = PayableStage(booking, customerId, now);
+        await quotationsForPayment.ValidatePayment(booking.Id, stage.QuotationId, ct);
         var outstanding = Outstanding(booking, stage);
         if (Money(request.Amount) != outstanding)
             throw new BookingException(422, $"Số tiền của {StageName(booking, stage)} phải đúng {outstanding.ToString("N0", Vietnamese)}đ.");
@@ -308,6 +318,7 @@ public sealed partial class BookingService
             PaymentRequest = stage
         });
         ApplyPayment(booking, stage, now);
+        Repo.NotifyPayment(booking);
 
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -365,8 +376,10 @@ public sealed partial class BookingService
         if (active is not null) return active;
         var deposit = ActiveRequest(booking, DepositStage);
         var dueAt = PaymentRules.BalanceDeadline(booking.StartDate);
+        if (booking.DesignRequestId.HasValue && dueAt < now) dueAt = PaymentRules.VietnamMidnightUtc(booking.StartDate.Date);
         var request = new PaymentRequest
         {
+            QuotationId = booking.AcceptedQuotationId,
             Stage = BalanceStage,
             Description = "Thanh toán phần còn lại",
             Amount = Math.Max(0, Money(booking.TotalAmount - (deposit?.Amount ?? 0))),
@@ -391,13 +404,14 @@ public sealed partial class BookingService
         if (active is not null) return active;
 
         var dueAt = approvedAt + PaymentRules.DepositWindow;
-        var full = PaymentRules.FullPaymentAtApproval(booking.StartDate, approvedAt);
+        var full = !booking.DesignRequestId.HasValue && PaymentRules.FullPaymentAtApproval(booking.StartDate, approvedAt);
         foreach (var legacy in booking.PaymentRequests.Where(p => p.Stage == null
                      && p.Status is null or PaymentRequestStatus.Pending or PaymentRequestStatus.Overdue))
             legacy.Status = PaymentRequestStatus.Cancelled;
 
         var request = new PaymentRequest
         {
+            QuotationId = booking.AcceptedQuotationId,
             Stage = DepositStage,
             Description = full ? "Thanh toán toàn bộ (tour sát ngày)" : $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
             Amount = full ? Money(booking.TotalAmount) : PlannedDeposit(booking),

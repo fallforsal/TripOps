@@ -41,7 +41,7 @@ export const agencyDesignRequests = async () =>
   (await http<RequestDto[]>("/agency/tour-design-requests")).map(fromDto);
 export const submitDesignRequest = async (r: Omit<CustomTourRequest, "id" | "createdAt" | "status">) =>
   fromDto(await http<RequestDto>("/tour-design-requests", { method: "POST", body: JSON.stringify({
-    agencyId: r.targetCompanyId, contactName: r.contactName, contactEmail: r.contactEmail,
+    initialChanges: r.initialChanges, sourceTourId: r.sourceTourId ? Number(r.sourceTourId) : null, agencyId: r.targetCompanyId, contactName: r.contactName, contactEmail: r.contactEmail,
     contactPhone: r.contactPhone, destination: r.destinations,
     departureDate: r.departureDate, returnDate: r.returnDate,
     numberOfPeople: Number(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson ? Number(r.budgetPerPerson) : null,
@@ -61,9 +61,9 @@ export const createDesignRequestTour = async (requestId: string, tour: Partial<T
 export const customerRequestTour = async (requestId: string) =>
   fromApiTour(await http<ApiTour>(`/tour-design-requests/${Number(requestId)}/tour`));
 export const customerRequestPlans = async (requestId: string) =>
-  (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map(fromApiTour);
+  (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map((t) => ({ ...fromApiTour(t), customRequestId: requestId }));
 export type TourPlanProposal = { id: number; requestId: number; tourId: number; baseTourVersion: number;
-  proposal: Pick<Tour, "itinerary" | "hotels">; message: string; status: string;
+  proposal: Pick<Tour, "itinerary" | "hotels"> & { quotation?: { tourVersion: number; quotationVersion?: number; pricePerPerson: number; total: number; preliminary: boolean }; requestedChanges?: Record<string, string> }; message: string; status: string;
   agencyReply: string | null; createdAt: string; respondedAt: string | null };
 export const customerPlanProposals = (requestId: string) =>
   http<TourPlanProposal[]>(`/tour-design-requests/${Number(requestId)}/proposals`);

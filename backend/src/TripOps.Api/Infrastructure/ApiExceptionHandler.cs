@@ -39,6 +39,13 @@ public sealed class ApiExceptionHandler(
             });
             return true;
         }
+        if (exception is Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            context.Response.StatusCode = 409;
+            await problems.WriteAsync(new ProblemDetailsContext { HttpContext = context,
+                ProblemDetails = new ProblemDetails { Status = 409, Title = "Dữ liệu đã thay đổi; vui lòng tải lại." } });
+            return true;
+        }
         logger.LogError("Unhandled {ExceptionType}; trace {TraceId}",
             exception.GetType().Name, context.TraceIdentifier);
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;

@@ -12,6 +12,8 @@ Enum user_role_enum {
 }
 
 Table users {
+  BanReason text
+  BannedAt timestamp
   id varchar(36) [pk, note: 'UUID định danh duy nhất người dùng']
   name varchar(150) [not null, note: 'Họ và tên hiển thị']
   email varchar(191) [unique, not null, note: 'Email chính đăng nhập']
@@ -60,6 +62,7 @@ Table business_profiles {
 // BẢNG DỊCH VỤ CỦA NHÀ CUNG CẤP (SINGLE TABLE CHO HOTEL, FNB, XE, THAM QUAN)
 // ============================================================================
 Table services {
+  PriceUnit text
   id int [pk, increment]
   provider_id varchar(36) [not null, note: 'FK tới users.id - Nhà cung cấp dịch vụ']
 
@@ -264,6 +267,13 @@ Table agency_suppliers {
 
 
 Table tour_design_requests {
+  AgreedAt timestamp
+  AgreedTourId int
+  AgreedTourVersion int
+  Revision int [not null]
+  SourceSnapshotJson text
+  SourceTourId int
+  InitialChangesJson text
   id int [pk, increment]
 
   // 1. CHỌN CÔNG TY DU LỊCH (Agency/Business Profile nhận yêu cầu)
@@ -325,6 +335,8 @@ Ref: tour_plan_proposals.customer_id > users.id
 Ref: tour_plan_proposals.agency_id > users.id
 
 Table tour_versions {
+  NumberOfGuests int
+  SharedToCustomer boolean [not null]
   id int [pk, increment]
   tour_id int [not null, note: 'FK tới tours.id']
   version int [not null, note: 'Số thứ tự phiên bản: 1, 2, 3...']
@@ -369,6 +381,7 @@ Table tour_design_request_agencies {
 
 
 Table bookings {
+  AcceptedQuotationId int
   id int [pk, increment]
   booking_code varchar(50) [unique, not null]
   customer_id varchar(36) // FK tới users.id
@@ -611,6 +624,7 @@ Ref: booking_incidents.reported_by > users.id
 // 1. CÁC ĐỢT YÊU CẦU THANH TOÁN (PAYMENT MILESTONES)
 // ============================================================================
 Table payment_requests {
+  QuotationId int
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
   stage varchar(20) [note: 'Đợt thu: deposit (cọc 50%, mở khi Agency duyệt đơn) | balance (phần còn lại, tạo cùng lúc duyệt, thu sau khi đủ cọc, hạn trước khởi hành 1 tuần). NULL = khoản cũ trước khi có lịch thanh toán. CHECK CK_payment_requests_stage']
@@ -656,6 +670,12 @@ Table payment_transactions {
 // 3. NHẬT KÝ ĐIỀU CHỈNH TĂNG / GIẢM GIÁ TOUR DO PHÁT SINH
 // ============================================================================
 Table booking_supplier_requests {
+  AvailabilityConfirmed boolean [not null]
+  AvailableQuantity decimal(19,2)
+  HoldUntil timestamp
+  PriceConfirmed boolean [not null]
+  ReplyDeadline timestamp
+  ResponseHistoryJson text [not null]
   id int [pk, increment]
   booking_id int [not null]
   service_id int [not null]
@@ -682,6 +702,10 @@ Ref: booking_supplier_requests.service_id > services.id
 Ref: booking_supplier_requests.provider_id > users.id
 
 Table booking_quotations {
+  NumberOfGuests int [not null]
+  PaymentPolicy text [not null]
+  PlanSnapshotJson text [not null]
+  ValidUntil timestamp
   id int [pk, increment]
   booking_id int [not null]
   version int [not null]
@@ -1170,3 +1194,13 @@ Ref: booking_participants.assigned_guide_id > users.id
 Ref: booking_participants.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)
 Ref: booking_participants.(booking_id, agency_id, assigned_guide_id) > booking_assigned_guides.(booking_id, agency_id, guide_id)
 Ref: booking_locations.guide_id > users.id
+
+Table workflow_notifications {
+  Id int [pk, not null]
+  UserId varchar(36) [not null]
+  Message text [not null]
+  RequestId int
+  BookingId int
+  CreatedAt timestamp [not null]
+  ReadAt timestamp
+}

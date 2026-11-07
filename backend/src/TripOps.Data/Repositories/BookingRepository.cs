@@ -139,6 +139,19 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.BookingParticipants.Include(p => p.Booking)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
+    public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct)
+    {
+        if (!tour.DesignRequestId.HasValue) return true;
+        await db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
+        var request = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == tour.DesignRequestId && r.CustomerId == customerId, ct);
+        return request != null && request.AgreedTourId == tour.Id && request.AgreedTourVersion == tour.Version &&
+            !await db.Bookings.AnyAsync(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct);
+    }
+    public void NotifyPayment(Booking booking)
+    {
+        db.WorkflowNotifications.Add(new WorkflowNotification { UserId = booking.CustomerId!, BookingId = booking.Id, Message = "Backend đã xác nhận thanh toán cho Booking." });
+        db.WorkflowNotifications.Add(new WorkflowNotification { UserId = booking.Tour!.AgencyId, BookingId = booking.Id, Message = "Booking đã nhận thanh toán; tiếp tục đặt dịch vụ chính thức." });
+    }
     public void Add(Booking booking) => db.Bookings.Add(booking);
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginCreate(CancellationToken ct) =>
         db.Database.BeginTransactionAsync(ct);

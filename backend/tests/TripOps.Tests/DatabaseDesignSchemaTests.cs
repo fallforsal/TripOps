@@ -25,6 +25,7 @@ public sealed class DatabaseDesignSchemaTests
         var depth = 0;
         var tableCount = 0;
         var columnCount = 0;
+        var documented = new HashSet<(string, string)>();
         foreach (var raw in source.Split('\n'))
         {
             var line = raw.Trim();
@@ -47,11 +48,14 @@ public sealed class DatabaseDesignSchemaTests
             var actual = tables[tableName].Columns.Single(c => c.Name == name);
             var required = Regex.IsMatch(line, @"\[[^\]]*\b(not null|pk)\b");
             Assert.True(actual.IsNullable == !required, $"NULL contract differs: {tableName}.{name}");
+            documented.Add((tableName, name));
             columnCount++;
         }
-        Assert.Equal(44, tableCount);
-        Assert.Equal(578, columnCount);
+        Assert.Equal(45, tableCount);
+        Assert.Equal(609, columnCount);
         Assert.Equal(tableCount, tables.Count);
+        var missing = tables.Values.SelectMany(t => t.Columns.Select(c => (t.Name, c.Name))).Where(c => !documented.Contains(c)).ToArray();
+        Assert.True(missing.Length == 0, "Undocumented columns: " + string.Join(", ", missing.Select(c => c.ToString())));
         Assert.Equal(columnCount, tables.Values.Sum(t => t.Columns.Count()));
     }
 

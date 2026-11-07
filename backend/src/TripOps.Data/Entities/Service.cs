@@ -7,6 +7,7 @@ public ServiceCategory Category { get; set; }
 public string? SubCategory { get; set; }
 public string Name { get; set; } = string.Empty;
 public string? Description { get; set; }
+public string? PriceUnit { get; set; }
 public decimal Price { get; set; } = 0m;
 public decimal? PriceFrom { get; set; }
 public decimal? PriceTo { get; set; }

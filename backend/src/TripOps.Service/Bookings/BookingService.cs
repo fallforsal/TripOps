@@ -12,6 +12,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
     TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
+    private BookingQuotationService quotationsForPayment => quotations;
     private BookingRepository Repo => repository;
     private PayOsGateway PayOs => payOs;
     private PayOsPayoutGateway Payouts => payouts;
@@ -29,9 +30,13 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (customer.Status != UserStatus.Active)
             throw new BookingException(403, "Tài khoản khách hàng không hợp lệ hoặc đã bị khóa.");
 
+        await using var transaction = await repository.BeginCreate(ct);
         var tour = await repository.FindBookableTour(request.TourId, customerId, ct);
         if (tour is null)
             throw new BookingException(404, "Tour không tồn tại hoặc chưa được công bố mở bán.");
+
+        if (!await repository.CanStartDesignBooking(tour, customerId, ct))
+            throw new BookingException(409, "Cần đồng ý phiên bản sơ bộ hiện hành; mỗi yêu cầu chỉ có một Booking đang xử lý.");
 
         if (request.Participants.Length == 0)
             throw new BookingException(400, "Cần có ít nhất một hành khách trong đơn đặt.");
@@ -169,7 +174,6 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 NightsCount = a.NightsCount }).ToList()
         };
 
-        await using var transaction = await repository.BeginCreate(ct);
         repository.Add(booking);
         await repository.SaveChangesAsync(ct);
 

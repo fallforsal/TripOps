@@ -15,7 +15,7 @@ public sealed record CreateDesignRequestInput(
     [StringLength(10000)] string? AdditionalInfo = null,
     [StringLength(255)] string? BusinessName = null,
     [EmailAddress, StringLength(191)] string? BusinessEmail = null,
-    [StringLength(30)] string? BusinessPhone = null);
+    [StringLength(30)] string? BusinessPhone = null, int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
 
 public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email,string? LogoUrl = null);
 

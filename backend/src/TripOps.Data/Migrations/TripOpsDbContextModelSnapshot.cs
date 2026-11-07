@@ -218,6 +218,9 @@ namespace TripOps.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AcceptedQuotationId")
+                        .HasColumnType("int");
+
                     b.Property<string>("BookingCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1046,6 +1049,17 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("lines_json");
 
+                    b.Property<int>("NumberOfGuests")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentPolicy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlanSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(1000)
@@ -1061,6 +1075,7 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("sent_at");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
@@ -1077,6 +1092,9 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("TourVersion")
                         .HasColumnType("int")
                         .HasColumnName("tour_version");
+
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("Version")
                         .HasColumnType("int")
@@ -1101,6 +1119,13 @@ namespace TripOps.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AvailabilityConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("AvailableQuantity")
+                        .HasPrecision(19, 2)
+                        .HasColumnType("decimal(19,2)");
+
                     b.Property<int>("BookingId")
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
@@ -1113,10 +1138,16 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("decimal(12,2)")
                         .HasColumnName("estimated_cost");
 
+                    b.Property<DateTime?>("HoldUntil")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)")
                         .HasColumnName("note");
+
+                    b.Property<bool>("PriceConfirmed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("ProviderId")
                         .IsRequired()
@@ -1132,16 +1163,23 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("decimal(12,2)")
                         .HasColumnName("quoted_cost");
 
+                    b.Property<DateTime?>("ReplyDeadline")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("RespondedAt")
                         .HasColumnType("datetime2")
                         .HasColumnName("responded_at");
 
+                    b.Property<string>("ResponseHistoryJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("ServiceDateFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("datetime2")
                         .HasColumnName("service_date_from");
 
                     b.Property<DateTime?>("ServiceDateTo")
-                        .HasColumnType("date")
+                        .HasColumnType("datetime2")
                         .HasColumnName("service_date_to");
 
                     b.Property<int>("ServiceId")
@@ -1161,6 +1199,7 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("slot_key");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
@@ -2018,6 +2057,9 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("paid_at");
 
+                    b.Property<int?>("QuotationId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Stage")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
@@ -2349,6 +2391,9 @@ namespace TripOps.Data.Migrations
                     b.Property<decimal?>("PriceTo")
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("price_to");
+
+                    b.Property<string>("PriceUnit")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ProviderId")
                         .IsRequired()
@@ -2969,6 +3014,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<DateTime?>("AgreedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AgreedTourId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AgreedTourVersion")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("BudgetPerPerson")
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("budget_per_person");
@@ -3032,9 +3086,22 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("hotel_rating_requirement");
 
+                    b.Property<string>("InitialChangesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("NumberOfGuests")
                         .HasColumnType("int")
                         .HasColumnName("number_of_participants");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceSnapshotJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SourceTourId")
+                        .HasColumnType("int");
 
                     b.Property<string>("SpecialRequirements")
                         .HasColumnType("nvarchar(max)")
@@ -3447,9 +3514,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("created_by");
 
+                    b.Property<int?>("NumberOfGuests")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Price")
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("price");
+
+                    b.Property<bool>("SharedToCustomer")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SnapshotData")
                         .IsRequired()
@@ -3598,6 +3671,43 @@ namespace TripOps.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.WorkflowNotification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BookingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("workflow_notifications", (string)null);
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.AgencySubscription", b =>

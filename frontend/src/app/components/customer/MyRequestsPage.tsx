@@ -1,6 +1,9 @@
+import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
+import { DesignVersionHistory } from "@/app/components/common/DesignVersionHistory";
+import { http } from "@/app/lib/http";
 import { useEffect, useState } from "react";
 import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
-import { customerPlanProposals, type TourPlanProposal } from "@/app/services/customTourRequests";
+import { customerRequestPlans, submitPlanProposal, customerPlanProposals, type TourPlanProposal } from "@/app/services/customTourRequests";
 import {
   FileQuestion,
   Plus,
@@ -30,7 +33,7 @@ interface MyRequestsPageProps {
   onCancelRequest: (requestId: string) => Promise<void>;
   onNavigateToCreate: () => void;
   onViewTour?: (tour: Tour) => void;
-  onBookTour?: (tour: Tour) => void;
+  onBookTour?: (tour: Tour) => void | Promise<void>;
 }
 
 export function MyRequestsPage({
@@ -48,12 +51,23 @@ export function MyRequestsPage({
   const [editingPlan, setEditingPlan] = useState<Tour | null>(null);
   const [editingDraftKey, setEditingDraftKey] = useState(0);
   const [proposals, setProposals] = useState<TourPlanProposal[]>([]);
+  const [loadedPlans, setLoadedPlans] = useState<Tour[]>([]);
+  const [planError, setPlanError] = useState("");
+  const [note, setNote] = useState("");
+  const [sendingNote, setSendingNote] = useState(false);
   const [proposalReload, setProposalReload] = useState(0);
   useEffect(() => { if (selectedRequestId) void customerPlanProposals(selectedRequestId)
     .then(setProposals).catch(() => setProposals([])); }, [selectedRequestId, proposalReload]);
 
+  useEffect(() => {
+    if (!selectedRequestId) return;
+    let active = true; setLoadedPlans([]); setPlanError(""); setNote("");
+    void customerRequestPlans(selectedRequestId).then((rows) => { if (active) setLoadedPlans(rows); })
+      .catch((e) => { if (active) setPlanError(e.status === 404 ? "API tải phương án chưa đồng bộ. Cần chạy backend bản mới để xem và chỉnh sửa Plan." : e.message); });
+    return () => { active = false; };
+  }, [selectedRequestId, proposalReload]);
   const selectedRequest = requests.find((r) => r.id === selectedRequestId);
-  const plans = selectedRequest ? tours.filter((t) => t.customRequestId === selectedRequest.id) : [];
+  const plans = loadedPlans.length ? loadedPlans : selectedRequest ? tours.filter((t) => t.customRequestId === selectedRequest.id) : [];
   const matchedTour = plans.find((t) => t.id === selectedPlanId) ||
     plans.find((t) => t.id === selectedRequest?.designedTourId) || plans[0] || null;
 
@@ -127,6 +141,9 @@ export function MyRequestsPage({
           )}
         </div>
 
+        {planError && <p role="alert" className="text-red-700">{planError}<Button variant="outline" onClick={() => setProposalReload((n) => n + 1)}>Tải lại phương án</Button></p>}
+        <DesignRequestMessages requestId={selectedRequest.id} />
+        <DesignVersionHistory requestId={selectedRequest.id} />
         {/* Agency Proposal Card */}
         {selectedRequest.companyNote || selectedRequest.quotedPricePerPerson || matchedTour ? (
           <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
@@ -175,10 +192,14 @@ export function MyRequestsPage({
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => onBookTour(matchedTour)}
+                        onClick={async () => { setCancelError(""); setCancelling(true);
+                          try { await http(`/tour-design-requests/${selectedRequest.id}/agree-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(matchedTour.id), version: matchedTour.version || 1 }) }); await onBookTour(matchedTour); }
+                          catch (e) { setCancelError(e instanceof Error ? e.message : "Không thể đồng ý phương án."); }
+                          finally { setCancelling(false); }
+                        }} disabled={cancelling}
                         className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-semibold"
                       >
-                        Đặt tour theo phương án này
+                        Đồng ý phương án — Yêu cầu báo giá chính thức
                       </Button>
                     )}
                   </div>
@@ -193,7 +214,7 @@ export function MyRequestsPage({
               Yêu cầu đang được xử lý
             </p>
             <p className="leading-relaxed">
-              Agency {selectedRequest.targetCompanyName} đang liên hệ đơn vị vận chuyển và lưu trú để lập phương án tối ưu nhất. Bạn sẽ nhận được thông báo ngay khi có báo giá.
+              Agency {selectedRequest.targetCompanyName} đang thiết kế lịch trình, chỗ ở và chỗ ăn phù hợp cho đoàn. Bạn sẽ nhận được thông báo ngay khi có báo giá.
             </p>
           </div>
         )}
@@ -201,6 +222,13 @@ export function MyRequestsPage({
         {matchedTour && <section className="space-y-3 rounded border border-sky-200 bg-sky-50 p-5 text-sm">
           <h3 className="font-bold text-sky-900">Trao đổi và tùy biến Tour plan với Agency</h3>
           <p>Chọn plan, sửa bản riêng của bạn và gửi cho Agency xem. Giá và khả năng cung cấp sẽ được Agency xác nhận lại.</p>
+          <label className="block">Ghi chú yêu cầu cho Plan v{matchedTour.version}<textarea className="w-full rounded border p-2 bg-white" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Viết yêu cầu để Agency điều chỉnh và báo giá lại…" /></label>
+          <Button disabled={sendingNote || !note.trim()} onClick={async () => {
+            setSendingNote(true); setPlanError("");
+            try { await submitPlanProposal(selectedRequest.id, matchedTour, { itinerary: structuredClone(matchedTour.itinerary), hotels: structuredClone(matchedTour.hotels || []) }, note.trim()); setProposalReload((n) => n + 1); }
+            catch (e) { setPlanError(e instanceof Error ? e.message : "Không gửi được ghi chú."); }
+            finally { setSendingNote(false); }
+          }}>Gửi note yêu cầu cho Agency</Button>
           {!editingPlan && <Button onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan(matchedTour); }}>Tùy biến phương án này</Button>}
           {editingPlan && <CustomerPlanEditor key={`${editingPlan.id}-${editingPlan.version}-${editingDraftKey}`} requestId={selectedRequest.id}
             plan={editingPlan} onCancel={() => setEditingPlan(null)} onDone={() => {
@@ -210,7 +238,8 @@ export function MyRequestsPage({
             const base = plans.find((plan) => Number(plan.id) === p.tourId);
             return <div key={p.id} className="rounded border bg-white p-3">
               <p className="font-semibold">Bản bạn gửi #{p.id} · Plan v{p.baseTourVersion} · {p.status === "Pending" ? "Chờ Agency xem" : p.status === "Reviewed" ? "Agency đã xem" : "Cần làm rõ"}</p>
-              <p className="mt-1">{p.message}</p>{p.agencyReply && <p className="mt-2 text-sky-800">Agency: {p.agencyReply}</p>}
+              <p className="mt-1">{p.message}</p>
+              {p.proposal.quotation && <p className="text-xs text-sky-800">Giá gắn với bản gửi này · Plan v{p.proposal.quotation.tourVersion}: {p.proposal.quotation.pricePerPerson.toLocaleString("vi-VN")} ₫/khách · Tổng {p.proposal.quotation.total.toLocaleString("vi-VN")} ₫ ({p.proposal.quotation.preliminary ? "dự kiến" : "báo giá chính thức"})</p>}{p.agencyReply && <p className="mt-2 text-sky-800">Agency: {p.agencyReply}</p>}
               {base?.version === p.baseTourVersion && <button type="button" className="mt-2 rounded border border-sky-700 px-3 py-1 text-sky-800"
                 onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan({ ...base,
                   itinerary: structuredClone(p.proposal.itinerary), hotels: structuredClone(p.proposal.hotels) }); }}>

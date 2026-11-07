@@ -7,6 +7,8 @@ type Request = { id: number; bookingId: number; serviceId: number; slotKey: stri
 export function ProviderBookingConfirmations({ onPendingChange }: { onPendingChange?: (count: number) => void }) {
   const [requests, setRequests] = useState<Request[]>([]);
   const [prices, setPrices] = useState<Record<number, string>>({});
+  const [available, setAvailable] = useState<Record<number, string>>({});
+  const [holds, setHolds] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const load = async () => {
@@ -15,11 +17,11 @@ export function ProviderBookingConfirmations({ onPendingChange }: { onPendingCha
     onPendingChange?.(rows.filter((r) => r.status === "Pending").length);
   };
   useEffect(() => { void load().catch((e) => setError(e.message)); }, []);
-  const respond = async (id: number, decision: "confirm" | "reject") => {
+  const respond = async (id: number, decision: "confirm" | "reject" | "counter" | "partial") => {
     setError("");
     try {
       await http(`/provider/booking-requests/${id}/respond`, { method: "POST", body: JSON.stringify({
-        decision, quotedCost: decision === "confirm" ? Number(prices[id]) : null, note: notes[id] || null }) });
+        decision, availableQuantity: available[id] ? Number(available[id]) : null, holdUntil: holds[id] ? new Date(holds[id]).toISOString() : null, quotedCost: decision !== "reject" ? Number(prices[id]) : null, note: notes[id] || null }) });
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "Không gửi được phản hồi."); }
   };
@@ -42,6 +44,12 @@ export function ProviderBookingConfirmations({ onPendingChange }: { onPendingCha
           value={notes[r.id] ?? ""} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} />
         <button className="bg-sky-800 text-white px-3 rounded" disabled={!prices[r.id]}
           onClick={() => void respond(r.id, "confirm")}>{r.status === "Confirmed" ? "Cập nhật giá" : "Xác nhận và báo giá"}</button>
+        {r.status === "Pending" && <>
+          <input aria-label="Số lượng có thể cung cấp" type="number" min="0.01" className="border rounded p-2" value={available[r.id] || ""} onChange={(e) => setAvailable({ ...available, [r.id]: e.target.value })} placeholder="Số lượng đáp ứng" />
+          <input aria-label="Giữ chỗ đến" type="datetime-local" className="border rounded p-2" value={holds[r.id] || ""} onChange={(e) => setHolds({ ...holds, [r.id]: e.target.value })} />
+          <button className="border rounded px-3" disabled={!prices[r.id]} onClick={() => void respond(r.id, "counter")}>Đề nghị giá mới</button>
+          <button className="border rounded px-3" disabled={!prices[r.id] || !available[r.id]} onClick={() => void respond(r.id, "partial")}>Chỉ đáp ứng một phần</button>
+        </>}
         {r.status === "Pending" && <button className="border border-red-700 text-red-700 px-3 rounded"
           onClick={() => void respond(r.id, "reject")}>Từ chối</button>
         }

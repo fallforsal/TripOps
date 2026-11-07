@@ -18,7 +18,7 @@ export async function fetchServicePosts(role?: string): Promise<Service[]> {
 export function servicePayload(service: Omit<Service, "id">) {
   return {
     name: service.name, category: service.category, subCategory: service.subCategory,
-    description: service.description, price: service.price,
+    description: service.description, priceUnit: service.priceUnit, price: service.price,
     priceFrom: service.priceFrom, priceTo: service.priceTo, capacity: service.capacity, stars: service.stars,
     province: service.province, ward: service.ward, street: service.street, fullAddress: service.fullAddress,
     latitude: service.latitude, longitude: service.longitude, operatingHours: service.operatingHours,

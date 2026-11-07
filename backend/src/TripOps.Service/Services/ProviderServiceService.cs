@@ -60,7 +60,7 @@ public sealed class ProviderServiceService(TripOpsDbContext db, AccountService a
                 s.Status == original.Status && s.UpdatedAt == original.UpdatedAt)
             .ExecuteUpdateAsync(set => set.SetProperty(s => s.Name, next.Name).SetProperty(s => s.Category, next.Category)
                 .SetProperty(s => s.SubCategory, next.SubCategory).SetProperty(s => s.Description, next.Description)
-                .SetProperty(s => s.Price, next.Price).SetProperty(s => s.PriceFrom, next.PriceFrom).SetProperty(s => s.PriceTo, next.PriceTo)
+                .SetProperty(s => s.PriceUnit, next.PriceUnit).SetProperty(s => s.Price, next.Price).SetProperty(s => s.PriceFrom, next.PriceFrom).SetProperty(s => s.PriceTo, next.PriceTo)
                 .SetProperty(s => s.Capacity, next.Capacity).SetProperty(s => s.StarRating, next.StarRating)
                 .SetProperty(s => s.Province, next.Province).SetProperty(s => s.Ward, next.Ward).SetProperty(s => s.Street, next.Street)
                 .SetProperty(s => s.FullAddress, next.FullAddress).SetProperty(s => s.OperatingHours, next.OperatingHours)
@@ -110,6 +110,8 @@ public sealed class ProviderServiceService(TripOpsDbContext db, AccountService a
 
     private static ServiceEntity Build(string actor, SaveProviderServiceRequest request)
     {
+        if (request.PriceUnit is not (null or "person" or "meal" or "room_night" or "night" or "day" or "trip" or "item"))
+            throw new ServiceModerationException(400, "Đơn vị giá không hợp lệ.");
         var category = request.Category.Trim().ToLowerInvariant() switch {
             "hotel" => ServiceCategory.Hotel, "fnb" => ServiceCategory.Fnb,
             "transportation" => ServiceCategory.Transportation, "attraction" => ServiceCategory.Attraction,
@@ -141,7 +143,7 @@ public sealed class ProviderServiceService(TripOpsDbContext db, AccountService a
         if (address.Length > 500) throw new ServiceModerationException(400, "Địa chỉ đầy đủ tối đa 500 ký tự.");
         return new() {
             ProviderId = actor, Name = request.Name.Trim(), Category = category, SubCategory = request.SubCategory?.Trim(),
-            Description = request.Description?.Trim(), Price = request.Price, PriceFrom = request.PriceFrom, PriceTo = request.PriceTo,
+            Description = request.Description?.Trim(), PriceUnit = request.PriceUnit, Price = request.Price, PriceFrom = request.PriceFrom, PriceTo = request.PriceTo,
             Capacity = request.Capacity, StarRating = category == ServiceCategory.Hotel ? request.Stars : null,
             Province = request.Province.Trim(), Ward = request.Ward?.Trim(), Street = request.Street?.Trim(), FullAddress = address,
             OperatingHours = request.OperatingHours?.Trim(), Latitude = request.Latitude, Longitude = request.Longitude,
