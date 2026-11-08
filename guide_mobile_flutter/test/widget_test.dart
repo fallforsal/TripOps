@@ -29,8 +29,9 @@ void main() {
     );
 
     expect(find.text('Hành trình Đà Lạt'), findsOneWidget);
-    expect(find.text('BK-042  ·  Đã xác nhận'), findsOneWidget);
-    expect(find.text('Khởi hành 12/11/2026'), findsOneWidget);
+    expect(find.text('BK-042'), findsOneWidget);
+    expect(find.text('Đã xác nhận'), findsOneWidget);
+    expect(find.text('12/11/2026'), findsOneWidget);
     expect(find.text('12 khách'), findsOneWidget);
 
     await tester.tap(find.text('Xem chi tiết  ›'));
