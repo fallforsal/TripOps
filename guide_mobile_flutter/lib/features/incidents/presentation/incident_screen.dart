@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
@@ -48,57 +49,138 @@ class _IncidentScreenState extends State<IncidentScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Báo cáo sự cố')),
-    body: Form(key: form, child: ListView(padding: const EdgeInsets.all(18), children: [
-      if (widget.detail.incidents.isNotEmpty) ...[
-        const Text('Sự cố đã báo cáo',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-        space(8),
-        ...widget.detail.incidents.map((incident) => Card(
-          child: ListTile(
-            leading: const Icon(Icons.report_problem_outlined),
-            title: Text(incident.title),
-            subtitle: Text(incident.description, maxLines: 2,
-              overflow: TextOverflow.ellipsis),
-            trailing: Text(incident.status),
+    body: Form(
+      key: form,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        children: [
+          GuideHero(
+            compact: true,
+            label: 'AN TOÀN HÀNH TRÌNH',
+            title: 'Báo cáo sự cố',
+            subtitle: widget.detail.name,
           ),
-        )),
-        space(16),
-      ],
-      const Text('Tạo báo cáo mới',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-      space(8),
-      Text(widget.detail.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-      space(16),
-      TextFormField(controller: type, maxLength: 100,
-        decoration: const InputDecoration(labelText: 'Loại sự cố'),
-        validator: (v) => v == null || v.trim().isEmpty ? 'Nhập loại sự cố' : null),
-      space(),
-      TextFormField(controller: title, maxLength: 255,
-        decoration: const InputDecoration(labelText: 'Tiêu đề'),
-        validator: (v) => v == null || v.trim().isEmpty ? 'Nhập tiêu đề' : null),
-      space(),
-      TextFormField(controller: description, maxLines: 5, maxLength: 2000,
-        decoration: const InputDecoration(labelText: 'Mô tả chi tiết'),
-        validator: (v) => v == null || v.trim().isEmpty ? 'Nhập mô tả' : null),
-      space(),
-      DropdownButtonFormField<String>(
-        initialValue: severity,
-        decoration: const InputDecoration(labelText: 'Mức độ'),
-        items: const [
-          DropdownMenuItem(value: 'Low', child: Text('Thấp')),
-          DropdownMenuItem(value: 'Medium', child: Text('Trung bình')),
-          DropdownMenuItem(value: 'High', child: Text('Cao')),
-          DropdownMenuItem(value: 'Critical', child: Text('Khẩn cấp')),
+          space(15),
+          const GuideInfoBanner(
+            icon: Icons.shield_outlined,
+            message: 'Hãy báo cáo ngay các tình huống ảnh hưởng tới an toàn và lịch trình của đoàn. Nội dung được gửi trực tiếp đến backend.',
+          ),
+          space(22),
+          if (widget.detail.incidents.isNotEmpty) ...[
+            GuideSectionTitle(
+              'Đã báo cáo (${widget.detail.incidents.length})',
+            ),
+            space(10),
+            ...widget.detail.incidents.map((incident) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Card(child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 8,
+                ),
+                leading: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0E4),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(Icons.report_problem_outlined,
+                    color: alertOrange),
+                ),
+                title: Text(incident.title, style: const TextStyle(
+                  color: ink, fontSize: 13, fontWeight: FontWeight.w800,
+                )),
+                subtitle: Text(incident.description, maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: muted)),
+                trailing: GuideStatusPill(incident.status),
+              )),
+            )),
+            space(15),
+          ],
+          const GuideSectionTitle('Tạo báo cáo mới'),
+          space(12),
+          const Text('Loại sự cố', style: TextStyle(
+            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
+          )),
+          space(7),
+          TextFormField(
+            controller: type, maxLength: 100,
+            decoration: const InputDecoration(
+              hintText: 'Ví dụ: TRANSPORT, HEALTH, OTHER',
+              prefixIcon: Icon(Icons.category_outlined),
+            ),
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Nhập loại sự cố' : null,
+          ),
+          space(4),
+          const Text('Tiêu đề', style: TextStyle(
+            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
+          )),
+          space(7),
+          TextFormField(
+            controller: title, maxLength: 255,
+            decoration: const InputDecoration(
+              hintText: 'Tóm tắt ngắn gọn tình huống',
+              prefixIcon: Icon(Icons.title_outlined),
+            ),
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Nhập tiêu đề' : null,
+          ),
+          space(4),
+          const Text('Mức độ ảnh hưởng', style: TextStyle(
+            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
+          )),
+          space(7),
+          DropdownButtonFormField<String>(
+            initialValue: severity,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.priority_high_rounded),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'Low', child: Text('Thấp')),
+              DropdownMenuItem(value: 'Medium', child: Text('Trung bình')),
+              DropdownMenuItem(value: 'High', child: Text('Cao')),
+              DropdownMenuItem(value: 'Critical', child: Text('Khẩn cấp')),
+            ],
+            onChanged: busy ? null : (v) {
+              if (v != null) setState(() => severity = v);
+            },
+          ),
+          space(17),
+          const Text('Mô tả chi tiết', style: TextStyle(
+            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
+          )),
+          space(7),
+          TextFormField(
+            controller: description,
+            maxLines: 5, maxLength: 2000,
+            decoration: const InputDecoration(
+              hintText: 'Nêu rõ thời gian, địa điểm, diễn biến và cách xử lý...',
+            ),
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Nhập mô tả' : null,
+          ),
+          if (error != null) ...[
+            GuideInfoBanner(
+              message: error!, icon: Icons.error_outline, warning: true,
+            ),
+            space(10),
+          ],
+          FilledButton.icon(
+            onPressed: busy ? null : submit,
+            icon: busy ? const SizedBox(
+              width: 15, height: 15,
+              child: CircularProgressIndicator(strokeWidth: 2,
+                color: Colors.white),
+            ) : const Icon(Icons.send_rounded, size: 17),
+            label: const Text('Gửi báo cáo sự cố'),
+          ),
+          space(12),
+          const Text('Đính kèm ảnh chưa được backend hỗ trợ.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: muted, fontSize: 11)),
         ],
-        onChanged: (v) { if (v != null) setState(() => severity = v); },
       ),
-      space(20),
-      if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
-      FilledButton(onPressed: busy ? null : submit,
-        child: busy ? const CircularProgressIndicator() : const Text('Gửi báo cáo')),
-      space(),
-      const Text('Backend hiện chưa hỗ trợ đính kèm ảnh qua API này.',
-        style: TextStyle(color: muted)),
-    ])),
+    ),
   );
 }
