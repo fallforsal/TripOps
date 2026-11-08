@@ -49,6 +49,15 @@ class _GuideEntryState extends State<GuideEntry> {
     setState(() { _account = account; _errorMessage = null; });
   }
 
+  Future<void> _sessionExpired() async {
+    await widget.auth.api.discardSession();
+    if (!mounted) return;
+    setState(() {
+      _account = null;
+      _errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    });
+  }
+
   Future<void> _logout() async {
     Object? failure;
     try {
@@ -67,7 +76,7 @@ class _GuideEntryState extends State<GuideEntry> {
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     if (_account != null) {
-      return GuideShell(account: _account!, guides: widget.guides, onLogout: _logout);
+      return GuideShell(account: _account!, guides: widget.guides, onLogout: _logout, onSessionExpired: _sessionExpired);
     }
     return LoginScreen(
       onLogin: _login,
@@ -157,10 +166,11 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class GuideShell extends StatefulWidget {
-  const GuideShell({super.key, required this.account, required this.guides, required this.onLogout});
+  const GuideShell({super.key, required this.account, required this.guides, required this.onLogout, required this.onSessionExpired});
   final GuideAccount account;
   final GuideRepository guides;
   final Future<void> Function() onLogout;
+  final Future<void> Function() onSessionExpired;
 
   @override
   State<GuideShell> createState() => _GuideShellState();
@@ -196,13 +206,17 @@ class _GuideShellState extends State<GuideShell> {
       setState(() { bookings = data; endDates = ends; loading = false; });
     } catch (e) {
       if (!mounted) return;
+      if (e is ApiFailure && e.statusCode == 401) {
+        await widget.onSessionExpired();
+        return;
+      }
       setState(() { loading = false; error = _error(e); });
     }
   }
 
   Future<void> openTour(BookingSummary summary) async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => TourDetailScreen(id: summary.id, guides: widget.guides),
+      builder: (_) => TourDetailScreen(id: summary.id, guides: widget.guides, onSessionExpired: widget.onSessionExpired),
     ));
     if (mounted) await refresh();
   }
@@ -375,9 +389,10 @@ class ErrorState extends StatelessWidget {
 }
 
 class TourDetailScreen extends StatefulWidget {
-  const TourDetailScreen({super.key, required this.id, required this.guides});
+  const TourDetailScreen({super.key, required this.id, required this.guides, required this.onSessionExpired});
   final int id;
   final GuideRepository guides;
+  final Future<void> Function() onSessionExpired;
   @override
   State<TourDetailScreen> createState() => _TourDetailScreenState();
 }
@@ -397,7 +412,12 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       final value = await widget.guides.detail(widget.id);
       if (mounted) setState(() { detail = value; loading = false; });
     } catch (e) {
-      if (mounted) setState(() { error = _error(e); loading = false; });
+      if (!mounted) return;
+      if (e is ApiFailure && e.statusCode == 401) {
+        await widget.onSessionExpired();
+        return;
+      }
+      setState(() { error = _error(e); loading = false; });
     }
   }
 
@@ -411,7 +431,14 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backend đã xác nhận thành công.')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error(e))));
+      if (!mounted) return;
+      if (e is ApiFailure && e.statusCode == 401) {
+        await widget.onSessionExpired();
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_error(e))),
+      );
     } finally {
       if (mounted) setState(() => acting = false);
     }
