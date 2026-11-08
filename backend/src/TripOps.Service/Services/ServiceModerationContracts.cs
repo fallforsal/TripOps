@@ -28,6 +28,7 @@ public sealed record AdminServiceDto
     public required string Category { get; init; }
     public string? SubCategory { get; init; }
     public string? Description { get; init; }
+    public string? PriceUnit { get; init; }
     public decimal Price { get; init; }
     public decimal? PriceFrom { get; init; }
     public decimal? PriceTo { get; init; }

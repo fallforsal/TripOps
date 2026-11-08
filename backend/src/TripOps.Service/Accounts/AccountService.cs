@@ -183,4 +183,69 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         { throw new AccountException(409, "Thông tin bị trùng (có thể là mã số thuế). Vui lòng kiểm tra lại."); }
         return Dto(user);
     }
+
+    private AdminAccountDto AdminDto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
+    u.Status.ToString().ToLowerInvariant(),
+    null, // AvatarUrl: gán khi entity User có trường ảnh đại diện
+    u.CreatedAt, u.UpdatedAt, u.BanReason, u.BannedAt,
+    u.BusinessProfile is null || u.Role is not (UserRole.TravelAgency or UserRole.Provider) ? null
+        : new AdminAccountBusinessDto(u.BusinessProfile.Id, u.BusinessProfile.BusinessName ?? "",
+            u.BusinessProfile.LogoUrl is null ? null : storage.DeliveryUrl(u.BusinessProfile.LogoUrl),
+            u.BusinessProfile.BusinessAddress, u.BusinessProfile.Status?.ToString().ToLowerInvariant(),
+            u.BusinessProfile.CreatedAt));
+
+    public async Task<AdminAccountPageDto> AdminAccounts(string? role, string? status, string? search,
+        int page, int pageSize, CancellationToken ct)
+    {
+        UserRole? roleFilter = role switch
+        {
+            null or "" or "all" => null,
+            "user" => UserRole.Customer,
+            "agency" => UserRole.TravelAgency,
+            "provider" => UserRole.Provider,
+            _ => throw new AccountException(400, "Vai trò không hợp lệ.")
+        };
+        var baseQuery = db.Users.AsNoTracking().Where(u => u.Role != UserRole.Admin);
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<UserStatus>(status, true, out var state) || !Enum.IsDefined(state))
+                throw new AccountException(400, "Trạng thái không hợp lệ.");
+            baseQuery = baseQuery.Where(u => u.Status == state);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim();
+            baseQuery = baseQuery.Where(u => u.Name.Contains(q) || u.Email.Contains(q) || (u.Phone != null && u.Phone.Contains(q)));
+        }
+        var grouped = await baseQuery.GroupBy(u => u.Role).Select(g => new { Role = g.Key, Count = g.Count() }).ToListAsync(ct);
+        int Count(UserRole r) => grouped.FirstOrDefault(g => g.Role == r)?.Count ?? 0;
+        var counts = new AdminAccountCountsDto(grouped.Sum(g => g.Count), Count(UserRole.Customer),
+            Count(UserRole.TravelAgency), Count(UserRole.Provider));
+        var query = roleFilter is null ? baseQuery : baseQuery.Where(u => u.Role == roleFilter);
+        page = Math.Max(page, 1); pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = await query.CountAsync(ct);
+        var rows = await query.Include(u => u.BusinessProfile).OrderByDescending(u => u.CreatedAt).ThenBy(u => u.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new AdminAccountPageDto(rows.Select(AdminDto).ToArray(), total, page, pageSize, counts);
+    }
+
+    public async Task<AdminAccountDto> SetBanned(string id, bool ban, string? reason, CancellationToken ct)
+    {
+        var user = await db.Users.Include(u => u.BusinessProfile).SingleOrDefaultAsync(u => u.Id == id, ct)
+            ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        if (user.Role == UserRole.Admin) throw new AccountException(403, "Không thể cấm tài khoản quản trị.");
+        if (ban)
+        {
+            if (string.IsNullOrWhiteSpace(reason)) throw new AccountException(400, "Vui lòng nhập lý do cấm.");
+            if (user.Status == UserStatus.Banned) throw new AccountException(409, "Tài khoản đã bị cấm. Vui lòng tải lại.");
+            user.Status = UserStatus.Banned; user.BanReason = reason.Trim(); user.BannedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            if (user.Status != UserStatus.Banned) throw new AccountException(409, "Tài khoản không bị cấm. Vui lòng tải lại.");
+            user.Status = UserStatus.Active; user.BanReason = null; user.BannedAt = null;
+        }
+        await db.SaveChangesAsync(ct);
+        return AdminDto(user);
+    }
 }

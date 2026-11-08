@@ -2,6 +2,7 @@ using TripOps.Data.Common;
 using TripOps.Data.Enums;
 namespace TripOps.Data.Entities;
 public class Booking : BaseEntity<int> {
+public int? AcceptedQuotationId { get; set; }
 public string BookingCode { get; set; } = string.Empty;
 public string? CustomerId { get; set; }
 public int? TourId { get; set; }

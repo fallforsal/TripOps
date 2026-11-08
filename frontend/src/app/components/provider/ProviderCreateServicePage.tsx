@@ -404,6 +404,7 @@ export function ProviderCreateServicePage({
   const [customAmenityInput, setCustomAmenityInput] = useState("");
 
   // Price range with dot formatting (e.g. "500.000") - Dùng placeholder
+  const [priceUnit, setPriceUnit] = useState<Service["priceUnit"]>(initialService?.priceUnit);
   const [priceFromDisplay, setPriceFromDisplay] = useState(
     initialService ? formatMoneyDisplay(initialService.priceFrom || initialService.price) : ""
   );
@@ -568,7 +569,7 @@ export function ProviderCreateServicePage({
       category,
       subCategory,
       description,
-      price: fromVal,
+      priceUnit: priceUnit || (category === "hotel" ? "room_night" : category === "transportation" ? "trip" : category === "fnb" ? "meal" : "person"), price: fromVal,
       priceFrom: fromVal,
       priceTo: toVal,
       pricePerPerson: fromVal,
@@ -1194,6 +1195,11 @@ export function ProviderCreateServicePage({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="text-xs font-bold text-gray-700">Đơn vị tính giá
+                    <select aria-label="Đơn vị tính giá dịch vụ" className="block w-full rounded border p-2 mt-1" value={priceUnit || (category === "hotel" ? "room_night" : category === "transportation" ? "trip" : category === "fnb" ? "meal" : "person")} onChange={(e) => setPriceUnit(e.target.value as Service["priceUnit"])}>
+                      {([["person", "Người"], ["meal", "Suất ăn"], ["room_night", "Phòng / đêm"], ["night", "Đêm"], ["day", "Ngày"], ["trip", "Chuyến"], ["item", "Dịch vụ / lần"]] as const).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
                   {/* Mức giá từ */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">

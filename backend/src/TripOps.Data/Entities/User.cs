@@ -15,4 +15,6 @@ public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual BusinessProfile? BusinessProfile { get; set; }
 public virtual GuideProfile? GuideProfile { get; set; }
+public string? BanReason { get; set; }
+public DateTime? BannedAt { get; set; }
 }

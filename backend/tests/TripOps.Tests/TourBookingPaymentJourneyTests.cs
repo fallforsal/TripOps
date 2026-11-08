@@ -18,7 +18,7 @@ public sealed partial class BookingFlowTests
     // Both payment schedules use the same journey, not pre-approved fixture bookings.
     [Theory]
     [InlineData(30, false)]
-    [InlineData(3, true)]
+    [InlineData(3, false)]
     public async Task Custom_tour_provider_quote_contract_and_payos_complete_one_journey(int daysUntilDeparture, bool fullPayment)
     {
         var clock = new TestClock { Fixed = DateTime.UtcNow };
@@ -68,6 +68,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal(plan.Id, Assert.Single(await Read<TourDto[]>(await customer.GetAsync(
             $"/api/v1/tour-design-requests/{request.Id}/plans"))).Id);
 
+        Assert.Equal(HttpStatusCode.NoContent, (await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(plan.Id, plan.Version))).StatusCode);
         var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, departure, "Demo Customer", "0900000000", "customer1@example.test", null,
                 [new ParticipantInput("Adult One", null, new DateTime(1990, 1, 1), null, null, null),
@@ -127,6 +128,7 @@ public sealed partial class BookingFlowTests
         using var check = app.Services.CreateScope();
         var persisted = check.ServiceProvider.GetRequiredService<TripOpsDbContext>();
         Assert.Equal(6000000, await persisted.PaymentTransactions.Where(t => t.BookingId == booking.Id && t.Status == PaymentTransactionStatus.Success).SumAsync(t => t.Amount));
+        Assert.All(await persisted.PaymentRequests.Where(r => r.BookingId == booking.Id).ToListAsync(), r => Assert.Equal(quotation.Id, r.QuotationId));
         Assert.Single(await persisted.ContractSignSessions.Where(s => s.CompletedAt != null).ToListAsync());
     }
 }

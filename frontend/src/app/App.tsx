@@ -1,3 +1,4 @@
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
@@ -194,6 +195,7 @@ function Application() {
   const [providerGroupRequests, setProviderGroupRequests] = useState<
     ProviderGroupReservationRequest[]
   >([]);
+  const [sourceDesignTour, setSourceDesignTour] = useState<Tour | undefined>();
   const [customTourRequests, setCustomTourRequests] = useState<
     CustomTourRequest[]
   >([]);
@@ -552,7 +554,8 @@ function Application() {
     autoCheckPayment(match[1]);
   }, [currentUser?.role, bookings]);
 
-  const handleNavigate = (page: string, criteria?: TourSearchCriteria) => {
+  const handleNavigate = (page: string, criteria?: TourSearchCriteria, designSource?: Tour) => {
+    if (page === "custom-tour") setSourceDesignTour(designSource);
     navigateForward(() => {
       setCurrentPage(page);
       setSelectedTour(null);
@@ -1564,6 +1567,7 @@ function Application() {
         );
         return (
           <ErrorBoundary fallbackTitle="Không thể tải giao diện Quản lý Agency">
+            <WorkflowNotifications />
             <AgencyDashboard
               providerGroupRequests={providerGroupRequests}
               currentUser={currentUser}
@@ -1606,6 +1610,7 @@ function Application() {
 
     return (
       <div className="min-h-screen bg-gray-50">
+        <WorkflowNotifications />
         {currentUser.role !== "admin" && currentUser.role !== "provider" && (
           <UnifiedHeader
             currentUser={currentUser}
@@ -1666,7 +1671,7 @@ function Application() {
               onDeleteService={undefined}
               onApproveProvider={handleApproveProvider}
               onRejectProvider={handleRejectProvider}
-              onUpdateUserStatus={handleUpdateUserStatus}
+              //onUpdateUserStatus={handleUpdateUserStatus}
               onApproveCompany={handleApproveCompany}
               onRejectCompany={handleRejectCompany}
               refundRequests={refundRequests}
@@ -1728,8 +1733,10 @@ function Application() {
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
       >
+        {currentUser && <WorkflowNotifications />}
         {currentPage === "custom-tour" ? (
           <CustomTourRequestPage
+            sourceTour={sourceDesignTour}
             companies={companies}
             currentUser={currentUser}
             onBack={() => goBack(() => handleNavigate("home"))}
@@ -1756,9 +1763,7 @@ function Application() {
                 }
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              onSubmit={(data) => {
-                handleBookingSubmit(data);
-              }}
+              onSubmit={handleBookingSubmit}
               onViewMyBookings={() => {
                 handleNavigate("my-bookings");
               }}
@@ -1780,6 +1785,7 @@ function Application() {
               }
             }}
             onBookNow={handleOpenBookingForm}
+            onCustomize={(tour) => handleNavigate("custom-tour", undefined, tour)}
             onOpenRequest={() => handleNavigate("my-requests")}
             onShowLogin={() => setShowLogin(true)}
           />
@@ -1883,7 +1889,13 @@ function Application() {
             onCancelRequest={handleCancelCustomTourRequest}
             onNavigateToCreate={() => handleNavigate("custom-tour")}
             onViewTour={handleViewTour}
-            onBookTour={(t) => handleOpenBookingForm(t)}
+            onBookTour={async (t) => {
+              const existing = userBookings.find((b) => b.tour?.customRequestId === t.customRequestId && b.status !== "cancelled" && b.status !== "rejected");
+              if (existing) {
+                await http(`/bookings/${existing.id}/quotations/change-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(t.id) }) });
+                await handleViewUserBookingDetail(existing);
+              } else handleOpenBookingForm(t);
+            }}
           />
         ) : currentPage === "my-complaints" ? (
           <MyComplaintsPage

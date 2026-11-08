@@ -106,6 +106,14 @@ public virtual Tour Tour { get; set; } = null!;
 }
 
 public class TourDesignRequest : BaseEntity<int> {
+public string? InitialChangesJson { get; set; }
+public int? SourceTourId { get; set; }
+public string? SourceSnapshotJson { get; set; }
+public int? AgreedTourId { get; set; }
+public int? AgreedTourVersion { get; set; }
+public DateTime? AgreedAt { get; set; }
+public int Revision { get; set; }
+
 public string? CustomerId { get; set; }
 public string? AgencyId { get; set; }
 public string? BusinessName { get; set; }
@@ -129,6 +137,9 @@ public virtual ICollection<TourDesignRequestAgency> RequestAgencies { get; set; 
 }
 
 public class TourVersion : BaseEntity<int> {
+public bool SharedToCustomer { get; set; }
+public int? NumberOfGuests { get; set; }
+
 public int TourId { get; set; }
 public int VersionNumber { get; set; }
 public string? ChangeLog { get; set; }

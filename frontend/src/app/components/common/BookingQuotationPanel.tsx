@@ -18,6 +18,11 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [supplierRequests, setSupplierRequests] = useState<SupplierRequest[]>([]);
   const [profit, setProfit] = useState("");
+  const [saleTotal, setSaleTotal] = useState("");
+  const [decisionMessage, setDecisionMessage] = useState("");
+  const [validUntil, setValidUntil] = useState("");
+  const [paymentPolicy, setPaymentPolicy] = useState("Đặt cọc 50% sau khi chấp nhận báo giá.");
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [costs, setCosts] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [extraCosts, setExtraCosts] = useState<Array<{ name: string; quantity: string; unit: string; unitCost: string }>>([]);
@@ -55,7 +60,9 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
     setSupplierRequests(requests);
     stateCallback.current?.({ bookingId, loading: false, quotes: rows, requests });
     if (resetForm && agency && rows[0]) {
+      setQuantities(Object.fromEntries((rows[0].costs || []).map((l) => [l.slotKey, String(l.quantity)])));
       setProfit(String(rows[0].agencyProfit ?? 0));
+      setSaleTotal(rows[0].saleTotal > 0 ? String(rows[0].saleTotal) : "");
       setCosts(Object.fromEntries((rows[0].costs || []).filter((l) => l.source === "AGENCY_SUPPLIER")
         .map((l) => [l.slotKey, String(l.unitCost)])));
       setExtraCosts((rows[0].costs || []).filter((l) => l.source === "AGENCY_OTHER").map((l) => ({
@@ -88,6 +95,10 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
       </p>)}
       {!agency && (!latest || latest.status === "Superseded") &&
         <p className="text-sm text-slate-600">Agency đang lập báo giá mới cho phương án hiện tại.</p>}
+      {agency && supplierRequests.filter((r) => r.status === "CounterOffered").map((r) => <div key={`counter-${r.id}`} className="text-sm border p-3 rounded">
+        <p>{r.serviceName}: Provider đề nghị {money(r.quotedCost || 0)}</p>
+        {[true, false].map((accept) => <button key={String(accept)} disabled={busy} className="border rounded px-3 py-1 mr-2" onClick={() => void run(() => http(`/bookings/${bookingId}/quotations/supplier-requests/${r.id}/counter/${accept}`, { method: "POST" }))}>{accept ? "Chấp nhận giá Provider" : "Từ chối giá Provider"}</button>)}
+      </div>)}
       {agency && !latest && <p className="text-sm text-slate-600">Chưa có bảng tính chi phí cho booking.</p>}
     {canChange && selectedPlan && <div className="space-y-2 border-b pb-4 text-sm">
       <p className="font-semibold">Đổi plan hoặc phương án trước khi cọc sẽ làm báo giá cũ hết hiệu lực.</p>
@@ -158,10 +169,15 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
       {(latest.costs || []).map((line) => <div key={line.slotKey} className="flex flex-wrap items-center gap-2 border-b pb-2">
         <span className="grow">{line.name} · {line.quantity} {line.unit} · {line.source === "PLATFORM_PARTNER"
           ? "Provider trên sàn" : line.source === "AGENCY_OTHER" ? "Chi phí khác" : "Supplier của Agency"}</span>
+        <input type="number" min="0.01" aria-label={`Số lượng ${line.name}`} className="w-20 border rounded p-1" value={quantities[line.slotKey] || String(line.quantity)} onChange={(e) => setQuantities({ ...quantities, [line.slotKey]: e.target.value })} />
         {line.source === "AGENCY_SUPPLIER" ? <input aria-label={`Chi phí ${line.name}`} type="number" min="0"
           className="w-32 border rounded p-1" value={costs[line.slotKey] ?? "0"}
           onChange={(e) => setCosts({ ...costs, [line.slotKey]: e.target.value })} /> : <strong>{money(line.total)}</strong>}
       </div>)}
+      <label className="block">Tổng giá bán do Agency quyết định: <input type="number" min="1" className="border rounded p-1" value={saleTotal} onChange={(e) => setSaleTotal(e.target.value)} /></label>
+      {latest.saleTotal > 0 && <p>Giá vốn/người: {money((latest.totalCost || 0) / Math.max(1, latest.numberOfGuests || passengers.length))} · Margin: {(((latest.agencyProfit || 0) / latest.saleTotal) * 100).toFixed(1)}% · Markup: {latest.totalCost ? (((latest.agencyProfit || 0) / latest.totalCost) * 100).toFixed(1) : "—"}%</p>}
+      <label className="block">Hạn hiệu lực: <input type="datetime-local" className="border rounded p-1" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></label>
+      <textarea aria-label="Chính sách thanh toán" className="border rounded p-2 w-full" value={paymentPolicy} onChange={(e) => setPaymentPolicy(e.target.value)} />
       <label className="block">Lãi Agency (tổng đoàn): <input aria-label="Lãi Agency" type="number" min="0"
         className="border rounded p-1 ml-2" value={profit} onChange={(e) => setProfit(e.target.value)} /></label>
       <div className="space-y-2"><p className="font-medium">Chi phí khác do Agency tính</p>
@@ -179,19 +195,49 @@ export function BookingQuotationPanel({ bookingId, agency, plans = [], currentTo
         value={reason} onChange={(e) => setReason(e.target.value)} />
       <div className="flex gap-2"><button disabled={busy} className="bg-sky-800 text-white rounded px-3 py-2"
         onClick={() => void run(() => http(`/bookings/${bookingId}/quotations/draft`, { method: "PUT", body: JSON.stringify({
-          agencyProfit: Number(profit), agencyCosts: Object.entries(costs).map(([slotKey, unitCost]) => ({ slotKey, unitCost: Number(unitCost) })),
+          quantities: Object.entries(quantities).map(([slotKey, quantity]) => ({ slotKey, quantity: Number(quantity) })), saleTotal: saleTotal ? Number(saleTotal) : null, agencyProfit: Number(profit), agencyCosts: Object.entries(costs).map(([slotKey, unitCost]) => ({ slotKey, unitCost: Number(unitCost) })),
           extraCosts: extraCosts.map((c) => ({ name: c.name, quantity: Number(c.quantity), unit: c.unit, unitCost: Number(c.unitCost) })), reason }) }))}>Tính và lưu giá</button>
       <button disabled={busy || latest.status !== "Draft" || latest.saleTotal <= 0} className="border rounded px-3 py-2"
-        onClick={() => void run(() => http(`/bookings/${bookingId}/quotations/send`, { method: "POST" }))}>Gửi báo giá cho khách</button></div>
+        onClick={() => void run(async () => {
+          await http(`/bookings/${bookingId}/quotations/terms`, { method: "PUT", body: JSON.stringify({ validUntil: validUntil ? new Date(validUntil).toISOString() : new Date(Date.now() + 3 * 86400000).toISOString(), paymentPolicy }) });
+          await http(`/bookings/${bookingId}/quotations/send`, { method: "POST" });
+        })}>Gửi báo giá cho khách</button></div>
     </div>}
-    {quotes.map((q) => <div key={q.id} className="border-t pt-3 text-sm space-y-1">
+    {quotes.map((q, quoteIndex) => <div key={q.id} className="border-t pt-3 text-sm space-y-1">
       <p className="font-semibold">{plans.find((p) => p.id === String(q.tourId))?.name || `Plan #${q.tourId}`} · Báo giá v{q.version} · {q.status}</p>
       <p>Giá dự kiến {money(q.estimatedSale)} · Giá thực tế {money(q.saleTotal)}</p>
       {agency && <p>Chi phí {money(q.totalCost ?? 0)} · Lãi Agency {money(q.agencyProfit ?? 0)}</p>}
+      {agency && quotes[quoteIndex + 1] && <details className="rounded border p-2"><summary>So sánh chi phí với báo giá v{quotes[quoteIndex + 1].version}: {money((q.totalCost || 0) - (quotes[quoteIndex + 1].totalCost || 0))}</summary>
+        {q.costs?.map((line) => <p key={line.slotKey}>{line.name}: {money(line.total - (quotes[quoteIndex + 1].costs?.find((old) => old.slotKey === line.slotKey)?.total || 0))}</p>)}
+      </details>}
       <p>{q.reason}</p>
+      {q.validUntil && <p>Hiệu lực đến: {new Date(q.validUntil).toLocaleString("vi-VN")} · Cọc 50%: {money(q.depositAmount || 0)}</p>}
+      {q.paymentPolicy && <p>{q.paymentPolicy}</p>}
+      <QuotationSnapshot raw={q.planSnapshotJson} />
+      {!agency && q.status === "Sent" && <div className="flex flex-wrap gap-2">
+        <input aria-label="Lý do từ chối hoặc chỉnh sửa báo giá" className="border rounded p-2" value={decisionMessage} onChange={(e) => setDecisionMessage(e.target.value)} placeholder="Lý do / yêu cầu chỉnh sửa" />
+        {(["reject", "revise"] as const).map((decision) => <button key={decision} disabled={busy || !decisionMessage.trim()} className="border rounded px-3" onClick={() => void run(() => http(`/bookings/${bookingId}/quotations/${q.version}/decision`, { method: "POST", body: JSON.stringify({ decision, message: decisionMessage }) }))}>{decision === "reject" ? "Từ chối" : "Yêu cầu sửa"}</button>)}
+      </div>}
       {!agency && q.status === "Sent" && <button disabled={busy} className="bg-sky-800 text-white rounded px-3 py-2"
         onClick={() => void run(async () => { await http(`/bookings/${bookingId}/quotations/${q.version}/accept`, { method: "POST" });
           onChanged?.(); })}>Đồng ý báo giá này</button>}
     </div>)}
   </section>;
+}
+
+function QuotationSnapshot({ raw }: { raw?: string }) {
+  if (!raw) return null;
+  let snapshot: { name?: string; numberOfGuests?: number; startDate?: string; inclusions?: string; exclusions?: string; cancellationPolicy?: string;
+    hotels?: { name: string; nightsCount?: number }[];
+    itinerary?: { dayNumber: number; title: string; description?: string; activities?: { name: string }[]; meals?: { name: string }[] }[] };
+  try { snapshot = JSON.parse(raw); } catch { return null; }
+  if (!snapshot?.itinerary) return null;
+  return <details className="rounded border p-3"><summary>Lịch trình và điều khoản của báo giá này</summary>
+    <p>{snapshot.name} · {snapshot.numberOfGuests} khách · Khởi hành {snapshot.startDate?.slice(0, 10)}</p>
+    {snapshot.itinerary.map((day) => <div key={day.dayNumber} className="border-t mt-2 pt-2"><strong>Ngày {day.dayNumber}: {day.title}</strong><p>{day.description}</p><p>{day.activities?.map((a) => a.name).join(" → ")}</p><p>{day.meals?.map((m) => m.name).join(", ")}</p></div>)}
+    {snapshot.hotels?.map((hotel, i) => <p key={i}>{hotel.name} · {hotel.nightsCount} đêm</p>)}
+    <p><strong>Bao gồm:</strong> {snapshot.inclusions || "Theo lịch trình"}</p>
+    <p><strong>Không bao gồm:</strong> {snapshot.exclusions || "Theo thỏa thuận Agency"}</p>
+    <p><strong>Điều kiện hoàn/hủy:</strong> {snapshot.cancellationPolicy || "Liên hệ Agency để làm rõ trước khi chấp nhận."}</p>
+  </details>;
 }

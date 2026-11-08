@@ -3,8 +3,14 @@ using TripOps.Data.Common;
 namespace TripOps.Data.Entities;
 
 // One request per selected in-platform service. Replacements remain in the audit trail.
-public class BookingSupplierRequest : BaseEntity<int>
-{
+public class BookingSupplierRequest : BaseEntity<int> {
+public DateTime? ReplyDeadline { get; set; }
+public DateTime? HoldUntil { get; set; }
+public decimal? AvailableQuantity { get; set; }
+public bool PriceConfirmed { get; set; }
+public bool AvailabilityConfirmed { get; set; }
+public string ResponseHistoryJson { get; set; } = "[]";
+
     public int BookingId { get; set; }
     public int ServiceId { get; set; }
     public string ProviderId { get; set; } = string.Empty;
@@ -24,8 +30,12 @@ public class BookingSupplierRequest : BaseEntity<int>
 }
 
 // A new revision is inserted for each costing change. Sent/accepted revisions are immutable.
-public class BookingQuotation : BaseEntity<int>
-{
+public class BookingQuotation : BaseEntity<int> {
+public DateTime? ValidUntil { get; set; }
+public string PlanSnapshotJson { get; set; } = "{}";
+public string PaymentPolicy { get; set; } = "Đặt cọc 50% sau khi chấp nhận báo giá.";
+public int NumberOfGuests { get; set; }
+
     public int BookingId { get; set; }
     public int Version { get; set; }
     public int TourId { get; set; }

@@ -1,6 +1,6 @@
 export type QuotationCostLine = { slotKey: string; source: string; name: string; quantity: number; unit: string;
   referenceUnitCost: number; unitCost: number; total: number; confirmed?: boolean };
-export type BookingQuotation = { id: number; bookingId: number; version: number; tourId: number; status: string;
+export type BookingQuotation = { validUntil?: string; depositAmount?: number; numberOfGuests?: number; planSnapshotJson?: string; paymentPolicy?: string; id: number; bookingId: number; version: number; tourId: number; status: string;
   estimatedSale: number; totalCost: number | null; agencyProfit: number | null;
   saleTotal: number; costs: QuotationCostLine[] | null; reason: string; createdAt: string;
   requiresCustomerAcceptance?: boolean };

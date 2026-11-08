@@ -57,6 +57,7 @@ type Day = {
   accommodations: Accommodation[];
 };
 export type TourConfiguration = {
+  numberOfGuests?: number | null;
   code?: string | null;
   name: string;
   description: string | null;
@@ -79,6 +80,7 @@ export type TourConfiguration = {
   provinceCodes?: string[];
 };
 export type ApiTour = {
+  designRequestId?: number | null;
   id: number;
   agencyId: string;
   code: string | null;
@@ -91,7 +93,7 @@ export type ApiTour = {
   createdAt: string;
   updatedAt: string;
 };
-type PublicTour = {
+type PublicTour = { agencyId?: string;
   id: number;
   code: string | null;
   version: number;
@@ -295,6 +297,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
     departureLocation: tour.departureLocation?.trim() || null,
     durationDays: days,
     durationNights: nights,
+    numberOfGuests: tour.planGuestCount ?? null,
     basePrice: tour.price ?? 0,
     minGuests: tour.minGuests ?? null,
     maxGuests: tour.maxGuests ?? null,
@@ -461,6 +464,7 @@ export function fromConfiguration(
     image: c.images?.[0] || "",
     images: c.images || [],
     rating: 0,
+    planGuestCount: c.numberOfGuests || undefined,
     minGuests: c.minGuests || 0,
     maxGuests: c.maxGuests || 0,
     highlights: lines(c.highlights),
@@ -484,17 +488,19 @@ export function fromConfiguration(
     tourType: options.isRequest ? "custom_request" : "public",
   };
 }
-export const fromApiTour = (tour: ApiTour) =>
-  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, {
+export const fromApiTour = (tour: ApiTour): Tour => ({
+  ...fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, {
     agencyId: tour.agencyId,
     status: tour.status,
     visibility: tour.visibility,
     createdAt: tour.createdAt,
     updatedAt: tour.updatedAt,
     isRequest: tour.isRequest,
-  });
+  }),
+  customRequestId: tour.designRequestId == null ? undefined : String(tour.designRequestId),
+});
 const fromPublicTour = (tour: PublicTour) =>
-  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration);
+  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, { agencyId: tour.agencyId });
 
 async function allPages(path: string): Promise<TourListItem[]> {
   const items: TourListItem[] = [];

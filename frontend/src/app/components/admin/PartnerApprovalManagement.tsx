@@ -1,6 +1,7 @@
-import { partnerService } from "@/app/services/partnerService";
+import { partnerService, type PartnerApplication } from "@/app/services/partnerService";
 import { usePartnerApplications } from "@/app/hooks/usePartnerApplications";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { toast } from "sonner";
 import {
   Building2,
   CheckCircle2,
@@ -63,7 +64,18 @@ const cleanDisplayName = (name?: string) => {
     .trim();
 };
 
-export function PartnerApprovalManagement() {
+const toUnifiedItem = (item: PartnerApplication): UnifiedPartnerItem => ({
+  id: String(item.profile.id), type: item.role, businessName: item.profile.businessName,
+  taxCode: item.profile.taxCode, representativeName: item.name, email: item.email,
+  phone: item.phone || "", address: item.profile.businessAddress,
+  licenseUrl: item.profile.businessLicenseUrl, description: item.profile.description,
+  status: item.profile.status, rejectionReason: item.profile.rejectionReason,
+  createdAt: item.profile.createdAt || "",
+});
+
+export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
+  focusUserId?: string | null; onFocusHandled?: () => void;
+}) {
   // Filters & Search (Mặc định mở tab "Đã phê duyệt")
   const [searchTerm, updateSearchTerm] = useState("");
   const [statusFilter, updateStatusFilter] = useState<
@@ -98,25 +110,7 @@ export function PartnerApprovalManagement() {
     refresh,
   } = usePartnerApplications(statusFilter, roleFilter, searchTerm, page);
 
-  const allPartners = useMemo<UnifiedPartnerItem[]>(
-    () =>
-      items.map((item) => ({
-        id: String(item.profile.id),
-        type: item.role,
-        businessName: item.profile.businessName,
-        taxCode: item.profile.taxCode,
-        representativeName: item.name,
-        email: item.email,
-        phone: item.phone || "",
-        address: item.profile.businessAddress,
-        licenseUrl: item.profile.businessLicenseUrl,
-        description: item.profile.description,
-        status: item.profile.status,
-        rejectionReason: item.profile.rejectionReason,
-        createdAt: item.profile.createdAt || "",
-      })),
-    [items],
-  );
+  const allPartners = useMemo(() => items.map(toUnifiedItem), [items])
 
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewError, setReviewError] = useState("");
@@ -139,7 +133,23 @@ export function PartnerApprovalManagement() {
   // Modal Confirm Thay đổi Trạng thái (Hoạt động <-> Đình chỉ)
   const [togglingStatusPartner, setTogglingStatusPartner] =
     useState<UnifiedPartnerItem | null>(null);
-
+  useEffect(() => {
+    if (!focusUserId) return;
+    const controller = new AbortController();
+    partnerService
+      .list(new URLSearchParams({ userId: focusUserId, page: "1", pageSize: "1" }), controller.signal)
+      .then(({ items: found }) => {
+        if (!found[0]) return toast.error("Không tìm thấy hồ sơ doanh nghiệp của tài khoản này.");
+        const partner = toUnifiedItem(found[0]);
+        updateStatusFilter(partner.status === "suspended" ? "approved" : partner.status);
+        setPage(1);
+        setSelectedPartner(partner);
+        setShowDetailModal(true);
+      })
+      .catch((e) => { if (!controller.signal.aborted) toast.error(e instanceof Error ? e.message : "Không mở được hồ sơ doanh nghiệp."); })
+      .finally(() => { if (!controller.signal.aborted) onFocusHandled?.(); });
+    return () => controller.abort();
+  }, [focusUserId]);
   const filteredPartners = allPartners;
 
   // Xử lý mở Modal Phê duyệt
@@ -207,24 +217,24 @@ export function PartnerApprovalManagement() {
 
   // Xác nhận Thay đổi trạng thái (Hoạt động <-> Đình chỉ)
   const handleConfirmToggleStatus = async () => {
-  if (!togglingStatusPartner || isReviewing) return;
-  setIsReviewing(true);
-  setReviewError("");
-  try {
-    const id = Number(togglingStatusPartner.id);
-    if (togglingStatusPartner.status === "suspended") await partnerService.activate(id);
-    else await partnerService.suspend(id);
-    setTogglingStatusPartner(null);
-    setShowDetailModal(false);
-    refresh();
-  } catch (error) {
-    setReviewError(
-      error instanceof Error ? error.message : "Không thể thay đổi trạng thái đối tác",
-    );
-  } finally {
-    setIsReviewing(false);
-  }
-};
+    if (!togglingStatusPartner || isReviewing) return;
+    setIsReviewing(true);
+    setReviewError("");
+    try {
+      const id = Number(togglingStatusPartner.id);
+      if (togglingStatusPartner.status === "suspended") await partnerService.activate(id);
+      else await partnerService.suspend(id);
+      setTogglingStatusPartner(null);
+      setShowDetailModal(false);
+      refresh();
+    } catch (error) {
+      setReviewError(
+        error instanceof Error ? error.message : "Không thể thay đổi trạng thái đối tác",
+      );
+    } finally {
+      setIsReviewing(false);
+    }
+  };
 
   const rejectionPresets = [
     "Mã số thuế không tồn tại hoặc không trùng khớp với tên pháp nhân trên Cổng Thông tin Quốc gia về Đăng ký Doanh nghiệp.",
@@ -265,11 +275,10 @@ export function PartnerApprovalManagement() {
         {/* 1. Đã phê duyệt (Approved) */}
         <div
           onClick={() => setStatusFilter("approved")}
-          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${
-            statusFilter === "approved"
-              ? "bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]"
-              : "bg-white text-slate-700 border-emerald-200 hover:border-emerald-300 shadow-2xs"
-          }`}
+          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${statusFilter === "approved"
+            ? "bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]"
+            : "bg-white text-slate-700 border-emerald-200 hover:border-emerald-300 shadow-2xs"
+            }`}
         >
           <div className="text-xs font-medium opacity-90 flex items-center justify-between">
             <span>Đã phê duyệt</span>
@@ -284,11 +293,10 @@ export function PartnerApprovalManagement() {
         {/* 2. Chờ phê duyệt (Pending) */}
         <div
           onClick={() => setStatusFilter("pending")}
-          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${
-            statusFilter === "pending"
-              ? "bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]"
-              : "bg-white text-slate-700 border-amber-200 hover:border-amber-300 shadow-2xs"
-          }`}
+          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${statusFilter === "pending"
+            ? "bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]"
+            : "bg-white text-slate-700 border-amber-200 hover:border-amber-300 shadow-2xs"
+            }`}
         >
           <div className="text-xs font-medium opacity-90 flex items-center justify-between">
             <span>Chờ phê duyệt</span>
@@ -310,11 +318,10 @@ export function PartnerApprovalManagement() {
         {/* 3. Bị từ chối (Rejected) */}
         <div
           onClick={() => setStatusFilter("rejected")}
-          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${
-            statusFilter === "rejected"
-              ? "bg-rose-600 text-white border-rose-600 shadow-md scale-[1.02]"
-              : "bg-white text-slate-700 border-rose-200 hover:border-rose-300 shadow-2xs"
-          }`}
+          className={`p-4.5 rounded-2xl border transition-all cursor-pointer ${statusFilter === "rejected"
+            ? "bg-rose-600 text-white border-rose-600 shadow-md scale-[1.02]"
+            : "bg-white text-slate-700 border-rose-200 hover:border-rose-300 shadow-2xs"
+            }`}
         >
           <div className="text-xs font-medium opacity-90 flex items-center justify-between">
             <span>Bị từ chối</span>
@@ -353,32 +360,29 @@ export function PartnerApprovalManagement() {
           <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-medium">
             <button
               onClick={() => setRoleFilter("all")}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                roleFilter === "all"
-                  ? "bg-white text-slate-900 shadow-2xs font-bold"
-                  : "text-slate-500"
-              }`}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${roleFilter === "all"
+                ? "bg-white text-slate-900 shadow-2xs font-bold"
+                : "text-slate-500"
+                }`}
             >
               Tất cả vai trò
             </button>
             <button
               onClick={() => setRoleFilter("agency")}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                roleFilter === "agency"
-                  ? "bg-amber-500 text-white shadow-2xs font-bold"
-                  : "text-slate-600"
-              }`}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${roleFilter === "agency"
+                ? "bg-amber-500 text-white shadow-2xs font-bold"
+                : "text-slate-600"
+                }`}
             >
               <Compass className="w-3.5 h-3.5" />
               <span>Công ty lữ hành</span>
             </button>
             <button
               onClick={() => setRoleFilter("provider")}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                roleFilter === "provider"
-                  ? "bg-emerald-600 text-white shadow-2xs font-bold"
-                  : "text-slate-600"
-              }`}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${roleFilter === "provider"
+                ? "bg-emerald-600 text-white shadow-2xs font-bold"
+                : "text-slate-600"
+                }`}
             >
               <Store className="w-3.5 h-3.5" />
               <span>Nhà cung cấp dịch vụ</span>
@@ -442,31 +446,30 @@ export function PartnerApprovalManagement() {
                     className="hover:bg-sky-50/30 transition-colors group"
                   >
                     {/* Cột 1: Thông tin Doanh nghiệp */}
-<td className="py-4 px-4">
-  <span className="font-extrabold text-sm text-slate-900 group-hover:text-[#075985] transition-colors">
-    {item.businessName}
-  </span>
-</td>
+                    <td className="py-4 px-4">
+                      <span className="font-extrabold text-sm text-slate-900 group-hover:text-[#075985] transition-colors">
+                        {item.businessName}
+                      </span>
+                    </td>
 
-{/* Cột 2: Loại hình */}
-<td className="py-4 px-4">
-  <span
-    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap ${
-      item.type === "agency"
-        ? "bg-amber-100 text-amber-900 border border-amber-200"
-        : "bg-emerald-100 text-emerald-900 border border-emerald-200"
-    }`}
-  >
-    {item.type === "agency" ? (
-      <Compass className="w-3 h-3" />
-    ) : (
-      <Store className="w-3 h-3" />
-    )}
-    <span>
-      {item.type === "agency" ? "Công ty lữ hành" : "Nhà cung cấp"}
-    </span>
-  </span>
-</td>
+                    {/* Cột 2: Loại hình */}
+                    <td className="py-4 px-4">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap ${item.type === "agency"
+                          ? "bg-amber-100 text-amber-900 border border-amber-200"
+                          : "bg-emerald-100 text-emerald-900 border border-emerald-200"
+                          }`}
+                      >
+                        {item.type === "agency" ? (
+                          <Compass className="w-3 h-3" />
+                        ) : (
+                          <Store className="w-3 h-3" />
+                        )}
+                        <span>
+                          {item.type === "agency" ? "Công ty lữ hành" : "Nhà cung cấp"}
+                        </span>
+                      </span>
+                    </td>
 
                     {/* Cột 2: Người đại diện */}
                     <td className="py-4 px-4">
@@ -550,11 +553,10 @@ export function PartnerApprovalManagement() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleOpenToggleStatusModal(item)}
-                              className={`h-8 px-2.5 text-xs font-bold gap-1.5 cursor-pointer rounded-xl border transition-colors ${
-                                item.status === "suspended"
-                                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
-                                  : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
-                              }`}
+                              className={`h-8 px-2.5 text-xs font-bold gap-1.5 cursor-pointer rounded-xl border transition-colors ${item.status === "suspended"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                                : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                                }`}
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
                               <span>
@@ -683,11 +685,10 @@ export function PartnerApprovalManagement() {
               <>
                 <DialogHeader>
                   <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2 ${
-                      isCurrentlySuspended
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2 ${isCurrentlySuspended
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700"
+                      }`}
                   >
                     {isCurrentlySuspended ? (
                       <CheckCircle2 className="w-6 h-6" />
@@ -762,11 +763,10 @@ export function PartnerApprovalManagement() {
                     type="button"
                     disabled={isReviewing}
                     onClick={handleConfirmToggleStatus}
-                    className={`font-bold text-xs h-10 px-5 rounded-xl gap-1.5 cursor-pointer shadow-xs text-white ${
-                      isCurrentlySuspended
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : "bg-amber-600 hover:bg-amber-700"
-                    }`}
+                    className={`font-bold text-xs h-10 px-5 rounded-xl gap-1.5 cursor-pointer shadow-xs text-white ${isCurrentlySuspended
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-amber-600 hover:bg-amber-700"
+                      }`}
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>
@@ -906,9 +906,8 @@ export function PartnerApprovalManagement() {
                 }}
                 rows={3}
                 placeholder="VD: Mã số thuế không trùng khớp với Giấy đăng ký kinh doanh..."
-                className={`text-xs bg-slate-50 focus:bg-white resize-none ${
-                  rejectError ? "border-rose-500 focus:ring-rose-500" : ""
-                }`}
+                className={`text-xs bg-slate-50 focus:bg-white resize-none ${rejectError ? "border-rose-500 focus:ring-rose-500" : ""
+                  }`}
               />
               {rejectError && (
                 <p className="text-[11px] text-rose-600 font-semibold">
@@ -978,20 +977,18 @@ export function PartnerApprovalManagement() {
             <div className="flex flex-col max-h-[88vh]">
               {/* HEADER MODAL */}
               <div
-                className={`px-7 py-5 border-b border-slate-200/80 pr-14 ${
-                  selectedPartner.type === "agency"
-                    ? "bg-gradient-to-r from-amber-500/10 via-sky-50/40 to-white"
-                    : "bg-gradient-to-r from-emerald-500/10 via-teal-50/40 to-white"
-                }`}
+                className={`px-7 py-5 border-b border-slate-200/80 pr-14 ${selectedPartner.type === "agency"
+                  ? "bg-gradient-to-r from-amber-500/10 via-sky-50/40 to-white"
+                  : "bg-gradient-to-r from-emerald-500/10 via-teal-50/40 to-white"
+                  }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 ${
-                        selectedPartner.type === "agency"
-                          ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
-                          : "bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs"
-                      }`}
+                      className={`px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 ${selectedPartner.type === "agency"
+                        ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                        : "bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs"
+                        }`}
                     >
                       {selectedPartner.type === "agency" ? (
                         <>
@@ -1007,15 +1004,14 @@ export function PartnerApprovalManagement() {
                     </span>
 
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${
-                        selectedPartner.status === "approved"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                          : selectedPartner.status === "suspended"
-                            ? "bg-slate-100 text-slate-700 border-slate-300"
-                            : selectedPartner.status === "rejected"
-                              ? "bg-rose-50 text-rose-700 border-rose-300"
-                              : "bg-amber-50 text-amber-700 border-amber-300"
-                      }`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${selectedPartner.status === "approved"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                        : selectedPartner.status === "suspended"
+                          ? "bg-slate-100 text-slate-700 border-slate-300"
+                          : selectedPartner.status === "rejected"
+                            ? "bg-rose-50 text-rose-700 border-rose-300"
+                            : "bg-amber-50 text-amber-700 border-amber-300"
+                        }`}
                     >
                       {selectedPartner.status === "approved" && (
                         <>

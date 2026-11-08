@@ -46,7 +46,7 @@ interface AdminDashboardProps {
     providerId: string,
     reason?: string,
   ) => void;
-  onUpdateUserStatus: (userId: string, isLocked: boolean) => void;
+  // onUpdateUserStatus: (userId: string, isLocked: boolean) => void;
   onApproveCompany: (companyId: string) => void;
   onRejectCompany: (companyId: string, reason: string) => void;
   systemBank: SystemBankAccount;
@@ -92,7 +92,7 @@ export function AdminDashboard({
   onDeleteService,
   onApproveProvider,
   onRejectProvider,
-  onUpdateUserStatus,
+  //onUpdateUserStatus,
   onApproveCompany,
   onRejectCompany,
   systemBank,
@@ -100,9 +100,9 @@ export function AdminDashboard({
   onSettleBooking,
   onSuspendCompany,
   refundRequests = [],
-  onApproveRefund = () => {},
-  onRejectRefund = () => {},
-  onReviewRefund = () => {},
+  onApproveRefund = () => { },
+  onRejectRefund = () => { },
+  onReviewRefund = () => { },
   payoutAccount,
   onPayoutRefund,
   onSyncPayout,
@@ -123,6 +123,8 @@ export function AdminDashboard({
 
   const [activeSection, setActiveSection] =
     useState<string>("partner-approvals");
+
+  const [focusPartnerUserId, setFocusPartnerUserId] = useState<string | null>(null);
 
   const companyAdmins = users.filter(
     (u) => u.role === "company_admin",
@@ -148,7 +150,10 @@ export function AdminDashboard({
       case "companies":
       case "approve-providers":
         return (
-          <PartnerApprovalManagement />
+          <PartnerApprovalManagement
+            focusUserId={focusPartnerUserId}
+            onFocusHandled={() => setFocusPartnerUserId(null)}
+          />
         );
       case "tours":
       case "approve-tours":
@@ -158,8 +163,8 @@ export function AdminDashboard({
             services={services}
             onToggleHideTour={onToggleHideTour}
             onDeleteTour={onDeleteTour}
-            onApproveTour={onApproveTour || (() => {})}
-            onRejectTour={onRejectTour || (() => {})}
+            onApproveTour={onApproveTour || (() => { })}
+            onRejectTour={onRejectTour || (() => { })}
           />
         );
       case "refund-requests":
@@ -209,8 +214,20 @@ export function AdminDashboard({
       case "users":
         return (
           <UserManagement
-            users={users}
-            onUpdateUserStatus={onUpdateUserStatus}
+            onOpenBusiness={(userId) => {
+              setFocusPartnerUserId(userId);
+              setActiveSection("partner-approvals");
+              window.location.hash = "#/admin/partner-approvals";
+            }}
+          />
+        );
+      case "partner-approvals":
+      case "companies":
+      case "approve-providers":
+        return (
+          <PartnerApprovalManagement
+            focusUserId={focusPartnerUserId}
+            onFocusHandled={() => setFocusPartnerUserId(null)}
           />
         );
       default:

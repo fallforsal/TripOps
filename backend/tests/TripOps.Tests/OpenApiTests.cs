@@ -150,12 +150,13 @@ public sealed class OpenApiTests
     {
         await using var app = Factory(); using var json = await Document(app);
         var schemas = json.RootElement.GetProperty("components").GetProperty("schemas");
-        foreach (var (type, field) in new[] { ("ActivityInput", "serviceId"), ("TimelineInput", "transportationServiceId") })
+        foreach (var (type, field) in new[] { ("TimelineInput", "transportationServiceId") })
         {
             Assert.False(schemas.GetProperty(type).GetProperty("properties").TryGetProperty(field, out _));
         }
         Assert.True(schemas.GetProperty("MealInput").GetProperty("properties").TryGetProperty("serviceId", out _));
         Assert.True(schemas.GetProperty("AccommodationInput").GetProperty("properties").TryGetProperty("serviceId", out _));
+        Assert.False(schemas.GetProperty("ActivityInput").GetProperty("properties").TryGetProperty("serviceId", out _));
         var activity = schemas.GetProperty("ActivityInput").GetProperty("properties");
         Assert.Equal("08:30:00", activity.GetProperty("estimatedTime").GetProperty("examples")[0].GetString());
         Assert.Contains("less than 24 hours", activity.GetProperty("estimatedTime").GetProperty("description").GetString());

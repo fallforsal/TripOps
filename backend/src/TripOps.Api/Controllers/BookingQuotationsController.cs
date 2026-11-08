@@ -14,6 +14,19 @@ public sealed class BookingQuotationsController(BookingQuotationService quotatio
     [ProducesResponseType<IReadOnlyList<QuotationView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(int bookingId, CancellationToken ct) =>
         Ok(await quotations.Quotations(Actor, bookingId, User.IsInRole("agency"), ct));
+    [HttpPut("terms"), Authorize(Roles = "agency")]
+    [ProducesResponseType<QuotationView>(200)]
+    public async Task<IActionResult> Terms(int bookingId, QuotationTerms input, CancellationToken ct) => Ok(await quotations.SetTerms(Actor, bookingId, input, ct));
+    [HttpPost("{version:int}/decision"), Authorize(Roles = "user")]
+    [ProducesResponseType<QuotationView>(200)]
+    public async Task<IActionResult> Decision(int bookingId, int version, QuotationDecision input, CancellationToken ct) => Ok(await quotations.Decide(Actor, bookingId, version, input, ct));
+    [HttpPost("supplier-requests/{id:int}/counter/{accept:bool}"), Authorize(Roles = "agency")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> Counter(int bookingId, int id, bool accept, CancellationToken ct)
+    { await quotations.CounterDecision(Actor, bookingId, id, accept, ct); return NoContent(); }
+    [HttpGet("supplier-requests/{id:int}/history"), Authorize(Roles = "agency")]
+    [ProducesResponseType<object>(200)]
+    public async Task<IActionResult> History(int bookingId, int id, CancellationToken ct) => Ok(await quotations.ResponseHistory(Actor, bookingId, id, ct));
     [HttpGet("supplier-requests"), Authorize(Roles = "agency")]
     [EndpointSummary("List Provider confirmations requested for an Agency booking")]
     [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]
@@ -47,7 +60,7 @@ public sealed class ProviderBookingRequestsController(BookingQuotationService qu
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet]
     [EndpointSummary("List booking service requests addressed to the signed-in Provider")]
-    [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<IReadOnlyList<ProviderInboxView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await quotations.ProviderRequests(Actor, ct));
     [HttpPost("{id:int}/respond")]
     [EndpointSummary("Provider confirms availability and total cost or declines a booking request")]

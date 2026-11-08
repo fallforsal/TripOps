@@ -58,6 +58,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<SystemCommissionConfig> SystemCommissionConfigs => Set<SystemCommissionConfig>();
 
     // 6. Interaction
+    public DbSet<WorkflowNotification> WorkflowNotifications => Set<WorkflowNotification>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Complaint> Complaints => Set<Complaint>();
 
@@ -73,6 +74,14 @@ public class TripOpsDbContext : DbContext
     {
         if (ChangeTracker.Entries<TourVersion>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Tour history is immutable.");
+        if (ChangeTracker.Entries<BookingQuotation>().Any(e => e.State == EntityState.Deleted && e.Entity.SentAt.HasValue))
+            throw new InvalidOperationException("Sent quotations cannot be deleted.");
+        foreach (var entry in ChangeTracker.Entries<TourPlanProposal>().Where(e => e.State == EntityState.Modified))
+            if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(TourPlanProposal.Status) or nameof(TourPlanProposal.AgencyReply) or nameof(TourPlanProposal.RespondedAt))))
+                throw new InvalidOperationException("Customer change requests are immutable.");
+        foreach (var entry in ChangeTracker.Entries<BookingQuotation>().Where(e => e.State == EntityState.Modified && e.OriginalValues.GetValue<DateTime?>(nameof(BookingQuotation.SentAt)).HasValue))
+            if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(BookingQuotation.Status) or nameof(BookingQuotation.AcceptedAt))))
+                throw new InvalidOperationException("Sent quotations are immutable.");
         foreach (var entry in ChangeTracker.Entries<Tour>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             var tour = entry.Entity;
@@ -177,6 +186,16 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<User>().ToTable("users");
         DatabaseDesignConfiguration.Configure(modelBuilder);
         BookingQuotationConfiguration.Configure(modelBuilder);
+        modelBuilder.Entity<TourDesignRequest>().Property(x => x.Revision).IsConcurrencyToken();
+        modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.Status).IsConcurrencyToken();
+        modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.AvailableQuantity).HasPrecision(19, 2);
+        modelBuilder.Entity<BookingQuotation>().Property(x => x.Status).IsConcurrencyToken();
+        modelBuilder.Entity<WorkflowNotification>(e => {
+            e.ToTable("workflow_notifications");
+            e.Property(x => x.UserId).HasMaxLength(36);
+            e.Property(x => x.Message).HasMaxLength(1000);
+            e.HasIndex(x => new { x.UserId, x.CreatedAt });
+        });
         DatabaseDesignDefaults.Configure(modelBuilder, Database.IsSqlServer());
         if (!Database.IsSqlServer())
             foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetProperties()))

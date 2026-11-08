@@ -1,3 +1,4 @@
+import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
 import { useEffect, useState } from "react";
 import { CustomTourRequest, TourCompany, User } from "@/app/types";
 import {
@@ -17,6 +18,7 @@ import { PageHeader } from "@/app/components/customer/PageHeader";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 
 interface CustomTourRequestPageProps {
+  sourceTour?: import("@/app/types").Tour;
   companies: TourCompany[];
   currentUser: User | null;
   onBack: () => void;
@@ -51,6 +53,7 @@ function CompanyLogo({ src, name }: { src?: string; name: string }) {
 
 export function CustomTourRequestPage({
   companies,
+  sourceTour,
   currentUser,
   onBack,
   onSubmit,
@@ -64,23 +67,26 @@ export function CustomTourRequestPage({
     contactName: currentUser?.name ?? "",
     contactEmail: currentUser?.email ?? "",
     contactPhone: currentUser?.phone ?? "",
-    destinations: "",
+    destinations: sourceTour?.destination || "",
     departureDate: TODAY,
     returnDate: TODAY,
     numberOfPeople: "",
     budgetPerPerson: "",
     hotelStars: "4",
     additionalInfo: "",
-    targetCompanyId: companies[0]?.id ?? "",
+    targetCompanyId: sourceTour?.companyId || companies[0]?.id || "",
   });
 
+  const [initialChanges, setInitialChanges] = useState<CustomTourRequest["initialChanges"]>();
+  const [editTemplate, setEditTemplate] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   useEffect(() => {
+    if (sourceTour?.companyId) { setForm((previous) => ({ ...previous, targetCompanyId: sourceTour.companyId! })); return; }
     setForm((previous) => companies.some((c) => c.id === previous.targetCompanyId)
       ? previous : { ...previous, targetCompanyId: companies[0]?.id ?? "" });
-  }, [companies]);
+  }, [companies, sourceTour?.companyId]);
 
   // Auto-format currency VND helper
   const formatCurrencyVND = (digits: string): string => {
@@ -161,7 +167,7 @@ export function CustomTourRequestPage({
     setSubmitting(true);
     try {
       await onSubmit({
-        userId: currentUser.id,
+        initialChanges, sourceTourId: sourceTour?.id, userId: currentUser.id,
         businessName: form.businessName.trim() || undefined,
         businessEmail: form.businessEmail.trim() || undefined,
         businessPhone: form.businessPhone.trim() || undefined,
@@ -265,6 +271,13 @@ export function CustomTourRequestPage({
         </div>
       )}
 
+      {sourceTour && <section className="rounded border border-sky-200 bg-sky-50 p-4 space-y-3">
+        <h3 className="font-bold text-sky-900">Tùy chỉnh từ Tour: {sourceTour.name}</h3>
+        <p>Tour gốc được giữ nguyên. Agency sẽ thiết kế và xác nhận lại theo đề xuất của bạn.</p>
+        <Button type="button" variant="outline" onClick={() => setEditTemplate(true)}>Chỉnh sửa lịch trình mẫu</Button>
+        {initialChanges && <p className="text-sky-800">Đã lưu đề xuất: {initialChanges.message}</p>}
+        {editTemplate && <CustomerPlanEditor requestId="" plan={initialChanges ? { ...sourceTour, ...initialChanges } : sourceTour} onSaveDraft={setInitialChanges} onCancel={() => setEditTemplate(false)} onDone={() => setEditTemplate(false)} />}
+      </section>}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Step 1: Chọn Agency */}
         <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
@@ -280,7 +293,7 @@ export function CustomTourRequestPage({
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {companies.map((c) => {
+            {companies.filter((c) => !sourceTour?.companyId || c.id === sourceTour.companyId).map((c) => {
               const isSelected = form.targetCompanyId === c.id;
               return (
                 <button

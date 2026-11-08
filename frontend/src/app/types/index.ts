@@ -482,6 +482,7 @@ export interface TourReview {
 }
 
 export interface Tour {
+  planGuestCount?: number;
   updatedAt?: string;
   id: string;
   tourCode: string;
@@ -768,6 +769,7 @@ export interface BookingIncident {
 }
 
 export interface Service {
+  priceUnit?: "person" | "meal" | "room_night" | "night" | "day" | "trip" | "item";
   id: string;
   providerId: string;
   providerName: string;
@@ -915,6 +917,8 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  sourceTourId?: string;
+  initialChanges?: { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
   id: string;
   userId?: string;
   // Business / contact info

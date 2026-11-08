@@ -1,3 +1,7 @@
+import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
+import { DesignVersionHistory } from "@/app/components/common/DesignVersionHistory";
+import { http } from "@/app/lib/http";
+import { fromApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
 import { useEffect, useState } from "react";
 import { agencyPlanProposals, replyPlanProposal, type TourPlanProposal } from "@/app/services/customTourRequests";
 import { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
@@ -65,6 +69,7 @@ export function AgencyCustomRequests({
 }: AgencyCustomRequestsProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [designingRequest, setDesigningRequest] = useState<CustomTourRequest | null>(null);
+  const [templateTour, setTemplateTour] = useState<Tour | null>(null);
   const [editingTourForRequest, setEditingTourForRequest] = useState<Tour | null>(null);
   const [versionHistoryTour, setVersionHistoryTour] = useState<Tour | null>(null);
   const [invitingRequest, setInvitingRequest] = useState<CustomTourRequest | null>(null);
@@ -87,7 +92,17 @@ export function AgencyCustomRequests({
   const designed = requests.filter((r) => r.status === "designed" || r.status === "quoted" || r.status === "accepted");
   const others = requests.filter((r) => r.status === "rejected" || r.status === "cancelled");
 
-  const handleStartDesignTour = (req: CustomTourRequest, existingTour?: Tour | null) => {
+  const handleStartDesignTour = async (req: CustomTourRequest, existingTour?: Tour | null) => {
+    setTemplateTour(null);
+    if (!existingTour) {
+      try {
+        const configuration = await http<TourConfiguration | null>(`/agency/tour-design-requests/${req.id}/source`);
+        const initialChanges = await http<CustomTourRequest["initialChanges"] | null>(`/agency/tour-design-requests/${req.id}/initial-changes`);
+        if (configuration) { const template = fromApiTour({ id: 0, agencyId: company.id, code: null, status: "draft", visibility: "hidden", isRequest: true, isAiGenerated: false, version: 1,
+          configuration: { ...configuration, code: null }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          setTemplateTour(initialChanges ? { ...template, itinerary: initialChanges.itinerary, hotels: initialChanges.hotels } : template); }
+      } catch { /* Request details remain available for manual design. */ }
+    }
     setDesigningRequest(req);
     setEditingTourForRequest(existingTour || null);
   };
@@ -115,7 +130,7 @@ export function AgencyCustomRequests({
     return (
       <TourFormPage
         company={company}
-        tour={editingTourForRequest || null}
+        tour={editingTourForRequest || templateTour || null}
         onBack={() => {
           setDesigningRequest(null);
           setEditingTourForRequest(null);
@@ -144,7 +159,7 @@ export function AgencyCustomRequests({
           specialRequirements: designingRequest.additionalInfo,
           version: editingTourForRequest ? (editingTourForRequest.version || 1) + 1 : 1,
         }}
-        initialTour={editingTourForRequest || undefined}
+        initialTour={editingTourForRequest || templateTour || undefined}
       />
     );
   }
@@ -392,6 +407,8 @@ function RequestGroupSection({
               {/* Collapsible Details */}
               {isExp && (
                 <div className="p-6 bg-[#F0F9FF] border-t border-[#CBD5E1] space-y-6">
+                  <DesignRequestMessages requestId={req.id} agency />
+                  <DesignVersionHistory requestId={req.id} agency />
                   {req.additionalInfo && (
                     <div className="space-y-1 bg-white p-4 rounded-xl border border-[#CBD5E1]">
                       <span className="text-xs uppercase font-semibold tracking-wider text-[#F97316]">
@@ -412,6 +429,8 @@ function RequestGroupSection({
                       return <div key={proposal.id} className="space-y-2 rounded border p-3">
                         <p className="font-semibold">Bản #{proposal.id} · Plan v{proposal.baseTourVersion} · {proposal.status}</p>
                         <p>{proposal.message}</p>
+              {proposal.proposal.quotation && <p className="text-xs text-sky-800">Giá gắn với bản gửi này · Plan v{proposal.proposal.quotation.tourVersion}: {proposal.proposal.quotation.pricePerPerson.toLocaleString("vi-VN")} ₫/khách · Tổng {proposal.proposal.quotation.total.toLocaleString("vi-VN")} ₫ ({proposal.proposal.quotation.preliminary ? "dự kiến" : "báo giá chính thức"})</p>}
+                        {proposal.proposal.requestedChanges && <p>Điều chỉnh đề xuất: {Object.entries(proposal.proposal.requestedChanges).filter(([, v]) => v).map(([k, v]) => `${({ numberOfPeople: "Số khách", budgetPerPerson: "Ngân sách/người", hotelStars: "Tiêu chuẩn sao", departureDate: "Ngày đi", returnDate: "Ngày về" } as Record<string, string>)[k] || k}: ${v}`).join(" · ")}</p>}
                         {base && base.version !== proposal.baseTourVersion &&
                           <p className="text-amber-800">Plan hiện là v{base.version}; hãy đối chiếu các thay đổi cũ trước khi lưu.</p>}
                         <p className="text-xs text-slate-600">Khách đã chỉnh địa điểm, khách sạn hoặc nhà hàng trong bản sao. Kiểm tra tính khả dụng và giá trước khi công bố plan mới.</p>
