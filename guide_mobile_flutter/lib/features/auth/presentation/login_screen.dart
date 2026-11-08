@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -42,41 +43,124 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(child: Center(child: SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 420),
-        child: Form(key: form, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Icon(Icons.explore_rounded, size: 70, color: Color(0xFF087D82)),
-          space(12),
-          const Text('TripOps Guide', textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: ink)),
-          const Text('Đăng nhập dành cho Hướng dẫn viên', textAlign: TextAlign.center,
-            style: TextStyle(color: muted)),
-          space(36),
-          TextFormField(controller: email, keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_outline)),
-            validator: (v) => v == null || !v.contains('@') ? 'Nhập email hợp lệ' : null),
-          space(),
-          TextFormField(controller: password, obscureText: true,
-            decoration: const InputDecoration(labelText: 'Mật khẩu', prefixIcon: Icon(Icons.lock_outline)),
-            validator: (v) => v == null || v.isEmpty ? 'Nhập mật khẩu' : null,
-            onFieldSubmitted: (_) => submit()),
-          if (widget.initialError != null || message != null) ...[
-            space(),
-            Text(message ?? widget.initialError!, style: const TextStyle(color: Colors.red)),
-          ],
-          space(20),
-          FilledButton(onPressed: loading ? null : submit,
-            child: Padding(padding: const EdgeInsets.all(11),
-              child: loading ? const CircularProgressIndicator() : const Text('Đăng nhập'))),
-          if (widget.initialError != null)
-            TextButton(onPressed: widget.onRetrySession, child: const Text('Thử khôi phục phiên')),
-          space(),
-          const Text('Tài khoản Hướng dẫn viên do Agency cấp. Ứng dụng không tự đăng ký.',
-            textAlign: TextAlign.center, style: TextStyle(color: muted)),
-        ])),
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 410),
+            child: Form(
+              key: form,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: Container(
+                    width: 75, height: 75,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [
+                        Color(0xFF193E57), Color(0xFF108980),
+                      ]),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Icon(Icons.explore_rounded,
+                      color: Colors.white, size: 39),
+                  )),
+                  space(16),
+                  const Text('TRIPOPS GUIDE',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: teal, fontSize: 11,
+                      fontWeight: FontWeight.w900, letterSpacing: 2)),
+                  space(7),
+                  const Text('Chào mừng trở lại',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 26,
+                      fontWeight: FontWeight.w900, color: ink)),
+                  space(6),
+                  const Text('Đăng nhập để quản lý hành trình và vận hành tour',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: muted)),
+                  space(28),
+                  Card(child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text('ĐĂNG NHẬP HƯỚNG DẪN VIÊN',
+                          style: TextStyle(fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.6, color: ink)),
+                        space(20),
+                        const Text('Địa chỉ email',
+                          style: TextStyle(fontSize: 12,
+                            fontWeight: FontWeight.w800, color: ink)),
+                        space(7),
+                        TextFormField(
+                          controller: email,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            hintText: 'guide@example.com',
+                            prefixIcon: Icon(Icons.mail_outline),
+                          ),
+                          validator: (v) => v == null || !v.contains('@')
+                            ? 'Nhập email hợp lệ' : null,
+                        ),
+                        space(16),
+                        const Text('Mật khẩu',
+                          style: TextStyle(fontSize: 12,
+                            fontWeight: FontWeight.w800, color: ink)),
+                        space(7),
+                        TextFormField(
+                          controller: password,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            hintText: 'Nhập mật khẩu',
+                            prefixIcon: Icon(Icons.lock_outline),
+                          ),
+                          validator: (v) => v == null || v.isEmpty
+                            ? 'Nhập mật khẩu' : null,
+                          onFieldSubmitted: (_) => submit(),
+                        ),
+                        if (widget.initialError != null || message != null) ...[
+                          space(14),
+                          GuideInfoBanner(
+                            message: message ?? widget.initialError!,
+                            warning: true, icon: Icons.error_outline,
+                          ),
+                        ],
+                        space(20),
+                        FilledButton.icon(
+                          onPressed: loading ? null : submit,
+                          icon: loading ? const SizedBox(
+                            height: 17, width: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                          ) : const Icon(Icons.login_rounded, size: 18),
+                          label: const Text('Đăng nhập'),
+                        ),
+                        if (widget.initialError != null)
+                          TextButton(
+                            onPressed: widget.onRetrySession,
+                            child: const Text('Thử khôi phục phiên'),
+                          ),
+                      ],
+                    ),
+                  )),
+                  space(21),
+                  const GuideInfoBanner(
+                    icon: Icons.info_outline,
+                    message: 'Tài khoản Hướng dẫn viên được Agency cấp. Không thể tự đăng ký trên ứng dụng.',
+                  ),
+                  space(20),
+                  const Text('TRIPOPS  •  TOUR OPERATIONS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: muted, fontSize: 10,
+                      letterSpacing: 1.3)),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-    ))),
+    ),
   );
 }
