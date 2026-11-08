@@ -17,7 +17,7 @@ HomeTrip selectHomeTrip(
 }) {
   final today = DateTime(now.year, now.month, now.day);
   DateTime day(DateTime d) => DateTime(d.year, d.month, d.day);
-  final possible = items.where((b) => b.isActive || b.isCompleted).toList();
+  final possible = items.where((b) => b.isActive).toList();
 
   final todayTours = possible.where((b) {
     if (day(b.startDate) == today) return true;
