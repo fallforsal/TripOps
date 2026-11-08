@@ -129,3 +129,22 @@ flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:5080
 Manual checks: navigate to **Tour**, search `da lat` when there is an assigned `Đà Lạt` tour, change status filters, open a tour, use attendance search/chips, inspect the existing incidents above the incident form, and verify refresh after saving. No mock bookings are added by this milestone.
 
 **Known behavior:** Location and attendance forms currently rely on backend enforcement for operational authorization and status transitions. Guide invitation accept/decline and incident image uploads still require real backend APIs. The guide booking list currently has no API-side search/status filter, so this milestone filters the fully paginated assigned bookings client-side. A production release still requires device integration, TLS and manual end-to-end verification.
+
+
+## Milestone 3 — prototype visual alignment
+
+The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / the TripOps Guide mobile screenboard:
+
+- Consistent **navy + teal + soft blue-gray** palette in `lib/core/theme/app_theme.dart`.
+- Shared design components in `lib/core/widgets/guide_ui.dart`: gradient tour hero, section title, metric, action tile, status pill, information banner and empty state.
+- Home: greeting, gradient tour hero for **today's tour** or **nearest upcoming tour**, statistics backed by real assigned bookings, tour preview and action shortcuts.
+- Tour list: search, rounded filter chips, date / guest cards and localized status labels.
+- Tour detail: gradient heading, operational summary, action shortcuts and day-by-day itinerary.
+- Attendance: summary counters, progress indicator, passenger cards and server-backed status actions.
+- Location check-in: day-grouped stops, status badges and existing backend check-in dialog.
+- Incident report: incident history, typed report form and server-backed submission.
+- Profile, login, history, bottom navigation: consistent typography, card spacing and color.
+
+**Data policy:** No fake counts, placeholder photos, GPS verification, photo-upload success, invitation acceptance or fabricated backend data. Tour data remains sourced from the ASP.NET Core API. The design uses an illustrated gradient instead of stock images.
+
+**Verification:** `flutter analyze`, `flutter test`, and Android debug build run on GitHub Actions. Check final CI status before merging. Use an Android emulator to evaluate accessibility, small-screen wrapping, keyboard input, and operational flows against a working TripOps backend.
