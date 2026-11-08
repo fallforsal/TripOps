@@ -75,3 +75,26 @@ test/
 ## Verification status
 
 Static review against the develop-branch controller, service, DTO and authentication source. Flutter SDK, Android toolchain and a running backend are not available in the authoring environment, so `flutter analyze`, `flutter test` and device integration must be run locally or in CI before merging.
+
+
+## Milestone 2 — operational usability
+
+- **Assigned tours:** search by tour name, booking code or customer name; filter Upcoming (Confirmed/Paid, start today or later), In progress, Completed or All. Search is accent-insensitive for Vietnamese.
+- **Attendance:** search by passenger name/phone; filter Pending, CheckedIn or Absent, with an overall check-in progress indicator. Inactive passengers are hidden.
+- **Incident reporting:** display the incident history returned in `BookingDto.incidents` above the new report form.
+- **Authentication:** when list or detail requests return HTTP 401, clear the cached session and return to login. A generic network error does not erase a valid cookie.
+- **Tests:** `home_picker_test.dart`, `tour_catalog_test.dart`, `attendance_filter_test.dart`, `booking_contract_test.dart`, `widget_test.dart`.
+
+Commands to verify on your Windows machine (in `guide_mobile_flutter`):
+
+```powershell
+git pull origin feat/guide-flutter-clean-20261108
+flutter pub get
+flutter analyze
+flutter test
+flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:5080
+```
+
+Manual checks: navigate to **Tour**, search `da lat` when there is an assigned `Đà Lạt` tour, change status filters, open a tour, use attendance search/chips, inspect the existing incidents above the incident form, and verify refresh after saving. No mock bookings are added by this milestone.
+
+**Known behavior:** Location and attendance forms currently rely on backend enforcement for operational authorization and status transitions. Guide invitation accept/decline and incident image uploads still require real backend APIs. The guide booking list currently has no API-side search/status filter, so this milestone filters the fully paginated assigned bookings client-side. A production release still requires device integration, TLS and manual end-to-end verification.
