@@ -415,6 +415,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       if (!mounted) return;
       if (e is ApiFailure && e.statusCode == 401) {
         await widget.onSessionExpired();
+        if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
         return;
       }
       setState(() { error = _error(e); loading = false; });
@@ -434,6 +435,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       if (!mounted) return;
       if (e is ApiFailure && e.statusCode == 401) {
         await widget.onSessionExpired();
+        if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
