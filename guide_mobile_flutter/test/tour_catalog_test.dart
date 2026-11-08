@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripops_guide/src/models.dart';
-import 'package:tripops_guide/src/tour_catalog.dart';
+import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart';
+import 'package:tripops_guide/features/assigned_tours/domain/tour_catalog.dart';
 
 BookingSummary booking(int id, String name, String date, String status) =>
     BookingSummary(

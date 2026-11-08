@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripops_guide/src/models.dart';
+import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart';
+import 'package:tripops_guide/core/utils/tripops_dates.dart';
 
 void main() {
   test('Guide booking list deserializes ASP.NET Core BookingListItem', () {

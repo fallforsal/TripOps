@@ -1,5 +1,5 @@
-import 'models.dart';
-import 'tour_catalog.dart';
+import '../../assigned_tours/domain/booking_models.dart';
+import '../../../core/utils/search_normalizer.dart';
 
 enum AttendanceFilter { all, pending, checkedIn, absent }
 

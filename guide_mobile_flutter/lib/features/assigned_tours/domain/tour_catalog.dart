@@ -1,4 +1,5 @@
-import 'models.dart';
+import '../../../core/utils/search_normalizer.dart';
+import 'booking_models.dart';
 
 enum TourFilter { upcoming, inProgress, completed, all }
 
@@ -23,24 +24,6 @@ String bookingStatusLabel(String status) => switch (status) {
 
 /// Search display-only fields. Normalization supports Vietnamese accents and
 /// is independent of API data; no server-side search endpoint is assumed.
-String normalizedSearch(String input) {
-  var text = input.toLowerCase().trim();
-  const accents = <String, String>{
-    'a': 'àáảãạăằắẳẵặâầấẩẫậ',
-    'e': 'èéẻẽẹêềếểễệ',
-    'i': 'ìíỉĩị',
-    'o': 'òóỏõọôồốổỗộơờớởỡợ',
-    'u': 'ùúủũụưừứửữự',
-    'y': 'ỳýỷỹỵ',
-    'd': 'đ',
-  };
-  for (final entry in accents.entries) {
-    for (final rune in entry.value.runes) {
-      text = text.replaceAll(String.fromCharCode(rune), entry.key);
-    }
-  }
-  return text;
-}
 
 List<BookingSummary> filterBookings(
   List<BookingSummary> bookings, {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripops_guide/src/models.dart';
-import 'package:tripops_guide/src/screens.dart';
+import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart';
+import 'package:tripops_guide/features/assigned_tours/presentation/tour_card.dart';
 
 void main() {
   testWidgets('TourCard displays assigned tour and handles details tap',

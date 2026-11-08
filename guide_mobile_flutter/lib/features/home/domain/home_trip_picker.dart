@@ -1,4 +1,4 @@
-import 'models.dart';
+import '../../assigned_tours/domain/booking_models.dart';
 
 enum HomeTripKind { today, upcoming, none }
 

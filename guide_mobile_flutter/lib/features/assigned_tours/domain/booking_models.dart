@@ -1,34 +1,4 @@
-/// DTOs aligned with backend/src/TripOps.Service/Bookings/BookingContracts.cs.
-/// Date-only comparisons intentionally use the leading YYYY-MM-DD of the
-/// serialized start/end dates rather than converting midnight between zones.
-DateTime parseCalendarDate(Object? value) {
-  final raw = value?.toString() ?? '';
-  if (raw.length < 10) throw const FormatException('Thiếu ngày trong dữ liệu tour.');
-  return DateTime.parse(raw.substring(0, 10));
-}
-
-String vnDate(DateTime value) {
-  final d = value.day.toString().padLeft(2, '0');
-  final m = value.month.toString().padLeft(2, '0');
-  return '$d/$m/${value.year}';
-}
-
-class GuideAccount {
-  const GuideAccount({required this.id, required this.name, required this.email, required this.role, this.phone});
-  final String id;
-  final String name;
-  final String email;
-  final String role;
-  final String? phone;
-
-  factory GuideAccount.fromJson(Map<String, dynamic> j) => GuideAccount(
-    id: (j['id'] ?? '').toString(),
-    name: (j['name'] ?? '').toString(),
-    email: (j['email'] ?? '').toString(),
-    role: (j['role'] ?? '').toString(),
-    phone: j['phone']?.toString(),
-  );
-}
+import '../../../core/utils/tripops_dates.dart';
 
 class BookingSummary {
   const BookingSummary({

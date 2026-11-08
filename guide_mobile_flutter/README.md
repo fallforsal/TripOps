@@ -59,18 +59,49 @@ The server issues an eight-hour HttpOnly **TripOps.Session cookie**, not JWT. Di
 
 ## Folder layout
 
-```
+The project uses feature-first organization, with API/storage and UI utilities in `core/`. The original `lib/src/` files were removed, so imports must use these paths.
+
+```text
 lib/
-  main.dart
-  src/
-    api.dart
-    models.dart
-    repositories.dart
-    home_picker.dart
-    screens.dart
+  main.dart                        # Entry point only
+  app/
+    tripops_app.dart               # MaterialApp / dependencies
+    guide_shell.dart               # Bottom navigation / refresh
+  core/
+    network/api_client.dart        # Dio and session cookie
+    theme/app_theme.dart
+    utils/tripops_dates.dart
+    utils/search_normalizer.dart
+    widgets/view_helpers.dart
+  features/
+    auth/{data,domain,presentation}/
+    home/{domain,presentation}/
+    assigned_tours/{data,domain,presentation}/
+    attendance/{domain,presentation}/
+    location_checkin/presentation/
+    incidents/presentation/
+    invitations/presentation/
+    tour_history/presentation/
+    profile/presentation/
 test/
   home_picker_test.dart
+  tour_catalog_test.dart
+  attendance_filter_test.dart
+  booking_contract_test.dart
+  widget_test.dart
 ```
+
+### Architecture rules
+
+- `app/` wires dependencies and owns tab navigation; avoid business models here.
+- `core/network/` owns HTTP transport/cookies. Feature repositories call the API via `TripOpsApi`.
+- Each `features/<name>/domain/` owns its models or pure selection/filter logic.
+- Each `features/<name>/data/` owns the real backend repository; do not call Dio from widgets.
+- Each `features/<name>/presentation/` owns only UI and user actions.
+- Cross-feature UI references are allowed for tour detail actions; do not copy DTO parsing into screens.
+- The project does not yet need a separate repository interface per feature; add abstractions when multiple implementations or tests require them.
+
+See `ARCHITECTURE.md` for the complete directory map and migration notes.
 
 ## Verification status
 
