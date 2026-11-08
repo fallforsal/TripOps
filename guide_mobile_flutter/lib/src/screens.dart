@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'attendance_filter.dart';
+import 'tour_catalog.dart';
 import 'home_picker.dart';
 import 'models.dart';
 import 'repositories.dart';
@@ -166,6 +168,8 @@ class GuideShell extends StatefulWidget {
 
 class _GuideShellState extends State<GuideShell> {
   int tab = 0;
+  TourFilter tourFilter = TourFilter.upcoming;
+  String tourQuery = '';
   bool loading = true;
   String? error;
   List<BookingSummary> bookings = [];
@@ -245,13 +249,44 @@ class _GuideShellState extends State<GuideShell> {
                   title: Text('Lời mời nhận tour'), subtitle: Text('Backend chưa cung cấp API nhận/từ chối lời mời.'))),
               ],
               1 => [
-                if (bookings.isEmpty) const Center(child: Text('Chưa có tour được phân công.')),
-                ...((bookings.toList()..sort((a,b) => a.startDate.compareTo(b.startDate)))
-                  .map((b) => TourCard(tour: b, onTap: () => openTour(b)))),
+                TextField(
+                  key: const ValueKey('tour-search'),
+                  decoration: const InputDecoration(
+                    hintText: 'Tìm tour, mã booking hoặc tên khách',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) => setState(() => tourQuery = value),
+                ),
+                _space(12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: TourFilter.values.map((filter) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(tourFilterLabel(filter)),
+                        selected: tourFilter == filter,
+                        onSelected: (_) => setState(() => tourFilter = filter),
+                      ),
+                    )).toList(),
+                  ),
+                ),
+                _space(12),
+                if (filterBookings(bookings, filter: tourFilter,
+                    today: DateTime.now(), query: tourQuery).isEmpty)
+                  const Card(child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('Không tìm thấy tour phù hợp với bộ lọc.'),
+                  )),
+                ...filterBookings(bookings, filter: tourFilter,
+                  today: DateTime.now(), query: tourQuery)
+                  .map((b) => TourCard(tour: b, onTap: () => openTour(b))),
               ],
               2 => [
-                if (!bookings.any((b) => b.isCompleted)) const Text('Chưa có tour đã hoàn thành.'),
-                ...bookings.where((b) => b.isCompleted)
+                if (!bookings.any((b) => b.isCompleted))
+                  const Text('Chưa có tour đã hoàn thành.'),
+                ...filterBookings(bookings, filter: TourFilter.completed,
+                    today: DateTime.now())
                     .map((b) => TourCard(tour: b, onTap: () => openTour(b))),
               ],
               _ => [
@@ -302,7 +337,7 @@ class TourCard extends StatelessWidget {
           ],
           Text(tour.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: ink)),
           _space(10),
-          Text('${tour.code}  ·  ${tour.status}', style: const TextStyle(color: muted)),
+          Text('${tour.code}  ·  ${bookingStatusLabel(tour.status)}', style: const TextStyle(color: muted)),
           _space(8),
           Row(children: [
             const Icon(Icons.event_outlined, size: 18, color: muted),
@@ -464,6 +499,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   late BookingDetail current = widget.detail;
   int? busy;
   String? error;
+  String query = '';
+  AttendanceFilter filter = AttendanceFilter.all;
 
   Future<void> update(Passenger passenger, String status) async {
     if (busy != null) return;
@@ -481,14 +518,47 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final passengers = current.passengers.where((p) => p.recordStatus != 'INACTIVE').toList();
-    final checked = passengers.where((p) => p.status == 'CheckedIn').length;
+    final all = filterPassengers(current.passengers);
+    final passengers = filterPassengers(current.passengers,
+        filter: filter, query: query);
+    final checked = all.where((p) => p.status == 'CheckedIn').length;
     return Scaffold(appBar: AppBar(title: const Text('Điểm danh hành khách')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        Text('$checked / ${passengers.length} khách đã có mặt',
+        Text('$checked / ${all.length} khách đã có mặt',
           style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
         _space(),
+        LinearProgressIndicator(
+          value: all.isEmpty ? 0 : checked / all.length,
+          minHeight: 7,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        _space(14),
+        TextField(
+          key: const ValueKey('passenger-search'),
+          decoration: const InputDecoration(
+            hintText: 'Tìm tên hoặc số điện thoại hành khách',
+            prefixIcon: Icon(Icons.search),
+          ),
+          onChanged: (value) => setState(() => query = value),
+        ),
+        _space(10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: AttendanceFilter.values.map((option) =>
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(attendanceFilterLabel(option)),
+                selected: filter == option,
+                onSelected: (_) => setState(() => filter = option),
+              ),
+            )).toList()),
+        ),
         if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
+        if (passengers.isEmpty) const Padding(
+          padding: EdgeInsets.symmetric(vertical: 30),
+          child: Center(child: Text('Không tìm thấy hành khách phù hợp.')),
+        ),
         ...passengers.map((p) => Card(child: Padding(padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -624,6 +694,24 @@ class _IncidentScreenState extends State<IncidentScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Báo cáo sự cố')),
     body: Form(key: form, child: ListView(padding: const EdgeInsets.all(18), children: [
+      if (widget.detail.incidents.isNotEmpty) ...[
+        const Text('Sự cố đã báo cáo',
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+        _space(8),
+        ...widget.detail.incidents.map((incident) => Card(
+          child: ListTile(
+            leading: const Icon(Icons.report_problem_outlined),
+            title: Text(incident.title),
+            subtitle: Text(incident.description, maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+            trailing: Text(incident.status),
+          ),
+        )),
+        _space(16),
+      ],
+      const Text('Tạo báo cáo mới',
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+      _space(8),
       Text(widget.detail.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
       _space(16),
       TextFormField(controller: type, maxLength: 100,
