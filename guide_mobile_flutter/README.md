@@ -14,14 +14,15 @@ This repository intentionally tracks the app source separately from any previous
 
 ```bash
 cd guide_mobile_flutter
-flutter create --project-name tripops_guide --org com.tripops --platforms android,ios .
+flutter create --project-name tripops_guide --org com.tripops --platforms android .
 flutter pub get
 flutter analyze
 flutter test
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5080
+flutter devices
+flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:5080
 ```
 
-The `flutter create` command uses the Flutter SDK installed on **your computer**; avoid `--overwrite` so the app source is kept. If using iOS simulator on the same Mac as API, use `http://127.0.0.1:5080`. A physical phone needs the backend's LAN IP, its firewall open and the server bound to the reachable interface. Production **must** use HTTPS.
+The `flutter create` command generates **new** Android platform files using the Flutter SDK installed on your computer; avoid `--overwrite` so the app source is kept. The `emulator-5554` ID is an example: use the ID from `flutter devices`. On macOS you can additionally run `flutter create --platforms ios .` when Xcode is available. If using iOS simulator on the same Mac as API, use `http://127.0.0.1:5080`. A physical phone needs the backend's LAN IP, its firewall open and the server bound to the reachable interface. Production **must** use HTTPS.
 
 ### Android local HTTP
 
