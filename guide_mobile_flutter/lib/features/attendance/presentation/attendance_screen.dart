@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
@@ -37,64 +38,185 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     final all = filterPassengers(current.passengers);
-    final passengers = filterPassengers(current.passengers,
-        filter: filter, query: query);
+    final passengers = filterPassengers(
+      current.passengers, filter: filter, query: query,
+    );
     final checked = all.where((p) => p.status == 'CheckedIn').length;
-    return Scaffold(appBar: AppBar(title: const Text('Điểm danh hành khách')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        Text('$checked / ${all.length} khách đã có mặt',
-          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-        space(),
-        LinearProgressIndicator(
-          value: all.isEmpty ? 0 : checked / all.length,
-          minHeight: 7,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        space(14),
-        TextField(
-          key: const ValueKey('passenger-search'),
-          decoration: const InputDecoration(
-            hintText: 'Tìm tên hoặc số điện thoại hành khách',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onChanged: (value) => setState(() => query = value),
-        ),
-        space(10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: AttendanceFilter.values.map((option) =>
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(attendanceFilterLabel(option)),
-                selected: filter == option,
-                onSelected: (_) => setState(() => filter = option),
-              ),
-            )).toList()),
-        ),
-        if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
-        if (passengers.isEmpty) const Padding(
-          padding: EdgeInsets.symmetric(vertical: 30),
-          child: Center(child: Text('Không tìm thấy hành khách phù hợp.')),
-        ),
-        ...passengers.map((p) => Card(child: Padding(padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            if (p.phone != null) Text(p.phone!, style: const TextStyle(color: muted)),
-            space(8),
-            if (busy == p.id) const LinearProgressIndicator(),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'Pending', label: Text('Chưa rõ')),
-                ButtonSegment(value: 'CheckedIn', label: Text('Có mặt')),
-                ButtonSegment(value: 'Absent', label: Text('Vắng')),
-              ],
-              selected: {p.status},
-              onSelectionChanged: busy != null ? null : (v) => update(p, v.first),
-            ),
+    final absent = all.where((p) => p.status == 'Absent').length;
+    final pending = all.where((p) => p.status == 'Pending').length;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Điểm danh hành khách')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+        children: [
+          Text(current.name, style: const TextStyle(
+            color: muted, fontSize: 12, fontWeight: FontWeight.w600,
+          )),
+          space(14),
+          Row(children: [
+            Expanded(child: GuideMetric(icon: Icons.groups_outlined,
+              value: '${all.length}', label: 'Tổng hành khách')),
+            const SizedBox(width: 9),
+            Expanded(child: GuideMetric(icon: Icons.check_circle_outline,
+              value: '$checked', label: 'Đã có mặt')),
+            const SizedBox(width: 9),
+            Expanded(child: GuideMetric(
+              icon: Icons.hourglass_empty_rounded,
+              value: '$pending', label: 'Chưa điểm danh',
+              iconColor: const Color(0xFFB78330),
+              tint: const Color(0xFFFFF3DF),
+            )),
           ]),
-        ))),
-      ]),
+          space(16),
+          Card(child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Expanded(child: Text('Tiến độ điểm danh',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
+                    color: ink))),
+                Text('$checked / ${all.length}', style: const TextStyle(
+                  fontSize: 13, color: teal, fontWeight: FontWeight.w900,
+                )),
+              ]),
+              space(12),
+              LinearProgressIndicator(
+                value: all.isEmpty ? 0 : checked / all.length,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(8),
+                backgroundColor: paleTeal,
+              ),
+              space(9),
+              Text('$absent khách vắng mặt', style: const TextStyle(
+                fontSize: 11, color: muted,
+              )),
+            ]),
+          )),
+          space(20),
+          const GuideSectionTitle('Danh sách hành khách'),
+          space(11),
+          TextField(
+            key: const ValueKey('passenger-search'),
+            decoration: const InputDecoration(
+              hintText: 'Tìm theo tên hoặc số điện thoại...',
+              prefixIcon: Icon(Icons.search),
+            ),
+            onChanged: (value) => setState(() => query = value),
+          ),
+          space(11),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: AttendanceFilter.values.map((option) =>
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(attendanceFilterLabel(option)),
+                  selected: filter == option,
+                  onSelected: (_) => setState(() => filter = option),
+                ),
+              ),
+            ).toList()),
+          ),
+          space(13),
+          if (error != null) ...[
+            GuideInfoBanner(message: error!,
+              icon: Icons.error_outline, warning: true),
+            space(10),
+          ],
+          if (passengers.isEmpty)
+            const GuideEmptyState(
+              title: 'Không tìm thấy hành khách',
+              message: 'Thử tìm kiếm hoặc chọn lại bộ lọc điểm danh.',
+              icon: Icons.person_search_outlined,
+            ),
+          ...passengers.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Card(child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      height: 39, width: 39,
+                      decoration: BoxDecoration(
+                        color: paleTeal,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(Icons.person_outline, color: deepTeal),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(p.name, style: const TextStyle(
+                          fontSize: 13, color: ink, fontWeight: FontWeight.w800,
+                        )),
+                        if (p.phone != null)
+                          Text(p.phone!, style: const TextStyle(
+                            fontSize: 11, color: muted,
+                          )),
+                      ],
+                    )),
+                    GuideStatusPill(
+                      p.status == 'CheckedIn' ? 'Có mặt'
+                        : p.status == 'Absent' ? 'Vắng' : 'Chưa rõ',
+                      background: p.status == 'CheckedIn'
+                        ? paleTeal : p.status == 'Absent'
+                          ? const Color(0xFFFFE8E8)
+                          : const Color(0xFFFFF3DF),
+                      foreground: p.status == 'CheckedIn'
+                        ? deepTeal : p.status == 'Absent'
+                          ? const Color(0xFFC05F5F)
+                          : const Color(0xFFB78330),
+                    ),
+                  ]),
+                  space(12),
+                  if (busy == p.id) ...[
+                    const LinearProgressIndicator(),
+                    space(9),
+                  ],
+                  Row(children: [
+                    Expanded(child: OutlinedButton.icon(
+                      onPressed: busy != null ? null :
+                          () => update(p, 'CheckedIn'),
+                      style: p.status == 'CheckedIn'
+                          ? OutlinedButton.styleFrom(
+                              backgroundColor: paleTeal,
+                              foregroundColor: deepTeal,
+                              side: const BorderSide(color: teal),
+                            ) : null,
+                      icon: const Icon(Icons.check_circle_outline, size: 16),
+                      label: const Text('Có mặt'),
+                    )),
+                    const SizedBox(width: 9),
+                    Expanded(child: OutlinedButton.icon(
+                      onPressed: busy != null ? null :
+                          () => update(p, 'Absent'),
+                      style: p.status == 'Absent'
+                          ? OutlinedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFFECEC),
+                              foregroundColor: const Color(0xFFAE5151),
+                            ) : null,
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: const Text('Vắng mặt'),
+                    )),
+                  ]),
+                  if (p.status != 'Pending')
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: busy != null ? null :
+                            () => update(p, 'Pending'),
+                        child: const Text('Đặt lại: Chưa rõ'),
+                      ),
+                    ),
+                ],
+              ),
+            )),
+          )),
+        ],
+      ),
     );
   }
 }
