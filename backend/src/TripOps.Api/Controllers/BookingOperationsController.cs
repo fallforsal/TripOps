@@ -20,13 +20,13 @@ public sealed record LocationCheckin([AllowedValues("CheckedIn", "Skipped", "Pen
 public sealed class BookingOperationsController(TripOpsDbContext db, BookingService bookings) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    [HttpPut("participants")]
+    [HttpPut("participants"), Authorize(Roles = "agency")]
     [EndpointSummary("Update passenger identity and preferences without changing agreed prices")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Passengers(int id, PassengerEdits request, CancellationToken ct)
     {
         var b = await db.Bookings.Include(x => x.Tour).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
-        if (b.CustomerId != Actor && b.Tour?.AgencyId != Actor) throw new BookingException(403, "Bạn không có quyền sửa hành khách.");
+        if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Bạn không có quyền sửa hành khách.");
         if (b.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.InProgress) throw new BookingException(409, "Booking không còn cho phép sửa hành khách.");
         if (request.Participants.Select(p => p.Id).Distinct().Count() != request.Participants.Length || request.Participants.Length != b.Participants.Count) throw new BookingException(422, "Thêm/bớt khách cần chốt lại giá với Agency; thao tác này chỉ sửa hồ sơ hiện có.");
         foreach (var input in request.Participants)

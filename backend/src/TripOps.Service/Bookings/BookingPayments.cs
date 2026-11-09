@@ -1,3 +1,4 @@
+using static TripOps.Service.Bookings.BookingBilling;
 using System.Globalization;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
@@ -28,7 +29,7 @@ public sealed partial class BookingService
     /// Tạo (hoặc dùng lại) link payOS cho đợt đang phải trả: Đợt 1 (cọc) nếu chưa đủ cọc, sau đó Đợt 2 (phần còn lại).
     /// Số tiền do backend tính, không nhận từ frontend. Bấm lặp khi link cũ còn hạn và đúng số tiền: trả lại link cũ.
     /// </summary>
-    public async Task<PayOsCheckoutDto> StartPayOsDeposit(string customerId, int id, CancellationToken ct)
+    public async Task<PayOsCheckoutDto> StartPayOsDeposit(string customerId, int id, CancellationToken ct, int? paymentRequestId = null)
     {
         if (!PayOs.Options.IsConfigured)
             throw new BookingException(503, "Cổng payOS chưa được cấu hình (thiếu PayOs:ClientId/ApiKey/ChecksumKey hoặc ReturnUrl).");
@@ -40,8 +41,8 @@ public sealed partial class BookingService
             throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
 
         var now = UtcNow;
-        var stage = PayableStage(booking, customerId, now);
-        await quotationsForPayment.ValidatePayment(booking.Id, stage.QuotationId, ct);
+        var stage = PayableStage(booking, customerId, now, paymentRequestId);
+        await quotationsForPayment.ValidatePayment(booking.Id, ct);
         var amount = Outstanding(booking, stage);
 
         var reusable = booking.PaymentTransactions
@@ -80,7 +81,7 @@ public sealed partial class BookingService
         try
         {
             // Nội dung ngắn (≤ 9 ký tự) theo giới hạn của payOS cho tài khoản không liên kết.
-            link = await PayOs.CreateLink(orderCode, (long)amount, $"{(stage.Stage == BalanceStage || IsFullPayment(booking, stage) ? "TT" : "COC")}{booking.Id}",
+            link = await PayOs.CreateLink(orderCode, (long)amount, $"{(IsSurcharge(stage) ? "PT" : stage.Stage == BalanceStage || IsFullPayment(booking, stage) ? "TT" : "COC")}{booking.Id}",
                 new DateTimeOffset(DateTime.SpecifyKind(linkExpires, DateTimeKind.Utc)), ct);
         }
         catch (PayOsException exception)
@@ -205,11 +206,11 @@ public sealed partial class BookingService
                 payment.PaidAt = now;
                 payment.GatewayTransactionNo = reference;
                 payment.ReviewNote = notes.Count == 0 ? null : string.Join(" ", notes);
-                try { await quotationsForPayment.ValidatePayment(booking.Id, request?.QuotationId, ct); }
+                try { await quotationsForPayment.ValidatePayment(booking.Id, ct); }
                 catch (BookingException)
                 {
                     payment.Status = PaymentTransactionStatus.NeedsReview;
-                    payment.ReviewNote = "Tiền nhận cho báo giá đã hết hiệu lực; cần đối soát.";
+                    payment.ReviewNote = "Tiền nhận khi phương án tour của booking không còn hiệu lực; cần đối soát.";
                     break;
                 }
                 ApplyPayment(booking, request, now);
@@ -292,15 +293,16 @@ public sealed partial class BookingService
         var previous = await Repo.FindTransaction(reference, ct);
         if (previous is not null)
         {
-            if (previous.BookingId != id || previous.Amount != Money(request.Amount))
+            if (previous.BookingId != id || previous.Amount != Money(request.Amount)
+                || (request.PaymentRequestId.HasValue && previous.PaymentRequestId != request.PaymentRequestId))
                 throw new BookingException(409, "Mã giao dịch đã được sử dụng.");
             await transaction.CommitAsync(ct);
             return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
         }
 
         var now = UtcNow;
-        var stage = PayableStage(booking, customerId, now);
-        await quotationsForPayment.ValidatePayment(booking.Id, stage.QuotationId, ct);
+        var stage = PayableStage(booking, customerId, now, request.PaymentRequestId);
+        await quotationsForPayment.ValidatePayment(booking.Id, ct);
         var outstanding = Outstanding(booking, stage);
         if (Money(request.Amount) != outstanding)
             throw new BookingException(422, $"Số tiền của {StageName(booking, stage)} phải đúng {outstanding.ToString("N0", Vietnamese)}đ.");
@@ -331,7 +333,7 @@ public sealed partial class BookingService
     /// Đợt đang phải trả: Đợt 1 (cọc) khi chưa đủ cọc; đủ cọc thì Đợt 2 (phần còn lại).
     /// Chặn khi đơn chưa duyệt, đợt đã quá hạn hoặc đã thanh toán đủ.
     /// </summary>
-    private PaymentRequest PayableStage(Booking booking, string actorId, DateTime now)
+    private PaymentRequest PayableStage(Booking booking, string actorId, DateTime now, int? paymentRequestId)
     {
         if (booking.Status == BookingStatus.Pending)
             throw new BookingException(409, "Đơn đang chờ công ty lữ hành duyệt. Bạn chỉ thanh toán sau khi đơn được duyệt.");
@@ -339,17 +341,39 @@ public sealed partial class BookingService
             throw new BookingException(409, "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán.");
         if (ContractBlocksPayment(booking))
             throw new BookingException(409, "Vui lòng tải hợp đồng, ký và tải bản đã ký lên trước khi thanh toán.");
-        if (booking.Status != BookingStatus.Confirmed)
+        if (booking.Status is not (BookingStatus.Confirmed or BookingStatus.Paid))
             throw new BookingException(422, booking.Status == BookingStatus.Paid
                 ? "Đơn đã được thanh toán đủ."
                 : "Đơn ở trạng thái này không thể thanh toán.");
-        // Không tự tạo đợt cọc lúc khách bấm thanh toán: hạn cọc phải tính từ lúc Agency duyệt.
-        var deposit = ActiveRequest(booking, DepositStage)
-            ?? throw new BookingException(409, "Đơn được duyệt trước khi áp dụng lịch thanh toán nên chưa có đợt cọc. Vui lòng liên hệ công ty lữ hành để được xử lý.");
-        var stage = deposit.Status != PaymentRequestStatus.Paid && Outstanding(booking, deposit) > 0
-            ? deposit
-            // Hạn Đợt 2 chỉ phụ thuộc ngày khởi hành nên tạo bù được cho đơn duyệt trước khi có Đợt 2.
-            : EnsureBalanceRequest(booking, actorId, now);
+        PaymentRequest? stage;
+        if (paymentRequestId.HasValue)
+        {
+            stage = booking.PaymentRequests.SingleOrDefault(p => p.Id == paymentRequestId.Value)
+                ?? throw new BookingException(404, "Khoản thu không thuộc booking này.");
+            if (stage.Status == PaymentRequestStatus.Cancelled ||
+                (stage.Stage != DepositStage && stage.Stage != BalanceStage && !IsSurcharge(stage)))
+                throw new BookingException(409, "Khoản thu không còn cho phép thanh toán.");
+            if (stage.Stage == BalanceStage)
+            {
+                var deposit = ActiveRequest(booking, DepositStage);
+                if (deposit is null || Outstanding(booking, deposit) > 0)
+                    throw new BookingException(409, "Vui lòng thanh toán đủ tiền cọc trước khi thanh toán đợt 2.");
+            }
+        }
+        else
+        {
+            // Giữ tương thích lời gọi cũ: cọc, phần còn lại, rồi phụ thu. Lời gọi mới chọn khoản thu cụ thể.
+            var deposit = ActiveRequest(booking, DepositStage)
+                ?? throw new BookingException(409, "Đơn chưa có đợt cọc. Vui lòng liên hệ công ty lữ hành để được xử lý.");
+            stage = Outstanding(booking, deposit) > 0 ? deposit : null;
+            if (stage == null && !IsFullPayment(booking, deposit)) {
+                var balance = EnsureBalanceRequest(booking, actorId, now);
+                if (Outstanding(booking, balance) > 0) stage = balance;
+            }
+            stage ??= booking.PaymentRequests.Where(p => IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled && Outstanding(booking, p) > 0)
+                .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id).FirstOrDefault();
+        }
+        if (stage == null) throw new BookingException(409, "Đơn đã được thanh toán đủ.");
         if (stage.Status == PaymentRequestStatus.Paid || Outstanding(booking, stage) == 0)
             throw new BookingException(409, "Đơn đã được thanh toán đủ.");
         if (Deadline(stage) is { } due && now > due)
@@ -358,13 +382,13 @@ public sealed partial class BookingService
     }
 
     private static string StageName(Booking booking, PaymentRequest request) =>
-        request.Stage == BalanceStage ? "đợt 2 (phần còn lại)" : IsFullPayment(booking, request) ? "khoản thanh toán toàn bộ" : "đợt cọc";
+        IsSurcharge(request) ? "khoản phụ thu" : request.Stage == BalanceStage ? "đợt 2 (phần còn lại)" : IsFullPayment(booking, request) ? "khoản thanh toán toàn bộ" : "đợt cọc";
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpper(text[0], Vietnamese) + text[1..];
 
     /// <summary>Khoản thu một lần 100% của tour sát ngày (lưu ở stage "deposit" với số tiền = tổng giá trị).</summary>
     private static bool IsFullPayment(Booking booking, PaymentRequest request) =>
-        request.Stage == DepositStage && booking.TotalAmount > 0 && request.Amount >= Money(booking.TotalAmount);
+        request.Stage == DepositStage && BaseTourAmount(booking) > 0 && request.Amount >= Money(BaseTourAmount(booking));
 
     /// <summary>
     /// Bảo đảm có Đợt 2 – phần còn lại (gọi trong giao dịch đã khóa đơn). Hạn = hết ngày (khởi hành − 8) giờ Việt Nam.
@@ -379,10 +403,9 @@ public sealed partial class BookingService
         if (booking.DesignRequestId.HasValue && dueAt < now) dueAt = PaymentRules.VietnamMidnightUtc(booking.StartDate.Date);
         var request = new PaymentRequest
         {
-            QuotationId = booking.AcceptedQuotationId,
             Stage = BalanceStage,
             Description = "Thanh toán phần còn lại",
-            Amount = Math.Max(0, Money(booking.TotalAmount - (deposit?.Amount ?? 0))),
+            Amount = Math.Max(0, Money(BaseTourAmount(booking) - (deposit?.Amount ?? 0))),
             DueAt = dueAt,
             DueDate = PaymentRules.VietnamDate(dueAt.AddTicks(-1)),
             Status = PaymentRequestStatus.Pending,
@@ -411,10 +434,9 @@ public sealed partial class BookingService
 
         var request = new PaymentRequest
         {
-            QuotationId = booking.AcceptedQuotationId,
             Stage = DepositStage,
             Description = full ? "Thanh toán toàn bộ (tour sát ngày)" : $"Đặt cọc {PaymentRules.DepositPercent.ToString("0.##", Vietnamese)}%",
-            Amount = full ? Money(booking.TotalAmount) : PlannedDeposit(booking),
+            Amount = full ? Money(BaseTourAmount(booking)) : PlannedDeposit(booking),
             DueAt = dueAt,
             DueDate = PaymentRules.VietnamDate(dueAt),
             Status = PaymentRequestStatus.Pending,
@@ -472,7 +494,7 @@ public sealed partial class BookingService
         .FirstOrDefault(p => p.Stage == stage
             && p.Status is PaymentRequestStatus.Pending or PaymentRequestStatus.Overdue or PaymentRequestStatus.Paid);
 
-    private static decimal PlannedDeposit(Booking booking) => Money(booking.TotalAmount * PaymentRules.DepositPercent / 100m);
+    private static decimal PlannedDeposit(Booking booking) => Money(BaseTourAmount(booking) * PaymentRules.DepositPercent / 100m);
 
     private static bool LinkedTo(PaymentTransaction t, PaymentRequest request) => ReferenceEquals(t.PaymentRequest, request)
         || (request.Id != 0 && t.PaymentRequestId == request.Id);
@@ -487,7 +509,7 @@ public sealed partial class BookingService
         {
             var deposit = ActiveRequest(booking, DepositStage);
             var depositMissing = deposit is null ? Math.Max(0, PlannedDeposit(booking) - PaidAmount(booking)) : Outstanding(booking, deposit);
-            return Math.Max(0, Money(booking.TotalAmount - PaidAmount(booking) - depositMissing));
+            return Math.Max(0, Money(BaseTourAmount(booking) - BasePaidAmount(booking) - depositMissing));
         }
         var stageById = booking.PaymentRequests.Where(p => p.Id != 0).ToDictionary(p => p.Id, p => p.Stage);
         bool Legacy(PaymentTransaction t) => t.PaymentRequest is { } linked
@@ -531,7 +553,7 @@ public sealed partial class BookingService
                 depositDeadline is { } d && d > departure ? "Hạn thanh toán rơi sau thời điểm khởi hành."
                 : full ? "Tour sát ngày khởi hành: thanh toán toàn bộ một lần, không chia hai đợt." : null));
             // Tour sát ngày: không có Đợt 2.
-            if (full) return items;
+            if (full) { AppendSurcharges(booking, items, now); return items; }
         }
         else
         {
@@ -546,8 +568,8 @@ public sealed partial class BookingService
         var balance = ActiveRequest(booking, BalanceStage);
         var balanceDeadline = balance is not null ? Deadline(balance) : PaymentRules.BalanceDeadline(booking.StartDate);
         var balanceOutstanding = balance is not null ? Outstanding(booking, balance)
-            : Math.Max(0, Money(booking.TotalAmount - PaidAmount(booking) - depositOutstanding));
-        var balanceAmount = Math.Max(0, Money(booking.TotalAmount - (deposit?.Amount ?? PlannedDeposit(booking))));
+            : Math.Max(0, Money(BaseTourAmount(booking) - BasePaidAmount(booking) - depositOutstanding));
+        var balanceAmount = Math.Max(0, Money(BaseTourAmount(booking) - (deposit?.Amount ?? PlannedDeposit(booking))));
         var balanceStatus = balanceOutstanding == 0 && depositOutstanding == 0 ? "Paid"
             : balanceDeadline is { } balanceDue && now > balanceDue ? "Overdue"
             : depositOutstanding > 0 ? "Scheduled" : "Pending";
@@ -557,7 +579,20 @@ public sealed partial class BookingService
         items.Add(new PaymentScheduleItemDto(balance?.Id, BalanceStage, balance?.Description ?? "Thanh toán phần còn lại",
             balanceAmount, balanceOutstanding, balance?.DueDate ?? (balanceDeadline is { } x ? PaymentRules.VietnamDate(x.AddTicks(-1)) : null),
             Utc(balanceDeadline), balanceStatus, Utc(balance?.PaidAt), balanceWarning));
+        AppendSurcharges(booking, items, now);
         return items;
+    }
+
+    private static decimal BasePaidAmount(Booking booking) => booking.PaymentTransactions
+        .Where(t => t.Status == PaymentTransactionStatus.Success && !booking.PaymentRequests.Any(p => IsSurcharge(p) && LinkedTo(t, p))).Sum(t => t.Amount);
+
+    private static void AppendSurcharges(Booking booking, List<PaymentScheduleItemDto> items, DateTime now)
+    {
+        foreach (var fee in booking.PaymentRequests.Where(p => IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled).OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)) {
+            var outstanding = Outstanding(booking, fee); var due = Deadline(fee);
+            var status = outstanding == 0 ? "Paid" : due.HasValue && now > due ? "Overdue" : "Pending";
+            items.Add(new(fee.Id, "surcharge", fee.Description, fee.Amount, outstanding, fee.DueDate, Utc(due), status, Utc(fee.PaidAt), null));
+        }
     }
 
     private static decimal LegacyCredit(Booking booking) => booking.PaymentTransactions

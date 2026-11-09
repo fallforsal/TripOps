@@ -50,7 +50,8 @@ interface AgencyDashboardProps {
   onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
   onMarkFullyPaid?: (bookingId: string) => void;
-  onUpdateBookingPrice?: (bookingId: string, newPrice: number, note?: string) => void;
+  onBookingChanged?: (booking: import("@/app/services/wf05Bookings").BookingDto) => void;
+  onUpdateBookingPrice?: (bookingId: string, newPrice: number, note?: string) => void | Promise<boolean>;
   onUpdateBookingPassengers?: (bookingId: string, updatedPassengers: any[]) => void;
   onUpdateBookingAgencies?: (bookingId: string, agencies: BookingAgencyShare[]) => void;
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
@@ -86,6 +87,7 @@ export function AgencyDashboard({
   onMarkDepositPaid,
   onMarkFullyPaid,
   onUpdateBookingPrice,
+  onBookingChanged,
   onUpdateBookingPassengers,
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
@@ -296,7 +298,6 @@ export function AgencyDashboard({
         if (currentSelectedBooking) {
           return (
             <AgencyBookingDetailPage
-              plans={tours.filter((t) => t.customRequestId && t.customRequestId === currentSelectedBooking.tour?.customRequestId)}
               booking={currentSelectedBooking}
               guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}
@@ -310,6 +311,7 @@ export function AgencyDashboard({
               onMarkDepositPaid={onMarkDepositPaid}
               onMarkFullyPaid={onMarkFullyPaid}
               onUpdateBookingPrice={onUpdateBookingPrice}
+              onBookingChanged={onBookingChanged}
               onUpdateBookingPassengers={onUpdateBookingPassengers}
               onUpdateBookingAgencies={onUpdateBookingAgencies}
               onUpdateAttractionCheckins={onUpdateAttractionCheckins}

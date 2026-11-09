@@ -8,11 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\..\..\..\backups\TripOps\backend\src\TripOps.Api\appsettings.Development.json" Link="appsettings.Development.json" />
-    <Content Include="..\..\..\..\backups\TripOps\backend\src\TripOps.Api\appsettings.json" Link="appsettings.json" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
