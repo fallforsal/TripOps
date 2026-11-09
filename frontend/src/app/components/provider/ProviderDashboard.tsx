@@ -1,4 +1,3 @@
-import { ProviderBookingConfirmations } from "./ProviderBookingConfirmations";
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
 import { http } from "@/app/lib/http";
 import { useEffect, useState } from "react";
@@ -296,7 +295,6 @@ export function ProviderDashboard({
         />
       ) : activeSection === "room-requests" ? (
         <ErrorBoundary fallbackTitle="Không thể tải trang Yêu cầu dịch vụ">
-          <ProviderBookingConfirmations />
           <ProviderGroupBookingRequests
             requests={activeRequestsList}
             providerServices={services.filter((s) => s.providerId === currentUser.id)}

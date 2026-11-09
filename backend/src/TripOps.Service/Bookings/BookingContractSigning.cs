@@ -1,3 +1,4 @@
+using static TripOps.Service.Bookings.BookingBilling;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -206,7 +207,7 @@ public sealed partial class BookingService
             throw new BookingException(409, "Phiên ký này đã hoàn tất.");
         if (now >= DateTime.SpecifyKind(session.ExpiresAt, DateTimeKind.Utc))
             throw new BookingException(410, "Mã ký đã hết hạn hoặc đã được thay bằng mã mới. Vui lòng tạo mã QR mới trong trang đơn.");
-        if (CurrentContract(contract.Booking) is not { } current || current.Id != contract.Id || current.TotalAmount != contract.Booking.TotalAmount)
+        if (CurrentContract(contract.Booking) is not { } current || current.Id != contract.Id || current.TotalAmount != BaseTourAmount(contract.Booking))
             throw new BookingException(409, "Hợp đồng đã có phiên bản mới. Vui lòng tạo mã QR mới để ký đúng phiên bản.");
         if (contract.Booking.Status is not (BookingStatus.Confirmed or BookingStatus.Paid))
             throw new BookingException(409, "Đơn không còn ở trạng thái ký hợp đồng.");

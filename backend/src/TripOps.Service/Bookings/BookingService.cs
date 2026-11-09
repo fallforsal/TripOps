@@ -1,3 +1,4 @@
+using static TripOps.Service.Bookings.BookingBilling;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
@@ -156,21 +157,21 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 return new BookingTimeline {
                     DayNumber = number, Title = day?.Title ?? $"Ngày {number}", Description = day?.Description,
                     Attractions = (day?.Attractions ?? []).Select(a => new BookingTimelineAttraction {
-                        AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
+                        AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", CurrentLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
                     Meals = (day?.Meals ?? []).Where(m => m.IsDefault == true).Select(m => new BookingTimelineMeal {
-                        MealType = m.MealType, OriginalRestaurantName = m.RestaurantName,
-                        CustomizedRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var chosenMeal) ? chosenMeal.RestaurantName : null,
+                        MealType = m.MealType, OriginalRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var bookedMeal) ? bookedMeal.RestaurantName : m.RestaurantName,
+                        CurrentRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var chosenMeal) ? chosenMeal.RestaurantName : m.RestaurantName,
                         IsCustomized = mealSelections.ContainsKey((number,m.MealType)),
                         PriceDifference = mealSelections.TryGetValue((number,m.MealType),out var mealOption) ? mealOption.PriceDifference : 0,
                         ServiceId = mealSelections.TryGetValue((number,m.MealType),out var selectedMeal) ? selectedMeal.ServiceId : m.ServiceId, DateService = request.StartDate.Date.AddDays(number-1), Time = m.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(m.Time.Value.TimeOfDay) : null }).ToList()
                 };
             }).ToList(),
             Accommodations = tour.Accommodations.Where(a => a.IsDefault == true).Select(a => new BookingAccommodation {
-                CustomizedHotelName = hotelSelections.TryGetValue(a.DestinationName,out var chosenHotel) ? chosenHotel.HotelName : null,
-                CustomizedStars = hotelSelections.TryGetValue(a.DestinationName,out var starsHotel) ? starsHotel.StarRating : null,
+                CurrentHotelName = hotelSelections.TryGetValue(a.DestinationName,out var chosenHotel) ? chosenHotel.HotelName : a.HotelName,
+                CurrentStars = hotelSelections.TryGetValue(a.DestinationName,out var starsHotel) ? starsHotel.StarRating : a.StarRating,
                 IsCustomized = hotelSelections.ContainsKey(a.DestinationName),
                 PriceDifference = hotelSelections.TryGetValue(a.DestinationName,out var priceHotel) ? priceHotel.PriceDifference : 0,
-                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date, DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1), Destination = a.DestinationName, OriginalHotelName = a.HotelName, OriginalStars = a.StarRating,
+                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date, DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1), Destination = a.DestinationName, OriginalHotelName = hotelSelections.TryGetValue(a.DestinationName,out var bookedHotel) ? bookedHotel.HotelName : a.HotelName, OriginalStars = hotelSelections.TryGetValue(a.DestinationName,out var bookedStars) ? bookedStars.StarRating : a.StarRating,
                 NightsCount = a.NightsCount }).ToList()
         };
 
@@ -196,7 +197,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!isOwner && !isAgency && !isGuide && !isAdmin)
             throw new BookingException(403, "Bạn không có quyền xem thông tin đơn đặt này.");
 
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        var snapshots = await quotations.SelectionSnapshots(id, ct);
+        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name, snapshots);
     }
 
     public async Task<BookingPage<BookingListItem>> ListForCustomer(
@@ -251,8 +253,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
 
         if (request.Decision == "approve")
         {
-            if (await quotations.RequiresAcceptance(booking.Id, ct))
-                await quotations.RequireAccepted(booking.Id, ct);
+            await quotations.RequireCurrentPlan(booking.Id, ct);
             booking.Status = BookingStatus.Confirmed;
             // Mở Đợt 1 – đặt cọc 50%, hạn = thời điểm duyệt + 24 giờ; Đợt 2 – phần còn lại, hạn = trước khởi hành 1 tuần.
             // Tour sát ngày (hạn Đợt 2 không sau hạn cọc): chỉ một khoản thu 100%, hạn = duyệt + 24 giờ.
@@ -414,7 +415,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
             incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
     }
 
-    private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName) =>
+    private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName,
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null) =>
         new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
             b.TourId, tourName, agencyId, agencyName,
             b.StartDate, EndDate(b), TotalGuests(b), b.TotalAmount,
@@ -428,10 +430,17 @@ public sealed partial class BookingService(BookingRepository repository, Account
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
                 i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
             b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
-                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CustomizedLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus)).ToList(),
-                t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CustomizedRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0)).ToList())).ToList(),
-            b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CustomizedHotelName??h.OriginalHotelName,h.CustomizedStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0)).ToList(),
-            Schedule(b), Transactions(b), Cancellation(b), ContractOf(b));
+                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote)).ToList(),
+                t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
+                    SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName)).ToList())).ToList(),
+            b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
+                SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName)).ToList(),
+            Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
+            b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
+                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b));
+
+    private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
+        snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),

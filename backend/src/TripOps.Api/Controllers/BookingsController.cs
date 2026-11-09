@@ -44,13 +44,13 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
     }
 
     [HttpPost("{id:int}/payments/payos")]
-    [EndpointSummary("Create (or reuse) a payOS payment link for the outstanding deposit; the amount is computed by the server")]
+    [EndpointSummary("Create (or reuse) a payOS link for the selected payment request; surcharges are independent, balance requires the deposit")]
     [ProducesResponseType<PayOsCheckoutDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<IActionResult> StartPayOs(int id, CancellationToken ct) =>
-        Ok(await bookings.StartPayOsDeposit(Actor, id, ct));
+    public async Task<IActionResult> StartPayOs(int id, CancellationToken ct, [FromQuery] int? paymentRequestId = null) =>
+        Ok(await bookings.StartPayOsDeposit(Actor, id, ct, paymentRequestId));
 
     [HttpPost("{id:int}/payments/payos/sync")]
     [EnableRateLimiting("payment-sync")]

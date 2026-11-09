@@ -347,14 +347,14 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
-                    b.Property<string>("CustomizedHotelName")
+                    b.Property<string>("CurrentHotelName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
-                        .HasColumnName("customized_hotel_name");
+                        .HasColumnName("current_hotel_name");
 
-                    b.Property<int?>("CustomizedStars")
+                    b.Property<int?>("CurrentStars")
                         .HasColumnType("int")
-                        .HasColumnName("customized_stars");
+                        .HasColumnName("current_stars");
 
                     b.Property<DateTime?>("DateFrom")
                         .HasColumnType("datetime2")
@@ -867,6 +867,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<Guid?>("CreationKey")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("creation_key");
+
                     b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("date")
                         .HasColumnName("date_of_birth");
@@ -944,6 +948,10 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("AssignedGuideId");
 
                     b.HasIndex("CheckedBy");
+
+                    b.HasIndex("BookingId", "CreationKey")
+                        .IsUnique()
+                        .HasFilter("[creation_key] IS NOT NULL");
 
                     b.HasIndex("BookingId", "ParticipantIndex")
                         .IsUnique()
@@ -1286,14 +1294,14 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("booking_timeline_id");
 
+                    b.Property<string>("CurrentLocationName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("current_location_name");
+
                     b.Property<string>("CustomerNote")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("customer_note");
-
-                    b.Property<string>("CustomizedLocationName")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("customized_location_name");
 
                     b.Property<string>("GuideId")
                         .HasMaxLength(36)
@@ -1359,10 +1367,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
-                    b.Property<string>("CustomizedRestaurantName")
+                    b.Property<string>("CurrentRestaurantName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
-                        .HasColumnName("customized_restaurant_name");
+                        .HasColumnName("current_restaurant_name");
 
                     b.Property<DateTime?>("DateService")
                         .HasColumnType("date")
@@ -2086,7 +2094,7 @@ namespace TripOps.Data.Migrations
 
                     b.ToTable("payment_requests", null, t =>
                         {
-                            t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance')");
+                            t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance') OR [stage] LIKE 'fee:%'");
                         });
                 });
 

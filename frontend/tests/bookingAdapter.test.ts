@@ -14,6 +14,22 @@ const dto: BookingDto = {
   assignedGuides: [],
 };
 
+test("booking selections preserve original names separately from current hotel, meal and attraction", () => {
+  const booking = fromApiBooking({ ...dto,
+    snapshotDays: [{ id: 10, dayNumber: 1, title: "Day one", locations: [
+      { id: 11, name: "Attraction C", originalName: "Attraction A", changeReason: "Road closure" },
+    ], meals: [{ id: 12, mealType: "lunch", name: "Restaurant C", originalName: "Restaurant A", priceDifference: 0 }] }],
+    snapshotHotels: [{ id: 13, destination: "Da Lat", name: "Hotel C", originalName: "Hotel A", priceDifference: 0 }],
+  });
+  assert.equal(booking.tour.hotels?.[0].name, "Hotel C");
+  assert.equal(booking.tour.hotels?.[0].originalName, "Hotel A");
+  assert.equal(booking.tour.itinerary[0].meals?.[0].serviceName, "Restaurant C");
+  assert.equal(booking.tour.itinerary[0].meals?.[0].originalName, "Restaurant A");
+  assert.equal(booking.tour.itinerary[0].locations[0].name, "Attraction C");
+  assert.equal(booking.tour.itinerary[0].locations[0].originalName, "Attraction A");
+  assert.equal(booking.tour.itinerary[0].locations[0].changeReason, "Road closure");
+});
+
 test("partial deposit requests only the missing deposit and remains partially paid", () => {
   const booking = fromApiBooking({ ...dto, paidAmount: 1000000, paymentStatus: "PartiallyPaid" });
   assert.equal(booking.paymentStatus, "partially_paid");

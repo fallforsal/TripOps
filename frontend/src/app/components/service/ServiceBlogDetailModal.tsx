@@ -30,6 +30,7 @@ interface ServiceBlogDetailModalProps {
   isSelected?: boolean;
   selectButtonText?: string;
   hidePrice?: boolean;
+  embedded?: boolean;
 }
 
 function formatVND(n?: number) {
@@ -45,6 +46,7 @@ export function ServiceBlogDetailModal({
   isSelected = false,
   selectButtonText = "Chọn dịch vụ này cho tour",
   hidePrice = false,
+  embedded = false,
 }: ServiceBlogDetailModalProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"blog" | "map" | "policies">("blog");
@@ -83,9 +85,9 @@ export function ServiceBlogDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200" onClick={onClose}>
+    <div className={embedded ? "flex min-h-0 flex-1 overflow-hidden" : "fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200"} onClick={embedded ? undefined : onClose}>
       <div
-        className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col border border-gray-100"
+        className={embedded ? "relative flex min-h-0 w-full flex-col overflow-hidden bg-white" : "relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col border border-gray-100"}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header */}
