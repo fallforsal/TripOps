@@ -9,6 +9,42 @@ namespace TripOps.Tests;
 public sealed partial class TourFlowTests
 {
     [Fact]
+    public async Task Agency_can_receive_or_reject_design_requests_and_customer_sees_the_decision()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var customer = await app.Login("customer");
+        using var agency = await app.Login("agency");
+        using var other = await app.Login("other");
+        var input = new CreateDesignRequestInput("agency", "Customer", "customer@example.test", "0900000000", "Da Lat",
+            DateTime.UtcNow.Date.AddDays(10), DateTime.UtcNow.Date.AddDays(11), 8);
+        var request = await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests", input), HttpStatusCode.Created);
+        var actionUrl = $"/api/v1/agency/tour-design-requests/{request.Id}/action";
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await customer.PostAsJsonAsync(actionUrl, new DesignRequestAction("review"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await other.PostAsJsonAsync(actionUrl, new DesignRequestAction("reject"))).StatusCode);
+        var received = await Read<DesignRequestDto>(await agency.PostAsJsonAsync(actionUrl, new DesignRequestAction("review")));
+        Assert.Equal("reviewing", received.Status);
+        Assert.Equal("reviewing", Assert.Single(await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"))).Status);
+        var rejected = await Read<DesignRequestDto>(await agency.PostAsJsonAsync(actionUrl, new DesignRequestAction("reject")));
+        Assert.Equal("rejected", rejected.Status);
+        Assert.Equal("rejected", Assert.Single(await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"))).Status);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await agency.PostAsJsonAsync(actionUrl, new DesignRequestAction("review"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tours", Complete())).StatusCode);
+
+        var second = await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests", input), HttpStatusCode.Created);
+        Assert.Equal("rejected", (await Read<DesignRequestDto>(await agency.PostAsJsonAsync(
+            $"/api/v1/agency/tour-design-requests/{second.Id}/action", new DesignRequestAction("reject")))).Status);
+
+        var withTour = await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests", input), HttpStatusCode.Created);
+        await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{withTour.Id}/tours", Complete()), HttpStatusCode.Created);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{withTour.Id}/action", new DesignRequestAction("reject"))).StatusCode);
+    }
+
+    [Fact]
     public async Task Customer_request_reaches_only_target_agency_and_supports_multiple_private_plans()
     {
         await using var app = new App(); await app.Initialize();

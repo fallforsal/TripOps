@@ -6,6 +6,7 @@ import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor
 import { customerRequestPlans, submitPlanProposal, customerPlanProposals, type TourPlanProposal } from "@/app/services/customTourRequests";
 import {
   FileQuestion,
+  FileText,
   Plus,
   Calendar,
   Users,
@@ -24,6 +25,7 @@ import {
 import { CustomTourRequest, Tour } from "@/app/types";
 import { PageHeader } from "@/app/components/customer/PageHeader";
 import { StatusBadge } from "@/app/components/customer/StatusBadge";
+import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
 import { EmptyState } from "@/app/components/customer/EmptyState";
 import { Button } from "@/app/components/ui/button";
 
@@ -45,6 +47,7 @@ export function MyRequestsPage({
   onBookTour,
 }: MyRequestsPageProps) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [viewingRequestModal, setViewingRequestModal] = useState<CustomTourRequest | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
   const [cancelling, setCancelling] = useState(false);
@@ -94,16 +97,28 @@ export function MyRequestsPage({
 
         {/* Request Overview Card */}
         <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F1F5F9] pb-3 gap-2">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#075985]" />
               <h2 className="text-base font-bold text-[#0F172A]">
                 {selectedRequest.destinations}
               </h2>
             </div>
-            <span className="text-xs text-[#475569]">
-              Gửi ngày: {new Date(selectedRequest.createdAt).toLocaleDateString("vi-VN")}
-            </span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs text-[#475569]">
+                Gửi ngày: {new Date(selectedRequest.createdAt).toLocaleDateString("vi-VN")}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingRequestModal(selectedRequest)}
+                className="border-sky-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-7 px-2.5 rounded-[4px] flex items-center gap-1.5 font-semibold"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#075985]" />
+                <span>Xem toàn bộ hồ sơ yêu cầu</span>
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -127,6 +142,29 @@ export function MyRequestsPage({
                 {selectedRequest.budgetPerPerson
                   ? formatVND(Number(selectedRequest.budgetPerPerson))
                   : "Chưa định mức"}
+              </strong>
+            </div>
+
+            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
+              <span className="text-[#475569] block">Đơn vị / Doanh nghiệp:</span>
+              <strong className="text-[#0F172A] font-semibold block mt-0.5">
+                {selectedRequest.businessName || "Khách hàng cá nhân / Đoàn tự do"}
+              </strong>
+            </div>
+
+            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
+              <span className="text-[#475569] block">Người đại diện liên hệ:</span>
+              <strong className="text-[#0F172A] font-semibold block mt-0.5">
+                {selectedRequest.contactName} ({selectedRequest.contactPhone || "—"})
+              </strong>
+            </div>
+
+            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
+              <span className="text-[#475569] block">Hạng khách sạn mong muốn:</span>
+              <strong className="text-amber-800 font-semibold block mt-0.5">
+                {selectedRequest.hotelStars
+                  ? (selectedRequest.hotelStars.includes("sao") ? selectedRequest.hotelStars : `${selectedRequest.hotelStars} sao`)
+                  : "Theo tư vấn của Agency"}
               </strong>
             </div>
           </div>
@@ -249,7 +287,18 @@ export function MyRequestsPage({
           })}
         </section>}
 
-        {/* Actions footer */}
+{/* Modal Xem chi tiết yêu cầu thiết kế tour */}
+        <CustomRequestDetailModal
+          isOpen={Boolean(viewingRequestModal)}
+          onClose={() => setViewingRequestModal(null)}
+          request={viewingRequestModal}
+          matchingTour={matchedTour}
+          userRole="customer"
+          onCancelRequest={onCancelRequest}
+          onViewTour={onViewTour}
+        />
+
+                {/* Actions footer */}
         <div className="flex items-center justify-between pt-4 border-t border-[#CBD5E1]">
           <Button
             type="button"
@@ -327,7 +376,7 @@ export function MyRequestsPage({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <div className="md:col-span-8 space-y-1.5">
+                <div className="md:col-span-7 space-y-1.5">
                   <h3
                     onClick={() => setSelectedRequestId(req.id)}
                     className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors"
@@ -358,14 +407,26 @@ export function MyRequestsPage({
                   )}
                 </div>
 
-                <div className="md:col-span-4 flex items-center md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
+                <div className="md:col-span-5 flex flex-wrap items-center md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewingRequestModal(req)}
+                    className="border-sky-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-8 px-3 rounded-[6px] flex items-center gap-1.5 font-medium"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#075985]" />
+                    <span>Xem chi tiết yêu cầu</span>
+                  </Button>
+
                   <Button
                     type="button"
                     size="sm"
                     onClick={() => setSelectedRequestId(req.id)}
-                    className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3 rounded-[6px]"
+                    className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3 rounded-[6px] flex items-center gap-1 font-medium"
                   >
-                    Xem chi tiết phương án
+                    <span>Xem chi tiết phương án</span>
+                    <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
                   </Button>
                 </div>
               </div>
@@ -381,6 +442,23 @@ export function MyRequestsPage({
           onAction={onNavigateToCreate}
         />
       )}
+
+      {/* Modal Xem chi tiết yêu cầu thiết kế tour */}
+      <CustomRequestDetailModal
+        isOpen={Boolean(viewingRequestModal)}
+        onClose={() => setViewingRequestModal(null)}
+        request={viewingRequestModal}
+        matchingTour={
+          viewingRequestModal
+            ? tours.find((t) => t.customRequestId === viewingRequestModal.id || t.id === viewingRequestModal.designedTourId) ||
+              plans.find((t) => t.customRequestId === viewingRequestModal.id || t.id === viewingRequestModal.designedTourId) ||
+              null
+            : null
+        }
+        userRole="customer"
+        onCancelRequest={onCancelRequest}
+        onViewTour={onViewTour}
+      />
     </div>
   );
 }

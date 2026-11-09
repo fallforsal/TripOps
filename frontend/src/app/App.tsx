@@ -1,4 +1,3 @@
-import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
@@ -1581,7 +1580,6 @@ function Application() {
         );
         return (
           <ErrorBoundary fallbackTitle="Không thể tải giao diện Quản lý Agency">
-            <WorkflowNotifications />
             <AgencyDashboard
               providerGroupRequests={providerGroupRequests}
               currentUser={currentUser}
@@ -1625,7 +1623,6 @@ function Application() {
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <WorkflowNotifications />
         {currentUser.role !== "admin" && currentUser.role !== "provider" && (
           <UnifiedHeader
             currentUser={currentUser}
@@ -1748,7 +1745,6 @@ function Application() {
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
       >
-        {currentUser && <WorkflowNotifications />}
         {currentPage === "custom-tour" ? (
           <CustomTourRequestPage
             sourceTour={sourceDesignTour}
