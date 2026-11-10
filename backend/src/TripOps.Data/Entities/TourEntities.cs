@@ -61,6 +61,9 @@ public virtual ICollection<TourMeal> Meals { get; set; } = new List<TourMeal>();
 }
 
 public class TouristAttraction : BaseEntity<int> {
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int GeofenceRadiusMeters { get; set; } = 1500;
 public int TourTimelineId { get; set; }
 public DateTime? Time { get; set; }
 public string? Name { get; set; }
