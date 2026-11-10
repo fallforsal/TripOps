@@ -191,3 +191,74 @@ are independent of the departure-day attendance restriction.
 From this point on, development changes to the Guide Flutter app are committed
 to the persistent `hiep` branch, based on `develop`. Pull `hiep` to run
 new changes before merging them to `develop`.
+
+
+## Ordered geofenced tour stop check-in (hiep)
+
+A Tour Guide can now check in a stop **only on or after the tour's departure date**
+(using Vietnam time UTC+7), and **only after every earlier stop has been
+successfully CheckedIn**. The sequence covers all itinerary days, ordered by
+day and visit order. The "Skipped" action is removed: skipping cannot unlock
+later destinations. The backend also denies duplicate check-ins.
+
+The managing Agency configures a geofence around each specific stop:
+`latitude`, `longitude` and `radiusMeters` (200–20,000 m, default 1,500 m).
+For example, configure the **actual tour location in Vũng Tàu**, not merely
+the city name, and choose an appropriate radius for that stop. The mobile app
+will request foreground location permission, then obtain a **fresh high-accuracy
+GPS position** when the HDV presses "Xác nhận check-in GPS". The backend accepts
+it only if (distance from authoritative destination center + GPS accuracy)
+is inside the configured radius, accuracy is at most 100 m, and the position
+timestamp is within three minutes (with at most 30 seconds clock skew).
+
+The guide booking detail API includes `canCheckInLocations`,
+`nextLocationCheckInId`, and each stop's `latitude`, `longitude`,
+`geofenceRadiusMeters` and `visitOrder`. The Flutter UI disables all
+out-of-sequence/too-early/unconfigured stops, but **backend verification is
+authoritative**.
+
+### Required database and Agency setup
+
+Run the new EF migration `20261110150000_AddGuideLocationGeofencing`
+against the same database used by the running API, then restart backend.
+Newly created tours may include optional activity GPS fields in the tour
+configuration. Those coordinates are copied into each new booking itinerary.
+
+**Existing tours/bookings have no historical coordinates** and are intentionally
+locked until the managing Agency configures each booked stop:
+
+```http
+PUT /api/v1/bookings/{bookingId}/locations/{locationId}/geofence
+Content-Type: application/json
+Cookie: TripOps.Session=... (Agency session only)
+
+{
+  "locationId": 123,
+  "latitude": 10.345,
+  "longitude": 107.08,
+  "radiusMeters": 1500
+}
+```
+
+Use surveyed or trusted map coordinates for the *specific stop*. Example
+coordinates above are placeholders only; do not assign them to a real tour
+without verification. The endpoint requires an authenticated owner-Agency
+account, rejects location ID mismatch, closed bookings and completed stops.
+
+### Device and privacy notes
+
+- Android: `ACCESS_COARSE_LOCATION` and `ACCESS_FINE_LOCATION` are declared
+  in the main AndroidManifest; the app requests location permission **only
+  when performing check-in**. iOS support would require an
+  `NSLocationWhenInUseUsageDescription` in its Info.plist.
+- `geolocator` retrieves a new position for each attempt; no background
+  location tracking is enabled.
+- GPS accuracy and reported position are stored as evidence in
+  `booking_attraction_checkins` (no continuous location history).
+- Mobile GPS, device clocks and JSON requests **can be spoofed**. The server
+  validates reported coordinates against a server-owned geofence but cannot
+  cryptographically prove a human's physical presence. Higher-assurance use
+  needs device integrity attestation and anti-mock-location protections.
+- Stop status changes require a valid API session and permission; app controls
+  alone do not grant permission. If a GPS location is unavailable, too far,
+  stale, or inaccurate, **no check-in is recorded**.
