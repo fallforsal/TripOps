@@ -14,6 +14,7 @@ using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Service.Bookings;
+using TripOps.Service.Payments;
 
 namespace TripOps.Tests;
 
@@ -293,8 +294,9 @@ public sealed partial class BookingFlowTests
         Assert.Single(guideTrips.Items);
         Assert.Equal(bookingId, guideTrips.Items[0].Id);
 
-        // 7. Guide may check attendance only on the exact departure date (UTC).
+        // 7. Guide may check attendance only on the Vietnam-local departure date.
         int participantId = assigned.Participants[0].Id;
+        var departureToday = PaymentRules.VietnamDate(DateTime.UtcNow);
         var attendanceUrl = $"/api/v1/guide/bookings/{bookingId}/attendance";
         var checkedInRequest = new AttendanceCheckinRequest(participantId, "CheckedIn");
         Assert.False(assigned.CanRecordAttendance);
@@ -308,7 +310,7 @@ public sealed partial class BookingFlowTests
             Assert.Equal(AttendanceStatus.Pending, futureParticipant.AttendanceStatus);
             Assert.Null(futureParticipant.CheckedAt);
             var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
-            trip.StartDate = DateTime.UtcNow.Date.AddDays(-1);
+            trip.StartDate = departureToday.AddDays(-1);
             await db.SaveChangesAsync();
         }
         Assert.Equal(HttpStatusCode.Conflict,
@@ -323,7 +325,7 @@ public sealed partial class BookingFlowTests
             Assert.Equal(AttendanceStatus.Pending, pastParticipant.AttendanceStatus);
             Assert.Null(pastParticipant.CheckedAt);
             var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
-            trip.StartDate = DateTime.UtcNow.Date;
+            trip.StartDate = departureToday;
             await db.SaveChangesAsync();
         }
         var departureDayDetail =
