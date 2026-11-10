@@ -19,6 +19,7 @@ import {
   Compass,
   FileText,
   RotateCcw,
+  Banknote,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -73,8 +74,13 @@ export function AdminLayout({
       badge: pendingRefundsCount > 0 ? pendingRefundsCount : undefined,
     },
     {
+      id: "settlements",
+      label: "Quyết toán Agency",
+      icon: Banknote,
+    },
+    {
       id: "finance",
-      label: "STK Sàn & Quyết toán",
+      label: "STK Sàn",
       icon: Landmark,
     },
     {

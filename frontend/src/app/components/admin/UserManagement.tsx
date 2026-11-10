@@ -12,6 +12,7 @@ import {
   MapPin,
   MinusCircle,
   Phone,
+  RefreshCw,
   Search,
   Store,
   User as UserIcon,
@@ -231,7 +232,10 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
               key={option.id || "all"}
               type="button"
               onClick={() => changeStatus(option.id)}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${status === option.id ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500"
+              aria-pressed={status === option.id}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${status === option.id
+                  ? "bg-white text-slate-900 font-bold shadow-md ring-1 ring-slate-300"
+                  : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               {option.label}
@@ -242,8 +246,12 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
 
       {/* Bảng */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div role="status" className="p-12 text-center text-sm text-slate-500">Đang tải danh sách tài khoản...</div>
+        {/* Đang tải lại: giữ bảng cũ (mờ đi) và hiện thanh chạy mảnh phía trên, không xóa trắng bảng. */}
+        <div className={`h-0.5 w-full overflow-hidden ${loading && items.length > 0 ? "bg-sky-100" : "bg-transparent"}`}>
+          {loading && items.length > 0 && <div className="h-full w-full bg-[#075985]/70 animate-pulse" />}
+        </div>
+        {loading && items.length === 0 ? (
+          <TableSkeleton />
         ) : error ? (
           <div role="alert" className="p-12 text-center text-sm text-rose-700">
             {error}
@@ -270,13 +278,20 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                   <th className="py-3.5 px-4 text-right">Hành động</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className={`divide-y divide-slate-100 transition-opacity duration-200 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
                 {items.map((account) => (
                   <tr key={account.id} className="hover:bg-sky-50/30 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar account={account} size="sm" />
-                        <span className="font-bold text-sm text-slate-900 truncate max-w-[14rem]">{account.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(account)}
+                          title="Xem chi tiết tài khoản"
+                          className="font-bold text-sm text-slate-900 truncate max-w-[14rem] text-left hover:text-[#075985] hover:underline cursor-pointer"
+                        >
+                          {account.name}
+                        </button>
                       </div>
                     </td>
                     <td className="py-3.5 px-4"><RoleBadge role={account.role} /></td>
@@ -290,23 +305,25 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                           variant="outline"
                           size="sm"
                           onClick={() => setSelected(account)}
-                          className="h-8 px-2.5 text-xs border-slate-300 hover:bg-slate-100 gap-1 cursor-pointer"
+                          title="Xem chi tiết"
+                          aria-label={`Xem chi tiết ${account.name}`}
+                          className="h-8 w-8 p-0 border-slate-300 hover:bg-slate-100 cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Xem chi tiết</span>
+                          <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => openConfirm(account)}
-                          className={`h-8 px-2.5 text-xs font-bold gap-1 cursor-pointer ${account.status === "banned"
+                          title={account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"}
+                          aria-label={`${account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"} ${account.name}`}
+                          className={`h-8 w-8 p-0 cursor-pointer ${account.status === "banned"
                               ? "border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100"
                               : "border-rose-300 text-rose-700 hover:bg-rose-50"
                             }`}
                         >
-                          {account.status === "banned" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                          <span>{account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"}</span>
+                          {account.status === "banned" ? <CheckCircle2 className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
                         </Button>
                       </div>
                     </td>
@@ -328,7 +345,10 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
           <Button variant="outline" className="rounded-xl" disabled={loading || page * PAGE_SIZE >= total} onClick={() => setPage((v) => v + 1)}>
             Trang sau
           </Button>
-          <Button variant="outline" className="rounded-xl" disabled={loading} onClick={refresh}>Tải lại</Button>
+          <Button variant="outline" className="rounded-xl gap-1.5" disabled={loading} onClick={refresh}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Đang tải..." : "Tải lại"}
+          </Button>
         </div>
       </div>
 
@@ -504,6 +524,29 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Khung xương lúc tải lần đầu: giữ đúng bố cục bảng để trang không bị nhảy. */
+function TableSkeleton() {
+  return (
+    <div role="status" aria-label="Đang tải danh sách tài khoản" className="divide-y divide-slate-100">
+      <div className="bg-slate-50/80 h-11 border-b border-slate-200" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-3.5 animate-pulse">
+          <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0" />
+          <div className="h-3.5 w-40 rounded bg-slate-200" />
+          <div className="h-5 w-20 rounded-full bg-slate-100" />
+          <div className="h-3 w-44 rounded bg-slate-100 hidden md:block" />
+          <div className="h-3 w-24 rounded bg-slate-100 hidden md:block" />
+          <div className="h-5 w-20 rounded-full bg-slate-100" />
+          <div className="ml-auto flex gap-1.5">
+            <div className="w-8 h-8 rounded-md bg-slate-100" />
+            <div className="w-8 h-8 rounded-md bg-slate-100" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -3560,7 +3560,7 @@ export function AgencyBookingDetailPage({
                     <CheckCircle className="w-4 h-4 text-emerald-600" />
                     Admin sàn đã quyết toán tiền tour:
                   </p>
-                  <p>Số tiền đã nhận: <strong className="text-emerald-700 text-xs">{formatVND(booking.settledAmount ?? 0)}</strong> {booking.platformFeeRate ? `(Đã khấu trừ ${booking.platformFeeRate}% phí sàn ${formatVND(booking.platformFeeAmount ?? 0)})` : "(Miễn phí sàn 0% - Giải ngân 100%)"}</p>
+                  <p>Số tiền đã nhận: <strong className="text-emerald-700 text-xs">{formatVND(booking.settledAmount ?? 0)}</strong> {booking.platformFeeRate ? `(Đã khấu trừ ${booking.platformFeeRate}% phí sàn ${formatVND(booking.platformFeeAmount ?? 0)})` : "(Đã khấu trừ 10% phí sàn)"}</p>
                   {booking.settledAt && <p className="text-gray-500">Ngày quyết toán: {booking.settledAt}</p>}
                 </div>
               ) : booking.status === "completed" ? (
@@ -4093,7 +4093,7 @@ export function AgencyBookingDetailPage({
                     Lưu ý về Dòng tiền Thanh toán:
                   </p>
                   <p>
-                    Tiền thanh toán của khách sẽ được chuyển trực tiếp vào <strong>Tài khoản trung gian (Escrow) của Hệ thống</strong>. Khi tour kết thúc tốt đẹp, Admin sàn sẽ quyết toán và chuyển lại 100% cho Quý công ty (chính sách miễn phí sàn hiện tại).
+                    Tiền thanh toán của khách sẽ được chuyển trực tiếp vào <strong>Tài khoản trung gian (Escrow) của Hệ thống</strong>. Sau khi hướng dẫn viên bấm hoàn thành tour 2 ngày, hệ thống tự chuyển tiền cho Quý công ty (đã trừ 10% phí sàn) vào tài khoản đã khai báo ở mục Tài khoản doanh nghiệp, nếu khách đã thanh toán đủ và không có khiếu nại.
                   </p>
                 </div>
 

@@ -65,7 +65,16 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     [HttpPost("complete")]
     [EndpointSummary("Complete an assigned tour already in progress")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Complete(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status != BookingStatus.InProgress) throw new BookingException(409, "Booking must be in progress."); b.Status = BookingStatus.Completed; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
+    public async Task<IActionResult> Complete(int id, [FromServices] TripOps.Service.Settlements.AgencySettlementService settlements, CancellationToken ct)
+    {
+        var b = await Assigned(id, ct);
+        if (b.Status != BookingStatus.InProgress) throw new BookingException(409, "Booking must be in progress.");
+        b.Status = BookingStatus.Completed;
+        // Mốc quyết toán: chốt phí sàn và hẹn ngày tự chuyển tiền cho Agency (mặc định sau 2 ngày).
+        await settlements.MarkTourCompleted(b, ct);
+        await db.SaveChangesAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
+    }
     [HttpPost("locations/{locationId:int}/check-in")]
     [EndpointSummary("Record a guide check-in against a booking itinerary location")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]

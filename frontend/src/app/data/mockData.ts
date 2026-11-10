@@ -19,7 +19,7 @@ export const defaultSystemBankAccount: SystemBankAccount = {
   accountHolder: "CONG TY CP CONG NGHE NEN TANG DU LICH VIET NAM",
   branch: "Hội sở TP. Hồ Chí Minh",
   defaultCommissionRate: 0,
-  notes: "Tài khoản trung gian (Escrow) đảm bảo an toàn giao dịch giữa Khách hàng và Công ty Du lịch. Hệ thống tự động ghi nhận thanh toán và bảo vệ quyền lợi hai bên (Hiện đang áp dụng chính sách Miễn phí sàn 0%).",
+  notes: "Tài khoản trung gian (Escrow) đảm bảo an toàn giao dịch giữa Khách hàng và Công ty Du lịch. Hệ thống tự động ghi nhận thanh toán và bảo vệ quyền lợi hai bên (Phí sàn 10% trừ khi quyết toán cho Công ty du lịch sau tour).",
 };
 
 export const mockTourCompanies: TourCompany[] = [

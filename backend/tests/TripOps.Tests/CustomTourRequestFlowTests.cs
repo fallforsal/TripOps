@@ -224,7 +224,7 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Rejected_platform_hotel_requires_replacement_before_approval()
+    public async Task Rejected_platform_hotel_can_be_replaced_with_agency_supplier_before_approval()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
@@ -251,8 +251,8 @@ public sealed partial class TourFlowTests
         await Read<ProviderRequestView>(await provider.PostAsJsonAsync(
             $"/api/v1/provider/booking-requests/{providerRequest.Id}/respond",
             new ProviderReply("reject", null, "Hết phòng")));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,
-            (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
+        // Duyệt booking không còn phụ thuộc phản hồi Provider (xem Agency_approval_is_independent_of_provider_response);
+        // test này chỉ kiểm tra việc thay khách sạn bị từ chối bằng nhà cung cấp riêng của Agency.
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/change-plan",
                 new BookingPlanChange(draft.Id))).StatusCode);
