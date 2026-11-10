@@ -63,6 +63,24 @@ public sealed partial class BookingFlowTests
         Assert.Equal(firstStop.Id, before.NextLocationCheckInId);
         Assert.Equal(10.345, before.SnapshotDays![0].Locations[0].Latitude);
 
+        // Old bookings without configured geofences must fail closed.
+        using (var scope = app.Services.CreateScope()) {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var stop = await db.BookingTimelineAttractions.SingleAsync(x => x.Id == firstStop.Id);
+            stop.Latitude = null; stop.Longitude = null;
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(firstUrl, near)).StatusCode);
+        var geofenceUrl = $"/api/v1/bookings/{booking.Id}/locations/{firstStop.Id}/geofence";
+        var geofence = new {
+            locationId = firstStop.Id, latitude = 10.345,
+            longitude = 107.08, radiusMeters = 1500
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await customer.PutAsJsonAsync(geofenceUrl, geofence)).StatusCode);
+        (await agency.PutAsJsonAsync(geofenceUrl, geofence)).EnsureSuccessStatusCode();
+
         // Sequence gate: cannot check in stop 2 before stop 1.
         Assert.Equal(HttpStatusCode.Conflict,
             (await guide.PostAsJsonAsync(secondUrl, near)).StatusCode);
