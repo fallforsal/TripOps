@@ -183,6 +183,23 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<TourTimeline>().ToTable("tour_timeline");
         modelBuilder.Entity<TourVersion>().ToTable("tour_versions");
         modelBuilder.Entity<TouristAttraction>().ToTable("tourist_locations");
+        modelBuilder.Entity<TouristAttraction>(e => {
+            e.Property(x => x.Latitude).HasColumnName("latitude");
+            e.Property(x => x.Longitude).HasColumnName("longitude");
+            e.Property(x => x.GeofenceRadiusMeters).HasColumnName("geofence_radius_meters").HasDefaultValue(1500);
+        });
+        modelBuilder.Entity<BookingTimelineAttraction>(e => {
+            e.Property(x => x.VisitOrder).HasColumnName("visit_order").HasDefaultValue(0);
+            e.Property(x => x.Latitude).HasColumnName("latitude");
+            e.Property(x => x.Longitude).HasColumnName("longitude");
+            e.Property(x => x.GeofenceRadiusMeters).HasColumnName("geofence_radius_meters").HasDefaultValue(1500);
+        });
+        modelBuilder.Entity<BookingAttractionCheckin>(e => {
+            e.Property(x => x.GpsLatitude).HasColumnName("gps_latitude");
+            e.Property(x => x.GpsLongitude).HasColumnName("gps_longitude");
+            e.Property(x => x.GpsAccuracyMeters).HasColumnName("gps_accuracy_meters");
+            e.Property(x => x.GpsRecordedAtUtc).HasColumnName("gps_recorded_at_utc");
+        });
         modelBuilder.Entity<User>().ToTable("users");
         DatabaseDesignConfiguration.Configure(modelBuilder);
         BookingQuotationConfiguration.Configure(modelBuilder);
