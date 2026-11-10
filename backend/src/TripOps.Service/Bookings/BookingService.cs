@@ -157,7 +157,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 var day = tour.Timelines.SingleOrDefault(d => d.DayNumber == number);
                 return new BookingTimeline {
                     DayNumber = number, Title = day?.Title ?? $"Ngày {number}", Description = day?.Description,
-                    Attractions = (day?.Attractions ?? []).Select(a => new BookingTimelineAttraction {
+                    Attractions = (day?.Attractions ?? []).OrderBy(a => a.Id).Select((a, index) => new BookingTimelineAttraction {
+                        VisitOrder = index + 1, Latitude = a.Latitude, Longitude = a.Longitude, GeofenceRadiusMeters = a.GeofenceRadiusMeters,
                         AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", CurrentLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
                     Meals = (day?.Meals ?? []).Where(m => m.IsDefault == true).Select(m => new BookingTimelineMeal {
                         MealType = m.MealType, OriginalRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var bookedMeal) ? bookedMeal.RestaurantName : m.RestaurantName,
@@ -462,17 +463,29 @@ public sealed partial class BookingService(BookingRepository repository, Account
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
                 i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
             b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
-                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote)).ToList(),
+                t.Attractions.OrderBy(a => a.VisitOrder > 0 ? a.VisitOrder : int.MaxValue).ThenBy(a => a.Id)
+                    .Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,
+                        a.Latitude,a.Longitude,a.GeofenceRadiusMeters,a.VisitOrder)).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
                     SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
                 SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
-                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), b.StartDate.Date == PaymentRules.VietnamDate(UtcNow));
+                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), b.StartDate.Date == PaymentRules.VietnamDate(UtcNow),
+             b.StartDate.Date <= PaymentRules.VietnamDate(UtcNow) && b.Status is (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress),
+             NextUncheckedLocationId(b));
 
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
+
+
+    // A single itinerary-wide sequence, stable for legacy tours.
+    private static int? NextUncheckedLocationId(Booking b) =>
+        b.Timelines.OrderBy(d => d.DayNumber)
+            .SelectMany(d => d.Attractions.OrderBy(a => a.VisitOrder > 0 ? a.VisitOrder : int.MaxValue)
+                .ThenBy(a => a.Id))
+            .FirstOrDefault(a => a.AttendanceStatus != "CheckedIn")?.Id;
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),
