@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
@@ -22,6 +23,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String query = '';
   AttendanceFilter filter = AttendanceFilter.all;
 
+  /// Recheck the server's attendance permission after crossing midnight
+  /// or returning to the app. Backend remains the source of truth.
+  Future<void> refresh() async {
+    if (busy != null) return;
+    try {
+      final updated = await widget.guides.detail(current.id);
+      if (mounted) setState(() {
+        current = updated;
+        error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => error = readableError(e));
+    }
+  }
+
   Future<void> update(Passenger passenger, String status) async {
     if (busy != null || !current.canRecordAttendance) return;
     setState(() { busy = passenger.id; error = null; });
@@ -30,6 +46,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final updated = await widget.guides.detail(current.id);
       if (mounted) setState(() => current = updated);
     } catch (e) {
+      // If midnight passed while this screen was open, refresh the flag from
+      // the backend so all action buttons become disabled immediately.
+      if (e is ApiFailure && e.statusCode == 409) {
+        try {
+          final updated = await widget.guides.detail(current.id);
+          if (mounted) setState(() => current = updated);
+        } catch (_) { /* Keep the original authorization error visible. */ }
+      }
       if (mounted) setState(() => error = readableError(e));
     } finally {
       if (mounted) setState(() => busy = null);
@@ -48,7 +72,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final canRecord = current.canRecordAttendance;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Điểm danh hành khách')),
+      appBar: AppBar(
+        title: const Text('Điểm danh hành khách'),
+        actions: [
+          IconButton(
+            tooltip: 'Kiểm tra lại ngày và quyền điểm danh',
+            onPressed: busy == null ? refresh : null,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
         children: [
