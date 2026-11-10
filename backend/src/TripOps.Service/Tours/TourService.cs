@@ -156,6 +156,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             foreach (var activity in activities)
             {
                 Require(activity.EstimatedTime == null || activity.EstimatedTime >= TimeSpan.Zero && activity.EstimatedTime < TimeSpan.FromDays(1), "Activity time must be within a day.");
+                Require(activity.Latitude.HasValue == activity.Longitude.HasValue, "Latitude and longitude must be provided together.");
             }
             var meals = day.Meals ?? [];
             foreach (var meal in meals)
@@ -290,7 +291,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             tour.PricingTiers.OrderBy(p => p.DisplayOrder).ThenBy(p => p.Id)
                 .Select(p => new PricingTierInput(p.Name ?? "", p.MinAge, p.MaxAge, p.PricePerGuest ?? 0, p.DisplayOrder ?? 0)).ToArray(),
             tour.Timelines.OrderBy(d => d.DayNumber).Select(d => new TimelineInput(d.DayNumber, d.Title ?? "", d.Description,
-                d.Attractions.OrderBy(a => a.Id).Select((a, index) => new ActivityInput(a.Name ?? "", null, a.Time.HasValue ? a.Time.Value.TimeOfDay : null, index)).ToArray(),
+                d.Attractions.OrderBy(a => a.Id).Select((a, index) => new ActivityInput(a.Name ?? "", null, a.Time.HasValue ? a.Time.Value.TimeOfDay : null, index, a.Latitude, a.Longitude, a.GeofenceRadiusMeters)).ToArray(),
                 d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName, m.Description, m.IsDefault == true, m.PriceDifference, m.ServiceId, m.Time.HasValue ? m.Time.Value.TimeOfDay : null, m.SupplierSource, m.AgencySupplierId, m.SupplierSnapshot is null ? null : JsonSerializer.Deserialize<SupplierSnapshotInput>(m.SupplierSnapshot, Json))).ToArray(),
                 stays.GetValueOrDefault(d.DayNumber, []).Select(a => new AccommodationInput(a.HotelName, a.DestinationName,
                     null, a.NightsCount ?? 0, a.StarRating ?? 3, a.IsDefault == true, a.PriceDifference ?? 0, a.AddressNotes, a.ServiceId, a.SupplierSource, a.AgencySupplierId, a.SupplierSnapshot is null ? null : JsonSerializer.Deserialize<SupplierSnapshotInput>(a.SupplierSnapshot, Json))).ToArray())).ToArray(),
@@ -335,7 +336,8 @@ public sealed class TourService(TourRepository repository, AccountService accoun
             MinAge = p.MinAge, MaxAge = p.MaxAge, DisplayOrder = p.DisplayOrder, PricePerGuest = Money(p.PricePerGuest) }).ToList();
         tour.Timelines = (c.Timelines ?? []).Select(d => new TourTimeline {
             DayNumber = d.DayNumber, Title = d.Title, Description = d.Description,
-            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name, AgencyId = tour.AgencyId ?? "", Time = a.EstimatedTime.HasValue ? new DateTime(2000,1,1).Add(a.EstimatedTime.Value) : null
+            Attractions = (d.Activities ?? []).OrderBy(a => a.OrderIndex).Select(a => new TouristAttraction { Name = a.Name, AgencyId = tour.AgencyId ?? "", Time = a.EstimatedTime.HasValue ? new DateTime(2000,1,1).Add(a.EstimatedTime.Value) : null,
+                 Latitude = a.Latitude, Longitude = a.Longitude, GeofenceRadiusMeters = a.GeofenceRadiusMeters
                  }).ToList(),
             Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName, AgencyId = tour.AgencyId ?? "",
                 ServiceId = m.ServiceId, SupplierSource = SupplierSources.Resolve(m.SupplierSource, m.ServiceId), AgencySupplierId = m.AgencySupplierId,
