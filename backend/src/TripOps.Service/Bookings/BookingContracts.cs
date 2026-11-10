@@ -234,7 +234,8 @@ public sealed record BookingListItem(
     decimal PaidAmount,
     string Status,
     string PaymentStatus,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? ThumbnailUrl = null);
 
 public sealed record ParticipantDto(
     int Id,

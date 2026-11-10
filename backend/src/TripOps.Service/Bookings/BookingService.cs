@@ -4,6 +4,7 @@ using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
 using TripOps.Service.Accounts;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
 using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
@@ -355,13 +356,38 @@ public sealed partial class BookingService(BookingRepository repository, Account
     public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
         (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
 
+    // Tour media is stored as JSON arrays. Prefer the explicit thumbnail, then
+    // use the first valid gallery image (older tours may lack ThumbnailUrls).
+    // Uploaded images use public /api/v1/files/tours/... paths; others are HTTPS.
+    private static string? TourThumbnail(Tour? tour)
+    {
+        if (tour is null) return null;
+        foreach (var json in new[] { tour.ThumbnailUrls, tour.Images })
+        {
+            if (string.IsNullOrWhiteSpace(json)) continue;
+            try
+            {
+                foreach (var url in JsonSerializer.Deserialize<string[]>(json) ?? [])
+                {
+                    var candidate = url?.Trim();
+                    if (string.IsNullOrWhiteSpace(candidate) || candidate.Length > 2048) continue;
+                    if (candidate.StartsWith("/api/v1/files/tours/", StringComparison.Ordinal) ||
+                        Uri.TryCreate(candidate, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                        return candidate;
+                }
+            }
+            catch (JsonException) { /* Ignore malformed legacy media and try Images. */ }
+        }
+        return null;
+    }
+
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
             b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
             b.StartDate, TotalGuests(b), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch, TourThumbnail(b.Tour))).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
