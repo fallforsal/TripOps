@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
@@ -22,7 +23,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   AttendanceFilter filter = AttendanceFilter.all;
 
   Future<void> update(Passenger passenger, String status) async {
-    if (busy != null) return;
+    if (busy != null || !current.canRecordAttendance) return;
     setState(() { busy = passenger.id; error = null; });
     try {
       await widget.guides.attendance(current.id, passenger.id, status);
@@ -44,6 +45,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final checked = all.where((p) => p.status == 'CheckedIn').length;
     final absent = all.where((p) => p.status == 'Absent').length;
     final pending = all.where((p) => p.status == 'Pending').length;
+    final canRecord = current.canRecordAttendance;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Điểm danh hành khách')),
@@ -93,6 +95,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               )),
             ]),
           )),
+          space(14),
+          if (!canRecord) ...[
+            GuideInfoBanner(
+              icon: Icons.lock_clock_outlined,
+              warning: true,
+              message: 'Chỉ được điểm danh vào ngày khởi hành '
+                  '${vnDate(current.startDate)}. '
+                  'Bạn vẫn có thể xem danh sách và trạng thái đã ghi nhận.',
+            ),
+            space(10),
+          ],
           space(20),
           const GuideSectionTitle('Danh sách hành khách'),
           space(11),
@@ -178,7 +191,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ],
                   Row(children: [
                     Expanded(child: OutlinedButton.icon(
-                      onPressed: busy != null ? null :
+                      onPressed: busy != null || !canRecord ? null :
                           () => update(p, 'CheckedIn'),
                       style: p.status == 'CheckedIn'
                           ? OutlinedButton.styleFrom(
@@ -191,7 +204,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     )),
                     const SizedBox(width: 9),
                     Expanded(child: OutlinedButton.icon(
-                      onPressed: busy != null ? null :
+                      onPressed: busy != null || !canRecord ? null :
                           () => update(p, 'Absent'),
                       style: p.status == 'Absent'
                           ? OutlinedButton.styleFrom(
@@ -206,7 +219,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: busy != null ? null :
+                        onPressed: busy != null || !canRecord ? null :
                             () => update(p, 'Pending'),
                         child: const Text('Đặt lại: Chưa rõ'),
                       ),
