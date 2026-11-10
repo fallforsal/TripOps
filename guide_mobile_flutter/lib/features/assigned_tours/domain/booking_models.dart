@@ -104,6 +104,7 @@ class BookingDetail {
     required this.startDate, required this.endDate, required this.totalGuests,
     required this.passengers, required this.days, required this.incidents,
     this.customerName, this.contactPhone, this.agencyName,
+    this.canRecordAttendance = false,
   });
   final int id;
   final String code;
@@ -118,6 +119,8 @@ class BookingDetail {
   final String? customerName;
   final String? contactPhone;
   final String? agencyName;
+  /// Backend-enforced rule: attendance is possible only on departure date (UTC).
+  final bool canRecordAttendance;
 
   factory BookingDetail.fromJson(Map<String, dynamic> j) => BookingDetail(
     id: (j['id'] as num).toInt(),
@@ -130,6 +133,7 @@ class BookingDetail {
     customerName: j['customerName']?.toString(),
     contactPhone: j['contactPhone']?.toString(),
     agencyName: j['agencyName']?.toString(),
+    canRecordAttendance: j['canRecordAttendance'] == true,
     passengers: (j['participants'] as List<dynamic>? ?? [])
         .map((e) => Passenger.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     days: (j['snapshotDays'] as List<dynamic>? ?? [])
