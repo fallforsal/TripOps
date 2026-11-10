@@ -486,6 +486,7 @@ export interface TourReview {
 }
 
 export interface Tour {
+  sharedVersion?: number;
   planGuestCount?: number;
   updatedAt?: string;
   id: string;
@@ -924,6 +925,8 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  rejectionReason?: string;
+  sharedVersion?: number;
   sourceTourId?: string;
   initialChanges?: { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
   id: string;

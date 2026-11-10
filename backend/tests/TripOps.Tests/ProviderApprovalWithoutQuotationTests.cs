@@ -83,21 +83,14 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Redesigned_private_plan_still_requires_updated_customer_booking_snapshot()
+    public async Task Booked_private_plan_cannot_rewrite_customer_booking()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
         var (request, plan) = await SharedDesign(customer, agency);
-        await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(plan.Id, plan.Version));
-        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
-            new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
-                [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
-        var changed = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Version,
-            plan.Configuration with { Name = "Revised private plan" }, "Revised itinerary")));
-        changed = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete", new TourCommand(changed.Version)));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
-        await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(changed.Id, changed.Version));
-        await Read<QuotationView>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/change-plan", new BookingPlanChange(changed.Id)));
+        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", DesignBooking(plan)), HttpStatusCode.Created);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Version,
+            plan.Configuration with { Name = "Revised private plan" }, "Revised itinerary"))).StatusCode);
         await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
     }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
 import {
   Tour,
   Service,
@@ -100,6 +101,7 @@ function formatVND(n: number) {
 
 // -------- Program Tab --------
 function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
+  const [viewingMealService, setViewingMealService] = useState<Service | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(
     new Set(tour.itinerary.slice(0, 1).map((d) => d.id)),
   );
@@ -161,6 +163,8 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
           </div>
         </section>
       )}
+
+      {(tour.is_request || tour.tourType === "custom_request") && <TourAccommodationSummary tour={tour} services={services}/>}
 
       {/* Highlights */}
       {tour.highlights.length > 0 && (
@@ -335,9 +339,6 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                     <div className="flex-1 border border-gray-200 rounded-xl p-3 bg-white hover:border-blue-300 transition-colors shadow-2xs">
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                                            Tham quan
-                                          </span>
                                           <h5 className="text-xs sm:text-sm font-bold text-gray-900">{loc.name}</h5>
                                         </div>
                                         <a
@@ -366,6 +367,9 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                 const isBreakfast = mealType === "breakfast";
                                 const isLunch = mealType === "lunch";
                                 const address = mealAddress(meal, services);
+                                const service = meal.supplierSource !== "AGENCY_SUPPLIER" && !meal.isCustom && meal.serviceId
+                                  ? services.find(post => post.id === meal.serviceId)
+                                  : undefined;
 
                                 return (
                                   <div key={meal.id || `meal-${idx}`} className="relative flex items-start gap-2.5">
@@ -420,6 +424,17 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                             +{meal.alternativeMeals.length} phương án ẩm thực
                                           </span>
                                         )}
+                                        <div className="flex items-center gap-2">
+                                        {service && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setViewingMealService(service)}
+                                            aria-label={`Xem bài dịch vụ ${service.name}`}
+                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                          >
+                                            <Eye className="w-3 h-3" /> Xem bài dịch vụ
+                                          </button>
+                                        )}
                                         {address && (
                                           <a
                                             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([meal.serviceName, address].filter(Boolean).join(", "))}`}
@@ -430,6 +445,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                             <MapPin className="w-3 h-3" /> Bản đồ
                                           </a>
                                         )}
+                                        </div>
                                       </div>
                                       <p className="text-xs text-gray-600 mt-1 leading-relaxed flex items-start gap-1.5">
                                         <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
@@ -461,6 +477,12 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
       {tour.companyNote && (
         <p className="text-center text-red-600 font-bold text-lg py-4">{tour.companyNote}</p>
       )}
+      <ServiceBlogDetailModal
+        service={viewingMealService}
+        isOpen={Boolean(viewingMealService)}
+        onClose={() => setViewingMealService(null)}
+        hidePrice
+      />
     </div>
   );
 }
@@ -2521,11 +2543,11 @@ export function TourDetailPage({
                   )}
                 </div>
                 <p className="text-xs text-purple-200 leading-relaxed">
-                  Đây là phương án Agency đã gửi. Bạn có thể mở yêu cầu thiết kế, sửa bản riêng của mình và gửi lại để Agency kiểm tra dịch vụ, báo giá và tạo phiên bản mới.
+                  Đây là phiên bản Agency đã chia sẻ. Nếu muốn điều chỉnh hoặc dùng lại phiên bản trước, hãy mở yêu cầu và trao đổi để Agency cập nhật rồi chia sẻ lại.
                 </p>
                 {onOpenRequest && <button type="button" onClick={onOpenRequest}
                   className="rounded border border-purple-200 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
-                  Mở yêu cầu để tùy biến và trao đổi
+                  Mở yêu cầu để trao đổi với Agency
                 </button>}
                 {tour.changeNote && (
                   <div className="bg-black/30 rounded-lg p-2.5 text-xs text-amber-300 italic border border-white/10">

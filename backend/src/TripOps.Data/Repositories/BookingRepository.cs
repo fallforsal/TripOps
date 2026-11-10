@@ -113,16 +113,16 @@ public sealed class BookingRepository(TripOpsDbContext db)
     }
 
     public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>
-        db.Tours.Include(t => t.PricingTiers)
+        db.Tours.AsNoTracking().Include(t => t.PricingTiers)
             .Include(t => t.Agency)
             .Include(t => t.Timelines).ThenInclude(t => t.Attractions)
             .Include(t => t.Timelines).ThenInclude(t => t.Meals)
             .Include(t => t.Accommodations).AsSplitQuery()
             .SingleOrDefaultAsync(t => t.Id == tourId &&
-                                       t.Status == TourStatus.Completed &&
-                                       ((t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
-                                        (t.IsRequest == true && t.IsSharedToCustomer == true && t.DesignRequestId.HasValue &&
-                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId))) &&
+                                       t.Status != TourStatus.Deleted &&
+                                       ((t.Status == TourStatus.Completed && t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
+                                        (t.IsRequest == true && t.SharedVersion.HasValue && t.DesignRequestId.HasValue &&
+                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId && r.Status == CustomRequestStatus.InProgress))) &&
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
@@ -140,12 +140,13 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.BookingParticipants.Include(p => p.Booking)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
-    public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct)
+    public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct, int? expectedVersion = null)
     {
         if (!tour.DesignRequestId.HasValue) return true;
         await db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
         var request = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == tour.DesignRequestId && r.CustomerId == customerId, ct);
-        return request != null && request.AgreedTourId == tour.Id && request.AgreedTourVersion == tour.Version &&
+        return request != null && request.Status == CustomRequestStatus.InProgress && expectedVersion.HasValue && tour.SharedVersion == expectedVersion &&
+            await db.Tours.AnyAsync(t => t.Id == tour.Id && t.SharedVersion == expectedVersion, ct) &&
             !await db.Bookings.AnyAsync(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct);
     }
     public void NotifyPayment(Booking booking)

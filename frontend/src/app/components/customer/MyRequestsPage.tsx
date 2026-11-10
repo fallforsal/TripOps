@@ -1,464 +1,59 @@
+import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
+import { useEffect, useState } from "react";
+import { Eye, Plus, RefreshCw, Send } from "lucide-react";
+import type { CustomTourRequest, Tour, Service } from "@/app/types";
+import { customerRequestPlans } from "@/app/services/customTourRequests";
+import { Button } from "@/app/components/ui/button";
+import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
 import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
 import { DesignVersionHistory } from "@/app/components/common/DesignVersionHistory";
-import { http } from "@/app/lib/http";
-import { useEffect, useState } from "react";
-import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
-import { customerRequestPlans, submitPlanProposal, customerPlanProposals, type TourPlanProposal } from "@/app/services/customTourRequests";
-import {
-  FileQuestion,
-  FileText,
-  Plus,
-  Calendar,
-  Users,
-  MapPin,
-  Building2,
-  Clock,
-  Eye,
-  CheckCircle2,
-  XCircle,
-  Sparkles,
-  ArrowRight,
-  MessageSquare,
-  ShieldCheck,
-  AlertCircle,
-} from "lucide-react";
-import { CustomTourRequest, Tour } from "@/app/types";
-import { PageHeader } from "@/app/components/customer/PageHeader";
 import { StatusBadge } from "@/app/components/customer/StatusBadge";
-import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
-import { EmptyState } from "@/app/components/customer/EmptyState";
-import { Button } from "@/app/components/ui/button";
-
-interface MyRequestsPageProps {
-  requests: CustomTourRequest[];
-  tours?: Tour[];
-  onCancelRequest: (requestId: string) => Promise<void>;
-  onNavigateToCreate: () => void;
-  onViewTour?: (tour: Tour) => void;
-  onBookTour?: (tour: Tour) => void | Promise<void>;
-}
-
-export function MyRequestsPage({
-  requests,
-  tours = [],
-  onCancelRequest,
-  onNavigateToCreate,
-  onViewTour,
-  onBookTour,
-}: MyRequestsPageProps) {
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [viewingRequestModal, setViewingRequestModal] = useState<CustomTourRequest | null>(null);
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<Tour | null>(null);
-  const [editingDraftKey, setEditingDraftKey] = useState(0);
-  const [proposals, setProposals] = useState<TourPlanProposal[]>([]);
-  const [loadedPlans, setLoadedPlans] = useState<Tour[]>([]);
-  const [planError, setPlanError] = useState("");
-  const [note, setNote] = useState("");
-  const [sendingNote, setSendingNote] = useState(false);
-  const [proposalReload, setProposalReload] = useState(0);
-  useEffect(() => { if (selectedRequestId) void customerPlanProposals(selectedRequestId)
-    .then(setProposals).catch(() => setProposals([])); }, [selectedRequestId, proposalReload]);
-
+interface Props { services?: Service[]; requests: CustomTourRequest[]; tours?: Tour[]; onCancelRequest: (id: string) => Promise<void>; onNavigateToCreate: () => void; onViewTour?: (tour: Tour) => void; onBookTour?: (tour: Tour) => void | Promise<void>; }
+const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
+const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
+export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, onViewTour, onBookTour, services = [] }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const [plan, setPlan] = useState<Tour | null>(null);
+  const [reload, setReload] = useState(0); const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const selected = requests.find(r => r.id === selectedId);
   useEffect(() => {
-    if (!selectedRequestId) return;
-    let active = true; setLoadedPlans([]); setPlanError(""); setNote("");
-    void customerRequestPlans(selectedRequestId).then((rows) => { if (active) setLoadedPlans(rows); })
-      .catch((e) => { if (active) setPlanError(e.status === 404 ? "API tải phương án chưa đồng bộ. Cần chạy backend bản mới để xem và chỉnh sửa Plan." : e.message); });
-    return () => { active = false; };
-  }, [selectedRequestId, proposalReload]);
-  const selectedRequest = requests.find((r) => r.id === selectedRequestId);
-  const plans = loadedPlans.length ? loadedPlans : selectedRequest ? tours.filter((t) => t.customRequestId === selectedRequest.id) : [];
-  const matchedTour = plans.find((t) => t.id === selectedPlanId) ||
-    plans.find((t) => t.id === selectedRequest?.designedTourId) || plans[0] || null;
-
-  const formatVND = (n: number) => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(n);
+    if (!selectedId) return;
+    let alive = true; setPlan(null); setLoading(true); setError("");
+    customerRequestPlans(selectedId).then(rows => { if (alive) setPlan(rows[0] || null); })
+      .catch(e => { if (alive) setError(e instanceof Error ? e.message : "Không tải được phương án."); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [selectedId, reload, selected?.sharedVersion]);
+  const book = async () => {
+    if (!selected || !plan || busy) return;
+    setBusy(true); setError("");
+    try { await onBookTour?.({ ...plan, customRequestId: selected.id }); }
+    catch (e) { setError(e instanceof Error ? e.message : "Không thể đặt tour."); }
+    finally { setBusy(false); }
   };
-
-  // If a request is selected, show detail view (7.9)
-  if (selectedRequest) {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6 pb-16 font-sans">
-        <PageHeader
-          title={`Chi tiết yêu cầu thiết kế #${selectedRequest.id}`}
-          subtitle={`Gửi tới: ${selectedRequest.targetCompanyName || "Travel Agency"}`}
-          onBack={() => setSelectedRequestId(null)}
-          backText="Quay lại danh sách yêu cầu"
-          actions={
-            <StatusBadge type="custom_request" status={selectedRequest.status} />
-          }
-        />
-
-        {/* Request Overview Card */}
-        <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F1F5F9] pb-3 gap-2">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-[#075985]" />
-              <h2 className="text-base font-bold text-[#0F172A]">
-                {selectedRequest.destinations}
-              </h2>
-            </div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-xs text-[#475569]">
-                Gửi ngày: {new Date(selectedRequest.createdAt).toLocaleDateString("vi-VN")}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setViewingRequestModal(selectedRequest)}
-                className="border-sky-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-7 px-2.5 rounded-[4px] flex items-center gap-1.5 font-semibold"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#075985]" />
-                <span>Xem toàn bộ hồ sơ yêu cầu</span>
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Thời gian mong muốn:</span>
-              <strong className="text-[#0F172A] font-semibold block mt-0.5">
-                {selectedRequest.departureDate} – {selectedRequest.returnDate}
-              </strong>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Quy mô đoàn:</span>
-              <strong className="text-[#0F172A] font-semibold block mt-0.5">
-                {selectedRequest.numberOfPeople} khách
-              </strong>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Ngân sách dự kiến / người:</span>
-              <strong className="text-[#075985] font-bold block mt-0.5">
-                {selectedRequest.budgetPerPerson
-                  ? formatVND(Number(selectedRequest.budgetPerPerson))
-                  : "Chưa định mức"}
-              </strong>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Đơn vị / Doanh nghiệp:</span>
-              <strong className="text-[#0F172A] font-semibold block mt-0.5">
-                {selectedRequest.businessName || "Khách hàng cá nhân / Đoàn tự do"}
-              </strong>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Người đại diện liên hệ:</span>
-              <strong className="text-[#0F172A] font-semibold block mt-0.5">
-                {selectedRequest.contactName} ({selectedRequest.contactPhone || "—"})
-              </strong>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-              <span className="text-[#475569] block">Hạng khách sạn mong muốn:</span>
-              <strong className="text-amber-800 font-semibold block mt-0.5">
-                {selectedRequest.hotelStars
-                  ? (selectedRequest.hotelStars.includes("sao") ? selectedRequest.hotelStars : `${selectedRequest.hotelStars} sao`)
-                  : "Theo tư vấn của Agency"}
-              </strong>
-            </div>
-          </div>
-
-          {selectedRequest.additionalInfo && (
-            <div className="pt-2 text-xs text-[#475569]">
-              <span className="font-semibold text-[#0F172A]">Yêu cầu riêng / Lưu ý đoàn:</span>
-              <p className="mt-1 p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px] leading-relaxed">
-                {selectedRequest.additionalInfo}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {planError && <p role="alert" className="text-red-700">{planError}<Button variant="outline" onClick={() => setProposalReload((n) => n + 1)}>Tải lại phương án</Button></p>}
-        <DesignRequestMessages requestId={selectedRequest.id} />
-        <DesignVersionHistory requestId={selectedRequest.id} />
-        {/* Agency Proposal Card */}
-        {selectedRequest.companyNote || selectedRequest.quotedPricePerPerson || matchedTour ? (
-          <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#F1F5F9] pb-3">
-              <Sparkles className="w-4 h-4 text-[#075985]" />
-              <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">
-                Phương án đề xuất từ {selectedRequest.targetCompanyName}
-              </h3>
-            </div>
-
-            {selectedRequest.companyNote && (
-              <div className="p-3.5 bg-[#F0F9FF] border border-[#BAE6FD] rounded-[4px] text-xs text-[#075985] leading-relaxed">
-                <strong>Phản hồi từ công ty:</strong> {selectedRequest.companyNote}
-              </div>
-            )}
-
-            {plans.length > 1 && <div className="flex flex-wrap gap-2">
-              {plans.map((plan) => <Button key={plan.id} type="button" variant={matchedTour?.id === plan.id ? "default" : "outline"}
-                onClick={() => setSelectedPlanId(plan.id)}>{plan.name} · {formatVND(plan.price)}/khách (dự kiến)</Button>)}
-            </div>}
-
-            {selectedRequest.quotedPricePerPerson && (
-              <div className="flex items-center justify-between p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px]">
-                <div>
-                  <span className="text-xs text-[#475569] block">Giá dự kiến / một khách; giá cuối sau khi Provider xác nhận:</span>
-                  <span className="text-lg font-bold text-[#075985]">
-                    {formatVND(selectedRequest.quotedPricePerPerson)}
-                  </span>
-                </div>
-
-                {matchedTour && (
-                  <div className="flex items-center gap-2">
-                    {onViewTour && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onViewTour(matchedTour)}
-                        className="border-[#CBD5E1] text-[#0F172A] hover:bg-[#F8FAFC] text-xs h-8 px-3 rounded-[6px]"
-                      >
-                        Xem lịch trình chi tiết
-                      </Button>
-                    )}
-
-                    {onBookTour && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={async () => { setCancelError(""); setCancelling(true);
-                          try { await http(`/tour-design-requests/${selectedRequest.id}/agree-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(matchedTour.id), version: matchedTour.version || 1 }) }); await onBookTour(matchedTour); }
-                          catch (e) { setCancelError(e instanceof Error ? e.message : "Không thể đồng ý phương án."); }
-                          finally { setCancelling(false); }
-                        }} disabled={cancelling}
-                        className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3.5 rounded-[6px] font-semibold"
-                      >
-                        Đồng ý phương án — Yêu cầu báo giá chính thức
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[6px] p-5 text-xs text-[#B45309] space-y-1">
-            <p className="font-semibold flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-[#B45309]" />
-              Yêu cầu đang được xử lý
-            </p>
-            <p className="leading-relaxed">
-              Agency {selectedRequest.targetCompanyName} đang thiết kế lịch trình, chỗ ở và chỗ ăn phù hợp cho đoàn. Bạn sẽ nhận được thông báo ngay khi có báo giá.
-            </p>
-          </div>
-        )}
-
-        {matchedTour && <section className="space-y-3 rounded border border-sky-200 bg-sky-50 p-5 text-sm">
-          <h3 className="font-bold text-sky-900">Trao đổi và tùy biến Tour plan với Agency</h3>
-          <p>Chọn plan, sửa bản riêng của bạn và gửi cho Agency xem. Giá và khả năng cung cấp sẽ được Agency xác nhận lại.</p>
-          <label className="block">Ghi chú yêu cầu cho Plan v{matchedTour.version}<textarea className="w-full rounded border p-2 bg-white" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Viết yêu cầu để Agency điều chỉnh và báo giá lại…" /></label>
-          <Button disabled={sendingNote || !note.trim()} onClick={async () => {
-            setSendingNote(true); setPlanError("");
-            try { await submitPlanProposal(selectedRequest.id, matchedTour, { itinerary: structuredClone(matchedTour.itinerary), hotels: structuredClone(matchedTour.hotels || []) }, note.trim()); setProposalReload((n) => n + 1); }
-            catch (e) { setPlanError(e instanceof Error ? e.message : "Không gửi được ghi chú."); }
-            finally { setSendingNote(false); }
-          }}>Gửi note yêu cầu cho Agency</Button>
-          {!editingPlan && <Button onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan(matchedTour); }}>Tùy biến phương án này</Button>}
-          {editingPlan && <CustomerPlanEditor key={`${editingPlan.id}-${editingPlan.version}-${editingDraftKey}`} requestId={selectedRequest.id}
-            plan={editingPlan} onCancel={() => setEditingPlan(null)} onDone={() => {
-              setEditingPlan(null); setProposalReload((n) => n + 1);
-            }} />}
-          {proposals.map((p) => {
-            const base = plans.find((plan) => Number(plan.id) === p.tourId);
-            return <div key={p.id} className="rounded border bg-white p-3">
-              <p className="font-semibold">Bản bạn gửi #{p.id} · Plan v{p.baseTourVersion} · {p.status === "Pending" ? "Chờ Agency xem" : p.status === "Reviewed" ? "Agency đã xem" : "Cần làm rõ"}</p>
-              <p className="mt-1">{p.message}</p>
-              {p.proposal.quotation && <p className="text-xs text-sky-800">Giá gắn với bản gửi này · Plan v{p.proposal.quotation.tourVersion}: {p.proposal.quotation.pricePerPerson.toLocaleString("vi-VN")} ₫/khách · Tổng {p.proposal.quotation.total.toLocaleString("vi-VN")} ₫ ({p.proposal.quotation.preliminary ? "dự kiến" : "báo giá chính thức"})</p>}{p.agencyReply && <p className="mt-2 text-sky-800">Agency: {p.agencyReply}</p>}
-              {base?.version === p.baseTourVersion && <button type="button" className="mt-2 rounded border border-sky-700 px-3 py-1 text-sky-800"
-                onClick={() => { setEditingDraftKey((n) => n + 1); setEditingPlan({ ...base,
-                  itinerary: structuredClone(p.proposal.itinerary), hotels: structuredClone(p.proposal.hotels) }); }}>
-                Chỉnh tiếp từ bản này
-              </button>}
-            </div>;
-          })}
-        </section>}
-
-{/* Modal Xem chi tiết yêu cầu thiết kế tour */}
-        <CustomRequestDetailModal
-          isOpen={Boolean(viewingRequestModal)}
-          onClose={() => setViewingRequestModal(null)}
-          request={viewingRequestModal}
-          matchingTour={matchedTour}
-          userRole="customer"
-          onCancelRequest={onCancelRequest}
-          onViewTour={onViewTour}
-        />
-
-                {/* Actions footer */}
-        <div className="flex items-center justify-between pt-4 border-t border-[#CBD5E1]">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSelectedRequestId(null)}
-            className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
-          >
-            Quay lại danh sách
-          </Button>
-
-          {cancelError && <p role="alert" className="text-xs text-red-700">{cancelError}</p>}
-          {(selectedRequest.status === "pending" || selectedRequest.status === "reviewing") && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={cancelling}
-              onClick={async () => {
-                if (confirm("Bạn có chắc chắn muốn hủy yêu cầu thiết kế này?")) {
-                  setCancelling(true);
-                  setCancelError("");
-                  try {
-                    await onCancelRequest(selectedRequest.id);
-                    setSelectedRequestId(null);
-                  } catch (error) {
-                    setCancelError(error instanceof Error ? error.message : "Không thể hủy yêu cầu.");
-                  } finally { setCancelling(false); }
-                }
-              }}
-              className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs h-9 px-4 rounded-[6px]"
-            >
-              {cancelling ? "Đang hủy..." : "Hủy yêu cầu"}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 pb-16 font-sans">
-      <PageHeader
-        title="Yêu cầu thiết kế tour của tôi"
-        subtitle="Theo dõi tiến độ báo giá và phản hồi lịch trình từ các đơn vị lữ hành"
-        actions={
-          <Button
-            type="button"
-            onClick={onNavigateToCreate}
-            className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-medium flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Tạo yêu cầu mới</span>
-          </Button>
-        }
-      />
-
-      {requests.length > 0 ? (
-        <div className="space-y-4">
-          {requests.map((req) => (
-            <div
-              key={req.id}
-              className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors space-y-3"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#F1F5F9]">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono font-bold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded-[4px] border border-[#BAE6FD]">
-                    {req.id}
-                  </span>
-                  <span className="text-xs text-[#475569] flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-[#075985]" />
-                    <span>Agency: <strong>{req.targetCompanyName}</strong></span>
-                  </span>
-                </div>
-
-                <StatusBadge type="custom_request" status={req.status} size="sm" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <div className="md:col-span-7 space-y-1.5">
-                  <h3
-                    onClick={() => setSelectedRequestId(req.id)}
-                    className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors"
-                  >
-                    {req.destinations}
-                  </h3>
-
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-[#075985]" />
-                      <span>{req.departureDate} đến {req.returnDate}</span>
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-[#075985]" />
-                      <span>{req.numberOfPeople} người</span>
-                    </span>
-
-                    <span className="text-[#94A3B8]">
-                      Gửi ngày: {new Date(req.createdAt).toLocaleDateString("vi-VN")}
-                    </span>
-                  </div>
-
-                  {req.companyNote && (
-                    <p className="text-xs text-[#075985] bg-[#F0F9FF] px-2.5 py-1 rounded-[4px] line-clamp-1 border border-[#BAE6FD]/50">
-                      <strong>Phản hồi mới:</strong> {req.companyNote}
-                    </p>
-                  )}
-                </div>
-
-                <div className="md:col-span-5 flex flex-wrap items-center md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewingRequestModal(req)}
-                    className="border-sky-300 text-[#075985] hover:bg-[#F0F9FF] text-xs h-8 px-3 rounded-[6px] flex items-center gap-1.5 font-medium"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-[#075985]" />
-                    <span>Xem chi tiết yêu cầu</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setSelectedRequestId(req.id)}
-                    className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3 rounded-[6px] flex items-center gap-1 font-medium"
-                  >
-                    <span>Xem chi tiết phương án</span>
-                    <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          icon={FileQuestion}
-          title="Bạn chưa có yêu cầu thiết kế nào"
-          description="Nếu các tour có sẵn chưa phù hợp với đoàn, bạn có thể gửi yêu cầu riêng để các Travel Agency thiết kế lịch trình và báo giá theo ý muốn."
-          actionText="Tạo yêu cầu thiết kế tour"
-          onAction={onNavigateToCreate}
-        />
-      )}
-
-      {/* Modal Xem chi tiết yêu cầu thiết kế tour */}
-      <CustomRequestDetailModal
-        isOpen={Boolean(viewingRequestModal)}
-        onClose={() => setViewingRequestModal(null)}
-        request={viewingRequestModal}
-        matchingTour={
-          viewingRequestModal
-            ? tours.find((t) => t.customRequestId === viewingRequestModal.id || t.id === viewingRequestModal.designedTourId) ||
-              plans.find((t) => t.customRequestId === viewingRequestModal.id || t.id === viewingRequestModal.designedTourId) ||
-              null
-            : null
-        }
-        userRole="customer"
-        onCancelRequest={onCancelRequest}
-        onViewTour={onViewTour}
-      />
-    </div>
-  );
+  if (selected) return <div className="mx-auto max-w-5xl space-y-5 pb-12">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><Button variant="ghost" onClick={() => setSelectedId(null)}>Quay lại danh sách</Button><h1 className="mt-2 text-xl font-bold text-[#075985]">Yêu cầu thiết kế #{selected.id}</h1><p className="mt-1 text-sm text-slate-500">Agency: {selected.targetCompanyName}</p></div><StatusBadge type="custom_request" status={selected.status}/></div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold">{selected.destinations}</h2><Button size="sm" variant="outline" onClick={() => setViewing(true)}>Xem hồ sơ yêu cầu</Button></div>
+      <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm text-slate-600"><span>{date(selected.departureDate)} – {date(selected.returnDate)}</span><span>{selected.numberOfPeople} khách</span><span>Ngân sách: {selected.budgetPerPerson ? money(Number(selected.budgetPerPerson)) + " / khách" : "Thỏa thuận"}</span></div>
+      {selected.additionalInfo && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{selected.additionalInfo}</p>}
+      {selected.rejectionReason && <div className="mt-4 rounded-lg bg-rose-50 p-4 text-sm text-rose-800"><strong>Lý do Agency từ chối:</strong><p className="mt-1 whitespace-pre-wrap">{selected.rejectionReason}</p></div>}
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[#075985]">Phương án được Agency chia sẻ</h2><Button size="sm" variant="outline" disabled={loading} onClick={() => setReload(n => n + 1)}><RefreshCw className={loading ? "animate-spin" : ""}/>Tải lại phương án</Button></div>
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+      {loading ? <p className="text-sm text-slate-500">Đang tải phương án…</p> : plan ? <><div className="flex flex-col gap-4 sm:flex-row">{plan.image && <img src={plan.image} alt={plan.name} className="h-36 w-full rounded-xl object-cover sm:w-52"/>}<div className="flex-1"><span className="text-xs font-semibold text-[#075985]">Phiên bản {plan.version}</span><h3 className="mt-1 text-lg font-bold">{plan.name}</h3><p className="mt-2 text-sm text-slate-500">{plan.duration} · {plan.destination}</p><p className="mt-3 text-lg font-bold text-[#075985]">{money(plan.price)} <span className="text-sm font-normal">/ khách</span></p></div></div>
+        <p className="text-sm text-slate-500">Bạn muốn điều chỉnh hoặc dùng lại phiên bản trước? Gửi trao đổi bên dưới để Agency cập nhật và chia sẻ lại.</p>
+        <div className="flex flex-wrap justify-end gap-2">{onViewTour && <Button variant="outline" onClick={() => onViewTour(plan)}><Eye/>Xem chi tiết tour</Button>}{onBookTour && <Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void book()}>Đặt tour phiên bản {plan.version}</Button>}</div></> : <p className="text-sm text-slate-500">{selected.status === "rejected" ? "Agency đã từ chối yêu cầu này." : selected.status === "cancelled" ? "Yêu cầu đã được hủy." : "Agency chưa chia sẻ phương án. Bạn có thể trao đổi để bổ sung nhu cầu."}</p>}
+    </section>
+    {plan && <TourAccommodationSummary tour={plan} services={services}/>}
+    <DesignRequestMessages requestId={selected.id} closed={selected.status === "rejected" || selected.status === "cancelled"}/>
+    <DesignVersionHistory key={`${selected.id}-${reload}`} requestId={selected.id}/>
+    {!selected.designedTourId && (selected.status === "pending" || selected.status === "reviewing") && <div className="flex justify-end"><Button variant="outline" disabled={busy} className="text-rose-700" onClick={async () => { if (!confirm("Hủy yêu cầu thiết kế này?")) return; setBusy(true); try { await onCancelRequest(selected.id); } catch(e) { setError(e instanceof Error ? e.message : "Không thể hủy yêu cầu."); } finally { setBusy(false); } }}>Hủy yêu cầu</Button></div>}
+    <CustomRequestDetailModal isOpen={viewing} onClose={() => setViewing(false)} request={selected} matchingTour={plan} userRole="customer" onViewTour={onViewTour}/>
+  </div>;
+  return <div className="space-y-5 pb-12"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><h1 className="text-2xl font-bold text-[#075985]">Yêu cầu thiết kế tour của tôi</h1><p className="mt-1 text-sm text-slate-500">Trao đổi với Agency và chọn phương án phù hợp cho chuyến đi.</p></div><Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" onClick={onNavigateToCreate}><Plus/>Tạo yêu cầu mới</Button></div>
+    {!requests.length && <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">Bạn chưa gửi yêu cầu thiết kế tour.</p>}
+    {requests.map(request => <section key={request.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">#{request.id} · {request.destinations}</h2><p className="mt-1 text-sm text-slate-500">Gửi tới {request.targetCompanyName} · {date(request.createdAt)}</p></div><StatusBadge type="custom_request" status={request.status}/></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600">{request.numberOfPeople} khách · {date(request.departureDate)} – {date(request.returnDate)}</p><Button variant="outline" onClick={() => setSelectedId(request.id)}>Xem phương án & trao đổi</Button></div>{request.rejectionReason && <p className="mt-3 text-sm text-rose-700">Lý do từ chối: {request.rejectionReason}</p>}</section>)}
+  </div>;
 }

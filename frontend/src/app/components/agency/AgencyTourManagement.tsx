@@ -3431,7 +3431,7 @@ export function TourFormPage(props: TourFormPageProps) {
       : [];
 
     if (isCustom) {
-      if (tour) {
+      if (tour && tour.id !== "0") {
         const snapshot: TourVersion = {
           version: tour.version || 1,
           createdAt: new Date().toISOString(),
@@ -3549,7 +3549,7 @@ export function TourFormPage(props: TourFormPageProps) {
         ? "quoted"
         : "pending_partner_quote",
       status: isDraft ? "draft" : "completed",
-      visibility: isDraft || mode === "complete_hidden" ? "hidden" : "public",
+      visibility: isCustom || isDraft || mode === "complete_hidden" ? "hidden" : "public",
       is_request: isCustom,
       tourType: isCustom ? "custom_request" : tour?.tourType || "public",
       customRequestId: customRequest?.id || tour?.customRequestId,
@@ -3624,7 +3624,7 @@ export function TourFormPage(props: TourFormPageProps) {
             </h1>
             <p className="text-xs text-gray-500">
               {isCustom
-                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || tour?.targetCustomerName || "Khách đặt riêng"}`
+                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
                 : tour
                   ? `Mã tour: ${tourCode || "T-NEW"} · Cập nhật thông tin chi tiết`
                   : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá"}
@@ -3683,7 +3683,7 @@ export function TourFormPage(props: TourFormPageProps) {
             <Check className="w-4 h-4 mr-1.5" />
             {isCustom
               ? tour
-                ? `Lưu phiên bản mới (v${(tour.version || 1) + 1})`
+                ? "Hoàn tất & Lưu tour riêng"
                 : "Hoàn tất & Lưu Tour Thiết Kế"
               : tour
                 ? "Lưu & Mở bán ngay"
@@ -3702,7 +3702,7 @@ export function TourFormPage(props: TourFormPageProps) {
             <span className="text-sm font-semibold">
               Khách hàng:{" "}
               <span className="text-purple-200">
-                {customRequest?.customerName ||
+                {customRequest?.customerName || customRequest?.contactName ||
                   tour?.targetCustomerName ||
                   "Yêu cầu từ khách"}
               </span>
@@ -3713,7 +3713,7 @@ export function TourFormPage(props: TourFormPageProps) {
               )}
             </span>
             <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-purple-600">
-              {tour
+              {tour && tour.id !== "0"
                 ? `Phiên bản hiện tại: v${tour.version || 1} ➔ Dự kiến lưu: v${(tour.version || 1) + 1}`
                 : "Phiên bản đầu tiên: v1"}
             </span>
@@ -9297,7 +9297,7 @@ export function TourFormPage(props: TourFormPageProps) {
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
           >
             <Check className="w-4 h-4 mr-1.5" />
-            {tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay"}
+            {isCustom ? "Hoàn tất & Lưu tour riêng" : tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay"}
           </Button>
         </div>
       </div>

@@ -6,6 +6,7 @@ public int? AcceptedQuotationId { get; set; }
 public string BookingCode { get; set; } = string.Empty;
 public string? CustomerId { get; set; }
 public int? TourId { get; set; }
+public int TourVersion { get; set; } = 1;
 public int? DesignRequestId { get; set; }
 public DateTime StartDate { get; set; }
 public string ContactName { get; set; } = string.Empty;

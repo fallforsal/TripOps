@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db)
+public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -299,7 +299,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
 
     private TourDto Dto(Tour t) => new(t.Id, t.AgencyId ?? "", t.Code, State(t.Status), State(t.Visibility),
         t.IsRequest == true, t.IsAiGenerated == true, t.Version ?? 1, Configuration(t),
-        t.CreatedAt ?? DateTime.UnixEpoch, t.UpdatedAt ?? t.CreatedAt ?? DateTime.UnixEpoch, t.DesignRequestId);
+        t.CreatedAt ?? DateTime.UnixEpoch, t.UpdatedAt ?? t.CreatedAt ?? DateTime.UnixEpoch, t.DesignRequestId, t.SharedVersion);
 
     private void Apply(Tour tour, TourConfiguration c)
     {
@@ -352,10 +352,11 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     {
         tour.Status = TourStatus.Draft; tour.Visibility = TourVisibility.Hidden;
     }
+    private int? restoredVersion;
     private void Snapshot(Tour tour, string actor, string note)
     {
         repository.AddVersion(tour, new TourVersion { VersionNumber = tour.Version ?? 1, CreatedBy = actor,
-            SharedToCustomer = tour.IsSharedToCustomer == true, NumberOfGuests = Configuration(tour).NumberOfGuests ?? (tour.DesignRequestId.HasValue ? db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).Select(r => r.NumberOfGuests).FirstOrDefault() : null),
+            RestoredFromVersion = restoredVersion, NumberOfGuests = Configuration(tour).NumberOfGuests ?? (tour.DesignRequestId.HasValue ? db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).Select(r => r.NumberOfGuests).FirstOrDefault() : null),
             Price = tour.BasePrice, ChangeLog = note, SnapshotData = JsonSerializer.Serialize(new TourSnapshot(1,
                 tour.Version ?? 1, tour.IsRequest == true, tour.IsAiGenerated == true, State(tour.Status), State(tour.Visibility), Configuration(tour)), Json) });
     }
@@ -369,21 +370,9 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         if (tour.DesignRequestId.HasValue)
         {
             var request = await db.TourDesignRequests.SingleAsync(r => r.Id == tour.DesignRequestId, ct);
-            var bookings = await db.Bookings.Where(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected).ToListAsync(ct);
-            Require(bookings.All(b => b.PaymentStatus == PaymentStatus.Unpaid && b.Status == BookingStatus.Pending), "Plan đã chốt hoặc thanh toán; không thể sửa.");
-            foreach (var booking in bookings)
-            {
-                foreach (var q in await db.BookingQuotations.Where(q => q.BookingId == booking.Id && q.Status != "Superseded").ToListAsync(ct)) q.Status = "Superseded";
-                foreach (var r in await db.BookingSupplierRequests.Where(r => r.BookingId == booking.Id && r.Status != "Superseded").ToListAsync(ct)) r.Status = "Superseded";
-            }
-            if (Configuration(tour).NumberOfGuests.HasValue) request.NumberOfGuests = Configuration(tour).NumberOfGuests;
-            request.AgreedTourId = null; request.AgreedTourVersion = null; request.AgreedAt = null; request.Revision++;
-            if (tour.IsSharedToCustomer == true)
-            {
-                foreach (var other in await db.Tours.Where(t => t.DesignRequestId == request.Id && t.Id != tour.Id && t.IsSharedToCustomer == true).ToListAsync(ct))
-                    other.IsSharedToCustomer = false;
-                db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = request.Id, Message = "Agency đã gửi phiên bản Tour plan mới." });
-            }
+            Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Yêu cầu đã có booking. Hãy thay đổi dịch vụ trên booking, không sửa phương án nguồn.");
+            request.Revision++;
+
         }
         tour.ChangeNote = note;
         Snapshot(tour, actor, note);
@@ -399,28 +388,23 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     {
         await Agency(actor, ct);
         var request = await repository.DesignRequest(actor, requestId, ct) ?? throw new TourException(404, "Yêu cầu thiết kế không tồn tại.");
-        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.Contacted, "Yêu cầu không còn ở trạng thái có thể thiết kế.");
+        Require(request.Status == CustomRequestStatus.InProgress, "Yêu cầu không còn ở trạng thái có thể thiết kế.");
+        Require(!await db.Tours.AnyAsync(t => t.DesignRequestId == requestId, ct), "Yêu cầu đã có tour thiết kế. Hãy sửa tour hiện có.");
         await Validate(config, false, ct, actor);
         var tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
-            IsRequest = true, DesignRequestId = requestId, IsSharedToCustomer = false };
+            IsRequest = true, DesignRequestId = requestId };
         Apply(tour, config); repository.Add(tour);
-        request.Status = CustomRequestStatus.Contacted; request.UpdatedAt = DateTime.UtcNow;
+        request.Status = CustomRequestStatus.InProgress; request.UpdatedAt = DateTime.UtcNow;
         return await Save(tour, actor, "Created from customer request", ct);
     }
-    public async Task<TourDto> CustomerRequestTour(string actor, int requestId, CancellationToken ct)
-    {
-        var user = await accounts.Current(actor, ct);
-        Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
-        var dto = Dto(await repository.CustomerRequestTour(actor, requestId, ct) ?? throw new TourException(404, "Tour chưa sẵn sàng cho khách xem."));
-        return dto with { Configuration = DesignRequestService.CustomerConfiguration(dto.Configuration) };
-    }
+    public Task<TourDto> CustomerRequestTour(string actor, int requestId, CancellationToken ct) => SharedTour(actor, requestId, ct);
     public async Task<IReadOnlyList<TourDto>> CustomerRequestTours(string actor, int requestId, CancellationToken ct)
     {
-        var user = await accounts.Current(actor, ct);
-        Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
-        return (await repository.CustomerRequestTours(actor, requestId, ct)).Select(t => { var dto = Dto(t); return dto with { Configuration = DesignRequestService.CustomerConfiguration(dto.Configuration) }; }).ToArray();
+        if (!await db.TourDesignRequests.AnyAsync(r => r.Id == requestId && r.CustomerId == actor, ct))
+            throw new TourException(404, "Không tìm thấy yêu cầu.");
+        try { return [await SharedTour(actor, requestId, ct)]; }
+        catch (TourException e) when (e.Status == 404) { return []; }
     }
-
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
         await Agency(actor, ct); await Validate(config, false, ct, actor);
@@ -435,7 +419,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         await Validate(request.Configuration, false, ct, actor);
         if(!string.IsNullOrWhiteSpace(request.Configuration.Code) && await repository.CodeExists(request.Configuration.Code.Trim().ToUpperInvariant(),id,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
         await Baseline(tour, actor, ct);
-        Apply(tour, request.Configuration); ResetApproval(tour); if (tour.IsRequest == true) tour.IsSharedToCustomer = false; tour.Version = (tour.Version ?? 1) + 1;
+        Apply(tour, request.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
         return await Save(tour, actor, request.ChangeNote, ct);
     }
     public async Task<TourDto> Get(string actor, int id, bool admin, CancellationToken ct)
@@ -536,11 +520,14 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         var configuration = Configuration(tour);
         pending.Remove(tour);
         pending.Add(tour, configuration);
+        if (action == "complete" && tour.IsRequest == true)
+            restoredVersion = await db.TourVersions.Where(v => v.TourId == tour.Id && v.VersionNumber == tour.Version)
+                .Select(v => v.RestoredFromVersion).SingleOrDefaultAsync(ct);
         tour.Version = (tour.Version ?? 1) + 1;
         switch (action)
         {
             case "complete": tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Hidden;
-                if (tour.IsRequest == true) tour.IsSharedToCustomer = true; break;
+                break;
             case "publish": ResetApproval(tour); tour.Status = TourStatus.Completed; tour.Visibility = TourVisibility.Public; break;
             case "hide": tour.Visibility = TourVisibility.Hidden; break;
             case "delete": tour.Status = TourStatus.Deleted; tour.Visibility = TourVisibility.Hidden;
@@ -571,7 +558,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         catch (JsonException) { throw new TourException(409, "Legacy snapshot format cannot be restored automatically."); }
         if (snapshot?.SchemaVersion != 1) throw new TourException(409, "Unsupported snapshot schema.");
         await Validate(snapshot.Configuration, false, ct, actor); await Baseline(tour, actor, ct);
-        Apply(tour, snapshot.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
+        restoredVersion = number; Apply(tour, snapshot.Configuration); ResetApproval(tour); tour.Version = (tour.Version ?? 1) + 1;
         return await Save(tour, actor, $"Restored v{number}: {request.Reason}", ct);
     }
     public async Task<TourDto> Duplicate(string actor, int id, DuplicateTourRequest request, CancellationToken ct)

@@ -62,14 +62,14 @@ const STATUS_CONFIG: Record<
     icon: <Clock className="w-3.5 h-3.5 text-amber-600" />,
   },
   reviewing: {
-    label: "Đang xem xét",
+    label: "Đã tiếp nhận",
     bg: "bg-sky-50",
     text: "text-[#075985]",
     border: "border-sky-200",
     icon: <Clock className="w-3.5 h-3.5 text-[#075985]" />,
   },
   designed: {
-    label: "Đã có phương án tour",
+    label: "Đã chia sẻ phương án",
     bg: "bg-indigo-50",
     text: "text-indigo-800",
     border: "border-indigo-200",
@@ -221,6 +221,7 @@ export function CustomRequestDetailModal({
             </div>
           </div>
 
+          {request.rejectionReason && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><strong>Lý do Agency từ chối:</strong><p className="mt-1 whitespace-pre-wrap">{request.rejectionReason}</p></div>}
           {/* SECTION 2: THÔNG TIN ĐƠN VỊ ĐẶT TOUR & NGƯỜI ĐẠI DIỆN */}
           <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#075985]">

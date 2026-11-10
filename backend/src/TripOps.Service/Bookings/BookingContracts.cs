@@ -10,7 +10,7 @@ public sealed record CreateBookingRequest(
     [Required, EmailAddress, StringLength(191)] string ContactEmail,
     [StringLength(1000)] string? SpecialRequests,
     [Required, MinLength(1)] ParticipantInput[] Participants,
-    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null);
+    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null, int? TourVersion = null);
 
 public sealed record HotelChoiceInput(string Destination, string Name, int? ServiceId = null);
 public sealed record MealChoiceInput(int DayNumber, string MealType, string Name, int? ServiceId = null);

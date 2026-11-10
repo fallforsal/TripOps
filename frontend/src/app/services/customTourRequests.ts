@@ -3,6 +3,7 @@ import type { CustomTourRequest, Tour, TourCompany } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
+  rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
   destination: string; departureDate: string; returnDate: string | null;
@@ -16,6 +17,7 @@ type RequestDto = {
 type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
+  rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
   targetCompanyName: r.agencyName, contactName: r.contactName,
   contactEmail: r.contactEmail, contactPhone: r.contactPhone,
@@ -50,9 +52,9 @@ export const submitDesignRequest = async (r: Omit<CustomTourRequest, "id" | "cre
   }) }));
 export const cancelDesignRequest = async (id: string) =>
   fromDto(await http<RequestDto>(`/tour-design-requests/${Number(id)}/cancel`, { method: "POST" }));
-export const actOnDesignRequest = async (id: string, action: "review" | "reject") =>
+export const actOnDesignRequest = async (id: string, action: "review" | "reject", reason?: string) =>
   fromDto(await http<RequestDto>(`/agency/tour-design-requests/${Number(id)}/action`, {
-    method: "POST", body: JSON.stringify({ action }),
+    method: "POST", body: JSON.stringify({ action, reason }),
   }));
 export const createDesignRequestTour = async (requestId: string, tour: Partial<Tour>) =>
   http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/tours`, {
@@ -62,16 +64,9 @@ export const customerRequestTour = async (requestId: string) =>
   fromApiTour(await http<ApiTour>(`/tour-design-requests/${Number(requestId)}/tour`));
 export const customerRequestPlans = async (requestId: string) =>
   (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map((t) => ({ ...fromApiTour(t), customRequestId: requestId }));
-export type TourPlanProposal = { id: number; requestId: number; tourId: number; baseTourVersion: number;
-  proposal: Pick<Tour, "itinerary" | "hotels"> & { quotation?: { tourVersion: number; quotationVersion?: number; pricePerPerson: number; total: number; preliminary: boolean }; requestedChanges?: Record<string, string> }; message: string; status: string;
-  agencyReply: string | null; createdAt: string; respondedAt: string | null };
-export const customerPlanProposals = (requestId: string) =>
-  http<TourPlanProposal[]>(`/tour-design-requests/${Number(requestId)}/proposals`);
-export const agencyPlanProposals = (requestId: string) =>
-  http<TourPlanProposal[]>(`/agency/tour-design-requests/${Number(requestId)}/proposals`);
-export const submitPlanProposal = (requestId: string, plan: Tour, proposal: TourPlanProposal["proposal"], message: string) =>
-  http<TourPlanProposal>(`/tour-design-requests/${Number(requestId)}/proposals`, { method: "POST",
-    body: JSON.stringify({ tourId: Number(plan.id), baseTourVersion: plan.version || 1, proposal, message }) });
-export const replyPlanProposal = (requestId: string, proposalId: number, decision: "reviewed" | "needs_changes", message: string) =>
-  http<TourPlanProposal>(`/agency/tour-design-requests/${Number(requestId)}/proposals/${proposalId}/reply`, {
-    method: "POST", body: JSON.stringify({ decision, message }) });
+export const cloneDesignTour = async (requestId: string, tourId: string) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/clone`, { method: "POST", body: JSON.stringify({ tourId: Number(tourId) }) }));
+export const shareDesignTour = async (requestId: string, version: number) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ version }) }));
+export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, version?: number) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/tour`, { method: "PUT", body: JSON.stringify({ version: version ?? null, configuration: toConfiguration(tour), complete: tour.status === "completed", reason: tour.changeNote }) }));

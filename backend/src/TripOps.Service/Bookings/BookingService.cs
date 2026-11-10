@@ -10,7 +10,7 @@ namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
-    TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations)
+    TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingQuotationService quotationsForPayment => quotations;
@@ -36,8 +36,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (tour is null)
             throw new BookingException(404, "Tour không tồn tại hoặc chưa được công bố mở bán.");
 
-        if (!await repository.CanStartDesignBooking(tour, customerId, ct))
-            throw new BookingException(409, "Cần đồng ý phiên bản sơ bộ hiện hành; mỗi yêu cầu chỉ có một Booking đang xử lý.");
+        if (!await repository.CanStartDesignBooking(tour, customerId, ct, request.TourVersion))
+            throw new BookingException(409, "Phương án đã thay đổi hoặc yêu cầu đã có booking. Vui lòng tải lại phương án đang chia sẻ.");
+
+        tour = await tourService.BookingSnapshot(tour, ct);
 
         if (request.Participants.Length == 0)
             throw new BookingException(400, "Cần có ít nhất một hành khách trong đơn đặt.");
@@ -139,6 +141,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             BookingCode = code,
             CustomerId = customerId,
             TourId = tour.Id,
+            TourVersion = tour.Version ?? 1,
             DesignRequestId = tour.DesignRequestId,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
@@ -178,7 +181,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         repository.Add(booking);
         await repository.SaveChangesAsync(ct);
 
-        await quotations.Initialize(booking.Id, ct);
+        await quotations.Initialize(booking.Id, ct, tour);
         await transaction.CommitAsync(ct);
 
         return ToDto(booking, tour.Name, tour.AgencyId, tour.Agency?.Name);

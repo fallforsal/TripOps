@@ -134,14 +134,14 @@ export function StatusBadge({
         Icon = Clock;
         break;
       case "reviewing":
-        label = "Đang thẩm định lịch trình";
+        label = "Đã tiếp nhận";
         bg = "bg-[#F0F9FF]";
         text = "text-[#0369A1]";
         border = "border-[#BAE6FD]";
         Icon = Clock;
         break;
       case "designed":
-        label = "Đã lên phương án tour";
+        label = "Đã chia sẻ phương án";
         bg = "bg-[#F0FDF4]";
         text = "text-[#15803D]";
         border = "border-[#BBF7D0]";

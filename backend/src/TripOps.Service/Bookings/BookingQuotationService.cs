@@ -69,7 +69,16 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             meals = d.Meals.Select(m => new { m.MealType, name = m.CurrentRestaurantName ?? m.OriginalRestaurantName, m.DateService, m.Time }) }),
         hotels = b.Accommodations.Select(h => new { name = h.CurrentHotelName ?? h.OriginalHotelName, h.DateFrom, h.DateTo, h.NightsCount })
     }, Json);
-    public async Task Initialize(int bookingId, CancellationToken ct)
+    private static string InitialPlanSnapshot(Booking booking, Tour? source)
+    {
+        var snapshot = System.Text.Json.Nodes.JsonNode.Parse(PlanSnapshot(booking))!.AsObject();
+        if (source != null) {
+            snapshot["name"] = source.Name; snapshot["inclusions"] = source.Inclusions;
+            snapshot["exclusions"] = source.Exclusions; snapshot["cancellationPolicy"] = source.CancellationPolicy;
+        }
+        return snapshot.ToJsonString();
+    }
+    public async Task Initialize(int bookingId, CancellationToken ct, Tour? source = null)
     {
         if (await db.BookingQuotations.AnyAsync(q => q.BookingId == bookingId, ct)) return;
         var booking = await db.Bookings.Include(b => b.Tour).Include(b => b.Participants).Include(b => b.Accommodations)
@@ -78,8 +87,8 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             .SingleAsync(b => b.Id == bookingId, ct);
         var lines = await CaptureCosts(booking, ct);
         db.BookingQuotations.Add(new BookingQuotation { BookingId = bookingId,
-            NumberOfGuests = booking.Participants.Count, PlanSnapshotJson = PlanSnapshot(booking),
-            Version = 1, TourId = booking.TourId!.Value, TourVersion = booking.Tour?.Version ?? 1,
+            NumberOfGuests = booking.Participants.Count, PlanSnapshotJson = InitialPlanSnapshot(booking, source),
+            Version = 1, TourId = booking.TourId!.Value, TourVersion = booking.TourVersion,
             EstimatedSale = booking.TotalAmount, TotalCost = lines.Sum(l => l.Total),
             LinesJson = JsonSerializer.Serialize(lines, Json), Reason = "Giá dự kiến khi khách đặt tour" });
         await db.SaveChangesAsync(ct);
@@ -107,14 +116,18 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         decimal Reference(string key, string name, string? destination, int? day, string? mealType)
         {
             var raw = key.StartsWith("hotel:")
-                ? tour.Accommodations.FirstOrDefault(h => h.DestinationName == destination && h.HotelName == name)?.SupplierSnapshot
-                : tour.Timelines.Where(d => d.DayNumber == day).SelectMany(d => d.Meals)
+                ? tour!.Accommodations.FirstOrDefault(h => h.DestinationName == destination && h.HotelName == name)?.SupplierSnapshot
+                : tour!.Timelines.Where(d => d.DayNumber == day).SelectMany(d => d.Meals)
                     .FirstOrDefault(m => m.MealType == mealType && m.RestaurantName == name)?.SupplierSnapshot;
             if (raw is null) return 0;
             try { return JsonSerializer.Deserialize<SupplierSnapshotInput>(raw, Json)?.ReferencePrice ?? 0; }
             catch (JsonException) { return 0; }
         }
         var lines = new List<CostLine>();
+        if (tour != null && booking.DesignRequestId.HasValue) {
+            var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == booking.TourVersion, ct);
+            tour = TourService.MaterializeSnapshot(tour, version);
+        }
         foreach (var s in selections)
         {
             var service = s.ServiceId.HasValue ? services.GetValueOrDefault(s.ServiceId.Value) : null;
@@ -159,11 +172,16 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         var tour = await db.Tours.Include(t => t.PricingTiers).Include(t => t.Accommodations)
             .Include(t => t.Timelines).ThenInclude(d => d.Meals)
             .Include(t => t.Timelines).ThenInclude(d => d.Attractions).AsSplitQuery()
-            .SingleOrDefaultAsync(t => t.Id == input.TourId && t.Status == TourStatus.Completed &&
+            .SingleOrDefaultAsync(t => t.Id == input.TourId && t.Status != TourStatus.Deleted &&
                 (booking.DesignRequestId.HasValue
-                    ? t.DesignRequestId == booking.DesignRequestId && t.IsRequest == true && t.IsSharedToCustomer == true
+                    ? t.DesignRequestId == booking.DesignRequestId && t.IsRequest == true && t.SharedVersion.HasValue
                     : t.Id == booking.TourId && t.IsRequest != true && t.Visibility == TourVisibility.Public), ct)
             ?? throw new BookingException(422, "Tour plan không thuộc yêu cầu của bạn hoặc chưa sẵn sàng.");
+        if (booking.DesignRequestId.HasValue) {
+            var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.SharedVersion, ct);
+            tour = TourService.MaterializeSnapshot(tour, version);
+        }
+        booking.TourVersion = tour.Version ?? 1;
         var guestCount = input.Participants?.Length ?? booking.Participants.Count;
         Require(agency || input.Participants == null,
             "Chỉ Agency được thay đổi danh sách hành khách của booking đã tạo.");
@@ -490,7 +508,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
     public async Task RequireCurrentPlan(int bookingId, CancellationToken ct)
     {
         var plan = await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId)
-            .Select(b => new { b.DesignRequestId, b.TourId, TourVersion = b.Tour!.Version }).SingleAsync(ct);
+            .Select(b => new { b.DesignRequestId, b.TourId, TourVersion = b.TourVersion }).SingleAsync(ct);
         if (plan.DesignRequestId.HasValue)
         {
             var snapshot = await db.BookingQuotations.AsNoTracking().Where(q => q.BookingId == bookingId)
@@ -505,7 +523,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
     {
         var booking = await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId, ct);
         // Provider replies are operational tracking, independent of approval/payment.
-        // A custom tour must still match the plan the customer agreed to.
+        // A booking is checked against its own captured version, never a later Agency draft.
         if (booking.PaymentStatus == PaymentStatus.Unpaid)
             await RequireCurrentPlan(bookingId, ct);
     }

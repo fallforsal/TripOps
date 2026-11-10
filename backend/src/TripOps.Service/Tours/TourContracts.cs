@@ -69,7 +69,7 @@ public sealed record AiDraftRequest([Required, StringLength(255)] string Destina
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
-    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null);
+    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
 public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
@@ -106,3 +106,7 @@ public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerat
     public Task<TourConfiguration> Generate(AiDraftRequest request, CancellationToken ct) =>
         throw new TourException(503, "AI itinerary generation is not configured.");
 }
+
+public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
+
+public sealed record SaveDesignTourInput(int? Version, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null);

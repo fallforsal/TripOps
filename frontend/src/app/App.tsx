@@ -2,7 +2,7 @@ import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
-  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestPlans } from "@/app/services/customTourRequests";
+  cancelDesignRequest, actOnDesignRequest, saveDesignTour, customerRequestPlans } from "@/app/services/customTourRequests";
 import { toast } from "sonner";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
@@ -654,6 +654,7 @@ function Application() {
       throw new Error("Mã tour không hợp lệ.");
     const dto = await createBooking({
       tourId,
+      tourVersion: bookingTour?.version,
       startDate: `${data.tourStartDate}T00:00:00`,
       contactName: data.contactName,
       contactPhone: data.contactPhone,
@@ -1257,7 +1258,7 @@ function Application() {
 
   const handleUpdateCustomTourRequest = async (id: string, update: Partial<CustomTourRequest>) => {
     if (update.status === "reviewing" || update.status === "rejected")
-      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject");
+      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject", update.rejectionReason);
     await refreshCustomRequests();
   };
 
@@ -1265,13 +1266,15 @@ function Application() {
   const handleCompanyCreateTour = async (
     tourData: Omit<Tour, "id"> & { id?: string },
   ) => {
-    const created = tourData.is_request
-      ? await createDesignRequestTour(tourData.customRequestId || "", tourData)
-      : await createAgencyTour(tourData);
+    if (tourData.is_request) {
+      const saved = await saveDesignTour(tourData.customRequestId || "", tourData);
+      await refreshTours();
+      setTourNotice("Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách.");
+      return saved;
+    }
+    const created = await createAgencyTour(tourData);
     const result =
-      tourData.is_request && tourData.status === "completed"
-        ? await completeAgencyTour(String(created.id), created.version)
-        : tourData.visibility === "public"
+      tourData.visibility === "public"
         ? await publishAgencyTour(String(created.id), created.version)
         : tourData.status === "completed"
           ? await completeAgencyTour(String(created.id), created.version)
@@ -1279,7 +1282,7 @@ function Application() {
     await refreshTours();
     setTourNotice(
       tourData.is_request && tourData.status === "completed"
-        ? "Tour thiết kế đã được gửi cho khách hàng."
+        ? "Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách."
         : result.visibility === "public"
         ? "Tour đã được đăng bán."
         : "Bản nháp đã được lưu.",
@@ -1293,6 +1296,12 @@ function Application() {
   ) => {
     const current = tours.find((t) => t.id === tourId);
     if (!current) throw new Error("Không tìm thấy tour.");
+    if (current.is_request && current.customRequestId) {
+      await saveDesignTour(current.customRequestId, { ...current, ...tourData }, current.version || 1);
+      await refreshTours();
+      setTourNotice("Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách.");
+      return;
+    }
     const visibilityOnly = Object.keys(tourData).every((key) =>
       ["status", "visibility"].includes(key),
     );
@@ -1892,6 +1901,7 @@ function Application() {
           </ErrorBoundary>
         ) : currentPage === "my-requests" ? (
           <MyRequestsPage
+            services={services}
             requests={customTourRequests.filter(
               (r) => !currentUser || r.userId === currentUser.id,
             )}

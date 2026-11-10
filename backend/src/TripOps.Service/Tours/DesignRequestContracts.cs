@@ -24,6 +24,6 @@ public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId
     DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
     string? HotelStars, string? AdditionalInfo, string? BusinessName, string? BusinessEmail,
     string? BusinessPhone, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
-    decimal? QuotedPricePerPerson);
+    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null);
 
-public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action);
+public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action, [StringLength(2000)] string? Reason = null);

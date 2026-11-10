@@ -1,5 +1,5 @@
 Project TripOps {
-  Note: 'Thiết kế DBML để review trên dbdiagram.io; chưa áp dụng vào BE hoặc SQL. Provider không quản lý loại phòng hoặc tồn phòng. Các Note ghi rõ quy tắc cần triển khai thêm trong SQL/BE; đường nối FK không tự kiểm tra vai trò người dùng. Khi triển khai SQL Server dùng datetime2 thay timestamp, nvarchar cho tiếng Việt và nvarchar(max) có ISJSON cho JSON. Không cascade xóa booking, thanh toán, phiên bản hoặc dữ liệu vận hành đã phát sinh.'
+  Note: 'Schema hiện tại của TripOps, bao gồm luồng thiết kế riêng và chia sẻ phiên bản. Provider không quản lý loại phòng hoặc tồn phòng. Các Note ghi rõ quy tắc cần triển khai thêm trong SQL/BE; đường nối FK không tự kiểm tra vai trò người dùng. Khi triển khai SQL Server dùng datetime2 thay timestamp, nvarchar cho tiếng Việt và nvarchar(max) có ISJSON cho JSON. Không cascade xóa booking, thanh toán, phiên bản hoặc dữ liệu vận hành đã phát sinh.'
 }
 
 Enum user_role_enum {
@@ -144,7 +144,8 @@ Table tours {
   version int [default: 1, note: 'Số phiên bản hiện tại đang áp dụng (v1, v2, v3...)']
   change_note text [note: 'Ghi chú tóm tắt lý do hoặc nội dung cập nhật của phiên bản hiện tại']
   design_request_id int [note: 'FK tới tour_design_requests.id']
-  is_shared_to_customer boolean [default: false, note: 'Chỉ Host bật true khi sẵn sàng cho khách xem']
+  shared_version int [note: 'FK (id, shared_version) tới tour_versions.(tour_id, version); khách xem snapshot này']
+  cloned_from_tour_id int
   is_ai_generated boolean [default: false]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
@@ -267,9 +268,8 @@ Table agency_suppliers {
 
 
 Table tour_design_requests {
-  AgreedAt timestamp
-  AgreedTourId int
-  AgreedTourVersion int
+  rejection_reason varchar(2000)
+  responded_at timestamp
   Revision int [not null]
   SourceSnapshotJson text
   SourceTourId int
@@ -278,7 +278,7 @@ Table tour_design_requests {
 
   // 1. CHỌN CÔNG TY DU LỊCH (Agency/Business Profile nhận yêu cầu)
   user_id varchar(36) // FK trỏ tới users.id (người dùng gửi form, có thể null nếu cho phép khách vãng lai)
-  agency_id varchar(36) [note: 'Công ty nhận yêu cầu ban đầu; không thay thế Host trong bảng phân công']
+  agency_id varchar(36) [note: 'Agency nhận yêu cầu và thiết kế tour riêng']
   business_name varchar(255)
   business_email varchar(191)
   business_phone varchar(30)
@@ -299,7 +299,7 @@ Table tour_design_requests {
   special_requirements text // Các điểm tham quan, hoạt động tour, lửa trại... hay ghi chú khác
 
   // 5. TRẠNG THÁI XỬ LÝ CỦA HỆ THỐNG
-  status varchar(50) [default: 'PENDING'] // PENDING, CONTACTED, QUOTED, ACCEPTED, CANCELLED, REJECTED
+  status varchar(50) [default: 'pending'] // pending, in_progress, rejected, cancelled
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
@@ -307,36 +307,13 @@ Table tour_design_requests {
 // ============================================================================
 // LỊCH SỬ PHIÊN BẢN & SAO LƯU TOUR (VERSION CONTROL & ROLLBACK)
 // ============================================================================
-Table tour_plan_proposals {
-  id int [pk, increment]
-  request_id int [not null]
-  tour_id int [not null]
-  customer_id varchar(36) [not null]
-  agency_id varchar(36) [not null]
-  base_tour_version int [not null]
-  proposal_json json [not null, note: 'SQL Server nvarchar(max); bản sao chỉnh của khách, không tự thay đổi Tour']
-  message varchar(2000) [not null]
-  status varchar(30) [not null]
-  agency_reply varchar(2000)
-  created_at timestamp [not null, note: 'SQL Server datetime2']
-  responded_at timestamp
 
-  indexes {
-    (request_id, created_at)
-    (agency_id, status)
-    customer_id
-    tour_id
-  }
-}
-
-Ref: tour_plan_proposals.request_id > tour_design_requests.id
-Ref: tour_plan_proposals.tour_id > tours.id
-Ref: tour_plan_proposals.customer_id > users.id
-Ref: tour_plan_proposals.agency_id > users.id
 
 Table tour_versions {
   NumberOfGuests int
-  SharedToCustomer boolean [not null]
+  shared_at timestamp
+  shared_by varchar(36)
+  restored_from_version int
   id int [pk, increment]
   tour_id int [not null, note: 'FK tới tours.id']
   version int [not null, note: 'Số thứ tự phiên bản: 1, 2, 3...']
@@ -357,31 +334,11 @@ Ref: tour_versions.tour_id > tours.id
 Ref: tour_versions.created_by > users.id
 
 // 2. Bảng trung gian gán nhiều công ty cho 1 đơn
-Table tour_design_request_agencies {
-  id int [pk, increment]
-  request_id int [not null]
-  agency_id varchar(36) [not null]
-  is_host boolean [default: false]          // true: Công ty chủ trì (Host), false: Đối tác được mời (Invitee)
-
-  // Thông tin từ Form mời đối tác liên minh
-  stage_area varchar(255)          // Chặng/Khu vực mời đối tác phối hợp
-  suggested_budget decimal(12, 2)           // Ngân sách gợi ý cho chặng của đối tác (VNĐ/khách)
-  communication_notes text              // Nội dung đã trao đổi ngoài hệ thống (Zalo / Điện thoại)
-
-  // Trạng thái & Báo giá
-  status varchar(50) [default: 'PENDING']   // PENDING, ACCEPTED, REJECTED, QUOTED
-  assigned_at timestamp [default: `now()`]
-  responded_at timestamp
-
-  indexes {
-    (request_id, agency_id) [unique]        // Mỗi công ty chỉ xuất hiện 1 lần trong 1 yêu cầu tour
-  }
-  Note: 'SQL triển khai unique index có điều kiện: mỗi request tối đa một is_host = true. BE yêu cầu một Host khi chốt phối hợp; agency nhận yêu cầu ban đầu có thể khác Host sau bàn giao.'
-}
 
 
 Table bookings {
   AcceptedQuotationId int
+  tour_version int [not null, note: 'Phiên bản khách đặt; sao chép sang booking_*']
   id int [pk, increment]
   booking_code varchar(50) [unique, not null]
   customer_id varchar(36) // FK tới users.id
@@ -412,6 +369,7 @@ Table bookings {
 // ============================================================================
 
 Table booking_participants {
+  creation_key varchar(36)
   id int [pk, increment]
   booking_id int [not null, note: 'FK trỏ tới bookings.id']
   creation_key uniqueidentifier [note: 'Khóa chống tạo trùng khi Agency gửi lại yêu cầu thêm khách; unique theo booking_id khi khác NULL']
@@ -859,6 +817,7 @@ Table complaints {
 }
 
     Table chat_messages {
+      design_request_id int
       id int [pk, increment]
       conversation_id int [not null, note: 'FK tới chat_conversations.id']
       sender_id varchar(36) [not null, note: 'FK tới users.id - Người gửi']
@@ -1168,8 +1127,6 @@ Ref: tour_hotels.tour_id > tours.id
 
 // 3. Quan hệ (References)
 Ref: tour_design_requests.user_id > users.id
-Ref: tour_design_request_agencies.request_id > tour_design_requests.id
-Ref: tour_design_request_agencies.agency_id > users.id
 
 Ref: tours.design_request_id > tour_design_requests.id
 
@@ -1205,3 +1162,7 @@ Table workflow_notifications {
   CreatedAt timestamp [not null]
   ReadAt timestamp
 }
+
+Ref: tours.cloned_from_tour_id > tours.id
+Ref: tours.(id, shared_version) > tour_versions.(tour_id, version)
+Ref: chat_messages.design_request_id > tour_design_requests.id

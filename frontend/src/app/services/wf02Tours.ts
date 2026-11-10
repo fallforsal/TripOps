@@ -80,6 +80,7 @@ export type TourConfiguration = {
   provinceCodes?: string[];
 };
 export type ApiTour = {
+  sharedVersion?: number | null;
   designRequestId?: number | null;
   id: number;
   agencyId: string;
@@ -497,6 +498,7 @@ export const fromApiTour = (tour: ApiTour): Tour => ({
     updatedAt: tour.updatedAt,
     isRequest: tour.isRequest,
   }),
+  sharedVersion: tour.sharedVersion ?? undefined,
   customRequestId: tour.designRequestId == null ? undefined : String(tour.designRequestId),
 });
 const fromPublicTour = (tour: PublicTour) =>
