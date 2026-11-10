@@ -153,8 +153,8 @@ The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / th
 ## Attendance: departure day only
 
 The backend now enforces that **passenger attendance can be changed only when the
-booking's `startDate` equals the current backend UTC calendar date**, consistent
-with the existing Guide start-tour policy. Earlier or later requests return
+booking's `startDate` equals today's **Vietnam-local calendar date (UTC+7)**,
+using the existing backend `PaymentRules.VietnamDate` helper. Earlier or later requests return
 HTTP 409 and do not change attendance, `checkedBy` or `checkedAt`.
 
 `GET /api/v1/guide/bookings/{id}` now includes the backward-compatible
@@ -168,8 +168,8 @@ The value is a snapshot of the time when the detail was fetched. Reopen
 or refresh the tour details after crossing midnight. The server always
 re-checks on write, even if a screen remains open past midnight.
 
-**Timezone caveat:** Existing backend rules use UTC for operational booking
-calendar checks; `00:00 UTC` is `07:00 Vietnam time`. If the product
-requires the entire local Vietnamese departure day, change the shared
-backend calendar policy across start-tour and attendance together, rather
-than letting mobile and backend disagree.
+**Timezone note:** Attendance uses the entire Vietnam-local day, 00:00–23:59
+UTC+7, regardless of the phone's timezone. The existing start-tour endpoint
+still uses a UTC calendar comparison, a separate pre-existing policy that
+should be aligned in a future backend change. The app respects the
+server-supplied `canRecordAttendance` for attendance controls.
