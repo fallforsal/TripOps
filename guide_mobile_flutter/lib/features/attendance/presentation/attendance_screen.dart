@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
@@ -7,6 +9,7 @@ import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../domain/attendance_filter.dart';
+import '../domain/passenger_contact.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key, required this.detail, required this.guides});
@@ -38,6 +41,42 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     } catch (e) {
       if (mounted) setState(() => error = readableError(e));
     }
+  }
+
+  Future<void> callPassenger(String phone) async {
+    final digits = dialablePassengerPhone(phone);
+    if (digits == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Số điện thoại không hợp lệ để gọi.')),
+      );
+      return;
+    }
+
+    try {
+      final opened = await launchUrl(
+        Uri.parse('tel:$digits'),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không mở được ứng dụng gọi điện.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không mở được ứng dụng gọi điện.')),
+      );
+    }
+  }
+
+  Future<void> copyPassengerPhone(String phone) async {
+    await Clipboard.setData(ClipboardData(text: phone));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã sao chép số điện thoại.')),
+    );
   }
 
   Future<void> update(Passenger passenger, String status) async {
@@ -185,27 +224,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Container(
-                      height: 39, width: 39,
-                      decoration: BoxDecoration(
-                        color: paleTeal,
-                        borderRadius: BorderRadius.circular(11),
+                    Expanded(child: Text(
+                      p.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13, color: ink, fontWeight: FontWeight.w800,
                       ),
-                      child: const Icon(Icons.person_outline, color: deepTeal),
-                    ),
-                    const SizedBox(width: 11),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.name, style: const TextStyle(
-                          fontSize: 13, color: ink, fontWeight: FontWeight.w800,
-                        )),
-                        if (p.phone != null)
-                          Text(p.phone!, style: const TextStyle(
-                            fontSize: 11, color: muted,
-                          )),
-                      ],
                     )),
+                    const SizedBox(width: 8),
                     GuideStatusPill(
                       p.status == 'CheckedIn' ? 'Có mặt'
                         : p.status == 'Absent' ? 'Vắng' : 'Chưa rõ',
@@ -218,6 +245,50 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ? const Color(0xFFC05F5F)
                           : const Color(0xFFB78330),
                     ),
+                  ]),
+                  space(8),
+                  Row(children: [
+                    const Text('SĐT: ', style: TextStyle(
+                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
+                    )),
+                    Expanded(child: Text(
+                      passengerPhone(p.phone) ?? 'Chưa cập nhật',
+                      key: ValueKey('passenger-phone-${p.id}'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: passengerPhone(p.phone) == null ? muted : ink,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    )),
+                    if (passengerPhone(p.phone) != null) ...[
+                      IconButton(
+                        key: ValueKey('passenger-copy-${p.id}'),
+                        tooltip: 'Sao chép số điện thoại',
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(
+                          minWidth: 35, minHeight: 35,
+                        ),
+                        icon: const Icon(Icons.copy_rounded, size: 17),
+                        onPressed: () => copyPassengerPhone(
+                          passengerPhone(p.phone)!,
+                        ),
+                      ),
+                      IconButton(
+                        key: ValueKey('passenger-call-${p.id}'),
+                        tooltip: 'Gọi hành khách',
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(
+                          minWidth: 35, minHeight: 35,
+                        ),
+                        icon: const Icon(Icons.call_outlined, size: 19),
+                        color: teal,
+                        onPressed: dialablePassengerPhone(p.phone) == null
+                            ? null
+                            : () => callPassenger(p.phone!),
+                      ),
+                    ],
                   ]),
                   space(12),
                   if (busy == p.id) ...[
