@@ -41,10 +41,22 @@ class GuideRepository {
   }
 
   Future<BookingDetail> checkIn(
-      int bookingId, int locationId, String status, String? note) async =>
+    int bookingId, int locationId, String status, String? note, {
+    required double latitude,
+    required double longitude,
+    required double accuracyMeters,
+    required DateTime recordedAtUtc,
+  }) async =>
       BookingDetail.fromJson(await api.postMap(
         'guide/bookings/$bookingId/locations/$locationId/check-in',
-        {'status': status, 'note': note},
+        {
+          'status': status,
+          'note': note,
+          'latitude': latitude,
+          'longitude': longitude,
+          'accuracyMeters': accuracyMeters,
+          'recordedAtUtc': recordedAtUtc.toUtc().toIso8601String(),
+        },
       ));
 
   Future<void> incident(int id, {required String type, required String title,
