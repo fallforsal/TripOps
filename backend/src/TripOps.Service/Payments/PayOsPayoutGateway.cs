@@ -152,11 +152,12 @@ public sealed class PayOsPayoutGateway(HttpClient http, PayOsPayoutOptions optio
                 logger.LogWarning("payOS payout HTTP {Status} for {Method} {Path}", (int)response.StatusCode, method, path);
                 var definite = (int)response.StatusCode is >= 400 and < 500 && (int)response.StatusCode != 408 && (int)response.StatusCode != 429;
                 var desc = parsed ? Text(root, "desc") : null;
-                var hint = response.StatusCode == HttpStatusCode.Forbidden
-                    ? " Kiểm tra IP công khai của máy chạy backend đã được thêm vào kênh chuyển tiền trên my.payos.vn chưa." : "";
-                throw new PayOsPayoutException(response.StatusCode == (HttpStatusCode)429
-                    ? "payOS đang giới hạn tần suất gọi. Vui lòng thử lại sau ít phút."
-                    : $"payOS từ chối yêu cầu chi hộ (HTTP {(int)response.StatusCode}{(desc is null ? "" : $": {desc}")}).{hint}", definite);
+                throw new PayOsPayoutException(response.StatusCode switch
+                {
+                    (HttpStatusCode)429 => "payOS đang giới hạn tần suất gọi. Vui lòng thử lại sau ít phút.",
+                    HttpStatusCode.Forbidden => "payOS từ chối lệnh chi hộ (HTTP 403). Kiểm tra quyền kênh chuyển tiền và IP máy chủ.",
+                    _ => $"payOS từ chối yêu cầu chi hộ (HTTP {(int)response.StatusCode}{(desc is null ? "" : $": {desc}")}).",
+                }, definite);
             }
 
             var code = Text(root, "code");

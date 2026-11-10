@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Send,
   Wallet,
-  X,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -41,6 +40,7 @@ import {
   type SettlementDto,
   type SettlementStatus,
 } from "@/app/services/settlements";
+import { toast } from "sonner";
 
 type Filter = "all" | SettlementStatus;
 type ActionMode = "payout" | "manual" | "hold";
@@ -58,8 +58,8 @@ const errorText = (err: unknown, fallback: string) => friendlyNote(err instanceo
 
 /** Rút gọn lỗi kỹ thuật của payOS thành câu ngắn cho Admin (lỗi gốc vẫn xem được khi rê chuột). */
 function friendlyNote(text: string): string {
-  if (/HTTP 403/.test(text) || /IP/.test(text) && /không được phép/i.test(text))
-    return "payOS chặn vì IP máy chạy backend chưa được thêm vào kênh chuyển tiền (my.payos.vn). Chưa có tiền ra.";
+  if (/HTTP 403/.test(text) || (/IP/.test(text) && /(không được phép|chưa cho phép)/i.test(text)))
+    return "payOS từ chối lệnh chi hộ. Kiểm tra quyền kênh chuyển tiền và IP máy chủ. Chưa có tiền ra.";
   return text;
 }
 
@@ -76,7 +76,6 @@ export function AdminSettlementManagement() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [action, setAction] = useState<{ mode: ActionMode; item: SettlementDto } | null>(null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -90,7 +89,7 @@ export function AdminSettlementManagement() {
       setItems(list);
       setAccount(payout);
     } catch (err) {
-      setMessage({ tone: "error", text: errorText(err, "Không tải được danh sách quyết toán.") });
+      toast.error(errorText(err, "Không tải được danh sách quyết toán."));
     } finally {
       setLoading(false);
     }
@@ -126,22 +125,16 @@ export function AdminSettlementManagement() {
 
   const runNow = async () => {
     setRunning(true);
-    setMessage(null);
     try {
       const result = await runSettlements();
-      setMessage(
-        result.configured
-          ? {
-              tone: result.errors.length ? "error" : "ok",
-              text:
-                `Đã tạo ${result.started} lệnh chuyển, cập nhật ${result.synced} lệnh đang chạy, ${result.waiting} khoản chưa đủ điều kiện.` +
-                (result.errors.length ? ` Lỗi: ${result.errors.join(" ")}` : ""),
-            }
-          : { tone: "error", text: result.errors.join(" ") || "Chưa cấu hình kênh chuyển tiền payOS." },
-      );
+      const summary = `Đã tạo ${result.started} lệnh chuyển, cập nhật ${result.synced} lệnh đang chạy, ${result.waiting} khoản chưa đủ điều kiện.`;
+      if (!result.configured) toast.error("Chưa cấu hình kênh chuyển tiền payOS.");
+      else if (result.errors.length > 0)
+        toast.error(summary, { description: [...new Set(result.errors.map((e) => friendlyNote(e.replace(/^#\d+:\s*/, ""))))].join(" ") });
+      else toast.success(summary);
       await load();
     } catch (err) {
-      setMessage({ tone: "error", text: errorText(err, "Không chạy được lượt chuyển tự động.") });
+      toast.error(errorText(err, "Không chạy được lượt chuyển tự động."));
     } finally {
       setRunning(false);
     }
@@ -149,13 +142,12 @@ export function AdminSettlementManagement() {
 
   const quick = async (item: SettlementDto, run: () => Promise<SettlementDto>, done: string) => {
     setBusyId(item.id);
-    setMessage(null);
     try {
       const next = await run();
       replace(next);
-      setMessage({ tone: "ok", text: done });
+      toast.success(done);
     } catch (err) {
-      setMessage({ tone: "error", text: errorText(err, "Thao tác không thành công.") });
+      toast.error(errorText(err, "Thao tác không thành công."));
       await load();
     } finally {
       setBusyId(null);
@@ -194,19 +186,19 @@ export function AdminSettlementManagement() {
             : await holdSettlement(item.id, note.trim());
       replace(next);
       setAction(null);
-      setMessage({
-        tone: "ok",
-        text:
-          mode === "payout"
-            ? next.status === "Paid"
-              ? `Đã chuyển ${formatVND(next.netPayout)} cho ${next.agencyName}.`
-              : `Đã tạo lệnh chuyển ${formatVND(next.netPayout)}. Bấm "Kiểm tra" để cập nhật kết quả từ payOS.`
-            : mode === "manual"
-              ? `Đã ghi nhận chuyển khoản ${formatVND(next.netPayout)} cho ${next.agencyName}.`
-              : "Đã tạm giữ khoản này.",
-      });
+      toast.success(
+        mode === "payout"
+          ? next.status === "Paid"
+            ? `Đã chuyển ${formatVND(next.netPayout)} cho ${next.agencyName}.`
+            : `Đã tạo lệnh chuyển ${formatVND(next.netPayout)}. Bấm "Kiểm tra" để cập nhật kết quả từ payOS.`
+          : mode === "manual"
+            ? `Đã ghi nhận chuyển khoản ${formatVND(next.netPayout)} cho ${next.agencyName}.`
+            : "Đã tạm giữ khoản này.",
+      );
     } catch (err) {
-      setFormError(errorText(err, "Thao tác không thành công."));
+      const text = errorText(err, "Thao tác không thành công.");
+      setFormError(text);
+      toast.error(text);
       await load();
     } finally {
       setSubmitting(false);
@@ -253,18 +245,6 @@ export function AdminSettlementManagement() {
         <Stat label="Đã chuyển cho Agency" value={formatVND(stats.paidAmount)} hint="Tổng số đã trả" tone="text-emerald-700" />
         <Stat label="Phí sàn đã thu" value={formatVND(stats.fees)} hint="Từ các khoản đã trả" tone="text-[#EA580C]" />
       </div>
-
-      {message && (
-        <div
-          role={message.tone === "error" ? "alert" : "status"}
-          className={`rounded-xl border px-4 py-3 text-sm flex items-start justify-between gap-3 ${message.tone === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}
-        >
-          <span>{message.text}</span>
-          <button type="button" aria-label="Đóng thông báo" onClick={() => setMessage(null)} className="shrink-0 opacity-60 hover:opacity-100">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">

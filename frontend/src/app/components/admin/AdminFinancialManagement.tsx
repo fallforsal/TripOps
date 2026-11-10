@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { getPlatformBankAccount, savePlatformBankAccount } from "@/app/services/settlements";
 import { Booking, SystemBankAccount } from "@/app/types";
 import {
   Landmark,
   CreditCard,
-  CheckCircle2,
   DollarSign,
   ArrowRight,
-  ShieldCheck,
   Building2,
   RefreshCw,
   Search,
@@ -59,6 +58,12 @@ function formatVND(n: number) {
   return (n || 0).toLocaleString("vi-VN") + "đ";
 }
 
+/** "Failed to fetch" = trình duyệt không gọi được API (backend chưa chạy / đang khởi động lại). */
+function apiErrorText(err: unknown, fallback: string) {
+  if (err instanceof TypeError) return "Không kết nối được máy chủ API. Kiểm tra backend đã chạy chưa rồi thử lại.";
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export function AdminFinancialManagement({
   systemBank,
   onUpdateSystemBank,
@@ -74,7 +79,6 @@ export function AdminFinancialManagement({
     systemBank.defaultCommissionRate ?? 0,
   );
   const [notes, setNotes] = useState(systemBank.notes || "");
-  const [bankSavedToast, setBankSavedToast] = useState(false);
 
   // Settlement modal state
   const [selectedBookingForSettlement, setSelectedBookingForSettlement] =
@@ -107,7 +111,7 @@ export function AdminFinancialManagement({
         }
         setDefaultCommissionRate(saved.commissionPercent);
       })
-      .catch((err) => alive && setBankError(err instanceof Error ? err.message : "Không tải được cấu hình."));
+      .catch((err) => alive && setBankError(apiErrorText(err, "Không tải được cấu hình.")));
     return () => {
       alive = false;
     };
@@ -129,10 +133,13 @@ export function AdminFinancialManagement({
       setAccountNumber(saved.accountNumber ?? accountNumber);
       setAccountHolder(saved.accountHolder ?? accountHolder);
       setDefaultCommissionRate(saved.commissionPercent);
-      setBankSavedToast(true);
-      setTimeout(() => setBankSavedToast(false), 3500);
+      toast.success("Đã lưu tài khoản ngân hàng sàn và phí sàn.", {
+        description: "Phí sàn mới áp dụng cho các tour hoàn thành từ bây giờ.",
+      });
     } catch (err) {
-      setBankError(err instanceof Error ? err.message : "Không lưu được cấu hình.");
+      const text = apiErrorText(err, "Không lưu được cấu hình.");
+      setBankError(text);
+      toast.error(text);
     } finally {
       setSavingBank(false);
     }
@@ -214,30 +221,8 @@ export function AdminFinancialManagement({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-semibold">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            Hệ thống Quản lý Dòng tiền Escrow An toàn
-          </div>
         </div>
       </div>
-
-      {/* SUCCESS TOAST ALERT */}
-      {bankSavedToast && (
-        <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <span>
-              <strong>Đã lưu.</strong> Tài khoản ngân hàng sàn và phí sàn đã được cập nhật; phí sàn mới áp dụng cho các tour hoàn thành từ bây giờ.
-            </span>
-          </div>
-          <button
-            onClick={() => setBankSavedToast(false)}
-            className="text-white hover:text-emerald-100 text-xs underline ml-4"
-          >
-            Đóng
-          </button>
-        </div>
-      )}
 
       {/* TOP SECTION: SYSTEM BANK ACCOUNT CONFIGURATION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -250,7 +235,6 @@ export function AdminFinancialManagement({
                 Cấu hình Tài khoản Ngân hàng Sàn (Hệ thống)
               </h2>
             </div>
-            <span className="text-xs text-gray-400">Dùng chung cho toàn hệ thống</span>
           </div>
 
           <form onSubmit={handleSaveBankInfo} className="space-y-4">
@@ -315,10 +299,7 @@ export function AdminFinancialManagement({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-gray-700 flex items-center justify-between">
-                  <span>Phí hoa hồng sàn mặc định (%)</span>
-                  <span className="text-[11px] text-[#075985] font-bold">Áp dụng cho tour hoàn thành sau khi lưu</span>
-                </Label>
+                <Label className="text-xs font-semibold text-gray-700">Phí sàn (%)</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -330,6 +311,7 @@ export function AdminFinancialManagement({
                   />
                   <span className="absolute right-3 top-2.5 text-xs text-gray-400 font-bold">%</span>
                 </div>
+                <p className="text-[11px] text-gray-500">Áp dụng cho tour hoàn thành sau khi lưu.</p>
               </div>
 
               <div className="space-y-1 sm:col-span-2">
