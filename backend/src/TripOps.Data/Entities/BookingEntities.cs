@@ -129,6 +129,10 @@ public virtual ICollection<BookingTimelineMeal> Meals { get; set; } = new List<B
 }
 
 public class BookingTimelineAttraction : BaseEntity<int> {
+    public int VisitOrder { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int GeofenceRadiusMeters { get; set; } = 1500;
 public int BookingTimelineId { get; set; }
 public DateTime? Time { get; set; }
 public string? AgencyId { get; set; }
@@ -184,6 +188,10 @@ public virtual Booking Booking { get; set; } = null!;
 }
 
 public class BookingAttractionCheckin : BaseEntity<int> {
+    public double? GpsLatitude { get; set; }
+    public double? GpsLongitude { get; set; }
+    public double? GpsAccuracyMeters { get; set; }
+    public DateTime? GpsRecordedAtUtc { get; set; }
 public int BookingTimelineAttractionId { get; set; }
 public string GuideId { get; set; } = string.Empty;
 public string AgencyId { get; set; } = string.Empty;
