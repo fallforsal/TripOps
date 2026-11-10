@@ -87,7 +87,8 @@ public sealed record BookingDto(
     ContractDto? Contract = null,
     decimal? OriginalTotalPrice = null,
     IReadOnlyList<BookingPriceAdjustmentDto>? PriceAdjustments = null,
-    decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false);
+    decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
+    bool CanRecordAttendance = false);
 
 /// <summary>
 /// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.
