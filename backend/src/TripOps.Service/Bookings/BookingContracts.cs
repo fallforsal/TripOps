@@ -88,7 +88,7 @@ public sealed record BookingDto(
     decimal? OriginalTotalPrice = null,
     IReadOnlyList<BookingPriceAdjustmentDto>? PriceAdjustments = null,
     decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
-    bool CanRecordAttendance = false);
+    bool CanRecordAttendance = false, bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
 
 /// <summary>
 /// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.
@@ -214,7 +214,8 @@ public sealed record PaymentSyncResultDto(string Outcome, string Message, Bookin
 public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus,
-    string? OriginalName = null, string? ChangeReason = null);
+    string? OriginalName = null, string? ChangeReason = null,
+    double? Latitude = null, double? Longitude = null, int GeofenceRadiusMeters = 1500, int VisitOrder = 0);
 public sealed record BookingSupplierDto(string? Address, string? ContactPhone);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null);
 public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);
