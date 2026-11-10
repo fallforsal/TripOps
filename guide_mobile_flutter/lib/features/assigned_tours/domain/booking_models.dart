@@ -62,16 +62,29 @@ class Passenger {
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time});
+  const TourStop({
+    required this.id, required this.name, required this.status,
+    this.time, this.latitude, this.longitude,
+    this.geofenceRadiusMeters = 1500, this.visitOrder = 0,
+  });
   final int id;
   final String name;
   final String status;
   final DateTime? time;
+  final double? latitude;
+  final double? longitude;
+  final int geofenceRadiusMeters;
+  final int visitOrder;
+  bool get hasGpsReference => latitude != null && longitude != null;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
+    latitude: (j['latitude'] as num?)?.toDouble(),
+    longitude: (j['longitude'] as num?)?.toDouble(),
+    geofenceRadiusMeters: (j['geofenceRadiusMeters'] as num?)?.toInt() ?? 1500,
+    visitOrder: (j['visitOrder'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -107,6 +120,8 @@ class BookingDetail {
     required this.passengers, required this.days, required this.incidents,
     this.customerName, this.contactPhone, this.agencyName,
     this.canRecordAttendance = false,
+    this.canCheckInLocations = false,
+    this.nextLocationCheckInId,
   });
   final int id;
   final String code;
@@ -123,6 +138,8 @@ class BookingDetail {
   final String? agencyName;
   /// Backend-enforced rule: attendance is possible only on departure date (UTC).
   final bool canRecordAttendance;
+  final bool canCheckInLocations;
+  final int? nextLocationCheckInId;
 
   factory BookingDetail.fromJson(Map<String, dynamic> j) => BookingDetail(
     id: (j['id'] as num).toInt(),
@@ -136,6 +153,8 @@ class BookingDetail {
     contactPhone: j['contactPhone']?.toString(),
     agencyName: j['agencyName']?.toString(),
     canRecordAttendance: j['canRecordAttendance'] == true,
+    canCheckInLocations: j['canCheckInLocations'] == true,
+    nextLocationCheckInId: (j['nextLocationCheckInId'] as num?)?.toInt(),
     passengers: (j['participants'] as List<dynamic>? ?? [])
         .map((e) => Passenger.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     days: (j['snapshotDays'] as List<dynamic>? ?? [])
