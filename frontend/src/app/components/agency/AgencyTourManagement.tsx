@@ -114,10 +114,6 @@ export interface AgencyTourManagementProps {
   onEditTour: (tourId: string, tour: Partial<Tour>) => void | Promise<unknown>;
   onDeleteTour: (tourId: string) => void | Promise<unknown>;
   onDuplicateTour?: (tourId: string, name: string) => Promise<void>;
-  onRestoreTourVersion?: (
-    tourId: string,
-    versionNumber: number,
-  ) => void | Promise<unknown>;
 }
 
 // Kiểu hành động cần hiển thị hộp thoại xác nhận đẹp mắt
@@ -135,7 +131,6 @@ export function AgencyTourManagement({
   onEditTour,
   onDeleteTour,
   onDuplicateTour,
-  onRestoreTourVersion,
 }: AgencyTourManagementProps) {
   const services = useServiceCatalogue();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -756,14 +751,14 @@ export function AgencyTourManagement({
                       )}
 
                       {/* Chỉnh sửa chi tiết tour */}
-                      <button
+                      {tour.is_request && <button
                         type="button"
                         title="Lịch sử phiên bản"
                         onClick={() => setVersionTour(tour)}
                         className="p-2 text-blue-700"
                       >
                         Lịch sử
-                      </button>
+                      </button>}
                       <button
                         type="button"
                         title="Chỉnh sửa chi tiết tour"
@@ -1021,11 +1016,7 @@ export function AgencyTourManagement({
         isOpen={!!versionTour}
         tour={versionTour}
         onClose={() => setVersionTour(null)}
-        onRestoreVersion={(id, version) => {
-          void Promise.resolve(onRestoreTourVersion?.(id, version)).then(() =>
-            setVersionTour(null),
-          );
-        }}
+
       />
       <AlertDialog
         open={!!pendingAction}
@@ -3370,6 +3361,7 @@ export function TourFormPage(props: TourFormPageProps) {
 
   const handleSubmit = async (
     mode: "draft" | "complete_hidden" | "complete_public" = "complete_public",
+    createNewVersion = false,
   ) => {
     if (props.customerMode) {
       setSaving(true); setSaveError("");
@@ -3443,28 +3435,6 @@ export function TourFormPage(props: TourFormPageProps) {
         ? `TC-${Date.now().toString().slice(-4)}`
         : `T${Date.now().toString().slice(-4)}`);
     const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
-
-    let nextVersion = tour?.version || 1;
-    let nextVersionHistory = tour?.versionHistory
-      ? [...tour.versionHistory]
-      : [];
-
-    if (isCustom) {
-      if (tour && tour.id !== "0") {
-        const snapshot: TourVersion = {
-          version: tour.version || 1,
-          createdAt: new Date().toISOString(),
-          createdByName: company.name,
-          changeNote:
-            changeNote.trim() || `Cập nhật phiên bản v${tour.version || 1}`,
-          tourSnapshot: JSON.parse(JSON.stringify(tour)),
-        };
-        nextVersionHistory = [snapshot, ...nextVersionHistory];
-        nextVersion = (tour.version || 1) + 1;
-      } else {
-        nextVersion = 1;
-      }
-    }
 
     // Handle co-hosting quotes and dynamic revenue split calculation
     let updatedCoHosts = coHostsList;
@@ -3580,14 +3550,11 @@ export function TourFormPage(props: TourFormPageProps) {
         customRequest?.customerPhone || customRequest?.contactPhone || tour?.targetCustomerPhone,
       targetCustomerEmail:
         customRequest?.customerEmail || customRequest?.contactEmail || tour?.targetCustomerEmail,
-      version: isCustom ? nextVersion : tour?.version,
-      changeNote: isCustom
-        ? changeNote.trim() ||
-        (tour
-          ? `Cập nhật phiên bản v${nextVersion}`
-          : "Phiên bản thiết kế đầu tiên theo yêu cầu")
-        : tour?.changeNote,
-      versionHistory: isCustom ? nextVersionHistory : tour?.versionHistory,
+      version: tour?.version,
+      revision: tour?.revision,
+      createNewVersion: isCustom && createNewVersion,
+      changeNote: changeNote.trim() || (createNewVersion ? "Lưu với phiên bản mới" : isCustom ? "Cập nhật phiên bản tour" : "Cập nhật bản nháp"),
+
     };
 
     setSaving(true);
@@ -3618,12 +3585,12 @@ export function TourFormPage(props: TourFormPageProps) {
         <p className="text-sm text-slate-600">Thay đổi trên bản sao của bạn. Agency sẽ xem yêu cầu, thiết kế lại và báo giá.</p>
       </div> : <>
       {/* Sticky Top Header Bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-2xs">
-        <div className="flex items-center gap-4">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex min-w-0 flex-1 basis-96 items-center gap-4">
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Quay lại danh sách</span>
@@ -3652,7 +3619,7 @@ export function TourFormPage(props: TourFormPageProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             type="button"
             onClick={() => setShowAIPlanner(true)}
@@ -3675,9 +3642,9 @@ export function TourFormPage(props: TourFormPageProps) {
             disabled={saving}
             onClick={() => handleSubmit("draft")}
             className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs font-semibold"
-            title="Lưu bản nháp để tiếp tục chỉnh sửa sau"
+            title={isCustom ? "Cập nhật phiên bản đang mở" : "Lưu bản nháp để tiếp tục chỉnh sửa sau"}
           >
-            Lưu bản nháp
+            {isCustom ? "Lưu" : "Lưu bản nháp"}
           </Button>
           {!isCustom && (
             <Button
@@ -3691,7 +3658,14 @@ export function TourFormPage(props: TourFormPageProps) {
               Lưu hoàn tất (Chưa đăng)
             </Button>
           )}
-          <Button
+          {isCustom && isLeadCompany && tour && tour.id !== "0" && (
+            <Button type="button" variant="outline" disabled={saving || !name.trim() || !destination.trim()}
+              onClick={() => handleSubmit("draft", true)}
+              title="Giữ lại phiên bản hiện tại và lưu nội dung này thành phiên bản kế tiếp">
+              <Plus className="w-4 h-4 mr-1.5" />Lưu với phiên bản mới
+            </Button>
+          )}
+          {!isCustom && (<Button
             type="button"
             disabled={saving || !name.trim() || !destination.trim()}
             onClick={() => handleSubmit("complete_public")}
@@ -3708,7 +3682,7 @@ export function TourFormPage(props: TourFormPageProps) {
               : tour
                 ? "Lưu & Mở bán ngay"
                 : "Hoàn tất & Đăng bán ngay"}
-          </Button>
+          </Button>)}
         </div>
       </div>
 
@@ -3734,7 +3708,7 @@ export function TourFormPage(props: TourFormPageProps) {
             </span>
             <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-purple-600">
               {tour && tour.id !== "0"
-                ? `Phiên bản hiện tại: v${tour.version || 1} ➔ Dự kiến lưu: v${(tour.version || 1) + 1}`
+                ? `Đang chỉnh sửa v${tour.version || 1}`
                 : "Phiên bản đầu tiên: v1"}
             </span>
           </div>
@@ -3748,7 +3722,7 @@ export function TourFormPage(props: TourFormPageProps) {
               onChange={(e) => setChangeNote(e.target.value)}
               placeholder={
                 tour
-                  ? `Ghi chú cho v${(tour.version || 1) + 1} (VD: Đổi khách sạn sang TTC Premium...)`
+                  ? "Ghi chú thay đổi của bản nháp hoặc phiên bản mới..."
                   : "Ghi chú ban đầu..."
               }
               className="text-xs bg-purple-950/80 text-white placeholder-purple-400 border border-purple-500/50 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 md:w-80"
@@ -9015,7 +8989,7 @@ export function TourFormPage(props: TourFormPageProps) {
         </div>
       </div> : <>
       {/* Sticky Bottom Action Bar */}
-      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-lg">
+      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#CBD5E1] px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
         <div className="text-xs text-gray-500 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
           <span>
@@ -9035,7 +9009,7 @@ export function TourFormPage(props: TourFormPageProps) {
             onClick={() => handleSubmit("draft")}
             className="border-amber-500 text-amber-700 hover:bg-amber-50 font-semibold"
           >
-            Lưu bản nháp
+            {isCustom ? "Lưu" : "Lưu bản nháp"}
           </Button>
           {!isCustom && (
             <Button
@@ -9049,14 +9023,15 @@ export function TourFormPage(props: TourFormPageProps) {
               Lưu hoàn tất (Chưa đăng)
             </Button>
           )}
-          <Button
+          {isCustom && isLeadCompany && tour && tour.id !== "0" && <Button type="button" variant="outline" disabled={saving || !name.trim() || !destination.trim()} onClick={() => handleSubmit("draft", true)}>Lưu với phiên bản mới</Button>}
+          {!isCustom && (<Button
             disabled={saving || !name.trim() || !destination.trim()}
             onClick={() => handleSubmit("complete_public")}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
           >
             <Check className="w-4 h-4 mr-1.5" />
             {isCustom ? "Hoàn tất & Lưu tour riêng" : tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay"}
-          </Button>
+          </Button>)}
         </div>
       </div>
 

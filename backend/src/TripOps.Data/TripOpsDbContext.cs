@@ -71,8 +71,8 @@ public class TripOpsDbContext : DbContext
 
     private void PrepareForSave()
     {
-        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State == EntityState.Deleted || (e.State == EntityState.Modified && e.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(TourVersion.SharedAt) or nameof(TourVersion.SharedBy))))))
-            throw new InvalidOperationException("Tour history is immutable.");
+        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State == EntityState.Deleted || (e.State == EntityState.Modified && e.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(TourVersion.SharedAt) or nameof(TourVersion.SharedBy))) && !(e.Entity.Tour?.IsRequest == true && e.Entity.Tour.Version == e.Entity.VersionNumber))))
+            throw new InvalidOperationException("Only the selected private design version may be edited.");
         if (ChangeTracker.Entries<BookingQuotation>().Any(e => e.State == EntityState.Deleted && e.Entity.SentAt.HasValue))
             throw new InvalidOperationException("Sent quotations cannot be deleted.");
         foreach (var entry in ChangeTracker.Entries<BookingQuotation>().Where(e => e.State == EntityState.Modified && e.OriginalValues.GetValue<DateTime?>(nameof(BookingQuotation.SentAt)).HasValue))

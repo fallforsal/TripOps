@@ -1,10 +1,11 @@
+import { DesignVersionSelector } from "./DesignVersionSelector";
 import { DesignCollaborationPanel } from "./DesignCollaborationPanel";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ChevronDown, Copy, Eye, History, Handshake, Loader2, Search, Send, Sparkles, XCircle } from "lucide-react";
 import { http } from "@/app/lib/http";
 import { fromApiTour, type ApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
-import { cloneDesignTour, shareDesignTour, saveDesignTour } from "@/app/services/customTourRequests";
+import { cloneDesignTour, shareDesignTour, saveDesignTour, getDesignVersion } from "@/app/services/customTourRequests";
 import type { CustomTourRequest, Tour, TourCompany } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
@@ -19,7 +20,6 @@ interface Props {
   onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
   onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
   onEditTour: (id: string, tour: Partial<Tour>) => void | Promise<void>;
-  onRestoreTourVersion?: (id: string, version: number) => void;
   onViewTour?: (tour: Tour) => void;
 }
 const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Đã chia sẻ", rejected: "Đã từ chối", cancelled: "Đã hủy" };
@@ -55,7 +55,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     await perform(async () => {
       setTemplate(null);
       if (existing) {
-        const saved=fromApiTour(await http<ApiTour>(`/agency/tours/${existing.id}`));
+        const saved=await getDesignVersion(request.id,overrides[request.id]?.version ?? existing.sharedVersion ?? existing.version ?? 1);
         setEditing(saved);
       }
       else {
@@ -72,24 +72,22 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   };
   const save = async (data: Partial<Tour>) => {
     if (!designing) return;
-    const saved = await saveDesignTour(designing.id, { ...(editing || template), ...data, is_request: true }, editing?.version);
+    const saved = await saveDesignTour(designing.id, { ...(editing || template), ...data, is_request: true }, editing?.revision);
     setOverrides(prev => ({ ...prev, [designing.id]: saved }));
     await onUpdateRequest(designing.id, {}); setDesigning(null); setEditing(null); setRevision(n => n + 1);
     toast.success("Đã lưu tour. Chia sẻ riêng khi bạn sẵn sàng gửi cho khách.");
   };
   const share = async (request: CustomTourRequest, tour: Tour) => perform(async () => {
-    const saved = await shareDesignTour(request.id, tour.version || 1);
+    const selected = overrides[request.id]?.version ?? tour.sharedVersion ?? tour.version ?? 1;
+    const fresh = await getDesignVersion(request.id, selected);
+    const saved = await shareDesignTour(request.id, fresh.revision || 1, selected);
     setOverrides(prev => ({ ...prev, [request.id]: saved })); await onUpdateRequest(request.id, {}); setRevision(n => n + 1);
     toast.success("Đã chia sẻ phương án cho khách.");
   });
-  const restore = async (request: CustomTourRequest, tourId: number, version: number) => {
-    await perform(async () => {
-      const current = await http<ApiTour>(`/agency/tours/${tourId}`);
-      const saved = fromApiTour(await http<ApiTour>(`/agency/tours/${tourId}/versions/${version}/restore`, { method: "POST", body: JSON.stringify({ version: current.version, reason: `Khôi phục nội dung phiên bản ${version} theo trao đổi với khách` }) }));
-      setOverrides(prev => ({ ...prev, [request.id]: saved })); await onUpdateRequest(request.id, {}); setRevision(n => n + 1);
-      toast.success(`Đã khôi phục thành bản nháp v${saved.version}. Hoàn tất rồi chia sẻ khi đã kiểm tra.`);
-    });
-  };
+  const chooseVersion = async (request: CustomTourRequest, version: number) => perform(async () => {
+    const selected = await getDesignVersion(request.id,version);
+    setOverrides(prev=>({...prev,[request.id]:selected}));
+  });
   const rows = useMemo(() => requests.filter(r => r.targetCompanyId === company.id && (filter === "all" || r.status === filter) &&
     [r.id, r.destinations, r.contactName, r.contactEmail, r.contactPhone, r.businessName].some(v => v?.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)), [requests, filter, search]);
@@ -114,26 +112,26 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
           <td className="px-4 py-4"><strong>{request.destinations}</strong><p className="mt-1 whitespace-nowrap text-xs text-slate-500">{date(request.departureDate)} – {date(request.returnDate)}</p><p className="mt-1 text-xs">{request.numberOfPeople} khách</p></td>
           <td className="px-4 py-4 whitespace-nowrap">{request.budgetPerPerson ? <><strong>{money(Number(request.budgetPerPerson))}</strong><span className="text-xs text-slate-500"> / khách</span><p className="mt-1 text-xs text-slate-500">Tổng: {money(Number(request.budgetPerPerson) * Number(request.numberOfPeople))}</p></> : "Thỏa thuận"}</td>
           <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${request.status === "rejected" ? "bg-rose-50 text-rose-700" : request.status === "pending" ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-800"}`}>{labels[request.status] || request.status}</span>{request.rejectionReason && <p className="mt-2 max-w-[220px] text-xs text-rose-700">{request.rejectionReason}</p>}</td>
-          <td className="px-4 py-4 min-w-[170px]">{tour ? <><p className="max-w-[200px] truncate font-medium" title={tour.name}>{tour.name}</p><p className="mt-1 text-xs text-slate-500">Bản làm việc v{tour.version} · {tour.status === "draft" ? "Bản nháp" : "Đã hoàn tất"}</p></> : <p className="text-xs text-slate-400">Chưa tạo tour</p>}<p className="mt-1 text-xs text-[#075985]">{sharedVersion ? `Khách đang xem v${sharedVersion}` : "Chưa chia sẻ cho khách"}</p></td>
+          <td className="px-4 py-4 min-w-[230px]">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} value={overrides[request.id]?.version ?? sharedVersion ?? tour.version ?? 1} sharedVersion={sharedVersion} reload={revision} disabled={busy} onChange={version=>void chooseVersion(request,version)}/> : <p className="text-xs text-slate-400">Chưa tạo tour</p>}</td>
           <td className="min-w-[280px] px-4 py-4"><div className="ml-auto flex min-w-[248px] max-w-[320px] flex-wrap justify-end gap-1.5">
             {request.status === "pending" && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void decide(request,"reviewing")}><CheckCircle2/>Tiếp nhận</Button>}
             {!tour && (request.status === "pending" || request.status === "reviewing") && <Button aria-label={`Từ chối yêu cầu ${request.id}`} title="Từ chối yêu cầu" size="icon" variant="outline" disabled={busy} className="h-8 w-8 text-rose-600" onClick={() => void decide(request,"rejected")}><XCircle/></Button>}
             <Button size="sm" variant="outline" onClick={() => setViewing(request.id)}><Eye/>Xem chi tiết</Button>
             {active(request) && <><Button size="sm" variant="outline" disabled={busy} onClick={() => setCollaborating(request.id)}><Handshake/>Đồng tổ chức</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void start(request,tour)}><Sparkles/>{tour ? "Sửa tour" : "Thiết kế"}</Button>
-              {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(""); setHistoryRequestId(request.id); }}><History/>Lịch sử / Khôi phục</Button>}
+              {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(""); setHistoryRequestId(request.id); }}><History/>Các phiên bản</Button>}
               {!tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setCloning(request); setSourceId(""); setError(""); }}><Copy/>Clone tour</Button>}
-              {tour && tour.status === "completed" && sharedVersion !== tour.version && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void share(request,tour)}><Send/>Chia sẻ v{tour.version}</Button>}
+              {tour && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void share(request,tour)}><Send/>Chia sẻ v{overrides[request.id]?.version ?? sharedVersion ?? tour.version}</Button>}
             </>}
             <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Trao đổi và lịch sử yêu cầu ${request.id}`} title="Trao đổi và lịch sử phiên bản" onClick={() => setExpanded(expanded === request.id ? null : request.id)}><ChevronDown/></Button>
           </div></td></tr>;
       })}</tbody></table>{!rows.length && <p className="p-8 text-center text-sm text-slate-500">Không tìm thấy yêu cầu phù hợp.</p>}<p className="border-t border-slate-100 p-4 text-xs text-slate-500">Hiển thị {rows.length} / {requests.length} yêu cầu</p></div>
     {expandedRequest && <div className="space-y-4"><h2 className="font-semibold text-[#075985]">Trao đổi và lịch sử yêu cầu #{expandedRequest.id}</h2>
       <DesignRequestMessages requestId={expandedRequest.id} agency closed={!active(expandedRequest) && expandedRequest.status !== "pending"}/>
-      <DesignVersionHistory key={`${expandedRequest.id}-${revision}`} requestId={expandedRequest.id} agency currentVersion={currentTour(expandedRequest)?.version} onRestore={(id,version) => restore(expandedRequest,id,version)}/></div>}
+      <DesignVersionHistory key={`${expandedRequest.id}-${revision}`} requestId={expandedRequest.id} agency currentVersion={currentTour(expandedRequest)?.version} onSelect={version => chooseVersion(expandedRequest,version)}/></div>}
     <CustomRequestDetailModal isOpen={Boolean(viewed)} onClose={() => setViewing(null)} request={viewed} matchingTour={viewed ? currentTour(viewed) : null} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={onViewTour}/>
-    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="bg-white sm:max-w-3xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Lịch sử & khôi phục phiên bản tour</DialogTitle><DialogDescription>Chọn phiên bản trước để khôi phục thành bản nháp mới. Khách tiếp tục xem phiên bản đã chia sẻ đến khi bạn chia sẻ lại.</DialogDescription></DialogHeader>
+    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="bg-white sm:max-w-3xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Các phương án tour theo phiên bản</DialogTitle><DialogDescription>Chọn phiên bản để chỉnh sửa hoặc chia sẻ trực tiếp cho khách. Chọn lại phiên bản cũ không tạo thêm phiên bản.</DialogDescription></DialogHeader>
       {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-      {requests.filter(r => r.id === historyRequestId).map(request => <DesignVersionHistory key={`${request.id}-${revision}`} requestId={request.id} agency currentVersion={currentTour(request)?.version} onRestore={(id,version) => restore(request,id,version)}/>)}
+      {requests.filter(r => r.id === historyRequestId).map(request => <DesignVersionHistory key={`${request.id}-${revision}`} requestId={request.id} agency currentVersion={currentTour(request)?.version} onSelect={async version => { await chooseVersion(request,version); setHistoryRequestId(null); }}/>)}
     </DialogContent></Dialog>
     <Dialog open={Boolean(rejecting)} onOpenChange={open => { if (!busy && !open) setRejecting(null); }}><DialogContent className="bg-white sm:max-w-lg"><DialogHeader><DialogTitle>Từ chối yêu cầu thiết kế #{rejecting?.id}</DialogTitle><DialogDescription>Cho khách biết vì sao Agency chưa thể tổ chức chuyến đi này.</DialogDescription></DialogHeader>
       <label className="space-y-2 text-sm">Lý do từ chối <span className="text-rose-600">*</span><textarea aria-label="Lý do từ chối" maxLength={2000} rows={4} className="mt-2 w-full rounded-lg border p-3" value={reason} onChange={e => setReason(e.target.value)}/></label>{error && <p role="alert" className="text-sm text-rose-700">{error}</p>}

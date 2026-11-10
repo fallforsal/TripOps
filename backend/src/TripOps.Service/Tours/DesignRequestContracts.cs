@@ -35,6 +35,6 @@ public sealed record DesignCoHostDto(string CompanyId, string CompanyName, strin
 public sealed record InviteDesignCoHost([Required] string AgencyId, [StringLength(255)] string? Segment = null,
     [Range(typeof(decimal), "0", "9999999999")] decimal? Budget = null, [StringLength(2000)] string? Notes = null);
 public sealed record DesignCoHostDecision([Required, AllowedValues("accept", "reject")] string Action, [StringLength(2000)] string? Reason = null);
-public sealed record DesignSegmentInput(int Version, [Required] TimelineInput[] Timelines, [Required] PricingTierInput[] PricingTiers);
+public sealed record DesignSegmentInput(int Revision, [Required] TimelineInput[] Timelines, [Required] PricingTierInput[] PricingTiers);
 
 public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action, [StringLength(2000)] string? Reason = null);

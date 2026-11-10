@@ -290,6 +290,7 @@ internal static class DatabaseDesignConfiguration
             entity.ToTable("bookings");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.TourVersion).HasColumnName("tour_version");
+            entity.Property(e => e.TourConfigurationData).HasColumnName("tour_configuration_data").HasColumnType("nvarchar(max)");
             entity.Property(e => e.BookingCode).HasColumnName("booking_code").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
             entity.HasIndex(e => e.BookingCode).IsUnique();
             entity.Property(e => e.CustomerId).HasColumnName("customer_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
@@ -855,7 +856,9 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<BookingParticipant>().HasOne<BookingAgency>().WithMany().HasForeignKey(e => new { e.BookingId, e.AgencyId }).HasPrincipalKey(e => new { e.BookingId, e.AgencyId }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingParticipant>().HasOne<BookingAssignedGuide>().WithMany().HasForeignKey(e => new { e.BookingId, e.AgencyId, e.AssignedGuideId }).HasPrincipalKey(e => new { e.BookingId, e.AgencyId, e.GuideId }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingTimelineAttraction>().HasOne<User>().WithMany().HasForeignKey(e => e.GuideId).HasPrincipalKey(e => e.Id).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<Tour>().Property(e => e.Version).IsConcurrencyToken();
+        modelBuilder.Entity<Tour>().Property(e => e.Revision).HasColumnName("revision").IsConcurrencyToken();
+        modelBuilder.Entity<Tour>().Property(e => e.ConfigurationData).HasColumnName("configuration_data").HasColumnType("nvarchar(max)");
+        modelBuilder.Entity<Tour>().Property(e => e.HasDraftChanges).HasColumnName("has_draft_changes");
         modelBuilder.Entity<Tour>().HasQueryFilter(e => e.Status != TourStatus.Deleted);
         modelBuilder.Entity<Complaint>().HasQueryFilter(e => e.DeletedAt == null);
         modelBuilder.Entity<TourAccommodation>().Property(e => e.NightsCount).HasSentinel(-1);

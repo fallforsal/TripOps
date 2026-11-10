@@ -91,7 +91,7 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
     [HttpPost("{id:int}/share")]
     [EndpointSummary("Share the completed working version without publishing it publicly")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Share(int id, TourCommand input, CancellationToken ct) =>
+    public async Task<IActionResult> Share(int id, ShareDesignVersionInput input, CancellationToken ct) =>
         Ok(await tours.ShareForRequest(Actor, id, input, ct));
     [HttpGet("{id:int}/history")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]

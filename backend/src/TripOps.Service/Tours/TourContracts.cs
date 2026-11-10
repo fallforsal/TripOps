@@ -62,16 +62,16 @@ public sealed record SupplierDto(int Id, string Type, string Name, string? Addre
     string? ContactPhone, string? ContactEmail, int? StarRating, decimal? ReferencePrice, string? Conditions, string? Notes,
     string Status, DateTime CreatedAt, DateTime UpdatedAt);
 
-public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Version,
+public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Revision,
     [Required] TourConfiguration Configuration, [Required, StringLength(2000)] string ChangeNote);
-public sealed record TourCommand([Range(1, int.MaxValue)] int Version, [StringLength(2000)] string? Reason = null);
+public sealed record TourCommand([Range(1, int.MaxValue)] int Revision, [StringLength(2000)] string? Reason = null);
 public sealed record DuplicateTourRequest([Required, StringLength(255)] string Name);
 public sealed record AiDraftRequest([Required, StringLength(255)] string Destination,
     [Range(1, 365)] int DurationDays, [StringLength(2000)] string? Style = null);
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
-    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null);
+    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null, int Revision = 1, bool HasDraftChanges = false);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
 public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
@@ -111,4 +111,5 @@ public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerat
 
 public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
 
-public sealed record SaveDesignTourInput(int? Version, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null);
+public sealed record SaveDesignTourInput(int? Revision, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null, bool CreateNewVersion = false, int? Version = null);
+public sealed record ShareDesignVersionInput(int Revision, int? Version = null);

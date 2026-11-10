@@ -57,7 +57,6 @@ interface AgencyDashboardProps {
   onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
   onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
   onUpdateCustomRequest?: (id: string, update: Partial<CustomTourRequest>) => void;
-  onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
   onGuidesChanged?: () => void | Promise<void>;
   onLogout?: () => void;
@@ -92,7 +91,6 @@ export function AgencyDashboard({
   onCancelBooking,
   onReviewContract,
   onUpdateCustomRequest,
-  onRestoreTourVersion,
   onViewTour,
   onGuidesChanged,
   onLogout,
@@ -181,7 +179,6 @@ export function AgencyDashboard({
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
             onDeleteTour={onDeleteTour} onDuplicateTour={onDuplicateTour}
-            onRestoreTourVersion={onRestoreTourVersion}
           />
         );
       case "bookings":
@@ -257,7 +254,6 @@ export function AgencyDashboard({
             onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
-            onRestoreTourVersion={onRestoreTourVersion}
             onViewTour={onViewTour}
           />
         );

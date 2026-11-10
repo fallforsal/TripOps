@@ -106,9 +106,8 @@ public sealed partial class TourService
     {
         var id=await db.Tours.Where(t=>t.DesignRequestId==request.Id).Select(t=>(int?)t.Id).SingleOrDefaultAsync(ct);
         if(!id.HasValue)return;
-        var tour=await Owned(request.AgencyId!,id.Value,ct); await Baseline(tour,actor,ct);
-        var config=await CollaborationConfiguration(request,Configuration(tour),ct);
-        tour.Version=(tour.Version??1)+1; tour.Status=TourStatus.Draft;
+        var tour=await Owned(request.AgencyId!,id.Value,ct); var config=await CollaborationConfiguration(request,Configuration(tour),ct);
+        tour.Status=TourStatus.Draft;
         Apply(tour,config); await Save(tour,actor,"Cập nhật liên minh đồng tổ chức",ct);
     }
     public async Task<TourDto> CollaborativeTour(string actor,int id,CancellationToken ct)
@@ -129,12 +128,11 @@ public sealed partial class TourService
         var row=await db.TourDesignRequestAgencies.SingleAsync(a=>a.TourDesignRequestId==id && a.AgencyId==actor,ct);
         Require(row.Status=="accepted","Bạn chưa được nhận vào liên minh."); await MutableCollaboration(request,ct);
         var tourId=await db.Tours.Where(t=>t.DesignRequestId==id).Select(t=>t.Id).SingleOrDefaultAsync(ct);
-        var tour=await Owned(request.AgencyId!,tourId,ct); Expected(tour,input.Version);
+        var tour=await Owned(request.AgencyId!,tourId,ct); Expected(tour,input.Revision);
         var current=Configuration(tour);
         var incoming=current with {Timelines=input.Timelines,PricingTiers=input.PricingTiers};
         var config=await CollaborationConfiguration(request,MergeDesign(current,incoming,actor,request.AgencyId!),ct);
-        await Validate(config,false,ct,request.AgencyId,id); await Baseline(tour,actor,ct);
-        tour.Version=(tour.Version??1)+1; tour.Status=TourStatus.Draft; Apply(tour,config);
+        await Validate(config,false,ct,request.AgencyId,id); tour.Status=TourStatus.Draft; Apply(tour,config);
         var result=await Save(tour,actor,"Đối tác cập nhật nội dung và bảng giá riêng",ct);
         db.WorkflowNotifications.Add(new WorkflowNotification {UserId=request.AgencyId!,RequestId=id,Message=$"Đối tác đã lưu nội dung và bảng giá riêng yêu cầu #{id}. Hãy kiểm tra, hoàn tất và chia sẻ lại khi sẵn sàng."});
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return result;

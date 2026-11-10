@@ -26,6 +26,8 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     [HttpGet("working-tour")]
     [EndpointSummary("Lead or accepted co-host reads the current private working tour")]
     public async Task<ActionResult<TourDto>> WorkingTour(int id,CancellationToken ct) => Ok(await tours.CollaborativeTour(Actor,id,ct));
+    [HttpGet("versions/{number:int}")]
+    public async Task<ActionResult<TourDto>> Version(int id,int number,CancellationToken ct) => Ok(await tours.DesignVersion(Actor,id,number,ct));
     [HttpPut("segment")]
     [EndpointSummary("Accepted co-host saves its own content and age-price table; day metadata is shared")]
     public async Task<ActionResult<TourDto>> SaveSegment(int id,DesignSegmentInput input,CancellationToken ct) => Ok(await tours.SaveSegment(Actor,id,input,ct));

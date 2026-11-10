@@ -118,6 +118,9 @@ Table services {
 Ref: services.provider_id > users.id
 
 Table tours {
+  configuration_data json [note: 'Cấu hình đang làm việc; không phụ thuộc lịch sử version']
+  revision int [not null, note: 'Khóa chống ghi đè mỗi lần lưu; không phải số phiên bản thiết kế']
+  has_draft_changes boolean [not null, default: false, note: 'Cột tương thích mô hình nháp cũ; luồng hiện tại cập nhật trực tiếp version và đặt false']
   id int [pk, increment]
   agency_id varchar(36) [not null] // FK tới users.id, vai trò agency
   tour_code varchar(50) [unique, not null]
@@ -319,7 +322,7 @@ Table tour_versions {
   version int [not null, note: 'Số thứ tự phiên bản: 1, 2, 3...']
   change_note text [note: 'Ghi chú lý do thay đổi: VD: Nâng cấp Terracotta 4 sao và bổ sung Gala Dinner VIP...']
   price decimal(12, 2) [note: 'Giá tour tại thời điểm của phiên bản này']
-  tour_snapshot json [not null, note: 'Bản sao snapshot toàn bộ cấu hình tour (lộ trình, khách sạn, ẩm thực, số khách) để khôi phục (rollback)']
+  tour_snapshot json [not null, note: 'Cấu hình đầy đủ của một phương án tour thiết kế riêng; Lưu cập nhật chính phương án này']
   created_by varchar(36) [note: 'FK tới users.id - Nhân viên công ty thực hiện cập nhật/lưu bản sao']
   created_at timestamp [default: `now()`, note: 'Thời điểm tạo bản sao lưu']
 
@@ -327,7 +330,7 @@ Table tour_versions {
     (tour_id, id) [unique]
     (tour_id, version) [unique, note: 'Mỗi tour chỉ có 1 bản ghi duy nhất cho mỗi số version']
   }
-  Note: 'Lịch sử cấu hình tour và khôi phục phiên bản; không phải đối tượng khách chọn để đặt booking.'
+  Note: 'Chỉ áp dụng tour thiết kế riêng. Lưu cập nhật version đang chọn; Lưu với phiên bản mới tạo dòng với số lớn nhất cộng 1. Chọn bất kỳ version để share; tour đăng bán không sinh version mới.'
 }
 
 Ref: tour_versions.tour_id > tours.id
@@ -337,6 +340,7 @@ Ref: tour_versions.created_by > users.id
 
 
 Table bookings {
+  tour_configuration_data json [note: 'Cấu hình riêng tại thời điểm booking, gồm bảng giá từng Agency; không trả thẳng cho Customer']
   AcceptedQuotationId int
   tour_version int [not null, note: 'Phiên bản khách đặt; sao chép sang booking_*']
   id int [pk, increment]

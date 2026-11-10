@@ -9,16 +9,16 @@ public sealed partial class TourFlowTests
     private static async Task<DesignRequestDto> DesignRequest(HttpClient customer) => await Read<DesignRequestDto>(await customer.PostAsJsonAsync("/api/v1/tour-design-requests",
         new CreateDesignRequestInput("agency", "Customer", "customer@example.test", "0900000000", "Da Lat", DateTime.UtcNow.Date.AddDays(20), DateTime.UtcNow.Date.AddDays(21), 2)), HttpStatusCode.Created);
     private static async Task Receive(HttpClient agency, int id) => _ = await Read<DesignRequestDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{id}/action", new DesignRequestAction("review")));
-    private static async Task<TourDto> Share(HttpClient agency, int id, TourDto plan) => await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{id}/share", new TourCommand(plan.Version)));
+    private static async Task<TourDto> Share(HttpClient agency, int id, TourDto plan) => await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{id}/share", new ShareDesignVersionInput(plan.Revision,plan.Version)));
     private static async Task<(DesignRequestDto Request, TourDto Plan)> SharedDesign(HttpClient customer, HttpClient agency, TourConfiguration? config = null)
     {
         var request = await DesignRequest(customer); await Receive(agency,request.Id);
         var draft = await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tours", config ?? Complete()),HttpStatusCode.Created);
-        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete",new TourCommand(draft.Version)));
+        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete",new TourCommand(draft.Revision)));
         return (request,await Share(agency,request.Id,plan));
     }
     private static CreateBookingRequest DesignBooking(TourDto plan) => new(plan.Id,DateTime.UtcNow.Date.AddDays(20),"Customer","0900000000","customer@example.test",null,
-        [new ParticipantInput("One",null,null,null,null,null),new ParticipantInput("Two",null,null,null,null,null)],TourVersion:plan.Version);
+        [new ParticipantInput("One",null,null,null,null,null),new ParticipantInput("Two",null,null,null,null,null)],TourVersion:plan.Version,TourRevision:plan.Revision);
 
     [Fact]
     public async Task Design_decision_requires_reason_and_only_target_agency_can_receive()
@@ -35,17 +35,16 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync(url,new DesignRequestAction("review"))).StatusCode);
     }
     [Fact]
-    public async Task Design_save_complete_and_share_are_separate_and_one_request_has_one_tour()
+    public async Task Design_save_and_share_are_separate_and_one_request_has_one_tour()
     {
         await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");using var other=await app.Login("other");
         var request=await DesignRequest(customer);await Receive(agency,request.Id);
         var draft=await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tours",Complete()),HttpStatusCode.Created);
         Assert.Empty(await Read<TourDto[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/plans")));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/share",new TourCommand(draft.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tours",Complete())).StatusCode);
-        var complete=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete",new TourCommand(draft.Version)));
+        var complete=draft;
         Assert.Empty(await Read<TourDto[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/plans")));
-        Assert.Equal(HttpStatusCode.NotFound,(await other.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/share",new TourCommand(complete.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await other.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/share",new TourCommand(complete.Revision))).StatusCode);
         var shared=await Share(agency,request.Id,complete);Assert.Equal(shared.Version,shared.SharedVersion);
         var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));Assert.Equal(shared.Version,visible.Version);
         var notificationCount=0;await app.Inspect(async db=>notificationCount=await db.WorkflowNotifications.CountAsync());
@@ -57,8 +56,8 @@ public sealed partial class TourFlowTests
     {
         await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");
         var (request,plan)=await SharedDesign(customer,agency);
-        var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{plan.Id}",new UpdateTourRequest(plan.Version,plan.Configuration with {Name="Not shared",BasePrice=9000000},"New draft")));
-        if(completeAgain)await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete",new TourCommand(edited.Version)));
+        var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tour",new SaveDesignTourInput(plan.Revision,plan.Configuration with {Name="Not shared",BasePrice=9000000},CreateNewVersion:true,Version:plan.Version)));
+        if(completeAgain)await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete",new TourCommand(edited.Revision)));
         var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));Assert.Equal(plan.Configuration.Name,visible.Configuration.Name);Assert.Equal(plan.Version,visible.Version);
         Assert.Single(await Read<DesignRequestService.PlanHistory[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")));
         var booking=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible)),HttpStatusCode.Created);
@@ -69,19 +68,30 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.Conflict,(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible))).StatusCode);
     }
     [Fact]
-    public async Task Design_reshare_rejects_stale_booking_and_restore_creates_new_unshared_version()
+    public async Task Design_shares_any_existing_plan_without_restore_and_booking_freezes_selected_version()
     {
         await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");
         var(request,plan)=await SharedDesign(customer,agency);
-        var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{plan.Id}",new UpdateTourRequest(plan.Version,plan.Configuration with {BasePrice=4000000},"New price")));
-        var next=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete",new TourCommand(edited.Version)));await Share(agency,request.Id,next);
+        var url=$"/api/v1/agency/tour-design-requests/{request.Id}";
+        var next=await Read<TourDto>(await agency.PutAsJsonAsync(url+"/tour",new SaveDesignTourInput(plan.Revision,plan.Configuration with {BasePrice=4000000},CreateNewVersion:true,Version:1)));
+        next=await Share(agency,request.Id,next);
         Assert.Equal(HttpStatusCode.Conflict,(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(plan))).StatusCode);
-        var restored=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/versions/{plan.Version}/restore",new TourCommand(next.Version,"Khách chọn bản trước")));
-        Assert.True(restored.Version>next.Version);Assert.Equal("draft",restored.Status);Assert.Equal(plan.Configuration.BasePrice,restored.Configuration.BasePrice);
-        Assert.Equal(next.Version,(await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"))).Version);
-        var complete=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete",new TourCommand(restored.Version)));await Share(agency,request.Id,complete);
-        var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));Assert.Equal(plan.Configuration.BasePrice,visible.Configuration.BasePrice);Assert.Equal(complete.Version,visible.Version);
-        Assert.Equal(3,(await Read<DesignRequestService.PlanHistory[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history"))).Length);
+        var reshared=await Read<TourDto>(await agency.PostAsJsonAsync(url+"/share",new ShareDesignVersionInput(next.Revision,1)));
+        Assert.Equal(1,reshared.Version);Assert.Equal(1,reshared.SharedVersion);
+        var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));
+        Assert.Equal(plan.Configuration.BasePrice,visible.Configuration.BasePrice);Assert.Equal(1,visible.Version);
+        Assert.Equal(2,(await Read<DesignRequestService.PlanHistory[]>(await agency.GetAsync(url+"/history"))).Length);
+        Assert.Equal(HttpStatusCode.NotFound,(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/versions/1/restore",new TourCommand(reshared.Revision))).StatusCode);
+        var booking=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible)),HttpStatusCode.Created);
+        Assert.Equal(plan.Configuration.BasePrice*2,booking.TotalAmount);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PutAsJsonAsync(url+"/tour",new SaveDesignTourInput(reshared.Revision,Complete("Cannot change booked plan"),Version:1))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync(url+"/share",new ShareDesignVersionInput(reshared.Revision,2))).StatusCode);
+        await app.Inspect(async db=> {
+            var row=await db.Bookings.SingleAsync(x=>x.Id==booking.Id);
+            Assert.Equal(1,row.TourVersion);
+            var frozen=await BookingAlliance.BookedConfiguration(db,row,CancellationToken.None);
+            Assert.Equal(plan.Configuration.BasePrice,frozen!.BasePrice);
+        });
     }
     [Fact]
     public async Task Design_clone_copies_owned_tour_without_mutating_source_or_allowing_second_plan()
@@ -91,7 +101,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NotFound,(await other.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/clone",new DesignCloneInput(source.Id))).StatusCode);
         var clone=await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/clone",new DesignCloneInput(source.Id)),HttpStatusCode.Created);
         Assert.NotEqual(source.Id,clone.Id);Assert.True(clone.IsRequest);Assert.Equal(request.Id,clone.DesignRequestId);Assert.Null(clone.SharedVersion);
-        await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{clone.Id}",new UpdateTourRequest(clone.Version,clone.Configuration with {Name="Private clone"},"Edited clone")));
+        await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{clone.Id}",new UpdateTourRequest(clone.Revision,clone.Configuration with {Name="Private clone"},"Edited clone")));
         Assert.Equal(source.Configuration.Name,(await Read<TourDto>(await agency.GetAsync($"{Root}/{source.Id}"))).Configuration.Name);
         await app.Inspect(async db=>Assert.Equal(source.Id,(await db.Tours.SingleAsync(t=>t.Id==clone.Id)).ClonedFromTourId));
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/clone",new DesignCloneInput(source.Id))).StatusCode);

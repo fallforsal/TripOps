@@ -491,6 +491,9 @@ export interface TourReview {
 }
 
 export interface Tour {
+  revision?: number;
+  hasDraftChanges?: boolean;
+  createNewVersion?: boolean;
   agencyPricing?: {agencyId:string;tiers:{key?:string|null;name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[]}[];
   sharedVersion?: number;
   planGuestCount?: number;

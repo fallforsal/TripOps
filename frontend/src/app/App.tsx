@@ -23,7 +23,6 @@ import {
   moderationTours,
   publicTours,
   publishAgencyTour,
-  restoreAgencyTour,
   updateAgencyTour,
 } from "@/app/services/wf02Tours";
 import {
@@ -654,6 +653,7 @@ function Application() {
     const dto = await createBooking({
       tourId,
       tourVersion: bookingTour?.version,
+      tourRevision: bookingTour?.revision,
       startDate: `${data.tourStartDate}T00:00:00`,
       contactName: data.contactName,
       contactPhone: data.contactPhone,
@@ -1274,9 +1274,9 @@ function Application() {
     const created = await createAgencyTour(tourData);
     const result =
       tourData.visibility === "public"
-        ? await publishAgencyTour(String(created.id), created.version)
+        ? await publishAgencyTour(String(created.id), created.revision || 1)
         : tourData.status === "completed"
-          ? await completeAgencyTour(String(created.id), created.version)
+          ? await completeAgencyTour(String(created.id), created.revision || 1)
           : created;
     await refreshTours();
     setTourNotice(
@@ -1296,7 +1296,7 @@ function Application() {
     const current = tours.find((t) => t.id === tourId);
     if (!current) throw new Error("Không tìm thấy tour.");
     if (current.is_request && current.customRequestId) {
-      await saveDesignTour(current.customRequestId, { ...current, ...tourData }, current.version || 1);
+      await saveDesignTour(current.customRequestId, { ...current, ...tourData }, current.revision || 1);
       await refreshTours();
       setTourNotice("Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách.");
       return;
@@ -1306,24 +1306,24 @@ function Application() {
     );
     if (visibilityOnly) {
       if (tourData.visibility === "public")
-        await publishAgencyTour(tourId, current.version || 1);
+        await publishAgencyTour(tourId, current.revision || 1);
       else if (tourData.visibility === "hidden")
         await hideAgencyTour(
           tourId,
-          current.version || 1,
+          current.revision || 1,
           "Agency tạm ẩn tour.",
         );
     } else {
-      const updated = await updateAgencyTour(tourId, current.version || 1, {
+      const updated = await updateAgencyTour(tourId, current.revision || 1, {
         ...current,
         ...tourData,
       });
       if (tourData.is_request && tourData.status === "completed")
-        await completeAgencyTour(tourId, updated.version);
+        await completeAgencyTour(tourId, updated.revision || 1);
       else if (tourData.visibility === "public")
-        await publishAgencyTour(tourId, updated.version);
+        await publishAgencyTour(tourId, updated.revision || 1);
       else if (tourData.status === "completed")
-        await completeAgencyTour(tourId, updated.version);
+        await completeAgencyTour(tourId, updated.revision || 1);
     }
     await refreshTours();
     setTourNotice("Tour đã được cập nhật.");
@@ -1337,11 +1337,11 @@ function Application() {
         ? (
             await hideAgencyTour(
               tourId,
-              current.version || 1,
+              current.revision || 1,
               "Agency lưu trữ tour.",
             )
-          ).version
-        : current.version || 1;
+          ).revision || 1
+        : current.revision || 1;
     await archiveAgencyTour(tourId, version);
     await refreshTours();
     setTourNotice("Tour đã được lưu trữ.");
@@ -1364,7 +1364,7 @@ function Application() {
     try {
       await hideModeratedTour(
         id,
-        tour.version || 1,
+        tour.revision || 1,
         reason || "Admin tạm ẩn tour",
       );
       await refreshTours();
@@ -1504,17 +1504,6 @@ function Application() {
     toast.success("Đã lưu hồ sơ hành khách");
   };
 
-  const handleRestoreTourVersion = async (
-    tourId: string,
-    versionNumber: number,
-  ) => {
-    const currentTour = tours.find((t) => t.id === tourId);
-    if (!currentTour) throw new Error("Không tìm thấy tour.");
-    await restoreAgencyTour(tourId, versionNumber, currentTour.version || 1);
-    await refreshTours();
-    setTourNotice(`Đã khôi phục v${versionNumber} thành bản nháp mới.`);
-  };
-
   // Auth restoring loading screen
   if (sessionLoading) {
     return (
@@ -1620,7 +1609,6 @@ function Application() {
               onCancelBooking={handleAgencyCancelBooking}
               onReviewContract={handleReviewContract}
               onUpdateCustomRequest={handleUpdateCustomTourRequest}
-              onRestoreTourVersion={handleRestoreTourVersion}
               onViewTour={handleViewTour}
               onLogout={handleLogout}
             />

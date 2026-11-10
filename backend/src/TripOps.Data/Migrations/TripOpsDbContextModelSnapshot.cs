@@ -304,6 +304,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("total_price");
 
+                    b.Property<string>("TourConfigurationData")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("tour_configuration_data");
+
                     b.Property<int?>("TourId")
                         .HasColumnType("int")
                         .HasColumnName("tour_id");
@@ -2819,6 +2823,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("tour_code");
 
+                    b.Property<string>("ConfigurationData")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("configuration_data");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -2852,6 +2860,10 @@ namespace TripOps.Data.Migrations
                     b.Property<string>("Exclusions")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("exclusions");
+
+                    b.Property<bool>("HasDraftChanges")
+                        .HasColumnType("bit")
+                        .HasColumnName("has_draft_changes");
 
                     b.Property<string>("Highlights")
                         .HasColumnType("nvarchar(max)")
@@ -2899,6 +2911,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("operation_period");
 
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int")
+                        .HasColumnName("revision");
+
                     b.Property<int?>("SharedVersion")
                         .HasColumnType("int")
                         .HasColumnName("shared_version");
@@ -2919,7 +2936,6 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<int?>("Version")
-                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1)

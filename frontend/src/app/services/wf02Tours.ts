@@ -86,6 +86,8 @@ export type TourConfiguration = {
   provinceCodes?: string[];
 };
 export type ApiTour = {
+  revision?: number;
+  hasDraftChanges?: boolean;
   sharedVersion?: number | null;
   designRequestId?: number | null;
   id: number;
@@ -526,6 +528,7 @@ export const fromApiTour = (tour: ApiTour): Tour => ({
     isRequest: tour.isRequest,
   }),
   sharedVersion: tour.sharedVersion ?? undefined,
+  revision: tour.revision ?? 1, hasDraftChanges: tour.hasDraftChanges ?? false,
   customRequestId: tour.designRequestId == null ? undefined : String(tour.designRequestId),
 });
 const fromPublicTour = (tour: PublicTour) =>
@@ -562,6 +565,7 @@ export async function agencyTours(provinceCode?: string): Promise<Tour[]> {
     summaries.map(async (item) => {
       const api = await http<ApiTour>(`/agency/tours/${item.id}`);
       const result = fromApiTour(api);
+      if (!api.isRequest) return result;
       const versions = await agencyTourVersions(String(item.id));
       result.versionHistory = await Promise.all(
         versions.items
@@ -644,7 +648,7 @@ export const updateAgencyTour = (
   http<ApiTour>(`/agency/tours/${idNumber(id)}`, {
     method: "PUT",
     body: JSON.stringify({
-      version,
+      revision: version,
       configuration: toConfiguration(data),
       changeNote: data.changeNote || "Agency updated tour",
     }),
@@ -652,12 +656,12 @@ export const updateAgencyTour = (
 export const publishAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/publish`, {
     method: "POST",
-    body: JSON.stringify({ version }),
+    body: JSON.stringify({ revision: version }),
   });
 export const hideAgencyTour = (id: string, version: number, reason: string) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/hide`, {
     method: "POST",
-    body: JSON.stringify({ version, reason }),
+    body: JSON.stringify({ revision: version, reason }),
   });
 export const hideModeratedTour = (
   id: string,
@@ -666,10 +670,10 @@ export const hideModeratedTour = (
 ) =>
   http<ApiTour>(`/admin/tours/${idNumber(id)}/hide`, {
     method: "POST",
-    body: JSON.stringify({ version, reason }),
+    body: JSON.stringify({ revision: version, reason }),
   });
 export const archiveAgencyTour = (id: string, version: number) =>
-  http<void>(`/agency/tours/${idNumber(id)}?version=${version}`, {
+  http<void>(`/agency/tours/${idNumber(id)}?revision=${version}`, {
     method: "DELETE",
   });
 export const duplicateAgencyTour = (id: string, name: string) =>
@@ -683,16 +687,6 @@ export const agencyTourVersions = (id: string) =>
   );
 export const agencyTourVersion = (id: string, number: number) =>
   http<ApiVersion>(`/agency/tours/${idNumber(id)}/versions/${number}`);
-export const restoreAgencyTour = (
-  id: string,
-  number: number,
-  version: number,
-) =>
-  http<ApiTour>(`/agency/tours/${idNumber(id)}/versions/${number}/restore`, {
-    method: "POST",
-    body: JSON.stringify({ version, reason: `Restore version ${number}` }),
-  });
-
 export const findCandidateAgenciesByProvince = (
   provinceCodes: string | string[],
   excludeSelf = true,
@@ -709,5 +703,5 @@ export const findCandidateAgenciesByProvince = (
 export const completeAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/complete`, {
     method: "POST",
-    body: JSON.stringify({ version }),
+    body: JSON.stringify({ revision: version }),
   });

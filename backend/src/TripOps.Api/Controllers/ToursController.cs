@@ -51,7 +51,7 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await tours.Get(Actor, id, false, ct));
     [HttpPut("{id:int}")]
-    [EndpointSummary("Replace itinerary, services, options and pricing as a new draft version")]
+    [EndpointSummary("Save the current working itinerary, services, options and pricing")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(int id, UpdateTourRequest request, CancellationToken ct) => Ok(await tours.Update(Actor, id, request, ct));
     [HttpGet("{id:int}/validation")]
@@ -74,8 +74,8 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     [HttpDelete("{id:int}")]
     [EndpointSummary("Soft archive a hidden tour and preserve its history")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Delete(int id, [FromQuery] int version, CancellationToken ct)
-    { await tours.Command(Actor, id, "delete", new(version), ct); return NoContent(); }
+    public async Task<IActionResult> Delete(int id, [FromQuery] int revision, CancellationToken ct)
+    { await tours.Command(Actor, id, "delete", new(revision), ct); return NoContent(); }
     [HttpPost("{id:int}/duplicate")]
     [EndpointSummary("Duplicate a tour into an independent draft")]
     [ProducesResponseType<TourDto>(StatusCodes.Status201Created)]
@@ -85,17 +85,14 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
         return CreatedAtAction(nameof(Get), new { id = tour.Id }, tour);
     }
     [HttpGet("{id:int}/versions")]
-    [EndpointSummary("List immutable tour version metadata")]
+    [EndpointSummary("List private design tour version metadata")]
     [ProducesResponseType<TourPage<TourVersionDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Versions(int id, CancellationToken ct, int page = 1, int pageSize = 20) => Ok(await tours.Versions(Actor, id, page, pageSize, ct));
     [HttpGet("{id:int}/versions/{number:int}")]
-    [EndpointSummary("Get an immutable historical tour snapshot")]
+    [EndpointSummary("Get a private design tour snapshot")]
     [ProducesResponseType<TourVersionDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Version(int id, int number, CancellationToken ct) => Ok(await tours.Version(Actor, id, number, ct));
-    [HttpPost("{id:int}/versions/{number:int}/restore")]
-    [EndpointSummary("Restore historical configuration into a new draft version")]
-    [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Restore(int id, int number, TourCommand request, CancellationToken ct) => Ok(await tours.Restore(Actor, id, number, request, ct));
+
 }
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/suppliers")]

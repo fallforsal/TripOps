@@ -64,8 +64,8 @@ public sealed partial class BookingFlowTests
         var draft = await Read<TourDto>(await agency.PostAsJsonAsync(
             $"/api/v1/agency/tour-design-requests/{request.Id}/tours", config));
         var plan = await Read<TourDto>(await agency.PostAsJsonAsync(
-            $"/api/v1/agency/tours/{draft.Id}/complete", new TourCommand(draft.Version)));
-        plan = await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/share",new TourCommand(plan.Version)));
+            $"/api/v1/agency/tours/{draft.Id}/complete", new TourCommand(draft.Revision)));
+        plan = await Read<TourDto>(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/share",new TourCommand(plan.Revision)));
         Assert.Equal("hidden", plan.Visibility);
         Assert.Equal(plan.Id, Assert.Single(await Read<TourDto[]>(await customer.GetAsync(
             $"/api/v1/tour-design-requests/{request.Id}/plans"))).Id);
@@ -73,7 +73,7 @@ public sealed partial class BookingFlowTests
         var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, departure, "Demo Customer", "0900000000", "customer1@example.test", null,
                 [new ParticipantInput("Adult One", null, new DateTime(1990, 1, 1), null, null, null),
-                    new ParticipantInput("Adult Two", null, new DateTime(1992, 1, 1), null, null, null)], TourVersion: plan.Version)));
+                    new ParticipantInput("Adult Two", null, new DateTime(1992, 1, 1), null, null, null)], TourVersion: plan.Version, TourRevision: plan.Revision)));
         Assert.Null(booking.Contract);
 
         var serviceRequests = await Read<ProviderRequestView[]>(await providerClient.GetAsync("/api/v1/provider/booking-requests"));

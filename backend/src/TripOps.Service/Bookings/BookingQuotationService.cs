@@ -184,6 +184,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             tour = TourService.MaterializeSnapshot(tour, version);
         }
         booking.TourVersion = tour.Version ?? 1;
+        booking.TourConfigurationData = tour.ConfigurationData;
         var guestCount = input.Participants?.Length ?? booking.Participants.Count;
         Require(agency || input.Participants == null,
             "Chỉ Agency được thay đổi danh sách hành khách của booking đã tạo.");

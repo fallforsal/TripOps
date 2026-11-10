@@ -33,6 +33,7 @@ public static class BookingAlliance
             b.Timelines.SelectMany(d=>d.Meals).SingleOrDefault(m=>m.Id==id)?.AgencyId)??b.Tour!.AgencyId;
     }
     public static async Task<TourConfiguration?> BookedConfiguration(TripOpsDbContext db,Booking b,CancellationToken ct) {
+        if (b.TourConfigurationData is not null) return JsonSerializer.Deserialize<TourConfiguration>(b.TourConfigurationData,new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var raw=await db.TourVersions.AsNoTracking().Where(v=>v.TourId==b.TourId && v.VersionNumber==b.TourVersion).Select(v=>v.SnapshotData).SingleOrDefaultAsync(ct);
         return raw==null?null:JsonSerializer.Deserialize<TourSnapshot>(raw,new JsonSerializerOptions(JsonSerializerDefaults.Web))?.Configuration;
     }

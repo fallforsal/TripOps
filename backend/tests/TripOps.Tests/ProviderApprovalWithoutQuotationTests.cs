@@ -14,8 +14,8 @@ public sealed partial class TourFlowTests
         var draft = await CreateCore(agency, Complete() with { Timelines = [new TimelineInput(1, "Arrival",
             Meals: [new MealInput("lunch", "Restaurant", ServiceId: 103)],
             Accommodations: [new AccommodationInput("Hotel", "Da Lat", ServiceId: 102)]), new TimelineInput(2, "Departure")] });
-        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Version)));
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Version)));
+        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Revision)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Revision)));
         return await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
                 [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
@@ -89,7 +89,7 @@ public sealed partial class TourFlowTests
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
         var (request, plan) = await SharedDesign(customer, agency);
         var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", DesignBooking(plan)), HttpStatusCode.Created);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Version,
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Revision,
             plan.Configuration with { Name = "Revised private plan" }, "Revised itinerary"))).StatusCode);
         await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
     }

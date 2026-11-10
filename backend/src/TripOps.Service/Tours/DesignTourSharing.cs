@@ -37,15 +37,17 @@ public sealed partial class TourService
         TourConfiguration? previousConfiguration = null;
         if (id.HasValue) {
             tour = await Owned(actor, id.Value, ct);
-            if (!input.Version.HasValue) throw Conflict();
-            Expected(tour, input.Version.Value);
-            previousConfiguration = Configuration(tour);
-            await Baseline(tour, actor, ct);
-            restoredVersion = await db.TourVersions.Where(v => v.TourId == tour.Id && v.VersionNumber == tour.Version)
-                .Select(v => v.RestoredFromVersion).SingleOrDefaultAsync(ct);
-            tour.Version = (tour.Version ?? 1) + 1;
+            if (!input.Revision.HasValue) throw Conflict();
+            Expected(tour, input.Revision.Value);
+            var target = input.Version ?? tour.Version ?? 1;
+            previousConfiguration = target == tour.Version ? Configuration(tour) :
+                JsonSerializer.Deserialize<TourSnapshot>((await repository.Version(tour.Id,target,ct)
+                    ?? throw new TourException(404,"Không tìm thấy phiên bản tour.")).SnapshotData,Json)!.Configuration;
+            tour.Version = input.CreateNewVersion
+                ? (await db.TourVersions.Where(v=>v.TourId==tour.Id).MaxAsync(v=>(int?)v.VersionNumber,ct) ?? 0) + 1
+                : target;
         } else {
-            if (input.Version.HasValue) throw Conflict();
+            if (input.Revision.HasValue) throw Conflict();
             tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid():N}", IsRequest = true, DesignRequestId = requestId, Version = 1 };
             repository.Add(tour);
         }
@@ -60,13 +62,25 @@ public sealed partial class TourService
         await tx.CommitAsync(ct);
         return result;
     }
+    public async Task<TourDto> DesignVersion(string actor,int requestId,int number,CancellationToken ct)
+    {
+        var request=await repository.DesignRequest(actor,requestId,ct) ?? throw new TourException(404,"Không tìm thấy yêu cầu.");
+        var id=await db.Tours.Where(t=>t.DesignRequestId==requestId).Select(t=>(int?)t.Id).SingleOrDefaultAsync(ct)
+            ?? throw new TourException(404,"Chưa có tour thiết kế.");
+        var tour=await Owned(actor,id,ct);
+        if(tour.Version==number)return Dto(tour);
+        var version=await repository.Version(id,number,ct) ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
+        var snapshot=JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!;
+        return Dto(tour) with {Version=number,Configuration=snapshot.Configuration,Status=snapshot.Status,HasDraftChanges=false};
+    }
+
     private async Task LockDesignRequest(string actor, int requestId, CancellationToken ct)
     {
         var count = await db.TourDesignRequests.Where(r => r.Id == requestId && r.AgencyId == actor)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
         if (count == 0) throw new TourException(404, "Không tìm thấy yêu cầu.");
     }
-    public async Task<TourDto> ShareForRequest(string actor, int requestId, TourCommand input, CancellationToken ct)
+    public async Task<TourDto> ShareForRequest(string actor, int requestId, ShareDesignVersionInput input, CancellationToken ct)
     {
         await Agency(actor, ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -76,17 +90,24 @@ public sealed partial class TourService
         Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Yêu cầu đã có booking.");
         var tour = await repository.Find((await db.Tours.Where(t => t.DesignRequestId == requestId).Select(t => (int?)t.Id).SingleOrDefaultAsync(ct)) ?? 0, actor, false, ct)
             ?? throw new TourException(404, "Chưa có tour thiết kế.");
-        Expected(tour, input.Version);
-        Require(tour.Status == TourStatus.Completed, "Hãy hoàn tất và lưu tour trước khi chia sẻ.");
-        await Validate(Configuration(tour), true, ct, actor, requestId);
-        if (tour.SharedVersion != tour.Version) {
-            var version = await db.TourVersions.SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.Version, ct);
-            version.SharedAt ??= DateTime.UtcNow; version.SharedBy ??= actor;
-            tour.SharedVersion = tour.Version;
-            db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = requestId, Message = $"Agency đã chia sẻ phương án tour phiên bản {tour.Version}." });
+        Expected(tour, input.Revision);
+        var target = input.Version ?? tour.Version ?? 1;
+        var version = await db.TourVersions.SingleOrDefaultAsync(v => v.TourId == tour.Id && v.VersionNumber == target, ct)
+            ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
+        // Existing data may have a working copy from the old draft model. Saving reconciles it first.
+        var configuration = target == tour.Version ? Configuration(tour) : JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!.Configuration;
+        await Validate(configuration, true, ct, actor, requestId);
+        if (tour.HasDraftChanges && target == tour.Version) {
+            version.SnapshotData=JsonSerializer.Serialize(new TourSnapshot(1,target,true,tour.IsAiGenerated==true,"completed","hidden",configuration),Json);
+            tour.HasDraftChanges=false;
+        }
+        if (tour.SharedVersion != target || version.SharedAt is null) {
+            version.SharedAt ??= DateTime.UtcNow; version.SharedBy = actor;
+            tour.SharedVersion = target; tour.Revision++;
+            db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = requestId, Message = $"Agency đã chia sẻ phương án tour phiên bản {target}." });
             await db.SaveChangesAsync(ct);
         }
-        await tx.CommitAsync(ct); return Dto(tour);
+        await tx.CommitAsync(ct); return Dto(tour) with {Version=target,Configuration=configuration,Status="completed"};
     }
     private async Task<TourDto> SharedTour(string actor, int requestId, CancellationToken ct)
     {
@@ -100,7 +121,7 @@ public sealed partial class TourService
         var snapshot = JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData, Json)!;
         return new TourDto(tour.Id, tour.AgencyId, tour.Code, "completed", "hidden", true, tour.IsAiGenerated == true,
             version.VersionNumber, DesignRequestService.CustomerConfiguration(snapshot.Configuration), tour.CreatedAt ?? DateTime.UnixEpoch,
-            version.SharedAt ?? version.CreatedAt ?? DateTime.UnixEpoch, requestId, tour.SharedVersion);
+            version.SharedAt ?? version.CreatedAt ?? DateTime.UnixEpoch, requestId, tour.SharedVersion, tour.Revision);
     }
     public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct)
     {
@@ -114,7 +135,7 @@ public sealed partial class TourService
         var c = JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData, Json)!.Configuration;
         var tour = new Tour { Id = identity.Id, AgencyId = identity.AgencyId, Agency = identity.Agency,
             Code = identity.Code, DesignRequestId = identity.DesignRequestId, IsRequest = identity.IsRequest,
-            Version = version.VersionNumber, SharedVersion = identity.SharedVersion, Status = TourStatus.Completed,
+            ConfigurationData = JsonSerializer.Serialize(c,Json), Version = version.VersionNumber, SharedVersion = identity.SharedVersion, Status = TourStatus.Completed,
             Visibility = TourVisibility.Hidden };
         var normalizedProvinces = VietnamProvinceCatalog.NormalizeDistinct(c.ProvinceCodes);
         tour.Name = c.Name.Trim(); tour.Destination = c.Destination;

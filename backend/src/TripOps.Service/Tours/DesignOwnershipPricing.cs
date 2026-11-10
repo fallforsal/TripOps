@@ -111,8 +111,7 @@ public sealed partial class TourService
     {
         AgencyPricingInput[]? prices=null;
         if(tour.DesignRequestId.HasValue) {
-            var raw=await db.TourVersions.Where(v=>v.TourId==tour.Id && v.VersionNumber==tour.Version).Select(v=>v.SnapshotData).SingleAsync(ct);
-            prices=JsonSerializer.Deserialize<TourSnapshot>(raw,Json)?.Configuration.AgencyPricing;
+            prices=Configuration(tour).AgencyPricing;
         }
         if(prices==null || prices.Length<2)return [new BookingAgency {AgencyId=tour.AgencyId,IsHost=true,OriginalAmount=total,FinalAmount=total,NetPayout=total}];
         var result=prices.Select(p=>new BookingAgency {AgencyId=p.AgencyId,IsHost=p.AgencyId==tour.AgencyId}).ToList();

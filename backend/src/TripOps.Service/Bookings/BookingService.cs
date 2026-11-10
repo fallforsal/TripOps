@@ -36,7 +36,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (tour is null)
             throw new BookingException(404, "Tour không tồn tại hoặc chưa được công bố mở bán.");
 
-        if (!await repository.CanStartDesignBooking(tour, customerId, ct, request.TourVersion))
+        if (!await repository.CanStartDesignBooking(tour, customerId, ct, request.TourVersion, request.TourRevision))
             throw new BookingException(409, "Phương án đã thay đổi hoặc yêu cầu đã có booking. Vui lòng tải lại phương án đang chia sẻ.");
 
         tour = await tourService.BookingSnapshot(tour, ct);
@@ -146,6 +146,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             CustomerId = customerId,
             TourId = tour.Id,
             TourVersion = tour.Version ?? 1,
+            TourConfigurationData = System.Text.Json.JsonSerializer.Serialize(tourService.CurrentConfiguration(tour), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)),
             DesignRequestId = tour.DesignRequestId,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,

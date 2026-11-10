@@ -25,6 +25,9 @@ public TourStatus? Status { get; set; } = TourStatus.Draft;
 public TourVisibility? Visibility { get; set; } = TourVisibility.Hidden;
 public bool? IsRequest { get; set; } = false;
 public int? Version { get; set; } = 1;
+public int Revision { get; set; } = 1;
+public string? ConfigurationData { get; set; }
+public bool HasDraftChanges { get; set; }
 public string? ChangeNote { get; set; }
 public int? DesignRequestId { get; set; }
 public int? SharedVersion { get; set; }

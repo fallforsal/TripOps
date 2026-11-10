@@ -28,10 +28,10 @@ public sealed partial class TourFlowTests
         var days=work.Configuration.Timelines!;
         var pricing=work.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers.Select(t=>t with {PricePerGuest=t.MinAge==12?600000:300000}).ToArray();
         days[1]=days[1] with {Activities=[new("Partner visit",Id:"partner-visit",AgencyId:"other")],Accommodations=[new("Partner hotel","Second destination",ServiceId:102,Id:"partner-hotel",AgencyId:"other")],Meals=[new("dinner","Partner meal",ServiceId:103,Id:"partner-meal",AgencyId:"other")]};
-        var modified=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Version,days,pricing)));
-        var final=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(modified.Version,modified.Configuration with {PricingTiers=modified.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers},true)));
-        await Share(lead,request.Id,final);
-        var input=DesignBooking(final) with {Participants=[new("Adult",null,new DateTime(1990,1,1),null,null,null),new("Child",null,new DateTime(2018,1,1),null,null,null)]};
+        var modified=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Revision,days,pricing)));
+        var final=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(modified.Revision,modified.Configuration with {PricingTiers=modified.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers},true)));
+        var shared=await Share(lead,request.Id,final);
+        var input=DesignBooking(shared) with {Participants=[new("Adult",null,new DateTime(1990,1,1),null,null,null),new("Child",null,new DateTime(2018,1,1),null,null,null)]};
         var created=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",input),HttpStatusCode.Created);
         var detail=await Read<BookingDto>(await partner.GetAsync($"/api/v1/agency/bookings/{created.Id}"));
         Assert.Equal(2,detail.TotalGuests);Assert.Equal(2,detail.Participants.Count);Assert.Single(detail.BookingAgencies!);

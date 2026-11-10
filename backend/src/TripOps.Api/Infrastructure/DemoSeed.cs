@@ -73,7 +73,7 @@ internal static class DemoSeed
                 [],
                 day == 1 ? [new AccommodationInput(hotel.Name, "Đà Lạt", NightsCount: 2, StarRating: 4, ServiceId: hotel.Id)] : [])).ToArray(), "TP. Hồ Chí Minh", "DL-3N2D-001", ["LAM_DONG"]);
         var tour = await tours.Create(users["agency"].Id, config, CancellationToken.None);
-        await tours.Command(users["agency"].Id, tour.Id, "publish", new TourCommand(tour.Version), CancellationToken.None);
+        await tours.Command(users["agency"].Id, tour.Id, "publish", new TourCommand(tour.Revision), CancellationToken.None);
         await transaction.CommitAsync();
         Console.WriteLine("Seeded 4 accounts: admin/agency/provider/customer@tripops.test; password 12345678. Kept 1 tour and 1 hotel service.");
     }

@@ -34,9 +34,9 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose 
   const action = async (fn: () => Promise<void>) => { if(busy)return;setBusy(true);setError("");try {await fn();await onChanged();} catch(e){setError(e instanceof Error?e.message:"Không thể lưu liên minh.");}finally{setBusy(false);} };
   if (editing) return <TourFormPage company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
     const config=toConfiguration({...editing,...data});
-    const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({version:editing.version,
+    const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({revision:editing.revision || 1,
       timelines:config.timelines,pricingTiers:config.pricingTiers})}));
-    setEditing(null);await load();await onChanged();toast.success(`Đã lưu chặng thành v${saved.version}. Agency chủ trì sẽ kiểm tra và chia sẻ.`);
+    setEditing(null);await load();await onChanged();toast.success(`Đã lưu nháp chặng trong v${saved.version}. Agency chủ trì sẽ kiểm tra và chia sẻ.`);
   }}/>;
   return <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-xl font-semibold text-[#075985]"><Handshake/>Đồng tổ chức tour · Yêu cầu #{request.id}</h2><p className="mt-2 text-sm text-slate-500">{request.destinations} · Chủ trì: {request.targetCompanyName}. Mỗi Agency quản lý nội dung và bảng giá của mình. Thông tin ngày trong lịch trình được cùng chỉnh sửa; Customer xem giá tổng khi chia sẻ.</p></div><Button variant="outline" onClick={onClose}>Quay lại</Button></div>

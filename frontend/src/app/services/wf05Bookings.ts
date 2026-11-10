@@ -15,7 +15,7 @@ export interface ParticipantInput {
 }
 
 export interface CreateBookingRequest {
-  tourVersion?: number;
+  tourVersion?: number; tourRevision?: number;
   tourId: number;
   startDate: string;
   contactName: string;
