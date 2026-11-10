@@ -134,9 +134,18 @@ public enum PaymentTransactionStatus
 
 public enum SettlementStatus
 {
+    /// <summary>Tour chưa hoàn thành: chưa đến lúc trả tiền cho Agency.</summary>
     Unpaid,
+    /// <summary>Hướng dẫn viên đã bấm hoàn thành: chờ chuyển (tự động sau AutoPayoutAt hoặc Admin chuyển tay).</summary>
     Ready,
-    Paid
+    /// <summary>Đã chuyển tiền cho Agency.</summary>
+    Paid,
+    /// <summary>Đã tạo lệnh chi hộ payOS, đang chờ payOS báo kết quả. Không được tạo lệnh khác.</summary>
+    Processing,
+    /// <summary>Lệnh chi hộ không thành công (chắc chắn chưa có tiền ra). Admin thử lại hoặc chuyển tay.</summary>
+    Failed,
+    /// <summary>Admin tạm giữ tiền (VD đang xử lý khiếu nại): tự động bỏ qua.</summary>
+    OnHold
 }
 
 public enum ComplaintStatus

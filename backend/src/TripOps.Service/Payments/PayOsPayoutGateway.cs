@@ -72,8 +72,9 @@ public sealed class PayOsPayoutGateway(HttpClient http, PayOsPayoutOptions optio
 {
     public PayOsPayoutOptions Options => options;
 
+    /// <param name="category">Nhãn phân loại lệnh chi trên payOS: "refund" (hoàn tiền khách) hoặc "settlement" (trả tiền Agency).</param>
     public async Task<PayOsPayoutInfo> Create(string referenceId, long amount, string description, string toBin,
-        string toAccountNumber, CancellationToken ct)
+        string toAccountNumber, CancellationToken ct, string category = "refund")
     {
         var body = new SortedDictionary<string, object>(StringComparer.Ordinal)
         {
@@ -82,7 +83,7 @@ public sealed class PayOsPayoutGateway(HttpClient http, PayOsPayoutOptions optio
             ["description"] = description,
             ["toBin"] = toBin,
             ["toAccountNumber"] = toAccountNumber,
-            ["category"] = new[] { "refund" }
+            ["category"] = new[] { category }
         };
         var element = JsonSerializer.SerializeToElement(body);
         var data = await Send(HttpMethod.Post, "/v1/payouts/", element, referenceId, ct);

@@ -449,6 +449,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
 
+                    b.Property<DateTime?>("AutoPayoutAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("auto_payout_at");
+
                     b.Property<string>("BankReferenceCode")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
@@ -463,6 +467,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<decimal?>("FeePercent")
+                        .HasColumnType("decimal(5, 2)")
+                        .HasColumnName("fee_percent");
 
                     b.Property<decimal>("FinalAmount")
                         .ValueGeneratedOnAdd()
@@ -488,6 +496,47 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("original_amount");
 
+                    b.Property<string>("PayoutAccountHolder")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("payout_account_holder");
+
+                    b.Property<string>("PayoutAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("payout_account_number");
+
+                    b.Property<int>("PayoutAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("payout_attempts");
+
+                    b.Property<string>("PayoutBankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("payout_bank_name");
+
+                    b.Property<string>("PayoutGatewayId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("payout_gateway_id");
+
+                    b.Property<string>("PayoutMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("payout_method");
+
+                    b.Property<string>("PayoutNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("payout_note");
+
+                    b.Property<string>("PayoutReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("payout_reference");
+
                     b.Property<DateTime?>("PayoutTransferredAt")
                         .HasColumnType("datetime2")
                         .HasColumnName("payout_transferred_at");
@@ -498,12 +547,21 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("platform_fee");
 
+                    b.Property<string>("SettledBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("settled_by");
+
                     b.Property<string>("SettlementStatus")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
                         .HasDefaultValue("Unpaid")
                         .HasColumnName("settlement_status");
+
+                    b.Property<DateTime?>("TourCompletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("tour_completed_at");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -518,6 +576,10 @@ namespace TripOps.Data.Migrations
                     b.HasIndex("BookingId")
                         .IsUnique()
                         .HasFilter("[is_host] = 1");
+
+                    b.HasIndex("PayoutReference")
+                        .IsUnique()
+                        .HasFilter("[payout_reference] IS NOT NULL");
 
                     b.HasIndex("BookingId", "AgencyId")
                         .IsUnique();
@@ -1450,6 +1512,25 @@ namespace TripOps.Data.Migrations
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("datetime2")
                         .HasColumnName("approved_at");
+
+                    b.Property<string>("BankAccountHolder")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("bank_account_holder");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<DateTime?>("BankAccountUpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("bank_account_updated_at");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("bank_name");
 
                     b.Property<string>("BusinessAddress")
                         .HasColumnType("nvarchar(max)")

@@ -19,6 +19,7 @@ import { AdminRefundManagement } from "./AdminRefundManagement";
 import { RefundRequest } from "@/app/types";
 import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 import { AdminTourModeration } from "./AdminTourModeration";
+import { AdminSettlementManagement } from "./AdminSettlementManagement";
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -179,6 +180,9 @@ export function AdminDashboard({
             onSyncPayout={onSyncPayout}
           />
         );
+
+      case "settlements":
+        return <AdminSettlementManagement />;
 
       case "finance":
         return (
