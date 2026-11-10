@@ -142,8 +142,11 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         if (next?.Id != locationId)
             throw new BookingException(409, "Phải check-in điểm đến trước đó theo thứ tự lịch trình.");
 
-        if (!location.Latitude.HasValue || !location.Longitude.HasValue)
-            throw new BookingException(409, "Agency chưa cấu hình tọa độ GPS cho điểm đến.");
+        if (!location.Latitude.HasValue || !location.Longitude.HasValue ||
+            !double.IsFinite(location.Latitude.Value) || !double.IsFinite(location.Longitude.Value) ||
+            location.Latitude.Value is < -90 or > 90 ||
+            location.Longitude.Value is < -180 or > 180)
+            throw new BookingException(409, "Agency chưa cấu hình tọa độ GPS hợp lệ cho điểm đến.");
         if (!request.Latitude.HasValue || !request.Longitude.HasValue ||
             !request.AccuracyMeters.HasValue || !request.RecordedAtUtc.HasValue)
             throw new BookingException(422, "Cần vị trí GPS hiện tại và độ chính xác.");
