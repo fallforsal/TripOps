@@ -638,6 +638,23 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+
+                    b.Property<double?>("GpsLatitude")
+                        .HasColumnType("float")
+                        .HasColumnName("gps_latitude");
+
+                    b.Property<double?>("GpsLongitude")
+                        .HasColumnType("float")
+                        .HasColumnName("gps_longitude");
+
+                    b.Property<double?>("GpsAccuracyMeters")
+                        .HasColumnType("float")
+                        .HasColumnName("gps_accuracy_meters");
+
+                    b.Property<DateTime?>("GpsRecordedAtUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("gps_recorded_at_utc");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
@@ -1336,6 +1353,27 @@ namespace TripOps.Data.Migrations
                     b.Property<DateTime?>("Time")
                         .HasColumnType("datetime2")
                         .HasColumnName("time");
+
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float")
+                        .HasColumnName("longitude");
+
+                    b.Property<int>("VisitOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("visit_order");
+
+                    b.Property<int>("GeofenceRadiusMeters")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1500)
+                        .HasColumnName("geofence_radius_meters");
 
                     b.HasKey("Id");
 
@@ -3583,6 +3621,21 @@ namespace TripOps.Data.Migrations
                     b.Property<int>("TourTimelineId")
                         .HasColumnType("int")
                         .HasColumnName("tour_timeline_id");
+
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float")
+                        .HasColumnName("longitude");
+
+                    b.Property<int>("GeofenceRadiusMeters")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1500)
+                        .HasColumnName("geofence_radius_meters");
 
                     b.HasKey("Id");
 
