@@ -373,6 +373,12 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!booking.AssignedGuides.Any(ag => ag.GuideId == guideId))
             throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền điểm danh.");
 
+        // Booking start date and the existing start-tour endpoint use UTC calendar dates.
+        // Compare only the date: attendance is allowed throughout departure day,
+        // never before departure or on subsequent multi-day tour dates.
+        if (booking.StartDate.Date != UtcNow.Date)
+            throw new BookingException(409, "Chỉ được điểm danh vào đúng ngày khởi hành của tour.");
+
         var participant = booking.Participants.FirstOrDefault(p => p.Id == request.ParticipantId)
             ?? throw new BookingException(404, "Không tìm thấy hành khách trong danh sách đoàn.");
 
@@ -437,7 +443,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
-                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b));
+                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), b.StartDate.Date == UtcNow.Date);
 
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
