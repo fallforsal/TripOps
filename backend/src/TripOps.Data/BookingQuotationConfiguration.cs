@@ -14,8 +14,8 @@ internal static class BookingQuotationConfiguration
             e.Property(x => x.ProviderId).HasColumnName("provider_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             e.Property(x => x.SlotKey).HasColumnName("slot_key").HasColumnType("nvarchar(100)").HasMaxLength(100);
             e.Property(x => x.ServiceName).HasColumnName("service_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
-            e.Property(x => x.ServiceDateFrom).HasColumnName("service_date_from").HasColumnType("date");
-            e.Property(x => x.ServiceDateTo).HasColumnName("service_date_to").HasColumnType("date");
+            e.Property(x => x.ServiceDateFrom).HasColumnName("service_date_from").HasColumnType("datetime2");
+            e.Property(x => x.ServiceDateTo).HasColumnName("service_date_to").HasColumnType("datetime2");
             e.Property(x => x.Quantity).HasColumnName("quantity").HasColumnType("decimal(12,2)");
             e.Property(x => x.Unit).HasColumnName("unit").HasColumnType("nvarchar(30)").HasMaxLength(30);
             e.Property(x => x.EstimatedCost).HasColumnName("estimated_cost").HasColumnType("decimal(12,2)");

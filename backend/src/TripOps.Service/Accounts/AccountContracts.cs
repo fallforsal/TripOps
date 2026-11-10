@@ -18,7 +18,19 @@ public sealed record ProfileRequest(
     [StringLength(5000)] string? Description);
 public sealed record ProfileDto(int Id, string UserId, string? BusinessName, string? TaxCode,
     string? BusinessAddress, string? BusinessLicenseUrl, string? Description, string Status,
-    string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt);
+    string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt, string? LogoUrl);
+
+//admin user management
+public sealed record AdminAccountBusinessDto(int ProfileId, string BusinessName, string? LogoUrl,
+    string? Address, string? Status, DateTime? CreatedAt);
+public sealed record AdminAccountDto(string Id, string Name, string Email, string? Phone, string Role,
+    string Status, string? AvatarUrl, DateTime? CreatedAt, DateTime? UpdatedAt, string? BanReason,
+    DateTime? BannedAt, AdminAccountBusinessDto? Business);
+public sealed record AdminAccountCountsDto(int All, int Customer, int Agency, int Provider);
+public sealed record AdminAccountPageDto(IReadOnlyList<AdminAccountDto> Items, int Total, int Page,
+    int PageSize, AdminAccountCountsDto Counts);
+public sealed record BanAccountRequest([Required, StringLength(1000, MinimumLength = 5)] string Reason);
+
 public sealed record AccountDto(string Id, string Name, string Email, string? Phone,
     string Role, ProfileDto? BusinessProfile);
 public sealed record PartnerDto(ProfileDto Profile, string Name, string Email, string? Phone, string Role);

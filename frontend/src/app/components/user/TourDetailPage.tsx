@@ -71,6 +71,7 @@ interface TourDetailPageProps {
   onBack: () => void;
   onBookNow?: (tour: Tour, customData?: TourDetailCustomData) => void;
   onOpenRequest?: () => void;
+  onCustomize?: (tour: Tour) => void;
   onShowLogin?: () => void;
   isAdmin?: boolean;
   onToggleHideTour?: (tourId: string, reason?: string) => void;
@@ -2272,6 +2273,7 @@ export function TourDetailPage({
   onBack,
   onBookNow,
   onOpenRequest,
+  onCustomize,
   onShowLogin,
   isAdmin,
   onToggleHideTour,
@@ -2501,6 +2503,7 @@ export function TourDetailPage({
               )}
             </div>
 
+            {!isCustomTour && onCustomize && <Button variant="outline" className="border-sky-700 text-sky-800" onClick={() => onCustomize(tour)}>Tùy chỉnh Tour này</Button>}
             {/* Custom Tour Banner */}
             {isCustomTour && (
               <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-2xl p-4.5 shadow-md space-y-2 border border-purple-700">

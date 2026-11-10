@@ -13,7 +13,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     private ProfileDto Profile(BusinessProfile p) => new(p.Id, p.UserId ?? "", p.BusinessName, p.TaxCode,
         p.BusinessAddress, storage.DeliveryUrl(p.BusinessLicenseUrl), p.Description,
         p.Status?.ToString().ToLowerInvariant() ?? "pending", p.RejectionReason, p.ApprovedAt,
-        p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch);
+        p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch, p.LogoUrl is null ? null : storage.DeliveryUrl(p.LogoUrl));
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
         u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
@@ -137,5 +137,115 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
                 ? "Chỉ có thể đình chỉ hồ sơ đang hoạt động. Vui lòng tải lại."
                 : "Chỉ có thể kích hoạt lại hồ sơ đang bị đình chỉ. Vui lòng tải lại.");
         return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+    }
+    //profile cho agency
+    public sealed record UpdateBusinessRequest(string Name, string Phone, string BusinessName, string TaxCode,
+    string BusinessAddress, string? Description, bool ConfirmReview, bool RemoveLogo);
+
+    public async Task<AccountDto> UpdateBusiness(string id, UpdateBusinessRequest request,
+        byte[]? logo, string? logoMime, byte[]? license, string? licenseMime, CancellationToken ct)
+    {
+        var user = await Current(id, ct);
+        if (user.Role is not (UserRole.TravelAgency or UserRole.Provider))
+            throw new AccountException(403, "Chỉ đối tác được sửa hồ sơ doanh nghiệp.");
+        var profile = user.BusinessProfile ?? throw new AccountException(409, "Bạn chưa nộp hồ sơ doanh nghiệp.");
+        if (profile.Status == BusinessProfileStatus.Suspended)
+            throw new AccountException(403, "Doanh nghiệp đang bị đình chỉ, không thể sửa hồ sơ.");
+        if (new[] { request.Name, request.Phone, request.BusinessName, request.TaxCode, request.BusinessAddress }
+            .Any(string.IsNullOrWhiteSpace))
+            throw new AccountException(400, "Vui lòng điền đầy đủ thông tin.");
+
+        var businessName = request.BusinessName.Trim();
+        var taxCode = request.TaxCode.Trim();
+        var address = request.BusinessAddress.Trim();
+        var legalChanged = businessName != profile.BusinessName || taxCode != profile.TaxCode
+            || address != profile.BusinessAddress || license is not null;
+
+        if (legalChanged && profile.Status == BusinessProfileStatus.Pending)
+            throw new AccountException(409, "Hồ sơ đang chờ duyệt, chưa thể sửa thông tin pháp lý.");
+        if (legalChanged && profile.Status == BusinessProfileStatus.Approved && !request.ConfirmReview)
+            throw new AccountException(409, "Đổi thông tin pháp lý sẽ gửi hồ sơ duyệt lại. Vui lòng xác nhận.");
+
+        if (logo is not null) profile.LogoUrl = await storage.Upload(id, logo, logoMime!, ct);
+        else if (request.RemoveLogo) profile.LogoUrl = null;
+        if (license is not null) profile.BusinessLicenseUrl = await storage.Upload(id, license, licenseMime!, ct);
+
+        var now = DateTime.UtcNow;
+        user.Name = request.Name.Trim(); user.Phone = request.Phone.Trim(); user.UpdatedAt = now;
+        profile.Description = request.Description?.Trim(); profile.UpdatedAt = now;
+        if (legalChanged)
+        {
+            profile.BusinessName = businessName; profile.TaxCode = taxCode; profile.BusinessAddress = address;
+            profile.Status = BusinessProfileStatus.Pending; profile.RejectionReason = null; profile.ApprovedAt = null;
+        }
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
+        { throw new AccountException(409, "Thông tin bị trùng (có thể là mã số thuế). Vui lòng kiểm tra lại."); }
+        return Dto(user);
+    }
+
+    private AdminAccountDto AdminDto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
+    u.Status.ToString().ToLowerInvariant(),
+    null, // AvatarUrl: gán khi entity User có trường ảnh đại diện
+    u.CreatedAt, u.UpdatedAt, u.BanReason, u.BannedAt,
+    u.BusinessProfile is null || u.Role is not (UserRole.TravelAgency or UserRole.Provider) ? null
+        : new AdminAccountBusinessDto(u.BusinessProfile.Id, u.BusinessProfile.BusinessName ?? "",
+            u.BusinessProfile.LogoUrl is null ? null : storage.DeliveryUrl(u.BusinessProfile.LogoUrl),
+            u.BusinessProfile.BusinessAddress, u.BusinessProfile.Status?.ToString().ToLowerInvariant(),
+            u.BusinessProfile.CreatedAt));
+
+    public async Task<AdminAccountPageDto> AdminAccounts(string? role, string? status, string? search,
+        int page, int pageSize, CancellationToken ct)
+    {
+        UserRole? roleFilter = role switch
+        {
+            null or "" or "all" => null,
+            "user" => UserRole.Customer,
+            "agency" => UserRole.TravelAgency,
+            "provider" => UserRole.Provider,
+            _ => throw new AccountException(400, "Vai trò không hợp lệ.")
+        };
+        var baseQuery = db.Users.AsNoTracking().Where(u => u.Role != UserRole.Admin);
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<UserStatus>(status, true, out var state) || !Enum.IsDefined(state))
+                throw new AccountException(400, "Trạng thái không hợp lệ.");
+            baseQuery = baseQuery.Where(u => u.Status == state);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim();
+            baseQuery = baseQuery.Where(u => u.Name.Contains(q) || u.Email.Contains(q) || (u.Phone != null && u.Phone.Contains(q)));
+        }
+        var grouped = await baseQuery.GroupBy(u => u.Role).Select(g => new { Role = g.Key, Count = g.Count() }).ToListAsync(ct);
+        int Count(UserRole r) => grouped.FirstOrDefault(g => g.Role == r)?.Count ?? 0;
+        var counts = new AdminAccountCountsDto(grouped.Sum(g => g.Count), Count(UserRole.Customer),
+            Count(UserRole.TravelAgency), Count(UserRole.Provider));
+        var query = roleFilter is null ? baseQuery : baseQuery.Where(u => u.Role == roleFilter);
+        page = Math.Max(page, 1); pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = await query.CountAsync(ct);
+        var rows = await query.Include(u => u.BusinessProfile).OrderByDescending(u => u.CreatedAt).ThenBy(u => u.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new AdminAccountPageDto(rows.Select(AdminDto).ToArray(), total, page, pageSize, counts);
+    }
+
+    public async Task<AdminAccountDto> SetBanned(string id, bool ban, string? reason, CancellationToken ct)
+    {
+        var user = await db.Users.Include(u => u.BusinessProfile).SingleOrDefaultAsync(u => u.Id == id, ct)
+            ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        if (user.Role == UserRole.Admin) throw new AccountException(403, "Không thể cấm tài khoản quản trị.");
+        if (ban)
+        {
+            if (string.IsNullOrWhiteSpace(reason)) throw new AccountException(400, "Vui lòng nhập lý do cấm.");
+            if (user.Status == UserStatus.Banned) throw new AccountException(409, "Tài khoản đã bị cấm. Vui lòng tải lại.");
+            user.Status = UserStatus.Banned; user.BanReason = reason.Trim(); user.BannedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            if (user.Status != UserStatus.Banned) throw new AccountException(409, "Tài khoản không bị cấm. Vui lòng tải lại.");
+            user.Status = UserStatus.Active; user.BanReason = null; user.BannedAt = null;
+        }
+        await db.SaveChangesAsync(ct);
+        return AdminDto(user);
     }
 }

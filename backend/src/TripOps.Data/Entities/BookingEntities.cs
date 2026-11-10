@@ -2,6 +2,7 @@ using TripOps.Data.Common;
 using TripOps.Data.Enums;
 namespace TripOps.Data.Entities;
 public class Booking : BaseEntity<int> {
+public int? AcceptedQuotationId { get; set; }
 public string BookingCode { get; set; } = string.Empty;
 public string? CustomerId { get; set; }
 public int? TourId { get; set; }
@@ -80,6 +81,7 @@ public virtual BookingContract Contract { get; set; } = null!;
 
 public class BookingParticipant : BaseEntity<int> {
 public int BookingId { get; set; }
+public Guid? CreationKey { get; set; }
 public string AgencyId { get; set; } = string.Empty;
 public int ParticipantIndex { get; set; }
 public bool IsPrimary { get; set; } = true;
@@ -131,7 +133,7 @@ public int BookingTimelineId { get; set; }
 public DateTime? Time { get; set; }
 public string? AgencyId { get; set; }
 public string OriginalLocationName { get; set; } = string.Empty;
-public string? CustomizedLocationName { get; set; }
+public string? CurrentLocationName { get; set; }
 public bool? IsCustomized { get; set; } = false;
 public string? CustomerNote { get; set; }
 public decimal? PriceDifference { get; set; } = 0m;
@@ -149,7 +151,7 @@ public DateTime? DateService { get; set; }
 public DateTime? Time { get; set; }
 public string MealType { get; set; } = string.Empty;
 public string OriginalRestaurantName { get; set; } = string.Empty;
-public string? CustomizedRestaurantName { get; set; }
+public string? CurrentRestaurantName { get; set; }
 public decimal? PriceDifference { get; set; } = 0m;
 public bool IsCustomized { get; set; } = false;
 public decimal? TotalPrice { get; set; }
@@ -168,8 +170,8 @@ public DateTime? DateFrom { get; set; }
 public DateTime? DateTo { get; set; }
 public string OriginalHotelName { get; set; } = string.Empty;
 public int? OriginalStars { get; set; } = 5;
-public string? CustomizedHotelName { get; set; }
-public int? CustomizedStars { get; set; }
+public string? CurrentHotelName { get; set; }
+public int? CurrentStars { get; set; }
 public string? ProviderResponse { get; set; }
 public int? NightsCount { get; set; } = 1;
 public decimal? PriceDifference { get; set; } = 0m;

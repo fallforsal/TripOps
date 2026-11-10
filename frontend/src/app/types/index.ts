@@ -38,11 +38,12 @@ export interface BusinessProfile {
   businessAddress: string;
   businessLicenseUrl?: string;
   description?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected'| 'suspended';
   rejectionReason?: string;
   approvedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  logoUrl?: string; 
 }
 
 export interface User {
@@ -70,7 +71,7 @@ export interface User {
   latitude?: number; // Vĩ độ
   longitude?: number; // Kinh độ
   businessDescription?: string;
-  accountStatus?: "pending" | "approved" | "rejected";
+  accountStatus?: "pending" | "approved" | "rejected" | "suspended";
   rejectionReason?: string;
   // Guide specific fields
   languages?: string[];
@@ -81,6 +82,8 @@ export interface User {
 }
 
 export interface Location {
+  originalName?: string;
+  changeReason?: string;
   id: string;
   name: string;
   address: string;
@@ -118,6 +121,7 @@ export interface TourAlternativeMeal {
 }
 
 export interface TourMeal {
+  originalName?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -160,6 +164,7 @@ export interface TourAlternativeHotel {
 }
 
 export interface TourHotel {
+  originalName?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -391,7 +396,7 @@ export interface PaymentRequest {
   createdAt: string;
   paidAt?: string;
   /** Đợt thu theo lịch máy chủ: deposit = cọc, balance = phần còn lại, full = tour sát ngày trả toàn bộ một lần. */
-  stage?: "deposit" | "balance" | "full";
+  stage?: "deposit" | "balance" | "full" | "surcharge";
   /** Tổng tiền của đợt. */
   totalAmount?: number;
   /** Hạn chính xác (ISO UTC) do backend tính. */
@@ -481,6 +486,7 @@ export interface TourReview {
 }
 
 export interface Tour {
+  planGuestCount?: number;
   updatedAt?: string;
   id: string;
   tourCode: string;
@@ -615,6 +621,9 @@ export interface Booking {
   userEmail: string;
   numberOfGuests: number;
   totalPrice: number;
+  baseTourPrice?: number;
+  surchargeAmount?: number;
+  hasBeenApproved?: boolean;
   status: "pending" | "deposited" | "confirmed" | "paid" | "in_progress" | "completed" | "cancelled" | "rejected";
   bookingDate: string;
   tourStartDate: string;
@@ -767,6 +776,7 @@ export interface BookingIncident {
 }
 
 export interface Service {
+  priceUnit?: "person" | "meal" | "room_night" | "night" | "day" | "trip" | "item";
   id: string;
   providerId: string;
   providerName: string;
@@ -914,6 +924,8 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  sourceTourId?: string;
+  initialChanges?: { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
   id: string;
   userId?: string;
   // Business / contact info

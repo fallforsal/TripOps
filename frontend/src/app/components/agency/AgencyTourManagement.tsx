@@ -1187,6 +1187,9 @@ export interface TourFormPageProps {
   isCustomDesign?: boolean;
   customRequestData?: any;
   initialTour?: Tour;
+  customerMode?: boolean;
+  customerContent?: import("react").ReactNode;
+  customerSubmitLabel?: string;
 }
 
 type TabType = "general" | "itinerary" | "pricing" | "regulations" | "preview";
@@ -1226,13 +1229,14 @@ export function TourFormPage(props: TourFormPageProps) {
     : 3);
   const customSpecialRequests = customRequest?.specialRequests || customRequest?.additionalInfo;
   const mockServices = useServiceCatalogue();
+  const [planGuestCount, setPlanGuestCount] = useState(tour?.planGuestCount || customGuests);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const isCustomTour = props.isCustomTour ?? props.isCustomDesign ?? false;
   const isCustom =
-    isCustomTour || !!customRequest || tour?.tourType === "custom_request";
+    props.customerMode || isCustomTour || !!customRequest || tour?.tourType === "custom_request";
   const [changeNote, setChangeNote] = useState("");
-  const [activeTab, setActiveTab] = useState<TabType>("general");
+  const [activeTab, setActiveTab] = useState<TabType>(props.customerMode ? "itinerary" : "general");
   const [showAIPlanner, setShowAIPlanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1717,6 +1721,7 @@ export function TourFormPage(props: TourFormPageProps) {
   const [selectedHotelSupplierId, setSelectedHotelSupplierId] = useState<number | undefined>();
   const [selectedMealSupplierIds, setSelectedMealSupplierIds] = useState<Record<string, number>>({});
   useEffect(() => {
+    if (props.customerMode) return;
     let controller: AbortController;
     const refreshDirectory = () => {
       controller?.abort();
@@ -1733,12 +1738,12 @@ export function TourFormPage(props: TourFormPageProps) {
     refreshDirectory();
     window.addEventListener("focus", refreshDirectory);
     return () => { controller?.abort(); window.removeEventListener("focus", refreshDirectory); };
-  }, []);
+  }, [props.customerMode]);
   const [customHotelInputs, setCustomHotelInputs] = useState({
     name: "",
     stars: 4,
     address: "",
-    price: 1200000,
+    price: props.customerMode ? 0 : 1200000,
     contactPhone: "",
     conditions: "",
   });
@@ -3279,6 +3284,7 @@ export function TourFormPage(props: TourFormPageProps) {
         },
       ],
     };
+    if (isCustom) { newDay.hotel = undefined; newDay.meals = []; newDay.locations = []; newDay.description = ""; }
     const updated = [...itinerary, newDay];
     setItinerary(updated);
     setNumberOfDays(nextDayNum);
@@ -3346,6 +3352,13 @@ export function TourFormPage(props: TourFormPageProps) {
   const handleSubmit = async (
     mode: "draft" | "complete_hidden" | "complete_public" = "complete_public",
   ) => {
+    if (props.customerMode) {
+      setSaving(true); setSaveError("");
+      try { await onSubmit({ itinerary: structuredClone(itinerary), hotels: structuredClone(hotels) }); }
+      catch (error) { setSaveError(error instanceof Error ? error.message : "Không gửi được yêu cầu thay đổi."); }
+      finally { setSaving(false); }
+      return;
+    }
     const isDraft = mode === "draft";
     const prepareSupplier = <T extends TourHotel | TourAlternativeHotel | TourMeal | TourAlternativeMeal>(
       item: T, type: "HOTEL" | "RESTAURANT", referencePrice: number, area: string,
@@ -3496,6 +3509,7 @@ export function TourFormPage(props: TourFormPageProps) {
       isCoHostedTour && calculatedFinalPrice > 0 ? calculatedFinalPrice : price;
 
     const tourData: Partial<Tour> = {
+      planGuestCount: isCustom ? planGuestCount : undefined,
       tourCode: finalTourCode,
       name,
       destination,
@@ -3573,12 +3587,16 @@ export function TourFormPage(props: TourFormPageProps) {
   const hotelNights = hotels.reduce((sum, h) => sum + (h.nights || 1), 0);
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-16 space-y-6 -m-6">
+    <div className={props.customerMode ? "bg-slate-50 pb-6 space-y-6" : "bg-slate-50 min-h-screen pb-16 space-y-6 -m-6"}>
       {saveError && (
         <div role="alert" className="p-4 text-red-700 bg-red-50">
           {saveError}
         </div>
       )}
+      {props.customerMode ? <div className="border-b border-[#CBD5E1] bg-white p-5">
+        <h2 className="font-bold text-[#075985]">Tùy chỉnh chỗ ở, chỗ ăn và lịch trình</h2>
+        <p className="text-sm text-slate-600">Thay đổi trên bản sao của bạn. Agency sẽ xem yêu cầu, thiết kế lại và báo giá.</p>
+      </div> : <>
       {/* Sticky Top Header Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-4">
@@ -3779,6 +3797,7 @@ export function TourFormPage(props: TourFormPageProps) {
         </div>
       )}
 
+      </>}
       {/* Sticky Tabs Bar */}
       <div className="bg-white border-y border-[#CBD5E1] px-6 shadow-2xs sticky top-[57px] z-20">
         <div className="flex overflow-x-auto gap-1">
@@ -3791,7 +3810,7 @@ export function TourFormPage(props: TourFormPageProps) {
             { id: "pricing", label: "3. Bảng giá vé theo độ tuổi" },
             { id: "regulations", label: "4. Quy định & Chính sách" },
             { id: "preview", label: "5. Mô phỏng Tour hiển thị (Preview)" },
-          ].map((tab) => (
+          ].filter((tab) => !props.customerMode || tab.id === "itinerary").map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -4581,11 +4600,11 @@ export function TourFormPage(props: TourFormPageProps) {
                               {/* Form thêm khách sạn ngoài sàn */}
                               {showCustomHotelForm && (
                                 <div className="p-3 bg-purple-50/60 rounded-xl border-2 border-purple-300 space-y-2.5 animate-in fade-in">
-                                  <select aria-label="Chọn khách sạn từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
+                                  {!props.customerMode && <select aria-label="Chọn khách sạn từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
                                     onChange={(e) => { const supplier = savedHotels.find((s) => s.id === Number(e.target.value)); setSelectedHotelSupplierId(supplier?.id); if (supplier) setCustomHotelInputs({ name: supplier.name, address: supplier.address || "", stars: supplier.starRating || 3, price: supplier.referencePrice || 0, contactPhone: supplier.contactPhone || "", conditions: supplier.conditions || "" }); }}>
                                     <option value="">Chọn khách sạn đã lưu trong danh bạ...</option>
                                     {savedHotels.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.area || s.address}</option>)}
-                                  </select>
+                                  </select>}
                                   <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 border border-purple-400">
                                       Nhà cung cấp của agency
@@ -4641,14 +4660,14 @@ export function TourFormPage(props: TourFormPageProps) {
                                     </div>
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    <Input type="number" min={0} placeholder="Giá tham khảo/đêm" value={customHotelInputs.price} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, price: Number(e.target.value) })} />
+                                    {!props.customerMode && <Input type="number" min={0} placeholder="Giá tham khảo/đêm" value={customHotelInputs.price} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, price: Number(e.target.value) })} />}
                                     <Input placeholder="Điện thoại liên hệ" value={customHotelInputs.contactPhone} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, contactPhone: e.target.value })} />
                                     <Input placeholder="Điều kiện tham khảo" value={customHotelInputs.conditions} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, conditions: e.target.value })} />
                                   </div>
                                   <p className="text-[11px] text-purple-900">Giá chỉ để tham khảo; agency cần tự xác nhận phòng và điều kiện với nhà cung cấp.</p>
                                   <div className="flex justify-end gap-2">
-                                    <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveHotelToDirectory} onChange={(e) => setSaveHotelToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>
-                                    {selectedHotelSupplierId && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
+                                    {!props.customerMode && <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveHotelToDirectory} onChange={(e) => setSaveHotelToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>}
+                                    {!props.customerMode && selectedHotelSupplierId && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
                                       try { const updated = await updateAgencySupplier(selectedHotelSupplierId, { type: "HOTEL", name: customHotelInputs.name.trim(), address: customHotelInputs.address.trim(), area: hotel.destination || destination, starRating: customHotelInputs.stars, referencePrice: customHotelInputs.price, contactPhone: customHotelInputs.contactPhone, conditions: customHotelInputs.conditions }); setSavedHotels((prev) => prev.map((s) => s.id === updated.id ? updated : s)); }
                                       catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể cập nhật danh bạ"); }
                                     }}>Cập nhật danh bạ</button>}
@@ -4669,7 +4688,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                           return;
                                         }
                                         let saved: AgencySupplier | undefined;
-                                        if (saveHotelToDirectory && !selectedHotelSupplierId) {
+                                        if (!props.customerMode && saveHotelToDirectory && !selectedHotelSupplierId) {
                                           try { saved = await createAgencySupplier({ type: "HOTEL", name: customHotelInputs.name.trim(), address: customHotelInputs.address.trim(), area: hotel.destination || destination, starRating: customHotelInputs.stars, referencePrice: customHotelInputs.price, contactPhone: customHotelInputs.contactPhone, conditions: customHotelInputs.conditions }); setSavedHotels((prev) => [...prev, saved!]); }
                                           catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể lưu nhà cung cấp"); return; }
                                         }
@@ -4687,9 +4706,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                             destination ||
                                             "Đà Lạt",
                                           price:
-                                            customHotelInputs.price || 1200000,
+                                            customHotelInputs.price || (props.customerMode ? 0 : 1200000),
                                           pricePerPerson:
-                                            customHotelInputs.price || 1200000,
+                                            customHotelInputs.price || (props.customerMode ? 0 : 1200000),
                                           status: "approved",
                                           image:
                                             "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
@@ -4705,7 +4724,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                           name: "",
                                           stars: 4,
                                           address: "",
-                                          price: 1200000,
+                                          price: props.customerMode ? 0 : 1200000,
                                           contactPhone: "",
                                           conditions: "",
                                         });
@@ -5500,6 +5519,7 @@ export function TourFormPage(props: TourFormPageProps) {
 
                         {/* GỢI Ý ĐIỂM THAM QUAN / CHECK-IN NỔI BẬT THEO ĐIỂM ĐẾN */}
                         {(() => {
+                          if (isCustom) return null;
                           const destPreset = getSuggestionsByDestination(
                             destination || "Đà Lạt",
                           );
@@ -6379,11 +6399,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     mealKey
                                                   ] && (
                                                       <div className="p-3 bg-purple-50/60 rounded-xl border-2 border-purple-300 space-y-2.5 animate-in fade-in">
-                                                        <select aria-label="Chọn nhà hàng từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
+                                                        {!props.customerMode && <select aria-label="Chọn nhà hàng từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
                                                           onChange={(e) => { const supplier = savedRestaurants.find((s) => s.id === Number(e.target.value)); setSelectedMealSupplierIds((prev) => ({ ...prev, [mealKey]: supplier?.id || 0 })); if (supplier) setCustomMealInputs((prev) => ({ ...prev, [mealKey]: { restaurantName: supplier.name, description: supplier.conditions || "", price: supplier.referencePrice || 0, address: supplier.address || "", contactPhone: supplier.contactPhone || "" } })); }}>
                                                           <option value="">Chọn nhà hàng đã lưu trong danh bạ...</option>
                                                           {savedRestaurants.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.area || s.address}</option>)}
-                                                        </select>
+                                                        </select>}
                                                         <div className="flex items-center gap-2">
                                                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 border border-purple-400">
                                                             Nhà cung cấp của agency
@@ -6476,7 +6496,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               className="text-xs h-8 bg-white border-purple-300"
                                                             />
                                                           </div>
-                                                          <div className="sm:col-span-3">
+{!props.customerMode &&                                                           <div className="sm:col-span-3">
                                                             <Input
                                                               type="number"
                                                               placeholder="Giá/người (VNĐ)"
@@ -6517,7 +6537,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               }}
                                                               className="text-xs h-8 bg-white border-purple-300"
                                                             />
-                                                          </div>
+                                                          </div>}
                                                         </div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                           <Input placeholder="Địa chỉ nhà hàng" value={customMealInputs[mealKey]?.address || ""} onChange={(e) => setCustomMealInputs((prev) => ({ ...prev, [mealKey]: { ...prev[mealKey], address: e.target.value } }))} />
@@ -6525,8 +6545,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                         </div>
                                                         <p className="text-[11px] text-purple-900">Giá chỉ để tham khảo; agency cần tự xác nhận bàn và điều kiện với nhà cung cấp.</p>
                                                         <div className="flex justify-end gap-2">
-                                                          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveMealToDirectory} onChange={(e) => setSaveMealToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>
-                                                          {selectedMealSupplierIds[mealKey] && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
+                                                          {!props.customerMode && <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveMealToDirectory} onChange={(e) => setSaveMealToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>}
+                                                          {!props.customerMode && selectedMealSupplierIds[mealKey] && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
                                                             const input = customMealInputs[mealKey]; if (!input) return;
                                                             try { const updated = await updateAgencySupplier(selectedMealSupplierIds[mealKey], { type: "RESTAURANT", name: input.restaurantName.trim(), address: input.address, area: day.destinationCity || destination, referencePrice: input.price, contactPhone: input.contactPhone, conditions: input.description.trim() }); setSavedRestaurants((prev) => prev.map((s) => s.id === updated.id ? updated : s)); }
                                                             catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể cập nhật danh bạ"); }
@@ -6562,7 +6582,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 return;
                                                               }
                                                               let saved: AgencySupplier | undefined;
-                                                              if (saveMealToDirectory && !selectedMealSupplierIds[mealKey]) {
+                                                              if (!props.customerMode && saveMealToDirectory && !selectedMealSupplierIds[mealKey]) {
                                                                 try { saved = await createAgencySupplier({ type: "RESTAURANT", name: input.restaurantName.trim(), address: input.address, area: day.destinationCity || destination, referencePrice: input.price, conditions: input.description.trim(), contactPhone: input.contactPhone }); setSavedRestaurants((prev) => [...prev, saved!]); }
                                                                 catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể lưu nhà cung cấp"); return; }
                                                               }
@@ -9230,6 +9250,12 @@ export function TourFormPage(props: TourFormPageProps) {
         )}
       </div>
 
+      {props.customerMode ? <div className="space-y-4 border-t border-[#CBD5E1] bg-white p-5">
+        {props.customerContent}
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={saving} onClick={onBack}>Hủy</Button>
+          <Button type="button" disabled={saving} onClick={() => void handleSubmit()} className="bg-[#075985] text-white">{saving ? "Đang gửi…" : props.customerSubmitLabel || "Gửi yêu cầu thay đổi cho Agency"}</Button>
+        </div>
+      </div> : <>
       {/* Sticky Bottom Action Bar */}
       <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#CBD5E1] px-6 py-3.5 flex items-center justify-between shadow-lg">
         <div className="text-xs text-gray-500 flex items-center gap-2">
@@ -9276,6 +9302,7 @@ export function TourFormPage(props: TourFormPageProps) {
         </div>
       </div>
 
+      </>}
       {/* AI Itinerary Planner Modal */}
       {showAIPlanner && (
         <AIItineraryPlannerModal

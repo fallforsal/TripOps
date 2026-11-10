@@ -1,0 +1,34 @@
+name: Guide Flutter CI
+on:
+  pull_request:
+    paths:
+      - 'guide_mobile_flutter/**'
+      - '.github/workflows/guide-flutter.yml'
+  push:
+    branches:
+      - hiep
+    paths:
+      - 'guide_mobile_flutter/**'
+      - '.github/workflows/guide-flutter.yml'
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: guide_mobile_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Restore dependencies
+        run: flutter pub get
+      - name: Static analysis
+        run: flutter analyze
+      - name: Unit tests
+        run: flutter test
+      - name: Generate clean Android scaffold
+        run: flutter create --project-name tripops_guide --org com.tripops --platforms android .
+      - name: Debug APK build
+        run: flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:5080

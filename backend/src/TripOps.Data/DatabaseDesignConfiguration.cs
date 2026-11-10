@@ -319,6 +319,8 @@ internal static class DatabaseDesignConfiguration
 
         modelBuilder.Entity<BookingParticipant>(entity =>
         {
+            entity.Property(e => e.CreationKey).HasColumnName("creation_key").HasColumnType("uniqueidentifier");
+            entity.HasIndex(e => new { e.BookingId, e.CreationKey }).IsUnique().HasFilter("[creation_key] IS NOT NULL");
             entity.ToTable("booking_participants");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
@@ -378,7 +380,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Time).HasColumnName("time").HasColumnType("datetime2");
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.OriginalLocationName).HasColumnName("original_location_name").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
-            entity.Property(e => e.CustomizedLocationName).HasColumnName("customized_location_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.CurrentLocationName).HasColumnName("current_location_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
             entity.Property(e => e.IsCustomized).HasColumnName("is_customized").HasColumnType("bit");
             entity.Property(e => e.CustomerNote).HasColumnName("customer_note").HasColumnType("nvarchar(max)");
             entity.Property(e => e.PriceDifference).HasColumnName("price_difference").HasColumnType("decimal(12, 2)");
@@ -396,7 +398,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Time).HasColumnName("time").HasColumnType("datetime2");
             entity.Property(e => e.MealType).HasColumnName("meal_type").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
             entity.Property(e => e.OriginalRestaurantName).HasColumnName("original_restaurant_name").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
-            entity.Property(e => e.CustomizedRestaurantName).HasColumnName("customized_restaurant_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.CurrentRestaurantName).HasColumnName("current_restaurant_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
             entity.Property(e => e.PriceDifference).HasColumnName("price_difference").HasColumnType("decimal(12, 2)");
             entity.Property(e => e.IsCustomized).HasColumnName("is_customized").HasColumnType("bit").IsRequired();
             entity.Property(e => e.TotalPrice).HasColumnName("total_price").HasColumnType("decimal(12, 2)");
@@ -416,8 +418,8 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.DateTo).HasColumnName("date_to").HasColumnType("datetime2");
             entity.Property(e => e.OriginalHotelName).HasColumnName("original_hotel_name").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
             entity.Property(e => e.OriginalStars).HasColumnName("original_stars").HasColumnType("int");
-            entity.Property(e => e.CustomizedHotelName).HasColumnName("customized_hotel_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
-            entity.Property(e => e.CustomizedStars).HasColumnName("customized_stars").HasColumnType("int");
+            entity.Property(e => e.CurrentHotelName).HasColumnName("current_hotel_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.CurrentStars).HasColumnName("current_stars").HasColumnType("int");
             entity.Property(e => e.ProviderResponse).HasColumnName("provider_response").HasColumnType("nvarchar(max)");
             entity.Property(e => e.NightsCount).HasColumnName("nights_count").HasColumnType("int");
             entity.Property(e => e.PriceDifference).HasColumnName("price_difference").HasColumnType("decimal(12, 2)");
@@ -463,7 +465,7 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<PaymentRequest>(entity =>
         {
             entity.ToTable("payment_requests", t =>
-                t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance')"));
+                t.HasCheckConstraint("CK_payment_requests_stage", "[stage] IS NULL OR [stage] IN ('deposit', 'balance') OR [stage] LIKE 'fee:%'"));
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
             entity.Property(e => e.Stage).HasColumnName("stage").HasColumnType("nvarchar(20)").HasMaxLength(20);

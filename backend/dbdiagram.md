@@ -488,7 +488,7 @@ Table booking_locations {
   original_location_name varchar(255) [not null, note: 'Điểm gốc của tour (VD: Đảo Hòn Mun, Chợ đêm Đà Lạt)']
 
   // ĐIỂM MỚI NẾU KHÁCH ĐỀ XUẤT ĐỔI (NULL nếu đi theo tour)
-  customized_location_name varchar(255) [note: 'Điểm mới khách muốn đi (VD: Hòn Tằm & Tắm bùn khoáng)']
+  current_location_name varchar(255) [note: 'Điểm mới khách muốn đi (VD: Hòn Tằm & Tắm bùn khoáng)']
 
   is_customized boolean [default: false, note: 'false: Đi theo tour mặc định | true: Có đổi điểm']
   customer_note text [note: 'Lý do hoặc mong muốn của khách khi đổi']
@@ -509,7 +509,7 @@ Table booking_restaurants {
   time timestamp
   meal_type varchar(20) [not null, note: 'breakfast, lunch, dinner']
   original_restaurant_name varchar(255) [not null]
-  customized_restaurant_name varchar(255)
+  current_restaurant_name varchar(255)
   price_difference decimal(12, 2) [default: 0]
   is_customized boolean [not null, default: false]
   total_price decimal(12, 2)
@@ -538,8 +538,8 @@ Table booking_hotels {
   original_stars int [default: 5]
 
   // KHÁCH SẠN MỚI NẾU ĐỔI HẠNG / NÂNG CẤP (Snapshot tên tại thời điểm đặt)
-  customized_hotel_name varchar(255) [note: 'VD: Khách Sạn Heritage Đà Lạt']
-  customized_stars int
+  current_hotel_name varchar(255) [note: 'VD: Khách Sạn Heritage Đà Lạt']
+  current_stars int
   provider_response text
   nights_count int [default: 1]
   price_difference decimal(12, 2) [default: 0, note: 'Chênh lệch (+450.000đ)']

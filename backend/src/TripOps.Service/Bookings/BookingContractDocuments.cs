@@ -1,3 +1,4 @@
+using static TripOps.Service.Bookings.BookingBilling;
 using System.Globalization;
 using System.Security.Cryptography;
 using TripOps.Data.Entities;
@@ -10,7 +11,7 @@ namespace TripOps.Service.Bookings;
 //  - Khi Agency duyệt, hệ thống lập hợp đồng phiên bản 1 với giá cuối cùng (bảng booking_contracts).
 //  - Khách tải PDF, ký tay hoặc chèn chữ ký, rồi tải bản đã ký lên (PDF/PNG/JPG ≤ 10 MB). Ký xong mới mở thanh toán đợt đầu.
 //  - Agency xem bản ký: "Hợp lệ" hoặc "Yêu cầu ký lại" (có lý do). Khách không phải chờ bước này mới trả cọc.
-//  - Giá đổi sau khi duyệt: tự tạo phiên bản mới, bản cũ Superseded, khách ký lại (chỉ chặn khi chưa trả đồng nào).
+//  - Giá tour khóa sau khi duyệt. Phụ thu là khoản riêng, không thay giá trị hoặc vô hiệu hóa hợp đồng gốc.
 //  - File lưu ở App_Data/contracts/{bookingId}/ (không công khai), kèm SHA-256 để chứng minh file không bị sửa.
 public sealed partial class BookingService
 {
@@ -32,14 +33,14 @@ public sealed partial class BookingService
     private static BookingContract EnsureContract(Booking booking, DateTime now)
     {
         var current = CurrentContract(booking);
-        if (current is not null && current.TotalAmount == booking.TotalAmount) return current;
+        if (current is not null && current.TotalAmount == BaseTourAmount(booking)) return current;
         if (current is not null) current.Status = ContractSuperseded;
         var version = booking.Contracts.Select(c => c.Version).DefaultIfEmpty(0).Max() + 1;
         var contract = new BookingContract
         {
             Version = version,
             ContractNo = $"HD-{booking.BookingCode}-{version.ToString(CultureInfo.InvariantCulture)}",
-            TotalAmount = booking.TotalAmount,
+            TotalAmount = BaseTourAmount(booking),
             Status = ContractAwaiting,
             CreatedAt = now
         };
@@ -56,7 +57,7 @@ public sealed partial class BookingService
     {
         if (PaidAmount(booking) > 0) return false;
         var current = CurrentContract(booking);
-        if (current is null || current.TotalAmount != booking.TotalAmount) return true;
+        if (current is null || current.TotalAmount != BaseTourAmount(booking)) return true;
         return !(current.Status == ContractVerified || (current.Status == ContractSigned && current.SignMethod == SignMethodWeb));
     }
 
@@ -66,7 +67,7 @@ public sealed partial class BookingService
         // Đơn duyệt trước khi có tính năng hợp đồng: vẫn hiện "chờ ký"; khách tải PDF thì hệ thống lập bù phiên bản 1.
         if (c is null)
             return Approved(booking) && ContractBlocksPayment(booking)
-                ? new ContractDto(0, 1, $"HD-{booking.BookingCode}-1", booking.TotalAmount, ContractAwaiting,
+                ? new ContractDto(0, 1, $"HD-{booking.BookingCode}-1", BaseTourAmount(booking), ContractAwaiting,
                     null, null, null, null, null, null, true)
                 : null;
         return new ContractDto(c.Id, c.Version, c.ContractNo, c.TotalAmount, c.Status,
@@ -198,7 +199,7 @@ public sealed partial class BookingService
     {
         var agency = booking.Tour?.Agency;
         var profile = agency?.BusinessProfile;
-        var schedule = Schedule(booking)
+        var schedule = Schedule(booking).Where(s => s.Stage != "surcharge")
             .Select(s => (Stage: s.Stage switch { "balance" => "Đợt 2 – phần còn lại", "full" => "Thanh toán toàn bộ (tour sát ngày)", _ => "Đợt 1 – đặt cọc" },
                 s.Amount,
                 Deadline: s.DueAt is { } due ? VietnamText(due) : s.DueDate is { } date ? "hết ngày " + date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "theo thông báo"))
@@ -212,7 +213,7 @@ public sealed partial class BookingService
             booking.Participants.Where(p => p.Status != "INACTIVE").OrderBy(p => p.ParticipantIndex)
                 .Select(p => (p.FullName, p.TierName, (decimal?)p.Price)).ToList(),
             booking.Timelines.OrderBy(t => t.DayNumber).Select(t => (t.DayNumber, t.Title)).ToList(),
-            booking.Accommodations.Select(h => (h.Destination, h.CustomizedHotelName ?? h.OriginalHotelName, h.NightsCount)).ToList(),
+            booking.Accommodations.Select(h => (h.Destination, h.CurrentHotelName ?? h.OriginalHotelName, h.NightsCount)).ToList(),
             contract.TotalAmount, schedule);
     }
 }

@@ -115,7 +115,7 @@ public sealed class ServiceModerationService(TripOpsDbContext db)
             ProviderName = businessName, ProviderHotline = provider.Phone, ProviderEmail = provider.Email,
             Provider = new(provider.Id, businessName, provider.Phone, provider.Email),
             Name = service.Name, Category = service.Category.ToString().ToLowerInvariant(),
-            SubCategory = service.SubCategory, Description = service.Description, Price = service.Price,
+            SubCategory = service.SubCategory, Description = service.Description, PriceUnit = service.PriceUnit, Price = service.Price,
             PriceFrom = service.PriceFrom, PriceTo = service.PriceTo, PricePerPerson = service.Price,
             Capacity = service.Capacity, Stars = service.StarRating, Rating = service.Rating ?? 0m,
             Province = service.Province, Ward = service.Ward, Street = service.Street, FullAddress = service.FullAddress,

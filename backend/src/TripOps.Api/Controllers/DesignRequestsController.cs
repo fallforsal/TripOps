@@ -38,6 +38,26 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [EndpointSummary("List all completed custom Tour plans shared with this customer")]
     [ProducesResponseType<IReadOnlyList<TourDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Plans(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTours(Actor, id, ct));
+    [HttpGet("{id:int}/history")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]
+    public async Task<IActionResult> History(int id, CancellationToken ct) => Ok(await requests.History(Actor, id, false, ct));
+    [HttpGet("{id:int}/messages")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.RequestMessage>>(200)]
+    public async Task<IActionResult> Messages(int id, CancellationToken ct) => Ok(await requests.Messages(Actor, id, ct));
+    [HttpPost("{id:int}/messages")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> SendMessage(int id, DesignRequestService.SendRequestMessage input, CancellationToken ct)
+    { await requests.SendMessage(Actor, id, input, ct); return NoContent(); }
+    [HttpGet("{id:int}/initial-changes")]
+    [ProducesResponseType<System.Text.Json.JsonElement>(200)]
+    public async Task<IActionResult> InitialChanges(int id, CancellationToken ct) => Ok(await requests.InitialChanges(Actor, id, ct));
+    [HttpGet("{id:int}/source")]
+    [ProducesResponseType<System.Text.Json.JsonElement>(200)]
+    public async Task<IActionResult> Source(int id, CancellationToken ct) => Ok(await requests.Source(Actor, id, ct));
+    [HttpPost("{id:int}/agree-plan")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> Agree(int id, DesignRequestService.PlanAgreement input, CancellationToken ct)
+    { await requests.Agree(Actor, id, input, ct); return NoContent(); }
     [HttpGet("{id:int}/proposals")]
     [EndpointSummary("List customer changes and Agency replies for a custom tour request")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]
@@ -71,6 +91,22 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
         var tour = await tours.CreateForRequest(Actor, id, configuration, ct);
         return Created($"/api/v1/agency/tours/{tour.Id}", tour);
     }
+    [HttpGet("{id:int}/history")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]
+    public async Task<IActionResult> History(int id, CancellationToken ct) => Ok(await requests.History(Actor, id, true, ct));
+    [HttpGet("{id:int}/messages")]
+    [ProducesResponseType<IReadOnlyList<DesignRequestService.RequestMessage>>(200)]
+    public async Task<IActionResult> Messages(int id, CancellationToken ct) => Ok(await requests.Messages(Actor, id, ct));
+    [HttpPost("{id:int}/messages")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> SendMessage(int id, DesignRequestService.SendRequestMessage input, CancellationToken ct)
+    { await requests.SendMessage(Actor, id, input, ct); return NoContent(); }
+    [HttpGet("{id:int}/initial-changes")]
+    [ProducesResponseType<System.Text.Json.JsonElement>(200)]
+    public async Task<IActionResult> InitialChanges(int id, CancellationToken ct) => Ok(await requests.InitialChanges(Actor, id, ct));
+    [HttpGet("{id:int}/source")]
+    [ProducesResponseType<System.Text.Json.JsonElement>(200)]
+    public async Task<IActionResult> Source(int id, CancellationToken ct) => Ok(await requests.Source(Actor, id, ct));
     [HttpGet("{id:int}/proposals")]
     [EndpointSummary("List customer Tour plan changes addressed to this Agency")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]

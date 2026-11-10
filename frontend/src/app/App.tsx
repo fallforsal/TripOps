@@ -1,3 +1,4 @@
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
@@ -194,6 +195,7 @@ function Application() {
   const [providerGroupRequests, setProviderGroupRequests] = useState<
     ProviderGroupReservationRequest[]
   >([]);
+  const [sourceDesignTour, setSourceDesignTour] = useState<Tour | undefined>();
   const [customTourRequests, setCustomTourRequests] = useState<
     CustomTourRequest[]
   >([]);
@@ -253,6 +255,15 @@ function Application() {
       .catch((e) => { if (active) setApiError(e.message); });
     return () => { active = false; };
   }, []);
+  //để company (trạng thái, logo) theo kịp currentUser sau khi lưu hồ sơ doanh nghiệp.
+  useEffect(() => {
+  if (currentUser?.role !== "agency") return;
+  setCompanies((previous) => [
+    ...previous.filter((item) => item.id !== currentUser.id),
+    companyFromUser(currentUser),
+  ]);
+}, [currentUser]);
+
   async function refreshCustomRequests() {
     if (currentUser?.role === "agency") {
       setCustomTourRequests(await agencyDesignRequests());
@@ -388,6 +399,7 @@ function Application() {
 
   const { navigateForward, restoreHistoryPosition, goBack } =
     useHistoryScroll();
+
 
   // URL Hash Sync for direct testing and browser back/forward
   useEffect(() => {
@@ -542,7 +554,8 @@ function Application() {
     autoCheckPayment(match[1]);
   }, [currentUser?.role, bookings]);
 
-  const handleNavigate = (page: string, criteria?: TourSearchCriteria) => {
+  const handleNavigate = (page: string, criteria?: TourSearchCriteria, designSource?: Tour) => {
+    if (page === "custom-tour") setSourceDesignTour(designSource);
     navigateForward(() => {
       setCurrentPage(page);
       setSelectedTour(null);
@@ -1160,8 +1173,22 @@ function Application() {
   };
 
   // Company adjusts total booking price & logs adjustment history
-  const handleUpdateBookingPrice = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleBookingChanged = (dto: import("@/app/services/wf05Bookings").BookingDto) => {
+    const updated = fromApiBooking(dto, tours, currentUser);
+    setBookings(prev => prev.map(b => b.id === updated.id ? updated : b));
+  };
+  const handleUpdateBookingPrice = async (bookingId: string, newPrice: number, note?: string): Promise<boolean> => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return false;
+    if (booking.hasBeenApproved || booking.status !== "pending") { toast.error("Giá tour đã khóa sau khi duyệt. Vui lòng tạo phụ thu riêng."); return false; }
+    try {
+      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${bookingId}/price-adjustments`, {
+        method: "POST", body: JSON.stringify({ newPrice, reason: note, expectedTotal: booking.totalPrice }),
+      });
+      handleBookingChanged(updated);
+      toast.success("Đã lưu giá mới và nhật ký trước khi duyệt booking.");
+      return true;
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Không lưu được giá mới."); return false; }
   };
 
   // Mã giao dịch mô phỏng cố định cho mỗi đợt: bấm lại / mạng chập chờn không ghi tiền hai lần.
@@ -1188,14 +1215,14 @@ function Application() {
     }
     try {
       const updated = fromApiBooking(
-        await depositBooking(Number(bookingId), request.amount, reference),
+        await depositBooking(Number(bookingId), request.amount, reference, undefined, Number(paymentRequestId)),
         tours,
         currentUser,
       );
       demoPaymentKeys.current.delete(keyId);
       setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
       if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
-      toast.success("Đã ghi nhận thanh toán cọc (mô phỏng).");
+      toast.success("Đã ghi nhận khoản thanh toán (mô phỏng).");
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không thể ghi nhận thanh toán.");
@@ -1204,9 +1231,9 @@ function Application() {
   };
 
   // Thanh toán cọc qua payOS: backend tính số tiền và tạo (hoặc dùng lại) link, trình duyệt chuyển sang payOS.
-  const handlePayWithPayOs = async (bookingId: string): Promise<void> => {
+  const handlePayWithPayOs = async (bookingId: string, paymentRequestId: string): Promise<void> => {
     try {
-      const checkout = await startPayOsPayment(Number(bookingId));
+      const checkout = await startPayOsPayment(Number(bookingId), Number(paymentRequestId));
       if (!isPayOsUrl(checkout.checkoutUrl)) {
         toast.error("Địa chỉ thanh toán không hợp lệ.");
         return;
@@ -1554,6 +1581,7 @@ function Application() {
         );
         return (
           <ErrorBoundary fallbackTitle="Không thể tải giao diện Quản lý Agency">
+            <WorkflowNotifications />
             <AgencyDashboard
               providerGroupRequests={providerGroupRequests}
               currentUser={currentUser}
@@ -1578,6 +1606,7 @@ function Application() {
               onMarkDepositPaid={handleMarkDepositPaid}
               onMarkFullyPaid={handleMarkFullyPaid}
               onUpdateBookingPrice={handleUpdateBookingPrice}
+              onBookingChanged={handleBookingChanged}
               onUpdateBookingPassengers={handleUpdateBookingPassengers}
               onUpdateBookingAgencies={handleUpdateBookingAgencies}
               onUpdateAttractionCheckins={handleUpdateAttractionCheckins}
@@ -1596,6 +1625,7 @@ function Application() {
 
     return (
       <div className="min-h-screen bg-gray-50">
+        <WorkflowNotifications />
         {currentUser.role !== "admin" && currentUser.role !== "provider" && (
           <UnifiedHeader
             currentUser={currentUser}
@@ -1656,7 +1686,7 @@ function Application() {
               onDeleteService={undefined}
               onApproveProvider={handleApproveProvider}
               onRejectProvider={handleRejectProvider}
-              onUpdateUserStatus={handleUpdateUserStatus}
+              //onUpdateUserStatus={handleUpdateUserStatus}
               onApproveCompany={handleApproveCompany}
               onRejectCompany={handleRejectCompany}
               refundRequests={refundRequests}
@@ -1718,8 +1748,10 @@ function Application() {
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
       >
+        {currentUser && <WorkflowNotifications />}
         {currentPage === "custom-tour" ? (
           <CustomTourRequestPage
+            sourceTour={sourceDesignTour}
             companies={companies}
             currentUser={currentUser}
             onBack={() => goBack(() => handleNavigate("home"))}
@@ -1746,9 +1778,7 @@ function Application() {
                 }
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              onSubmit={(data) => {
-                handleBookingSubmit(data);
-              }}
+              onSubmit={handleBookingSubmit}
               onViewMyBookings={() => {
                 handleNavigate("my-bookings");
               }}
@@ -1770,6 +1800,7 @@ function Application() {
               }
             }}
             onBookNow={handleOpenBookingForm}
+            onCustomize={(tour) => handleNavigate("custom-tour", undefined, tour)}
             onOpenRequest={() => handleNavigate("my-requests")}
             onShowLogin={() => setShowLogin(true)}
           />
@@ -1852,7 +1883,6 @@ function Application() {
                 window.clearTimeout(paymentPollTimer.current);
                 void checkPayment(id);
               }}
-              onUpdateBookingPassengers={handleUpdateBookingPassengers}
               onNavigateToComplaint={(b) => {
                 setComplaintInitialBooking(b);
                 setCurrentPage("my-complaints");
@@ -1873,7 +1903,13 @@ function Application() {
             onCancelRequest={handleCancelCustomTourRequest}
             onNavigateToCreate={() => handleNavigate("custom-tour")}
             onViewTour={handleViewTour}
-            onBookTour={(t) => handleOpenBookingForm(t)}
+            onBookTour={async (t) => {
+              const existing = userBookings.find((b) => b.tour?.customRequestId === t.customRequestId && b.status !== "cancelled" && b.status !== "rejected");
+              if (existing) {
+                await http(`/bookings/${existing.id}/quotations/change-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(t.id) }) });
+                await handleViewUserBookingDetail(existing);
+              } else handleOpenBookingForm(t);
+            }}
           />
         ) : currentPage === "my-complaints" ? (
           <MyComplaintsPage

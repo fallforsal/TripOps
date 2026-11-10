@@ -142,10 +142,10 @@ export function BookingDetails({
               <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-bold text-amber-950 mb-0.5">
-                  Đang chờ công ty du lịch xác nhận &amp; chốt giá dịch vụ
+                  Đang chờ công ty du lịch duyệt booking
                 </p>
                 <p className="leading-relaxed text-amber-800">
-                  Bạn không cần thanh toán ngay khi đặt tour. Công ty lữ hành đang liên hệ các bên cung ứng bên ngoài (khách sạn lưu trú, quán ăn) để kiểm tra phòng/chỗ và chốt giá thực tế. Sau khi công ty duyệt và chốt giá, bạn sẽ nhận được thông tin để thanh toán.
+                  Công ty lữ hành đang xem xét thông tin booking của đoàn. Sau khi booking được duyệt, bạn ký hợp đồng và thanh toán theo lịch của booking. Giá thanh toán theo tổng tiền tour đã đặt.
                 </p>
               </div>
             </div>

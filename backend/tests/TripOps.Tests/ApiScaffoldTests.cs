@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -11,7 +12,7 @@ namespace TripOps.Tests;
 public sealed class ApiScaffoldTests
 {
     private static WebApplicationFactory<Program> Factory(string environment = "Development") =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment(environment));
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment(environment).ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> { ["Cors:AllowedOrigins:0"] = "http://localhost:5173" })).ConfigureServices(services => services.PostConfigure<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>(options => options.AddPolicy("Development", policy => policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials()))));
 
     [Fact]
     public async Task Health_does_not_claim_database_readiness()

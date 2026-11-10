@@ -41,6 +41,59 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
+    public async Task Guides_AssignedBookingsExposeTourThumbnailWithGalleryFallback()
+    {
+        using var app = new App(); await app.Initialize();
+        using var agency = await app.Client("agency1@example.test");
+        var guide = await CreateGuide(agency);
+        var bookingId = await GuideBooking(app, DateTime.UtcNow.Date.AddDays(30));
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var tour = await db.Tours.SingleAsync(t => t.Id == 1);
+            tour.ThumbnailUrls = JsonSerializer.Serialize(new[] {
+                "/api/v1/files/tours/agency1/12345678901234567890123456789012.jpg"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var assignment = new GuideAssignmentRequest(guide.Id, "lead_guide", null);
+        (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/guide-assignments", assignment))
+            .EnsureSuccessStatusCode();
+
+        using var client = app.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions {
+            HandleCookies = true, BaseAddress = new Uri("http://localhost")
+        });
+        (await client.PostAsJsonAsync("/api/v1/auth/login", new {
+            email = guide.Email, password = "GuidePass123!"
+        })).EnsureSuccessStatusCode();
+
+        async Task<string?> Thumbnail()
+        {
+            var page = await client.GetFromJsonAsync<JsonElement>("/api/v1/guide/bookings");
+            var item = page.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("id").GetInt32() == bookingId);
+            return item.GetProperty("thumbnailUrl").GetString();
+        }
+
+        Assert.Equal("/api/v1/files/tours/agency1/12345678901234567890123456789012.jpg",
+            await Thumbnail());
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var tour = await db.Tours.SingleAsync(t => t.Id == 1);
+            tour.ThumbnailUrls = "invalid old thumbnail json";
+            tour.Images = JsonSerializer.Serialize(new[] {
+                "https://res.cloudinary.com/sample/image/upload/guide-tour.jpg"
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal("https://res.cloudinary.com/sample/image/upload/guide-tour.jpg",
+            await Thumbnail());
+    }
+
+    [Fact]
     public async Task Guides_FullCrudLoginPasswordSuspendReactivateDelete_PersistsProfile()
     {
         using var app = new App(); await app.Initialize(); using var agency = await app.Client("agency1@example.test");

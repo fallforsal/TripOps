@@ -28,6 +28,7 @@ export function companyFromUser(user: User): TourCompany {
     status: p?.status || "pending",
     rejectionReason: p?.rejectionReason,
     createdAt: p?.createdAt || "",
+    logo: user.businessProfile?.logoUrl,
   };
 }
 export async function login(data: { email: string; password: string }) {

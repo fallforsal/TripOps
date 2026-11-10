@@ -1,11 +1,12 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using TripOps.Service.Accounts;
+using System.Security.Claims;
 using TripOps.Data.Entities;
+using TripOps.Service.Accounts;
+using static TripOps.Service.Accounts.AccountService;
 namespace TripOps.Api.Controllers;
 [ApiController, Route("api/v1/auth")]
 [Tags("Authentication")]
@@ -54,6 +55,27 @@ public sealed class BusinessProfilesController(AccountService accounts) : Contro
         }
         return Ok(await accounts.Submit(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, image, license?.ContentType, ct));
     }
+    [HttpPut, RequestSizeLimit(8 * 1024 * 1024)]
+    [EndpointSummary("Update the business profile and logo; legal changes go back to review")]
+    [ProducesResponseType<AccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Update([FromForm] UpdateBusinessRequest request, IFormFile? logo, IFormFile? license, CancellationToken ct)
+    {
+        var (logoBytes, logoMime) = await ReadImage(logo, 2 * 1024 * 1024, ct);
+        var (licenseBytes, licenseMime) = await ReadImage(license, 5 * 1024 * 1024, ct);
+        return Ok(await accounts.UpdateBusiness(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request,
+            logoBytes, logoMime, licenseBytes, licenseMime, ct));
+    }
+
+    private static async Task<(byte[]?, string?)> ReadImage(IFormFile? file, long maxBytes, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return (null, null);
+        if (file.Length > maxBytes) throw new AccountException(400, "Ảnh vượt quá dung lượng cho phép.");
+        if (file.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))
+            throw new AccountException(400, "Chỉ nhận ảnh JPG, PNG hoặc WebP.");
+        using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        return (stream.ToArray(), file.ContentType);
+    }
 }
 [ApiController, Authorize(Roles = "admin"), Route("api/v1/admin/partner-applications")]
 [Tags("Partner Management")]
@@ -82,3 +104,25 @@ public sealed class PartnerApplicationsController(AccountService accounts) : Con
     [ProducesResponseType<ProfileDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Activate(int id, CancellationToken ct) => Ok(await accounts.SetSuspended(id, false, ct));
 }
+[ApiController, Authorize(Roles = "admin"), Route("api/v1/admin/accounts")]
+[Tags("Account Management")]
+public sealed class AdminAccountsController(AccountService accounts) : ControllerBase
+{
+    [HttpGet]
+    [EndpointSummary("List customer, Agency, Provider and Guide accounts with filters")]
+    [ProducesResponseType<AdminAccountPageDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(CancellationToken ct, string? role = null, string? status = null,
+        string? search = null, int page = 1, int pageSize = 20)
+        => Ok(await accounts.AdminAccounts(role, status, search, page, pageSize, ct));
+    [HttpPost("{id}/ban")]
+    [EndpointSummary("Ban an account with a required reason")]
+    [ProducesResponseType<AdminAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Ban(string id, BanAccountRequest request, CancellationToken ct)
+        => Ok(await accounts.SetBanned(id, true, request.Reason, ct));
+    [HttpPost("{id}/unban")]
+    [EndpointSummary("Revoke an account ban")]
+    [ProducesResponseType<AdminAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Unban(string id, CancellationToken ct)
+        => Ok(await accounts.SetBanned(id, false, null, ct));
+}
+

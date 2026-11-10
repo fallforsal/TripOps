@@ -1,7 +1,10 @@
+import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
+import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
+import { BookingServicePicker, type BookingReplacement } from "./BookingServicePicker";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
-import { useState, useMemo } from "react";
-import { BookingQuotationPanel } from "@/app/components/common/BookingQuotationPanel";
-import type { Tour } from "@/app/types";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { http } from "@/app/lib/http";
+import { useBookingSupplierState } from "@/app/hooks/useBookingSupplierState";
 import {
   Booking,
   User,
@@ -22,7 +25,7 @@ import {
   IncidentStatus,
   Location,
 } from "@/app/types";
-import { formatVietnamDeadline } from "@/app/services/payos";
+import { formatVietnamDateTime, formatVietnamDeadline } from "@/app/services/payos";
 import {
   ArrowLeft,
   Calendar,
@@ -87,7 +90,7 @@ import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { BookingSupplierConfirmation } from "./BookingSupplierConfirmation";
 import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
-import { bookingApprovalEligibility, type BookingQuotationState, type BookingServiceSlot } from "@/app/lib/bookingSupplierStatus";
+import { providerResponseInstant } from "@/app/lib/bookingSupplierStatus";
 import {
   Dialog,
   DialogContent,
@@ -99,10 +102,9 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
 import { ContractCard } from "@/app/components/common/ContractCard";
-import { getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
+import { fromApiBooking, getAgencyCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
 
 interface AgencyBookingDetailPageProps {
-  plans?: Tour[];
   booking: Booking;
   guides: User[];
   companyName: string;
@@ -115,7 +117,8 @@ interface AgencyBookingDetailPageProps {
   onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
   onMarkFullyPaid?: (bookingId: string) => void;
-  onUpdateBookingPrice?: (bookingId: string, newPrice: number, note?: string, adjustment?: Partial<BookingPriceAdjustment>) => void;
+  onUpdateBookingPrice?: (bookingId: string, newPrice: number, note?: string, adjustment?: Partial<BookingPriceAdjustment>) => void | Promise<boolean>;
+  onBookingChanged?: (booking: import("@/app/services/wf05Bookings").BookingDto) => void;
   onUpdateBookingPassengers?: (bookingId: string, passengers: BookingPassenger[]) => void;
   onUpdateBookingAgencies?: (bookingId: string, agencies: BookingAgencyShare[]) => void;
   onUpdateAttractionCheckins?: (bookingId: string, checkins: BookingAttractionCheckin[]) => void;
@@ -189,7 +192,6 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function AgencyBookingDetailPage({
-  plans = [],
   booking,
   guides,
   companyName,
@@ -203,6 +205,7 @@ export function AgencyBookingDetailPage({
   onMarkDepositPaid,
   onMarkFullyPaid,
   onUpdateBookingPrice,
+  onBookingChanged,
   onUpdateBookingPassengers,
   onUpdateBookingAgencies,
   onUpdateAttractionCheckins,
@@ -211,20 +214,8 @@ export function AgencyBookingDetailPage({
   onReviewContract,
 }: AgencyBookingDetailPageProps) {
   const services = useServiceCatalogue();
-  const [quotationState, setQuotationState] = useState<BookingQuotationState>({ bookingId: booking.id,
-    loading: true, quotes: [], requests: [] });
-  const currentQuotationState = quotationState.bookingId === booking.id ? quotationState : {
-    bookingId: booking.id, loading: true, quotes: [], requests: [],
-  };
-  const expectedServiceSlots: BookingServiceSlot[] = [
-    ...(booking.tour.hotels || []).filter((h) => h.serviceId).map((h) => ({
-      kind: "hotel" as const, itemId: h.id, serviceId: h.serviceId,
-    })),
-    ...booking.tour.itinerary.flatMap((d) => (d.meals || []).filter((m) => m.serviceId).map((m) => ({
-      kind: "meal" as const, itemId: m.id, serviceId: m.serviceId,
-    }))),
-  ];
-  const approvalEligibility = bookingApprovalEligibility(currentQuotationState, expectedServiceSlots);
+  const currentQuotationState = useBookingSupplierState(booking.id);
+  const [approvingBooking, setApprovingBooking] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
   const [agencyCancelOpen, setAgencyCancelOpen] = useState(false);
@@ -842,15 +833,15 @@ export function AgencyBookingDetailPage({
   const [passengerDob, setPassengerDob] = useState("");
   const [passengerGender, setPassengerGender] = useState<"male" | "female">("male");
   const [passengerIdNumber, setPassengerIdNumber] = useState("");
-  const [passengerPhone, setPassengerPhone] = useState("");
+  const [passengerSaving, setPassengerSaving] = useState(false);
+  const [passengerError, setPassengerError] = useState("");
+  const passengerCreationKey = useRef("");
   const [passengerNotes, setPassengerNotes] = useState("");
   const [passengerRoommateNote, setPassengerRoommateNote] = useState("");
   const [passengerDietaryNote, setPassengerDietaryNote] = useState("");
   const [passengerSelectedAgencyId, setPassengerSelectedAgencyId] = useState<string>("all");
 
   // Simultaneous price sync state when adding passenger
-  const [autoUpdateTourPrice, setAutoUpdateTourPrice] = useState(true);
-  const [createExtraPaymentRequest, setCreateExtraPaymentRequest] = useState(true);
   const [customAdjustmentReason, setCustomAdjustmentReason] = useState("");
   const [passengerCustomPrice, setPassengerCustomPrice] = useState<string>("");
 
@@ -868,103 +859,59 @@ export function AgencyBookingDetailPage({
   const [editTargetDay, setEditTargetDay] = useState<number>(1);
   const [editTargetKey, setEditTargetKey] = useState<string>("");
   const [editOldName, setEditOldName] = useState("");
+  const [replacement, setReplacement] = useState<BookingReplacement | null>(null);
+  const [editItemId, setEditItemId] = useState("");
+  const [amendmentSaving, setAmendmentSaving] = useState(false);
+  const [amendmentError, setAmendmentError] = useState("");
+  const [priceSaving, setPriceSaving] = useState(false);
+  const [surchargeOpen, setSurchargeOpen] = useState(false);
+  const hasBeenApproved = booking.hasBeenApproved ?? !!booking.travelContract;
+  const canAmend = ["pending", "confirmed", "deposited", "paid"].includes(booking.status) && !agencyCancellationPending;
+  const canChangePrice = canAmend && !hasBeenApproved && booking.status === "pending";
+  const canAddSurcharge = canAmend && hasBeenApproved && booking.status !== "pending";
+  useEffect(() => { if (serviceEditModalOpen) { setReplacement(null); setAmendmentError(""); } }, [serviceEditModalOpen]);
   const [editNewName, setEditNewName] = useState("");
   const [editPriceDiff, setEditPriceDiff] = useState<string>("0");
   const [editReason, setEditReason] = useState("");
   const [editAddressOrNote, setEditAddressOrNote] = useState("");
 
-  const handleSaveServiceEdit = () => {
-    if (!editNewName.trim()) {
-      alert("Vui lòng nhập tên dịch vụ thay thế!");
+  const handleSaveServiceEdit = async () => {
+    if (serviceEditType !== "location") {
+      if (!replacement?.name.trim() || (!replacement.serviceId && !replacement.supplier?.address?.trim())) {
+        setAmendmentError("Vui lòng chọn dịch vụ hoặc nhập đủ tên và địa chỉ ngoài sàn."); return;
+      }
+      const diff = hasBeenApproved ? 0 : Number(editPriceDiff);
+      if (!Number.isSafeInteger(diff) || booking.totalPrice + diff <= 0 || editReason.trim().length < 3) {
+        setAmendmentError("Nhập chênh lệch hợp lệ, tổng giá phải lớn hơn 0 và cần có lý do thay đổi."); return;
+      }
+      setAmendmentSaving(true); setAmendmentError("");
+      try {
+        const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/service-changes`, {
+          method: "POST", body: JSON.stringify({ kind: serviceEditType, itemId: Number(editItemId), ...replacement,
+            reason: editReason.trim(), priceDifference: diff, expectedTotal: booking.totalPrice }),
+        });
+        onBookingChanged?.(updated);
+        window.dispatchEvent(new Event("booking-suppliers-changed"));
+        setServiceEditModalOpen(false);
+      } catch (e) { setAmendmentError(e instanceof Error ? e.message : "Không lưu được dịch vụ."); }
+      finally { setAmendmentSaving(false); }
       return;
     }
-    const diff = parseInt(editPriceDiff) || 0;
-    const defaultReason =
-      serviceEditType === "hotel"
-        ? `Đã liên hệ thống nhất với khách đổi khách sạn sang "${editNewName.trim()}"`
-        : serviceEditType === "meal"
-        ? `Đã liên hệ thống nhất với khách đổi bữa ăn sang "${editNewName.trim()}"`
-        : `Đã liên hệ thống nhất với khách đổi điểm tham quan sang "${editNewName.trim()}"`;
-    const reasonText = editReason.trim() || defaultReason;
-
-    if (serviceEditType === "hotel") {
-      const existingIdx = hotelChanges.findIndex(
-        (h) => h.destination === editTargetKey || (hotelChanges.length === 1 && !h.destination)
-      );
-      const updatedHotel: CustomHotelChange = {
-        destination: editTargetKey,
-        newHotelName: editNewName.trim(),
-        originalHotelName: editOldName,
-        mode: "custom",
-        address: editAddressOrNote.trim() || undefined,
-        note: reasonText,
-        newPricePerNight: diff,
-      };
-      let nextHotels: CustomHotelChange[];
-      if (existingIdx >= 0) {
-        nextHotels = [...hotelChanges];
-        nextHotels[existingIdx] = updatedHotel;
-      } else {
-        nextHotels = [...hotelChanges, updatedHotel];
-      }
-      setHotelChanges(nextHotels);
-    } else if (serviceEditType === "location") {
-      const existingIdx = locChanges.findIndex(
-        (l) => l.dayNumber === editTargetDay && (l.locationId === editTargetKey || l.requestedLocations === editOldName || l.originalLocationName === editOldName)
-      );
-      const updatedLoc: CustomLocationChange = {
-        dayId: `day-${editTargetDay}`,
-        dayNumber: editTargetDay,
-        locationId: editTargetKey,
-        originalLocationName: editOldName,
-        requestedLocations: editNewName.trim(),
-        note: reasonText,
-      };
-      let nextLocs: CustomLocationChange[];
-      if (existingIdx >= 0) {
-        nextLocs = [...locChanges];
-        nextLocs[existingIdx] = updatedLoc;
-      } else {
-        nextLocs = [...locChanges, updatedLoc];
-      }
-      setLocChanges(nextLocs);
-    } else if (serviceEditType === "meal") {
-      const existingIdx = mealChangesList.findIndex(
-        (m) => m.dayNumber === editTargetDay && m.mealType === editTargetKey
-      );
-      const updatedMeal: CustomMealChange = {
-        dayNumber: editTargetDay,
-        mealType: editTargetKey as any,
-        originalMealName: editOldName,
-        newMealName: editNewName.trim(),
-        mode: "custom",
-        priceDifference: diff,
-        note: reasonText,
-      };
-      let nextMeals: CustomMealChange[];
-      if (existingIdx >= 0) {
-        nextMeals = [...mealChangesList];
-        nextMeals[existingIdx] = updatedMeal;
-      } else {
-        nextMeals = [...mealChangesList, updatedMeal];
-      }
-      setMealChangesList(nextMeals);
+    const diff = hasBeenApproved ? 0 : Number(editPriceDiff);
+    if (!editNewName.trim() || editNewName.trim().length > 255 || editReason.trim().length < 3 ||
+        !Number.isSafeInteger(diff) || booking.totalPrice + diff <= 0) {
+      setAmendmentError("Nhập tên điểm, lý do thay đổi và chênh lệch giá hợp lệ."); return;
     }
-
-    if (diff !== 0 && onUpdateBookingPrice) {
-      const newTotal = booking.totalPrice + diff;
-      onUpdateBookingPrice(booking.id, newTotal, reasonText, {
-        adjustedBy: companyName || "Công ty lữ hành",
-        previousTotalPrice: booking.totalPrice,
-        adjustmentAmount: diff,
-        newTotalPrice: newTotal,
-        reason: reasonText,
-        createdAt: new Date().toISOString(),
+    setAmendmentSaving(true); setAmendmentError("");
+    try {
+      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/location-changes`, {
+        method: "POST", body: JSON.stringify({ itemId: Number(editItemId), name: editNewName.trim(),
+          reason: editReason.trim(), expectedTotal: booking.totalPrice, priceDifference: diff }),
       });
-    }
-
-    setServiceEditModalOpen(false);
-    alert(`✓ Đã cập nhật lại dịch vụ thành công!\n✓ Dịch vụ mới: ${editNewName.trim()}\n${diff !== 0 ? `✓ Điều chỉnh giá: ${diff > 0 ? "+" : ""}${formatVND(diff)}\n` : "✓ Giá tour không thay đổi.\n"}✓ Lý do: ${reasonText}`);
+      onBookingChanged?.(updated);
+      setServiceEditModalOpen(false);
+    } catch (e) { setAmendmentError(e instanceof Error ? e.message : "Không lưu được điểm tham quan."); }
+    finally { setAmendmentSaving(false); }
   };
 
   // Function to calculate passenger price based on age group and stage
@@ -1032,19 +979,15 @@ export function AgencyBookingDetailPage({
 
   // Approval for Lead Agency (Lead confirms the group and itinerary)
   const handleApproveHappyCase = async () => {
-    if (!approvalEligibility.canApprove) {
-      alert(approvalEligibility.reason);
-      return;
-    }
-    const approved = await onApproveBooking(booking.id);
-    if (approved === false) return;
-    setAgenciesList((current) => current.map((a) => ({
-      ...a,
-      confirmationStatus: "confirmed" as const,
-      quoteConfirmed: true,
-      confirmedAt: a.confirmedAt || new Date().toISOString(),
-    })));
-    setHappyCaseModalOpen(false);
+    if (approvingBooking) return;
+    setApprovingBooking(true);
+    try {
+      const approved = await onApproveBooking(booking.id);
+      if (approved === false) return;
+      setAgenciesList(current => current.map(a => ({ ...a, confirmationStatus: "confirmed" as const,
+        quoteConfirmed: true, confirmedAt: a.confirmedAt || new Date().toISOString() })));
+      setHappyCaseModalOpen(false);
+    } finally { setApprovingBooking(false); }
   };
 
   // Multi-Guide Management Handlers
@@ -1325,13 +1268,13 @@ export function AgencyBookingDetailPage({
     setPassengerDob("1995-01-01");
     setPassengerGender("male");
     setPassengerIdNumber("");
-    setPassengerPhone("");
+    passengerCreationKey.current = crypto.randomUUID();
+    setPassengerError("");
+    setPassengerRoommateNote(""); setPassengerDietaryNote("");
     setPassengerNotes("");
     const defaultAgency = isCurrentCompanyLead ? "all" : (currentAgency?.agencyId || "all");
     setPassengerSelectedAgencyId(defaultAgency);
-    setAutoUpdateTourPrice(true);
-    setCreateExtraPaymentRequest(true);
-    setCustomAdjustmentReason("");
+    setCustomAdjustmentReason("Bổ sung hành khách theo thỏa thuận với khách hàng");
     const defaultPrice = calculatePassengerPrice("adult", defaultAgency);
     setPassengerCustomPrice(defaultPrice.toString());
     setPassengerModalOpen(true);
@@ -1344,7 +1287,7 @@ export function AgencyBookingDetailPage({
     setPassengerDob(p.dateOfBirth || "1995-01-01");
     setPassengerGender(p.gender || "male");
     setPassengerIdNumber(p.idNumber || "");
-    setPassengerPhone(p.phone || "");
+    setPassengerError("");
     setPassengerRoommateNote(p.roommateNote || "");
     setPassengerDietaryNote(p.dietaryNote || "");
     setPassengerNotes(p.notes || "");
@@ -1356,7 +1299,7 @@ export function AgencyBookingDetailPage({
 
   const handlePassengerDobChange = (newDob: string) => {
     setPassengerDob(newDob);
-    const age = calculateAge(newDob, booking.tourStartDate || booking.bookingDate) || 25;
+    const age = calculateAge(newDob, booking.tourStartDate || booking.bookingDate) ?? 25;
     let grp: "adult" | "child_2_11" | "child_under_2" = "adult";
     if (age < 2) grp = "child_under_2";
     else if (age <= 11) grp = "child_2_11";
@@ -1364,125 +1307,33 @@ export function AgencyBookingDetailPage({
     setPassengerCustomPrice(autoPrice.toString());
   };
 
-  const handleSavePassengerModal = () => {
-    if (!passengerName.trim()) {
-      alert("Vui lòng nhập họ và tên hành khách!");
-      return;
-    }
-
-    const age = calculateAge(passengerDob, booking.tourStartDate || booking.bookingDate) || 25;
-    let ageGroup: "adult" | "child_2_11" | "child_under_2" = "adult";
-    if (age < 2) ageGroup = "child_under_2";
-    else if (age <= 11) ageGroup = "child_2_11";
-
-    const computedPrice = passengerCustomPrice !== "" ? Math.max(0, parseInt(passengerCustomPrice) || 0) : calculatePassengerPrice(ageGroup, passengerSelectedAgencyId);
-    const targetAgency = passengerSelectedAgencyId !== "all" ? agenciesList.find((a) => a.agencyId === passengerSelectedAgencyId) : null;
-
-    if (passengerModalMode === "add") {
-      const newPassenger: BookingPassenger = {
-        id: `p-new-${Date.now()}`,
-        fullName: passengerName.trim(),
-        dateOfBirth: passengerDob,
-        gender: passengerGender,
-        ageGroup,
-        idNumber: passengerIdNumber.trim(),
-        phone: passengerPhone.trim(),
-        notes: passengerNotes.trim(),
-        price: computedPrice,
-        agencyId: targetAgency ? targetAgency.agencyId : undefined,
-        agencyName: targetAgency ? targetAgency.agencyName : undefined,
-        isPrimary: true,
-        status: "ACTIVE",
-      };
-
-      const nextList = [...passengersList, newPassenger];
-      setPassengersList(nextList);
-
-      if (onUpdateBookingPassengers) {
-        onUpdateBookingPassengers(booking.id, nextList);
-      }
-
-      // Update booking_agencies final amount
-      if (targetAgency) {
-        const nextAgencies = agenciesList.map((a) =>
-          a.agencyId === targetAgency.agencyId
-            ? { ...a, finalAmount: a.finalAmount + computedPrice }
-            : a
-        );
-        setAgenciesList(nextAgencies);
-        onUpdateBookingAgencies?.(booking.id, nextAgencies);
-      } else if (isCoHostedTour && agenciesList.length > 1) {
-        const nextAgencies = agenciesList.map((a) => {
-          const ch = stagesList.find((c) => c.companyId === a.agencyId);
-          const share = ch?.quoteAdult ?? ch?.quotePerGuest ?? Math.round(computedPrice / agenciesList.length);
-          return { ...a, finalAmount: a.finalAmount + share };
+  const handleSavePassengerModal = async () => {
+    if (passengerSaving) return;
+    if (!passengerName.trim() || !passengerDob) { setPassengerError("Vui lòng nhập họ tên và ngày sinh."); return; }
+    const price = Number(passengerCustomPrice);
+    if (!Number.isSafeInteger(price) || price < 0) { setPassengerError("Giá vé phải là số nguyên không âm."); return; }
+    setPassengerSaving(true); setPassengerError("");
+    try {
+      if (passengerModalMode === "add") {
+        const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/participants`, {
+          method: "POST", body: JSON.stringify({ fullName: passengerName.trim(), dateOfBirth: passengerDob,
+            gender: passengerGender === "female" ? "Nữ" : "Nam", identityNumber: passengerIdNumber.trim() || null,
+            roommateNote: passengerRoommateNote.trim(), restaurantNote: passengerDietaryNote.trim(), note: passengerNotes.trim(),
+            ticketPrice: price, reason: customAdjustmentReason.trim(), expectedTotal: booking.totalPrice, requestId: passengerCreationKey.current }),
         });
-        setAgenciesList(nextAgencies);
-        onUpdateBookingAgencies?.(booking.id, nextAgencies);
+        setPassengersList(fromApiBooking(updated, [booking.tour]).passengers || []);
+        onBookingChanged?.(updated);
+        window.dispatchEvent(new Event("booking-suppliers-changed"));
+      } else if (editingPassengerId) {
+        const next = passengersList.map(p => p.id === editingPassengerId ? { ...p, fullName: passengerName.trim(),
+          dateOfBirth: passengerDob, gender: passengerGender, idNumber: passengerIdNumber.trim(),
+          roommateNote: passengerRoommateNote.trim(), dietaryNote: passengerDietaryNote.trim(), notes: passengerNotes.trim() } : p);
+        await onUpdateBookingPassengers?.(booking.id, next);
+        setPassengersList(next);
       }
-
-      // Simultaneously update tour price and create payment request if enabled
-      if (autoUpdateTourPrice && computedPrice > 0) {
-        const newTotal = booking.totalPrice + computedPrice;
-        const ageLabel = ageGroup === "adult" ? "Người lớn" : ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)";
-        const stageLabel = targetAgency ? ` (Chặng ${targetAgency.agencyName})` : "";
-        const reason = customAdjustmentReason.trim() || `Thêm thành viên đoàn: ${passengerName.trim()} (${ageLabel})${stageLabel}`;
-
-        let paymentReqId: string | undefined = undefined;
-        if (createExtraPaymentRequest) {
-          paymentReqId = `pr-add-${Date.now()}`;
-          onCreatePaymentRequest(booking.id, {
-            amount: computedPrice,
-            description: `Phụ thu bổ sung hành khách: ${passengerName.trim()} (${ageLabel})${stageLabel}`,
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-          });
-        }
-
-        if (onUpdateBookingPrice) {
-          onUpdateBookingPrice(booking.id, newTotal, reason, {
-            id: `adj-${Date.now()}`,
-            bookingId: booking.id,
-            agencyId: targetAgency ? targetAgency.agencyId : undefined,
-            agencyName: targetAgency ? targetAgency.agencyName : undefined,
-            adjustedBy: companyName,
-            previousTotalPrice: booking.totalPrice,
-            adjustmentAmount: computedPrice,
-            newTotalPrice: newTotal,
-            reason,
-            createdAt: new Date().toISOString(),
-            paymentRequestId: paymentReqId,
-          });
-        }
-
-        alert(`✓ Đã thêm hành khách "${passengerName.trim()}" vào đoàn!\n✓ Đồng thời cập nhật tổng giá tour: ${formatVND(booking.totalPrice)} ➔ ${formatVND(newTotal)} (+${formatVND(computedPrice)})\n${createExtraPaymentRequest ? "✓ Đã tự động tạo đợt thu thanh toán tương ứng cho khách hàng." : ""}`);
-      } else {
-        alert(`✓ Đã thêm hành khách "${passengerName.trim()}" vào danh sách đoàn.`);
-      }
-    } else if (editingPassengerId) {
-      const nextList = passengersList.map((p) => {
-        if (p.id !== editingPassengerId) return p;
-        return {
-          ...p,
-          fullName: passengerName.trim(),
-          dateOfBirth: passengerDob,
-          gender: passengerGender,
-          ageGroup,
-          idNumber: passengerIdNumber.trim(),
-          phone: passengerPhone.trim(),
-          notes: passengerNotes.trim(),
-          price: computedPrice,
-          agencyId: targetAgency ? targetAgency.agencyId : p.agencyId,
-          agencyName: targetAgency ? targetAgency.agencyName : p.agencyName,
-        };
-      });
-      setPassengersList(nextList);
-
-      if (onUpdateBookingPassengers) {
-        onUpdateBookingPassengers(booking.id, nextList);
-      }
-    }
-
-    setPassengerModalOpen(false);
+      setPassengerModalOpen(false);
+    } catch (e) { setPassengerError(e instanceof Error ? e.message : "Không lưu được hành khách."); }
+    finally { setPassengerSaving(false); }
   };
 
   // Payment form state
@@ -1500,11 +1351,7 @@ export function AgencyBookingDetailPage({
   const today = new Date().toLocaleDateString("vi-VN");
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16">
-      <BookingQuotationPanel bookingId={booking.id} agency plans={plans}
-        currentTourId={booking.tourId} currentTourSnapshot={booking.tour}
-        showSupplierRequests={false} onStateChange={setQuotationState}
-        canChange={booking.status === "pending" && booking.paymentStatus === "unpaid"} />
+    <div className="space-y-6 w-full min-w-0 pb-16">
       {/* Top Header & Actions Bar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1544,13 +1391,13 @@ export function AgencyBookingDetailPage({
               <>
                 {isCurrentCompanyLead ? (
                   <div className="space-y-1.5">
-                    <Button onClick={handleApproveHappyCase} disabled={!approvalEligibility.canApprove}
-                      title={approvalEligibility.reason}
+                    <Button onClick={handleApproveHappyCase} disabled={approvingBooking}
+                      title="Agency chủ động duyệt booking, độc lập với phản hồi Provider"
                       className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm text-sm font-bold disabled:opacity-50">
                       <CheckCircle className="w-4 h-4" />
                       Duyệt Booking
                     </Button>
-                    <p className="max-w-sm text-xs text-gray-600" role="status">{approvalEligibility.reason}</p>
+                    <p className="max-w-sm text-xs text-gray-600" role="status">Agency chủ động duyệt booking; phản hồi Provider được theo dõi riêng.</p>
                   </div>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F0F9FF] text-purple-800 border border-[#F97316]/30">
@@ -1624,26 +1471,393 @@ export function AgencyBookingDetailPage({
         </div>
       </div>
 
-      {/* Provider Price Verification Notice for Pending Bookings */}
-      {booking.status === "pending" && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 mb-6 flex items-start gap-3.5 shadow-2xs">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="space-y-1 text-xs">
-            <p className="font-bold text-sm text-amber-950 flex items-center gap-2">
-              Xác nhận dịch vụ &amp; Chốt báo giá:
-              <span className="bg-amber-200 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                Khách không thanh toán liền
-              </span>
-            </p>
-            <p className="text-amber-800 leading-relaxed">
-              Kiểm tra phản hồi Provider ngay tại từng khách sạn và bữa ăn bên dưới. Với nhà cung cấp riêng, Agency trực tiếp xác nhận dịch vụ và nhập chi phí thực tế trong phần báo giá.
-            </p>
-            <p className="font-semibold text-amber-900 pt-1">
-              → Gửi báo giá và chờ khách đồng ý trước khi duyệt booking. Sau đó hoàn tất hợp đồng và thanh toán theo các đợt của booking.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* PASSENGER LIST: full width so every column fits without horizontal scrolling */}
+          {(() => {
+            const isLead = isCurrentCompanyLead;
+            const myAgencyId = companyId || currentAgency?.agencyId;
+
+            // If current company is partner, they can ONLY see passengers belonging to their agency
+            let visiblePassengers: BookingPassenger[] = [];
+            if (isLead) {
+              visiblePassengers = passengersList;
+            } else {
+              // 1. Check if there are explicit rows tagged for my agency
+              const myAgencyRows = passengersList.filter(
+                (p) =>
+                  p.agencyId === myAgencyId ||
+                  p.agencyName === companyName ||
+                  (currentAgency?.agencyName && p.agencyName === currentAgency.agencyName)
+              );
+
+              if (myAgencyRows.length > 0) {
+                visiblePassengers = myAgencyRows;
+              } else {
+                // 2. Fallback: If no explicit rows exist for my agency, but there are full-tour rows (unassigned to a specific stage)
+                const unassignedRows = passengersList.filter((p) => !p.agencyId || p.agencyId === "all");
+                if (unassignedRows.length > 0) {
+                  visiblePassengers = unassignedRows;
+                } else if (!passengersList.some((p) => p.agencyId && p.agencyId !== booking.companyId)) {
+                  // 3. Fallback: Full tour group where all participants participate in this partner stage
+                  const partnerStage = stagesList.find((s) => s.companyId === myAgencyId);
+                  const partnerAgency = agenciesList.find((a) => a.agencyId === myAgencyId);
+                  const stagePrice =
+                    partnerStage?.quoteAdult ??
+                    partnerStage?.quotePerGuest ??
+                    (partnerAgency && booking.numberOfGuests
+                      ? Math.round(partnerAgency.finalAmount / booking.numberOfGuests)
+                      : 1800000);
+
+                  visiblePassengers = passengersList.map((p) => ({
+                    ...p,
+                    agencyId: myAgencyId,
+                    agencyName: companyName || currentAgency?.agencyName || partnerStage?.companyName,
+                    price: stagePrice,
+                  }));
+                }
+              }
+            }
+
+            const activeCount = visiblePassengers.filter((p) => p.status !== "INACTIVE").length;
+            const inactiveCount = visiblePassengers.filter((p) => p.status === "INACTIVE").length;
+            const visibleTotalPrice = visiblePassengers
+              .filter((p) => p.status !== "INACTIVE")
+              .reduce((sum, p) => sum + (p.price || 0), 0);
+
+            const filteredPassengers = visiblePassengers.filter((p) => {
+              if (!isLead) return true; // Partner already strictly limited to their stage
+              if (stageFilter === "all") return true;
+              if (stageFilter === "my_stage") {
+                return p.agencyId === myAgencyId || p.agencyId === "all";
+              }
+              if (stageFilter === "partner_stage") {
+                return p.agencyId && p.agencyId !== myAgencyId;
+              }
+              return p.agencyId === stageFilter || p.agencyId === "all" || !p.agencyId;
+            });
+
+            const filteredActiveCount = filteredPassengers.filter((p) => p.status !== "INACTIVE").length;
+            const filteredTotalPrice = filteredPassengers
+              .filter((p) => p.status !== "INACTIVE")
+              .reduce((sum, p) => sum + (p.price || 0), 0);
+
+            return (
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                        <Users className="w-4 h-4 text-[#075985]" />
+                        Danh sách hành khách tham gia đoàn ({visiblePassengers.length} người)
+                      </h2>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {activeCount} Đang tham gia
+                        </span>
+                        {inactiveCount > 0 && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                            {inactiveCount} Đã rút khỏi chặng
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isCoHostedTour && (
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {isLead
+                          ? `Tour liên minh ${agenciesList.length} công ty điều phối. Với vai trò Đơn vị Chủ trì, bạn có thể xem danh sách toàn đoàn, lọc theo từng chặng và thêm khách mới.`
+                          : `Tour liên minh: Bạn đang xem danh sách hành khách chặng do ${companyName} phụ trách theo bảng booking_participants.`}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* ONLY Lead Company has permission to add new passengers */}
+                    {isLead && (
+                      <Button
+                        size="sm"
+                        disabled={!canAmend} onClick={handleOpenAddPassenger}
+                        className="bg-[#075985] hover:bg-[#F97316] text-white text-xs h-8 px-3 rounded-lg flex items-center gap-1.5 shadow-2xs font-semibold"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Thêm khách vào đoàn</span>
+                      </Button>
+                    )}
+
+                    {visiblePassengers.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          try {
+                            const exportPassengers = stageFilter !== "all" ? filteredPassengers : visiblePassengers;
+                            const fileName = `Danh_Sach_Doan_${booking.id}${stageFilter !== "all" ? `_${stageFilter}` : ""}.xlsx`;
+                            const exportRows = exportPassengers.map((p, idx) => {
+                              const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
+                              return {
+                                "STT": idx + 1,
+                                "Họ & Tên": p.fullName,
+                                "CCCD / Định danh": p.idNumber || "",
+                                "Ngày sinh": p.dateOfBirth || "",
+                                "Độ tuổi": age !== null ? `${age} tuổi` : "",
+                                "Giới tính": p.gender === "male" ? "Nam" : "Nữ",
+                                "Phân loại": p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)",
+                                "Trạng thái chặng": p.status === "INACTIVE" ? `Đã rút (${p.statusNote || ""})` : "Đang tham gia chặng",
+                                "Số điện thoại": p.phone || "",
+                                "Nguyện vọng xếp phòng": p.roommateNote || "",
+                                "Yêu cầu ăn uống / Dị ứng": p.dietaryNote || "",
+                                "Ghi chú riêng": p.notes || "",
+                                "Giá vé (VNĐ)": p.status === "INACTIVE" ? 0 : p.price,
+                              };
+                            });
+
+                            const ws = XLSX.utils.json_to_sheet(exportRows);
+                            ws["!cols"] = [
+                              { wch: 6 },
+                              { wch: 25 },
+                              { wch: 20 },
+                              { wch: 15 },
+                              { wch: 12 },
+                              { wch: 10 },
+                              { wch: 18 },
+                              { wch: 22 },
+                              { wch: 16 },
+                              { wch: 40 },
+                              { wch: 35 },
+                              { wch: 30 },
+                              { wch: 16 },
+                            ];
+                            const wb = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(wb, ws, "Danh_Sach");
+                            XLSX.writeFile(wb, fileName);
+                          } catch (err: any) {
+                            alert("Không thể xuất file Excel: " + (err?.message || "Lỗi không xác định"));
+                          }
+                        }}
+                        className="text-xs gap-1.5 h-8 border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold shadow-2xs"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#075985]" />
+                        <span>Xuất Excel</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Partner Company Privacy Notice */}
+                {!isLead && isCoHostedTour && (
+                  <div className="bg-[#F0F9FF] border border-[#F97316]/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-purple-900">
+                    <ShieldCheck className="w-4 h-4 text-[#F97316] flex-shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      <strong>Phân quyền Đối tác Liên minh (booking_participants):</strong> Quý công ty đang xem danh sách <strong>{filteredPassengers.length}</strong> hành khách thuộc phạm vi chặng do <strong>{companyName}</strong> phụ trách đón tiếp. Chỉ Đơn vị Chủ trì mới có quyền xem toàn bộ đoàn và thêm khách mới vào đoàn.
+                    </p>
+                  </div>
+                )}
+
+                {/* Stage Filter Buttons - ONLY visible to Lead Agency */}
+                {isLead && isCoHostedTour && agenciesList.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <span className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5 text-gray-400" /> Lọc theo chặng:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStageFilter("all")}
+                      className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all ${
+                        stageFilter === "all"
+                          ? "bg-[#075985] text-white shadow-2xs"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      Tất cả ({passengersList.length})
+                    </button>
+                    {agenciesList.map((a) => {
+                      const countInStage = passengersList.filter((p) => p.agencyId === a.agencyId || p.agencyId === "all" || !p.agencyId).length;
+                      return (
+                        <button
+                          key={a.agencyId}
+                          type="button"
+                          onClick={() => setStageFilter(a.agencyId)}
+                          className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                            stageFilter === a.agencyId
+                              ? "bg-[#F97316] text-white shadow-2xs"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          <span>{a.agencyName}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                            stageFilter === a.agencyId ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                          }`}>
+                            {countInStage}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {filteredPassengers.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[980px] text-xs">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-500 text-[11px] font-semibold uppercase tracking-wide">
+                            <th className="w-8 px-3 py-2.5 text-left rounded-l-lg">#</th>
+                            <th className="px-3 py-2.5 text-left">Hành khách</th>
+                            <th className="px-3 py-2.5 text-left whitespace-nowrap">Ngày sinh</th>
+                            <th className="px-3 py-2.5 text-left">Loại khách</th>
+                            <th className="px-3 py-2.5 text-left min-w-[150px]">Xếp phòng</th>
+                            <th className="px-3 py-2.5 text-left min-w-[150px]">Ăn uống / Dị ứng</th>
+                            <th className="px-3 py-2.5 text-left min-w-[140px]">Ghi chú</th>
+                            <th className="px-3 py-2.5 text-left">Trạng thái</th>
+                            <th className="px-3 py-2.5 text-right whitespace-nowrap">Giá vé</th>
+                            <th className="w-24 px-3 py-2.5 text-center rounded-r-lg">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {filteredPassengers.map((p, i) => {
+                            const isInactive = p.status === "INACTIVE";
+                            const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
+                            const dob = p.dateOfBirth && /^\d{4}-\d{2}-\d{2}/.test(p.dateOfBirth)
+                              ? p.dateOfBirth.slice(0, 10).split("-").reverse().join("/")
+                              : p.dateOfBirth || "—";
+                            const noteCell = (value?: string) =>
+                              value ? <span className="text-gray-700 leading-relaxed">{value}</span> : <span className="text-gray-300">—</span>;
+                            return (
+                              <tr
+                                key={p.id}
+                                className={`align-top transition-colors ${
+                                  isInactive ? "bg-rose-50/40 text-gray-500" : "hover:bg-gray-50/80"
+                                }`}
+                              >
+                                <td className="px-3 py-3 text-gray-400 font-mono">{i + 1}</td>
+                                <td className="px-3 py-3 min-w-[170px]">
+                                  <p className={`font-bold text-sm ${isInactive ? "line-through text-gray-500" : "text-gray-900"}`}>
+                                    {p.fullName}
+                                  </p>
+                                  {p.idNumber && (
+                                    <p className="mt-0.5 font-mono text-[11px] text-gray-500">{p.idNumber}</p>
+                                  )}
+                                  {p.phone && <p className="text-[11px] text-[#075985]">{p.phone}</p>}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                  <p className="text-gray-800">{dob}</p>
+                                  {age !== null && <p className="text-[11px] text-gray-400">{age} tuổi</p>}
+                                </td>
+                                <td className="px-3 py-3">
+                                  <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                    p.ageGroup === "adult"
+                                      ? "bg-sky-50 text-[#075985]"
+                                      : p.ageGroup === "child_2_11"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-orange-50 text-orange-700"
+                                  }`}>
+                                    {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em" : "Em bé"}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">{noteCell(p.roommateNote)}</td>
+                                <td className="px-3 py-3">{noteCell(p.dietaryNote)}</td>
+                                <td className="px-3 py-3">{noteCell(p.notes)}</td>
+                                <td className="px-3 py-3">
+                                  {isInactive ? (
+                                    <div className="space-y-0.5">
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700">
+                                        <XCircle className="w-3 h-3" />
+                                        Đã rút
+                                      </span>
+                                      {p.statusNote && (
+                                        <p className="text-[10px] text-rose-700 italic max-w-[140px] truncate" title={p.statusNote}>
+                                          {p.statusNote}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+                                      <CheckCircle className="w-3 h-3" />
+                                      Đang tham gia
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-right whitespace-nowrap">
+                                  {isInactive ? (
+                                    <div>
+                                      <span className="line-through text-gray-400">{formatVND(p.price || 0)}</span>
+                                      <span className="block text-[10px] text-rose-600 font-bold">0đ (đã khấu trừ)</span>
+                                    </div>
+                                  ) : (
+                                    <span className="font-bold text-sm text-[#075985]">
+                                      {p.price === 0 ? "Miễn phí" : formatVND(p.price || 0)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditPassenger(p)}
+                                      className="p-1.5 text-gray-400 hover:text-[#075985] hover:bg-sky-50 rounded-md transition-colors"
+                                      title="Chỉnh sửa thông tin"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    {!isInactive ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenDeactivateModal(p)}
+                                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                                        title="Rút hành khách khỏi chặng này trước khởi hành"
+                                      >
+                                        <UserMinus className="w-3.5 h-3.5" />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleReactivatePassenger(p)}
+                                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                        title="Khôi phục hành khách này vào chặng"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {isCurrentCompanyLead && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePassenger(p.id)}
+                                        className="p-1.5 text-rose-400 border border-rose-200 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                        title="Xóa vĩnh viễn khỏi danh sách đoàn (Chỉ Công ty Chủ trì)"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 font-bold border-t border-gray-200">
+                            <td colSpan={8} className="px-3 py-2.5 text-right text-gray-700">
+                              Tổng cộng tiền vé ({filteredActiveCount} khách {stageFilter !== "all" ? "chặng này" : "đang tham gia"}):
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-[#075985] text-sm font-extrabold whitespace-nowrap">
+                              {formatVND(filteredTotalPrice)}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-6 text-center text-xs text-gray-500 space-y-2">
+                      <p>Chưa có hành khách nào phù hợp với bộ lọc này.</p>
+                      <Button size="sm" disabled={!canAmend} onClick={handleOpenAddPassenger} className="text-xs bg-[#075985] text-white">
+                        <UserPlus className="w-3.5 h-3.5 mr-1" /> Thêm hành khách
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
 
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1874,13 +2088,13 @@ export function AgencyBookingDetailPage({
                       Quy trình duyệt booking &amp; Thỏa thuận liên minh
                     </p>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      Công ty chủ trì kiểm tra xác nhận dịch vụ và báo giá khách đã đồng ý trước khi duyệt booking. Sau đó tiếp tục hợp đồng và lịch thanh toán của booking.
+                      Công ty chủ trì chủ động duyệt booking. Khách ký hợp đồng và thanh toán theo lịch; phản hồi Provider được theo dõi riêng cho từng dịch vụ.
                     </p>
                   </div>
                   {isCurrentCompanyLead && (
                     <Button
                       onClick={handleApproveHappyCase}
-                      disabled={!approvalEligibility.canApprove} title={approvalEligibility.reason}
+                      disabled={approvingBooking} title="Agency chủ động duyệt booking, độc lập với phản hồi Provider"
                       className="bg-[#075985] hover:bg-[#F97316] text-white text-xs font-bold h-9 px-4 shrink-0 shadow-sm flex items-center gap-1.5 rounded-xl"
                     >
                       <Zap className="w-4 h-4 text-yellow-300" />
@@ -1904,417 +2118,6 @@ export function AgencyBookingDetailPage({
               </div>
             </div>
           )}
-
-          {/* PASSENGER LIST & STAGE ROLL-CALL TABLE */}
-          {(() => {
-            const isLead = isCurrentCompanyLead;
-            const myAgencyId = companyId || currentAgency?.agencyId;
-
-            // If current company is partner, they can ONLY see passengers belonging to their agency
-            let visiblePassengers: BookingPassenger[] = [];
-            if (isLead) {
-              visiblePassengers = passengersList;
-            } else {
-              // 1. Check if there are explicit rows tagged for my agency
-              const myAgencyRows = passengersList.filter(
-                (p) =>
-                  p.agencyId === myAgencyId ||
-                  p.agencyName === companyName ||
-                  (currentAgency?.agencyName && p.agencyName === currentAgency.agencyName)
-              );
-
-              if (myAgencyRows.length > 0) {
-                visiblePassengers = myAgencyRows;
-              } else {
-                // 2. Fallback: If no explicit rows exist for my agency, but there are full-tour rows (unassigned to a specific stage)
-                const unassignedRows = passengersList.filter((p) => !p.agencyId || p.agencyId === "all");
-                if (unassignedRows.length > 0) {
-                  visiblePassengers = unassignedRows;
-                } else if (!passengersList.some((p) => p.agencyId && p.agencyId !== booking.companyId)) {
-                  // 3. Fallback: Full tour group where all participants participate in this partner stage
-                  const partnerStage = stagesList.find((s) => s.companyId === myAgencyId);
-                  const partnerAgency = agenciesList.find((a) => a.agencyId === myAgencyId);
-                  const stagePrice =
-                    partnerStage?.quoteAdult ??
-                    partnerStage?.quotePerGuest ??
-                    (partnerAgency && booking.numberOfGuests
-                      ? Math.round(partnerAgency.finalAmount / booking.numberOfGuests)
-                      : 1800000);
-
-                  visiblePassengers = passengersList.map((p) => ({
-                    ...p,
-                    agencyId: myAgencyId,
-                    agencyName: companyName || currentAgency?.agencyName || partnerStage?.companyName,
-                    price: stagePrice,
-                  }));
-                }
-              }
-            }
-
-            const activeCount = visiblePassengers.filter((p) => p.status !== "INACTIVE").length;
-            const inactiveCount = visiblePassengers.filter((p) => p.status === "INACTIVE").length;
-            const visibleTotalPrice = visiblePassengers
-              .filter((p) => p.status !== "INACTIVE")
-              .reduce((sum, p) => sum + (p.price || 0), 0);
-
-            const filteredPassengers = visiblePassengers.filter((p) => {
-              if (!isLead) return true; // Partner already strictly limited to their stage
-              if (stageFilter === "all") return true;
-              if (stageFilter === "my_stage") {
-                return p.agencyId === myAgencyId || p.agencyId === "all";
-              }
-              if (stageFilter === "partner_stage") {
-                return p.agencyId && p.agencyId !== myAgencyId;
-              }
-              return p.agencyId === stageFilter || p.agencyId === "all" || !p.agencyId;
-            });
-
-            const filteredActiveCount = filteredPassengers.filter((p) => p.status !== "INACTIVE").length;
-            const filteredTotalPrice = filteredPassengers
-              .filter((p) => p.status !== "INACTIVE")
-              .reduce((sum, p) => sum + (p.price || 0), 0);
-
-            return (
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                        <Users className="w-4 h-4 text-[#075985]" />
-                        Danh sách hành khách tham gia đoàn ({visiblePassengers.length} người)
-                      </h2>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          {activeCount} Đang tham gia
-                        </span>
-                        {inactiveCount > 0 && (
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-                            {inactiveCount} Đã rút khỏi chặng
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {isCoHostedTour && (
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        {isLead
-                          ? `Tour liên minh ${agenciesList.length} công ty điều phối. Với vai trò Đơn vị Chủ trì, bạn có thể xem danh sách toàn đoàn, lọc theo từng chặng và thêm khách mới.`
-                          : `Tour liên minh: Bạn đang xem danh sách hành khách chặng do ${companyName} phụ trách theo bảng booking_participants.`}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* ONLY Lead Company has permission to add new passengers */}
-                    {isLead && (
-                      <Button
-                        size="sm"
-                        onClick={handleOpenAddPassenger}
-                        className="bg-[#075985] hover:bg-[#F97316] text-white text-xs h-8 px-3 rounded-lg flex items-center gap-1.5 shadow-2xs font-semibold"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Thêm khách vào đoàn</span>
-                      </Button>
-                    )}
-
-                    {visiblePassengers.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          try {
-                            const exportPassengers = stageFilter !== "all" ? filteredPassengers : visiblePassengers;
-                            const fileName = `Danh_Sach_Doan_${booking.id}${stageFilter !== "all" ? `_${stageFilter}` : ""}.xlsx`;
-                            const exportRows = exportPassengers.map((p, idx) => {
-                              const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
-                              return {
-                                "STT": idx + 1,
-                                "Họ & Tên": p.fullName,
-                                "CCCD / Định danh": p.idNumber || "",
-                                "Ngày sinh": p.dateOfBirth || "",
-                                "Độ tuổi": age !== null ? `${age} tuổi` : "",
-                                "Giới tính": p.gender === "male" ? "Nam" : "Nữ",
-                                "Phân loại": p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)",
-                                "Trạng thái chặng": p.status === "INACTIVE" ? `Đã rút (${p.statusNote || ""})` : "Đang tham gia chặng",
-                                "Số điện thoại": p.phone || "",
-                                "Nguyện vọng xếp phòng": p.roommateNote || "",
-                                "Yêu cầu ăn uống / Dị ứng": p.dietaryNote || "",
-                                "Ghi chú riêng": p.notes || "",
-                                "Giá vé (VNĐ)": p.status === "INACTIVE" ? 0 : p.price,
-                              };
-                            });
-
-                            const ws = XLSX.utils.json_to_sheet(exportRows);
-                            ws["!cols"] = [
-                              { wch: 6 },
-                              { wch: 25 },
-                              { wch: 20 },
-                              { wch: 15 },
-                              { wch: 12 },
-                              { wch: 10 },
-                              { wch: 18 },
-                              { wch: 22 },
-                              { wch: 16 },
-                              { wch: 40 },
-                              { wch: 35 },
-                              { wch: 30 },
-                              { wch: 16 },
-                            ];
-                            const wb = XLSX.utils.book_new();
-                            XLSX.utils.book_append_sheet(wb, ws, "Danh_Sach");
-                            XLSX.writeFile(wb, fileName);
-                          } catch (err: any) {
-                            alert("Không thể xuất file Excel: " + (err?.message || "Lỗi không xác định"));
-                          }
-                        }}
-                        className="text-xs gap-1.5 h-8 border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold shadow-2xs"
-                      >
-                        <Download className="w-3.5 h-3.5 text-[#075985]" />
-                        <span>Xuất Excel</span>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Partner Company Privacy Notice */}
-                {!isLead && isCoHostedTour && (
-                  <div className="bg-[#F0F9FF] border border-[#F97316]/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-purple-900">
-                    <ShieldCheck className="w-4 h-4 text-[#F97316] flex-shrink-0 mt-0.5" />
-                    <p className="leading-relaxed">
-                      <strong>Phân quyền Đối tác Liên minh (booking_participants):</strong> Quý công ty đang xem danh sách <strong>{filteredPassengers.length}</strong> hành khách thuộc phạm vi chặng do <strong>{companyName}</strong> phụ trách đón tiếp. Chỉ Đơn vị Chủ trì mới có quyền xem toàn bộ đoàn và thêm khách mới vào đoàn.
-                    </p>
-                  </div>
-                )}
-
-                {/* Stage Filter Buttons - ONLY visible to Lead Agency */}
-                {isLead && isCoHostedTour && agenciesList.length > 1 && (
-                  <div className="flex items-center gap-2 flex-wrap pt-1">
-                    <span className="text-xs font-bold text-gray-600 flex items-center gap-1">
-                      <Tag className="w-3.5 h-3.5 text-gray-400" /> Lọc theo chặng:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setStageFilter("all")}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all ${
-                        stageFilter === "all"
-                          ? "bg-[#075985] text-white shadow-2xs"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      Tất cả ({passengersList.length})
-                    </button>
-                    {agenciesList.map((a) => {
-                      const countInStage = passengersList.filter((p) => p.agencyId === a.agencyId || p.agencyId === "all" || !p.agencyId).length;
-                      return (
-                        <button
-                          key={a.agencyId}
-                          type="button"
-                          onClick={() => setStageFilter(a.agencyId)}
-                          className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
-                            stageFilter === a.agencyId
-                              ? "bg-[#F97316] text-white shadow-2xs"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
-                        >
-                          <span>{a.agencyName}</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                            stageFilter === a.agencyId ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
-                          }`}>
-                            {countInStage}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {filteredPassengers.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[11px]">
-                            <th className="px-3 py-2.5 text-left rounded-l-lg">#</th>
-                            <th className="px-3 py-2.5 text-left">Họ &amp; Tên</th>
-                            <th className="px-3 py-2.5 text-left">CCCD / Passport</th>
-                            <th className="px-3 py-2.5 text-left">Ngày sinh / Tuổi</th>
-                            <th className="px-3 py-2.5 text-left">Phân loại</th>
-                            <th className="px-3 py-2.5 text-left">Trạng thái chặng</th>
-                            <th className="px-3 py-2.5 text-right">Giá vé áp dụng</th>
-                            <th className="px-3 py-2.5 text-center rounded-r-lg">Thao tác</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {filteredPassengers.map((p, i) => {
-                            const isInactive = p.status === "INACTIVE";
-                            return (
-                              <tr
-                                key={p.id}
-                                className={`transition-colors ${
-                                  isInactive ? "bg-rose-50/40 text-gray-500" : "hover:bg-gray-50/80"
-                                }`}
-                              >
-                                <td className="px-3 py-2.5 text-gray-400 font-mono">{i + 1}</td>
-                                <td className="px-3 py-2.5 font-bold text-gray-900">
-                                  <span className={isInactive ? "line-through text-gray-500" : ""}>
-                                    {p.fullName}
-                                  </span>
-                                  {p.phone && <span className="block text-[11px] font-normal text-[#075985]">{p.phone}</span>}
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {p.roommateNote && (
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded font-medium">
-                                        🛏️ {p.roommateNote}
-                                      </span>
-                                    )}
-                                    {p.dietaryNote && (
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-950 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
-                                        🍽️ {p.dietaryNote}
-                                      </span>
-                                    )}
-                                    {p.notes && (
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded">
-                                        📝 {p.notes}
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2.5">
-                                  {p.idNumber ? (
-                                    <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                                      {p.idNumber}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400 italic">—</span>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2.5 text-gray-600">
-                                  <span>{p.dateOfBirth || "—"}</span>
-                                  {(() => {
-                                    const age = calculateAge(p.dateOfBirth, booking.tourStartDate || booking.bookingDate);
-                                    return age !== null ? (
-                                      <span className="ml-1.5 text-xs text-teal-700 font-semibold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
-                                        {age} tuổi
-                                      </span>
-                                    ) : null;
-                                  })()}
-                                </td>
-                                <td className="px-3 py-2.5">
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    p.ageGroup === "adult"
-                                      ? "bg-[#F0F9FF] text-[#075985]"
-                                      : p.ageGroup === "child_2_11"
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-[#F0F9FF] text-[#EA580C]"
-                                  }`}>
-                                    {p.ageGroup === "adult" ? "Người lớn" : p.ageGroup === "child_2_11" ? "Trẻ em (2–11t)" : "Em bé (<2t)"}
-                                  </span>
-                                </td>
-
-                                <td className="px-3 py-2.5">
-                                  {isInactive ? (
-                                    <div className="space-y-0.5">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                        <XCircle className="w-3 h-3 text-rose-600" />
-                                        Đã rút khỏi chặng
-                                      </span>
-                                      {p.statusNote && (
-                                        <p className="text-[10px] text-rose-700 italic max-w-[170px] truncate" title={p.statusNote}>
-                                          {p.statusNote}
-                                        </p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                      <CheckCircle className="w-3 h-3 text-emerald-600" />
-                                      Đang tham gia chặng
-                                    </span>
-                                  )}
-                                </td>
-
-                                <td className="px-3 py-2.5 text-right">
-                                  {isInactive ? (
-                                    <div>
-                                      <span className="line-through text-gray-400 text-xs">{formatVND(p.price || 0)}</span>
-                                      <span className="block text-[10px] text-rose-600 font-bold">0đ (Đã khấu trừ)</span>
-                                    </div>
-                                  ) : (
-                                    <div className="font-bold text-[#075985]">
-                                      {p.price === 0 ? "Miễn phí" : formatVND(p.price || 0)}
-                                    </div>
-                                  )}
-                                </td>
-
-                                <td className="px-3 py-2.5 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditPassenger(p)}
-                                      className="p-1 text-gray-400 hover:text-[#075985] rounded transition-colors"
-                                      title="Chỉnh sửa thông tin"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    {!isInactive ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenDeactivateModal(p)}
-                                        className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
-                                        title="Rút hành khách khỏi chặng này trước khởi hành"
-                                      >
-                                        <UserMinus className="w-3.5 h-3.5" />
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleReactivatePassenger(p)}
-                                        className="p-1 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                        title="Khôi phục hành khách này vào chặng"
-                                      >
-                                        <RotateCcw className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-
-                                    {isCurrentCompanyLead && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeletePassenger(p.id)}
-                                        className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
-                                        title="Xóa vĩnh viễn khỏi danh sách đoàn (Chỉ Công ty Chủ trì)"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-50 font-bold border-t border-gray-200">
-                            <td colSpan={6} className="px-3 py-2.5 text-right text-gray-700">
-                              Tổng cộng tiền vé ({filteredActiveCount} khách {stageFilter !== "all" ? "chặng này" : "đang tham gia"}):
-                            </td>
-                            <td className="px-3 py-2.5 text-right text-[#075985] text-sm font-extrabold">
-                              {formatVND(filteredTotalPrice)}
-                            </td>
-                            <td></td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg p-6 text-center text-xs text-gray-500 space-y-2">
-                      <p>Chưa có hành khách nào phù hợp với bộ lọc này.</p>
-                      <Button size="sm" onClick={handleOpenAddPassenger} className="text-xs bg-[#075985] text-white">
-                        <UserPlus className="w-3.5 h-3.5 mr-1" /> Thêm hành khách
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
 
           {/* DEDICATED ACCOMMODATION / HOTEL SECTION (MATCHING TourDetailPage.tsx & BookingFormPage.tsx) */}
           {(() => {
@@ -2354,8 +2157,8 @@ export function AgencyBookingDetailPage({
                   nights: h.nights || 1,
                   hotelName: change ? change.newHotelName : h.name,
                   stars: change?.stars || h.stars || 4,
-                  originalHotelName: change?.originalHotelName || h.name,
-                  isChanged: Boolean(change),
+                  originalHotelName: h.originalName || change?.originalHotelName || h.name,
+                  isChanged: Boolean(change) || (!!h.originalName && h.originalName !== h.name),
                   mode: (change?.mode as any) || (change?.isProviderService ? "provider" : "system"),
                   note: change?.note,
                   address: change?.address || h.address || h.description,
@@ -2434,6 +2237,7 @@ export function AgencyBookingDetailPage({
                             type="button"
                             onClick={() => {
                               setServiceEditType("hotel");
+                              setEditItemId(acc.itemId || "");
                               setEditTargetKey(acc.destination);
                               setEditOldName(acc.originalHotelName || acc.hotelName);
                               setEditNewName(acc.hotelName);
@@ -2480,7 +2284,7 @@ export function AgencyBookingDetailPage({
                         </div>
                         {acc.isChanged && acc.originalHotelName && acc.originalHotelName !== acc.hotelName && (
                           <div className="flex items-center justify-between text-gray-400">
-                            <span>Tiêu chuẩn theo tour:</span>
+                            <span>Lúc đặt:</span>
                             <span className="line-through">{acc.originalHotelName}</span>
                           </div>
                         )}
@@ -3352,14 +3156,17 @@ export function AgencyBookingDetailPage({
                                 {timelineItems.map((item) => {
                                   if (item.kind === "location") {
                                     const { loc, time } = item;
-                                    const locChange = locChanges.find(
+                                    const locChange = loc.originalName !== undefined ? undefined : locChanges.find(
                                       (lc) =>
                                         (lc.dayId === day.id || lc.dayNumber === day.day) &&
                                         (lc.locationId === loc.id ||
                                           (lc.originalLocationName && lc.originalLocationName.toLowerCase() === loc.name.toLowerCase()) ||
                                           (lc.originalLocations && lc.originalLocations.some((orig) => orig.toLowerCase() === loc.name.toLowerCase())))
                                     );
-                                    const isLocChanged = Boolean(locChange);
+                                    const currentLocationName = locChange?.requestedLocations || loc.name;
+                                    const originalLocationName = loc.originalName || locChange?.originalLocationName || loc.name;
+                                    const locationReason = loc.changeReason || locChange?.note;
+                                    const isLocChanged = currentLocationName !== originalLocationName;
 
                                     return (
                                       <div key={item.key} className="relative flex items-start gap-2.5">
@@ -3390,20 +3197,15 @@ export function AgencyBookingDetailPage({
                                         >
                                           <div className="flex items-center justify-between gap-2">
                                             <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                                                  Tham quan
-                                                </span>
-                                              </div>
                                               {isLocChanged ? (
                                                 <>
-                                                  <p className="text-xs text-gray-400 line-through">{loc.name}</p>
+                                                  <p className="text-xs text-gray-500">Lúc đặt: {originalLocationName}</p>
                                                   <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                                    → {locChange?.requestedLocations}
+                                                    {currentLocationName}
                                                   </p>
-                                                  {locChange?.note && (
+                                                  {locationReason && (
                                                     <p className="text-xs text-amber-700 italic mt-0.5">
-                                                      Ghi chú: {locChange.note}
+                                                      Lý do đổi: {locationReason}
                                                     </p>
                                                   )}
                                                 </>
@@ -3416,30 +3218,28 @@ export function AgencyBookingDetailPage({
                                                 type="button"
                                                 onClick={() => {
                                                   setServiceEditType("location");
+                                                  setEditItemId(loc.id);
                                                   setEditTargetDay(day.day);
                                                   setEditTargetKey(loc.id || loc.name);
-                                                  setEditOldName(loc.name);
-                                                  setEditNewName(isLocChanged ? locChange?.requestedLocations || loc.name : loc.name);
+                                                  setEditOldName(currentLocationName);
+                                                  setEditNewName(currentLocationName);
                                                   setEditPriceDiff("0");
-                                                  setEditReason(locChange?.note || "Đã liên hệ thống nhất với khách đổi điểm tham quan");
+                                                  setEditReason("Đã liên hệ thống nhất với khách đổi điểm tham quan");
                                                   setEditAddressOrNote("");
                                                   setServiceEditModalOpen(true);
                                                 }}
                                                 className="text-xs text-amber-700 hover:text-amber-900 bg-white hover:bg-amber-100/70 border border-amber-300 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                disabled={!canAmend || loc.checkedIn}
                                                 title="Điều chỉnh hoặc đổi điểm đến này"
                                               >
                                                 <Edit className="w-3 h-3 text-amber-600" />
                                                 <span>Đổi điểm</span>
                                               </button>
-                                              <span
-                                                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                                                  isLocChanged
-                                                    ? "bg-amber-100 text-amber-700 border border-amber-300"
-                                                    : "bg-gray-100 text-gray-600"
-                                                }`}
-                                              >
-                                                {isLocChanged ? "Đã đổi" : "Theo tour"}
-                                              </span>
+                                              {isLocChanged && (
+                                                <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-amber-100 text-amber-700 border border-amber-300">
+                                                  Đã đổi
+                                                </span>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
@@ -3540,7 +3340,7 @@ export function AgencyBookingDetailPage({
                                                   </span>
                                                 </div>
                                                 <p className="text-[11px] text-gray-500">
-                                                  Mặc định: {defaultMeal.serviceName || "Nhà hàng địa phương"}
+                                                  Lúc đặt: {defaultMeal.originalName || defaultMeal.serviceName || "Nhà hàng địa phương"}
                                                 </p>
                                               </div>
                                             </div>
@@ -3550,11 +3350,12 @@ export function AgencyBookingDetailPage({
                                                 type="button"
                                                 onClick={() => {
                                                   setServiceEditType("meal");
+                                                  setEditItemId(defaultMeal.id || "");
                                                   setEditTargetDay(day.day);
                                                   setEditTargetKey(mealType);
                                                   setEditOldName(defaultMeal.serviceName || "Nhà hàng theo tour");
                                                   setEditNewName(isChanged ? mealChange?.newMealName || defaultMeal.serviceName || "" : defaultMeal.serviceName || "");
-                                                  setEditPriceDiff(mealChange?.priceDifference ? mealChange.priceDifference.toString() : "0");
+                                                  setEditPriceDiff("0");
                                                   setEditReason(mealChange?.note || "Đã liên hệ thống nhất với khách đổi nhà hàng / bữa ăn");
                                                   setEditAddressOrNote("");
                                                   setServiceEditModalOpen(true);
@@ -3565,15 +3366,12 @@ export function AgencyBookingDetailPage({
                                                 <Edit className="w-3 h-3 text-emerald-600" />
                                                 <span>Đổi bữa ăn</span>
                                               </button>
-                                              <div className="border border-gray-200 bg-white px-2.5 py-1 rounded-md text-xs text-gray-500 flex items-center gap-1 shadow-2xs">
-                                                {isChanged ? (
+                                              {isChanged && (<div className="border border-gray-200 bg-white px-2.5 py-1 rounded-md text-xs text-gray-500 flex items-center gap-1 shadow-2xs">
                                                   <span className="text-[10px] text-emerald-800 font-bold">
                                                     Đã đổi {mealChange?.priceDifference ? `(+${formatVND(mealChange.priceDifference)})` : ""}
                                                   </span>
-                                                ) : (
-                                                  <span>Theo tour (0đ)</span>
-                                                )}
-                                              </div>
+
+                                              </div>)}
                                             </div>
                                           </div>
                                           <BookingSupplierConfirmation state={currentQuotationState}
@@ -3662,37 +3460,32 @@ export function AgencyBookingDetailPage({
             {/* Total Price with Adjustment option */}
             <div className="space-y-2.5 text-xs">
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
-                <div className="flex justify-between items-center">
+                {hasBeenApproved && <div className="space-y-1 border-b border-slate-200 pb-2 text-xs">
+                  <div className="flex justify-between gap-2"><span className="flex items-center gap-1 text-slate-500"><Lock className="h-3 w-3" /> Giá tour đã chốt</span><strong>{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></div>
+                  <div className="flex justify-between gap-2"><span className="text-slate-500">Phụ thu phát sinh</span><strong className="text-amber-700">+{formatVND(booking.surchargeAmount ?? 0)}</strong></div>
+                </div>}
+                <div className="flex justify-between items-center gap-3">
                   <span className="text-gray-500 font-medium">Tổng giá trị đơn ({booking.numberOfGuests} khách):</span>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                    <span className="font-extrabold text-[#075985] text-base">{formatVND(booking.totalPrice)}</span>
-                    {onUpdateBookingPrice && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setNewPriceInput(booking.totalPrice.toString());
-                          setPriceNoteInput(booking.priceAdjustmentNote || "");
-                          setPriceModalOpen(true);
-                        }}
-                        className="h-7 px-2 text-xs text-[#075985] hover:text-blue-800 hover:bg-[#E0F2FE] gap-1 font-semibold"
-                        title="Điều chỉnh giá tiền tour theo thỏa thuận"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        Đổi giá
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setPriceAdjustmentsModalOpen(true)}
-                      className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100 gap-1 font-semibold"
-                      title="Xem nhật ký lịch sử điều chỉnh giá và biến động thành viên đoàn"
-                    >
-                      <History className="w-3.5 h-3.5 text-amber-600" />
-                      Nhật ký ({booking.priceAdjustments?.length || 0})
-                    </Button>
-                  </div>
+                  <span className="font-extrabold text-[#075985] text-base whitespace-nowrap">{formatVND(booking.totalPrice)}</span>
+                </div>
+                <div className="flex flex-wrap justify-end gap-1">
+                  {hasBeenApproved ? <Button size="sm" variant="ghost" disabled={!canAddSurcharge} onClick={() => setSurchargeOpen(true)} className="h-7 gap-1 px-2 text-xs text-sky-800"><Plus className="h-3.5 w-3.5" /> Thêm phụ thu</Button> : <>
+                  <Button size="sm" variant="ghost" disabled={!canChangePrice || !onUpdateBookingPrice}
+                    onClick={() => { setNewPriceInput(String(booking.totalPrice)); setPriceNoteInput(""); setPriceModalOpen(true); }}
+                    className="h-7 px-2 text-xs text-sky-800 gap-1" title={canChangePrice ? "Điều chỉnh giá trước khi duyệt" : "Giá tour đã khóa sau khi duyệt"}>
+                    <Edit3 className="h-3.5 w-3.5" /> Đổi giá
+                  </Button>
+                  </>}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPriceAdjustmentsModalOpen(true)}
+                    className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100 gap-1 font-semibold"
+                    title="Xem nhật ký lịch sử điều chỉnh giá và biến động thành viên đoàn"
+                  >
+                    <History className="w-3.5 h-3.5 text-amber-600" />
+                    Nhật ký điều chỉnh ({booking.priceAdjustments?.length || 0})
+                  </Button>
                 </div>
 
                 {booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
@@ -3779,9 +3572,9 @@ export function AgencyBookingDetailPage({
                   <p>Hệ thống đang tạm giữ tiền. Admin sàn sẽ sớm đối soát và giải ngân chi trả cho Quý công ty.</p>
                 </div>
               ) : (
-                <div className="bg-[#F0F9FF]/70 p-2.5 rounded-lg border border-[#CBD5E1] text-blue-900 text-[11px] leading-relaxed">
-                  🛡️ <strong>Chính sách Escrow:</strong> Tiền thanh toán của khách sẽ vào Tài khoản Hệ thống. Khi tour kết thúc, Admin sàn sẽ đối soát và giải ngân 100% cho Quý công ty (chính sách miễn phí sàn hiện tại).
-                </div>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  Tiền khách trả được giữ tại tài khoản TripOps và chuyển cho công ty sau khi tour kết thúc.
+                </p>
               )}
             </div>
 
@@ -3807,18 +3600,13 @@ export function AgencyBookingDetailPage({
                 </Button>
               )}
 
-            {/* Lịch thanh toán: hệ thống tự tạo khi duyệt đơn — công ty chỉ xem (không tạo yêu cầu thu thủ công) */}
-            <div className="p-3 bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl text-[11px] text-blue-900 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 text-blue-900">
-                <Lock className="w-3.5 h-3.5 text-[#075985]" />
-                Lịch thanh toán do hệ thống tạo
-              </div>
-              <p className="mt-0.5">
-                Khi công ty <strong>duyệt đơn</strong>, hệ thống mở Đợt 1 – đặt cọc <strong>50%</strong> tổng giá trị, hạn <strong>24 giờ</strong> kể từ lúc duyệt.
-                Đợt 2 (phần còn lại) mở sau khi đủ cọc, hạn chót trước ngày khởi hành 1 tuần (ví dụ khởi hành 30/11 thì hạn hết ngày 22/11).
-                Khách thanh toán qua payOS; đơn chỉ cập nhật sau khi máy chủ xác minh với payOS.
+            {/* Lịch thanh toán do hệ thống tự tạo khi duyệt: chỉ giải thích ngắn khi đơn chưa có lịch. */}
+            {(!booking.paymentRequests || booking.paymentRequests.length === 0) && (
+              <p className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-relaxed">
+                <Lock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                Duyệt đơn xong, hệ thống tự mở đợt cọc 50% (hạn 24 giờ) và đợt còn lại (hạn trước khởi hành 1 tuần).
               </p>
-            </div>
+            )}
 
             {booking.paymentRequests && booking.paymentRequests.length > 0 && (
               <div className="pt-3 border-t border-gray-100 space-y-2">
@@ -3830,7 +3618,7 @@ export function AgencyBookingDetailPage({
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wide text-[#075985] block">
                             {pr.stage === "deposit" ? "Đợt 1 · Đặt cọc" : pr.stage === "balance" ? "Đợt 2 · Phần còn lại"
-                              : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán"}
+                              : pr.stage === "surcharge" ? "Phụ thu phát sinh" : pr.stage === "full" ? "Thanh toán toàn bộ · Tour sát ngày" : "Đợt thanh toán"}
                           </span>
                           <p className="font-semibold text-gray-800">{pr.description}</p>
                         </div>
@@ -3843,7 +3631,7 @@ export function AgencyBookingDetailPage({
                             ? "bg-gray-100 text-gray-700 border-gray-200"
                             : "bg-amber-100 text-amber-800 border-amber-200"
                         }`}>
-                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? "Mở sau khi đủ cọc" : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
+                          {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? (pr.stage === "surcharge" ? "Chờ thanh toán các khoản trước" : "Mở sau khi đủ cọc") : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-gray-500 pt-1">
@@ -3877,182 +3665,6 @@ export function AgencyBookingDetailPage({
             )}
           </div>
 
-          {/* ASSIGNED GUIDE CARD (Multi-guide support with company ownership) */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-[#075985]" />
-                Hướng dẫn viên phụ trách ({assignedGuides.length})
-              </h3>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleOpenAssignAttractionsModal}
-                  className="h-7 px-2 text-xs text-[#EA580C] hover:text-purple-900 hover:bg-[#F0F9FF] border-[#F97316]/30 font-semibold gap-1 shadow-2xs"
-                  title="Phân công HDV theo từng điểm đến (booking_attraction_checkins)"
-                >
-                  <Navigation className="w-3 h-3 text-[#F97316]" />
-                  Gán điểm
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedGuideToAdd(guides[0]?.id || "");
-                    setSelectedGuideRole(assignedGuides.length === 0 ? "lead_guide" : "support_guide");
-                    setSelectedGuideNotes("");
-                    setAssignModalOpen(true);
-                  }}
-                  className="h-7 px-2 text-xs text-[#075985] hover:text-blue-800 hover:bg-[#F0F9FF] border-[#CBD5E1] font-semibold gap-1"
-                  title="Phân công thêm HDV của công ty bạn vào đoàn"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  + Thêm HDV
-                </Button>
-              </div>
-            </div>
-
-            {assignedGuides.length === 0 ? (
-              <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-center space-y-2">
-                <p className="text-xs text-amber-800">Chưa có hướng dẫn viên được chỉ định cho đoàn này.</p>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setSelectedGuideToAdd(guides[0]?.id || "");
-                    setSelectedGuideRole("lead_guide");
-                    setSelectedGuideNotes("");
-                    setAssignModalOpen(true);
-                  }}
-                  className="bg-[#075985] hover:bg-[#F97316] text-white text-xs h-8"
-                >
-                  <UserCheck className="w-3.5 h-3.5 mr-1" />
-                  Giao hướng dẫn viên
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {assignedGuides.map((ag) => {
-                  const isMyGuide = Boolean(
-                    (companyId && ag.companyId === companyId) ||
-                    (companyName && ag.companyName === companyName) ||
-                    (!ag.companyId && isCurrentCompanyLead)
-                  );
-
-                  const roleLabel =
-                    ag.role === "lead_guide"
-                      ? "HDV Trưởng đoàn"
-                      : ag.role === "stage_guide"
-                      ? "HDV Chặng"
-                      : ag.role === "logistics"
-                      ? "Hậu cần & Điều phối"
-                      : "HDV Phụ tá / Hỗ trợ";
-
-                  const roleBadgeClass =
-                    ag.role === "lead_guide"
-                      ? "bg-[#E0F2FE] text-blue-800 border-[#CBD5E1]"
-                      : ag.role === "stage_guide"
-                      ? "bg-[#F97316]/15 text-purple-800 border-[#F97316]/30"
-                      : "bg-gray-100 text-gray-700 border-gray-200";
-
-                  return (
-                    <div
-                      key={ag.id}
-                      className={`p-3 rounded-xl border transition-all ${
-                        isMyGuide ? "bg-white border-[#CBD5E1] shadow-2xs" : "bg-gray-50/80 border-gray-200"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {ag.guideAvatar ? (
-                          <img
-                            src={ag.guideAvatar}
-                            alt={ag.guideName}
-                            className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-[#075985] text-white font-bold flex items-center justify-center shrink-0">
-                            {ag.guideName ? ag.guideName[0] : "H"}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0 text-xs space-y-1">
-                          <div className="flex items-center justify-between gap-1 flex-wrap">
-                            <span className="font-bold text-gray-900 text-xs sm:text-sm">{ag.guideName}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${roleBadgeClass}`}>
-                              {roleLabel}
-                            </span>
-                          </div>
-
-                          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-gray-700">{ag.companyName}</span>
-                            {isMyGuide ? (
-                              <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                                Của cty bạn
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.2 rounded bg-[#F0F9FF] text-[#EA580C] border border-[#F97316]/30 text-[10px] font-bold">
-                                Đối tác
-                              </span>
-                            )}
-                          </div>
-
-                          {ag.guidePhone && (
-                            <p className="text-[#075985] flex items-center gap-1 text-[11px]">
-                              <Phone className="w-3 h-3" />
-                              {ag.guidePhone}
-                            </p>
-                          )}
-
-                          {ag.notes && (
-                            <p className="text-[11px] text-gray-600 bg-gray-50 p-1.5 rounded border border-gray-100 italic">
-                              {ag.notes}
-                            </p>
-                          )}
-
-                          {/* Guide action permissions */}
-                          <div className="pt-1.5 flex items-center justify-between border-t border-gray-100 text-[11px]">
-                            {isMyGuide ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setGuideToReplace(ag);
-                                    const otherGuides = guides.filter((g) => g.id !== ag.guideId);
-                                    setNewReplacementGuideId(otherGuides[0]?.id || "");
-                                    setReplaceModalOpen(true);
-                                  }}
-                                  className="text-[#075985] hover:text-blue-800 font-semibold hover:underline flex items-center gap-1"
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                  Thay thế
-                                </button>
-                                <span className="text-gray-300">|</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAssignedGuide(ag.id)}
-                                  className="text-rose-600 hover:text-rose-800 font-semibold hover:underline flex items-center gap-1"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  Xoá
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-gray-500 italic flex items-center gap-1">
-                                <Lock className="w-3 h-3 text-gray-400" />
-                                Do {ag.companyName} quản lý
-                              </span>
-                            )}
-                            <span className="text-[10px] text-gray-400 ml-auto">
-                              Gán: {ag.assignedAt}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -4245,10 +3857,10 @@ export function AgencyBookingDetailPage({
             )}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Hủy</Button>
+              <Button variant="outline" onClick={() => setAssignModalOpen(false)} className="border-rose-300 bg-white text-rose-600 hover:bg-rose-600 hover:text-white hover:border-rose-600 font-semibold cursor-pointer transition-colors">Hủy</Button>
               <Button
                 disabled={guides.length === 0 || !selectedGuideToAdd}
-                className="bg-[#075985] hover:bg-[#F97316] text-white font-bold"
+                className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleConfirmAddGuide}
               >
                 Xác nhận phân công
@@ -4520,9 +4132,11 @@ export function AgencyBookingDetailPage({
         </DialogContent>
       </Dialog>
 
+      <BookingSurchargeDialog open={surchargeOpen} onOpenChange={setSurchargeOpen} bookingId={booking.id} expectedTotal={booking.totalPrice} onChanged={onBookingChanged} />
+
       {/* MODAL: ĐIỀU CHỈNH GIÁ TOUR TỔNG THỂ */}
       <Dialog open={priceModalOpen} onOpenChange={setPriceModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
               <Edit3 className="w-5 h-5 text-[#075985]" />
@@ -4539,16 +4153,17 @@ export function AgencyBookingDetailPage({
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold text-gray-700">
+              <Label htmlFor="booking-new-total" className="text-xs font-semibold text-gray-700">
                 Giá tổng thể mới (VNĐ) <span className="text-red-500">*</span>
               </Label>
-              <Input
-                type="number"
+              <VietnameseMoneyInput
+                id="booking-new-total"
                 value={newPriceInput}
-                onChange={(e) => setNewPriceInput(e.target.value)}
-                placeholder={booking.totalPrice.toString()}
+                onValueChange={setNewPriceInput}
+                placeholder={booking.totalPrice.toLocaleString("vi-VN")}
                 className="mt-1 text-xs font-bold text-[#075985]"
               />
+              <p className="pt-1 text-[11px] text-gray-500">Chỉ được sửa giá trước lần duyệt đầu tiên. Sau khi duyệt, khoản phát sinh được tạo thành phụ thu riêng.</p>
               {parseInt(newPriceInput) > 0 && (
                 <p className="text-[11px] text-gray-500 pt-0.5">
                   Tương đương: <strong>{formatVND(parseInt(newPriceInput))}</strong>
@@ -4564,7 +4179,7 @@ export function AgencyBookingDetailPage({
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-gray-700">
-                Ghi chú / Lý do điều chỉnh giá
+                Ghi chú / Lý do điều chỉnh giá *
               </Label>
               <Textarea
                 value={priceNoteInput}
@@ -4576,32 +4191,22 @@ export function AgencyBookingDetailPage({
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => setPriceModalOpen(false)}>
+              <Button disabled={priceSaving} variant="outline" onClick={() => setPriceModalOpen(false)}>
                 Hủy bỏ
               </Button>
               <Button
-                disabled={!newPriceInput || parseInt(newPriceInput) <= 0}
+                disabled={priceSaving || !canChangePrice || !Number.isSafeInteger(Number(newPriceInput)) || Number(newPriceInput) <= 0 || Number(newPriceInput) === booking.totalPrice || priceNoteInput.trim().length < 3}
                 className="bg-[#075985] hover:bg-[#F97316] text-white font-bold"
-                onClick={() => {
-                  if (onUpdateBookingPrice && newPriceInput) {
-                    const parsed = parseInt(newPriceInput);
-                    const diff = parsed - booking.totalPrice;
-                    const reason = priceNoteInput.trim() || "Thỏa thuận điều chỉnh giá tour trực tiếp";
-                    onUpdateBookingPrice(booking.id, parsed, priceNoteInput, {
-                      id: `adj-${Date.now()}`,
-                      bookingId: booking.id,
-                      adjustedBy: companyName,
-                      previousTotalPrice: booking.totalPrice,
-                      adjustmentAmount: diff,
-                      newTotalPrice: parsed,
-                      reason,
-                      createdAt: new Date().toISOString(),
-                    });
-                  }
-                  setPriceModalOpen(false);
+                onClick={async () => {
+                  if (!onUpdateBookingPrice) return;
+                  setPriceSaving(true);
+                  try {
+                    const ok = await onUpdateBookingPrice(booking.id, Number(newPriceInput), priceNoteInput.trim());
+                    if (ok !== false) setPriceModalOpen(false);
+                  } finally { setPriceSaving(false); }
                 }}
               >
-                Lưu giá mới
+                {priceSaving ? "Đang lưu…" : "Lưu giá mới"}
               </Button>
             </div>
           </div>
@@ -4647,7 +4252,7 @@ export function AgencyBookingDetailPage({
 
             <div>
               <p className="font-bold text-gray-900 mb-1">ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN</p>
-              <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.totalPrice)}</strong></p>
+              <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></p>
               <p>Trạng thái thanh toán: <strong>{pst.label}</strong></p>
               {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
                 <p>Số tiền còn lại: <strong className="text-amber-700">{formatVND(booking.remainingAmount)}</strong></p>
@@ -4672,252 +4277,28 @@ export function AgencyBookingDetailPage({
         </DialogContent>
       </Dialog>
 
-      {/* Passenger Add/Edit Modal (with Stage Selection & Live Price Preview) */}
-      <Dialog open={passengerModalOpen} onOpenChange={setPassengerModalOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
-              <Users className="w-5 h-5 text-[#075985]" />
-              {passengerModalMode === "add" ? "Thêm hành khách vào đoàn" : "Chỉnh sửa thông tin hành khách"}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-gray-700">Họ và tên *</label>
-                <input
-                  type="text"
-                  value={passengerName}
-                  onChange={(e) => setPassengerName(e.target.value)}
-                  placeholder="VD: Nguyễn Văn A"
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs font-semibold focus:border-blue-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-gray-700">Số CCCD / Passport</label>
-                <input
-                  type="text"
-                  value={passengerIdNumber}
-                  onChange={(e) => setPassengerIdNumber(e.target.value)}
-                  placeholder="001..."
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs focus:border-blue-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-gray-700">Ngày sinh *</label>
-                <VietnameseDatePicker
-                  value={passengerDob}
-                  onChange={handlePassengerDobChange}
-                  isBirthDate
-                  max={new Date().toLocaleDateString("sv-SE")}
-                  placeholder="Chọn ngày sinh"
-                  className="py-1.5 rounded-lg"
-                />
-                {passengerDob && (
-                  <span className="text-[10px] text-gray-500 block">
-                    Độ tuổi: {calculateAge(passengerDob, booking.tourStartDate || booking.bookingDate)} tuổi (
-                    {(() => {
-                      const age = calculateAge(passengerDob, booking.tourStartDate || booking.bookingDate) || 25;
-                      if (age < 2) return "Em bé <2t";
-                      if (age <= 11) return "Trẻ em 2–11t";
-                      return "Người lớn";
-                    })()}
-                    )
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-gray-700">Giới tính</label>
-                <select
-                  value={passengerGender}
-                  onChange={(e) => setPassengerGender(e.target.value as "male" | "female")}
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs bg-white focus:border-blue-500 focus:outline-hidden"
-                >
-                  <option value="male">Nam</option>
-                  <option value="female">Nữ</option>
-                </select>
-              </div>
-
-              <div className="space-y-1 sm:col-span-2">
-                <label className="font-bold text-gray-700">Số điện thoại liên hệ</label>
-                <input
-                  type="tel"
-                  value={passengerPhone}
-                  onChange={(e) => setPassengerPhone(e.target.value)}
-                  placeholder="09..."
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs focus:border-blue-500 focus:outline-hidden"
-                />
-              </div>
-
-              {/* Stage / Agency Selection (Alliance tours) */}
-              {isCoHostedTour && agenciesList.length > 1 && (
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="font-bold text-gray-700 block">Chặng tour &amp; Đơn vị tiếp nhận:</label>
-                  <select
-                    value={passengerSelectedAgencyId}
-                    onChange={(e) => {
-                      const sel = e.target.value;
-                      setPassengerSelectedAgencyId(sel);
-                      const age = calculateAge(passengerDob, booking.tourStartDate || booking.bookingDate) || 25;
-                      let grp: "adult" | "child_2_11" | "child_under_2" = "adult";
-                      if (age < 2) grp = "child_under_2";
-                      else if (age <= 11) grp = "child_2_11";
-                      const p = calculatePassengerPrice(grp, sel);
-                      setPassengerCustomPrice(p.toString());
-                    }}
-                    className="w-full h-9 px-3 rounded-lg border border-purple-300 bg-[#F0F9FF]/50 text-xs font-semibold focus:border-purple-500 focus:outline-hidden"
-                  >
-                    <option value="all">Toàn bộ tour (100% tất cả các chặng)</option>
-                    {agenciesList.map((a) => (
-                      <option key={a.agencyId} value={a.agencyId}>
-                        Chỉ tham gia chặng: {a.agencyName} ({a.role === "lead" ? "Chủ trì" : "Đối tác"})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-gray-500">
-                    {passengerSelectedAgencyId === "all"
-                      ? "Hành khách tham gia trọn vẹn lịch trình của cả 2 công ty."
-                      : `Hành khách chỉ tham gia riêng chặng của công ty được chọn. Tiền vé sẽ chỉ phân bổ vào doanh thu chặng của công ty đó.`}
-                  </p>
-                </div>
-              )}
+      <Dialog open={passengerModalOpen} onOpenChange={open => !passengerSaving && setPassengerModalOpen(open)}>
+        <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[760px]">
+          <DialogHeader className="border-b px-5 py-4 text-left"><DialogTitle className="flex items-center gap-2 pr-6 text-base"><Users className="h-5 w-5 text-sky-800" />{passengerModalMode === "add" ? "Thêm hành khách vào đoàn" : "Chỉnh sửa hồ sơ hành khách"}</DialogTitle></DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5 font-semibold">Họ và tên *<Input maxLength={150} value={passengerName} onChange={e => setPassengerName(e.target.value)} placeholder="VD: Nguyễn Văn An" /></label>
+              <label className="space-y-1.5 font-semibold">CCCD / Hộ chiếu<Input maxLength={50} value={passengerIdNumber} onChange={e => setPassengerIdNumber(e.target.value)} placeholder="Không bắt buộc với trẻ nhỏ" /></label>
+              <div className="space-y-1.5"><label className="font-semibold">Ngày sinh *</label><VietnameseDatePicker value={passengerDob} onChange={passengerModalMode === "add" ? handlePassengerDobChange : setPassengerDob} /></div>
+              <label className="space-y-1.5 font-semibold">Giới tính<select value={passengerGender} onChange={e => setPassengerGender(e.target.value as "male" | "female")} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3"><option value="male">Nam</option><option value="female">Nữ</option></select></label>
+              <label className="space-y-1.5 font-semibold">Nguyện vọng xếp phòng<Textarea rows={2} maxLength={2000} value={passengerRoommateNote} onChange={e => setPassengerRoommateNote(e.target.value)} placeholder="VD: Ở cùng Nguyễn Văn An, ưu tiên hai giường đơn…" /></label>
+              <label className="space-y-1.5 font-semibold">Ăn uống / Dị ứng<Textarea rows={2} maxLength={2000} value={passengerDietaryNote} onChange={e => setPassengerDietaryNote(e.target.value)} placeholder="VD: Ăn chay, dị ứng hải sản, không ăn cay…" /></label>
+              <label className="space-y-1.5 font-semibold sm:col-span-2">Hỗ trợ đặc biệt / Ghi chú<Textarea rows={2} maxLength={2000} value={passengerNotes} onChange={e => setPassengerNotes(e.target.value)} placeholder="VD: Cần xe lăn, dễ say xe, người thân đi cùng…" /></label>
             </div>
-
-            {/* Price Box with Auto-calculation Explanation & Editable Input */}
-            <div className="bg-[#F0F9FF]/70 p-3.5 rounded-xl border border-[#CBD5E1] space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <span className="text-gray-800 font-bold text-xs block">Giá vé áp dụng theo độ tuổi:</span>
-                  <span className="text-[11px] text-gray-500">
-                    {(() => {
-                      const age = calculateAge(passengerDob, booking.tourStartDate || booking.bookingDate) || 25;
-                      if (age < 2) return "Em bé <2t (Miễn phí vé tour)";
-                      if (age <= 11) return "Trẻ em 2–11t (70% giá vé người lớn)";
-                      return "Khách người lớn (100% dịch vụ đoàn)";
-                    })()}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input
-                    type="number"
-                    value={passengerCustomPrice}
-                    onChange={(e) => setPassengerCustomPrice(e.target.value)}
-                    placeholder="0"
-                    className="w-36 h-9 px-3 rounded-lg border border-blue-300 bg-white font-black text-blue-800 text-sm text-right focus:border-blue-500 focus:outline-hidden"
-                  />
-                  <span className="text-xs font-bold text-blue-900">đ</span>
-                </div>
-              </div>
-
-              {/* Informative Note Explaining Price Origin */}
-              <div className="text-[11px] text-blue-900 bg-white/90 p-2.5 rounded-lg border border-blue-100 flex items-start gap-2 leading-relaxed">
-                <Info className="w-4 h-4 text-[#075985] flex-shrink-0 mt-0.5" />
-                <div>
-                  <span>
-                    <strong>Cơ sở tính giá vé:</strong> Giá vé đoàn thực tế của booking này là{" "}
-                    <strong className="text-[#075985]">{formatVND(calculatePassengerPrice("adult"))}</strong>/khách người lớn
-                    {booking.tour?.price && booking.tour.price !== calculatePassengerPrice("adult") ? (
-                      <> (đã bao gồm tùy chỉnh nâng cấp dịch vụ &amp; phụ thu theo đơn của khách so với giá niêm yết ban đầu {formatVND(booking.tour.price)})</>
-                    ) : null}.
-                  </span>
-                  <span className="block text-[10px] text-gray-500 mt-0.5">
-                    Hệ thống tự động điền giá chuẩn của đoàn, bạn có thể chỉnh sửa số tiền ở ô trên nếu có thỏa thuận riêng với khách.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Simultaneous Price & Payment Request Options (Add Mode Only) */}
-            {passengerModalMode === "add" && (() => {
-              const effectivePrice = passengerCustomPrice !== "" ? Math.max(0, parseInt(passengerCustomPrice) || 0) : calculatePassengerPrice("adult");
-
-              return (
-                <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 space-y-2.5">
-                  <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    Đồng thời cập nhật tài chính &amp; tổng giá tour
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Theo quy trình bổ sung người ngoài hệ thống, bạn có thể tự động cộng tiền vé mới vào tổng giá booking và tạo đợt thu phụ phí cho khách.
-                  </p>
-
-                  <div className="space-y-2 pt-1 border-t border-amber-200/60">
-                    <label className="flex items-start gap-2.5 cursor-pointer text-xs font-semibold text-gray-800">
-                      <input
-                        type="checkbox"
-                        checked={autoUpdateTourPrice}
-                        onChange={(e) => setAutoUpdateTourPrice(e.target.checked)}
-                        className="mt-0.5 rounded border-gray-300 text-[#075985] focus:ring-[#075985] w-4 h-4"
-                      />
-                      <div>
-                        <span>Tự động cập nhật tổng giá tour (+{formatVND(effectivePrice)})</span>
-                        <span className="block text-[11px] font-normal text-gray-500 mt-0.5">
-                          Tổng đơn sẽ tự động tăng từ <strong>{formatVND(booking.totalPrice)}</strong> lên{" "}
-                          <strong className="text-[#075985]">{formatVND(booking.totalPrice + effectivePrice)}</strong>
-                        </span>
-                      </div>
-                    </label>
-
-                    {autoUpdateTourPrice && effectivePrice > 0 && (
-                      <label className="flex items-start gap-2.5 cursor-pointer text-xs font-semibold text-gray-800 pl-6">
-                        <input
-                          type="checkbox"
-                          checked={createExtraPaymentRequest}
-                          onChange={(e) => setCreateExtraPaymentRequest(e.target.checked)}
-                          className="mt-0.5 rounded border-gray-300 text-[#075985] focus:ring-[#075985] w-4 h-4"
-                        />
-                        <div>
-                          <span>Tạo đợt thu (Payment Request) gửi đến khách hàng</span>
-                          <span className="block text-[11px] font-normal text-gray-500 mt-0.5">
-                            Tạo hóa đơn đợt thu bổ sung <strong>{formatVND(effectivePrice)}</strong> trên trang khách hàng kèm mã QR ngân hàng
-                          </span>
-                        </div>
-                      </label>
-                    )}
-
-                    {autoUpdateTourPrice && effectivePrice > 0 && (
-                      <div className="space-y-1 pl-6 pt-1">
-                        <label className="font-semibold text-gray-700 text-[11px]">
-                          Lý do điều chỉnh (ghi vào nhật ký kiểm toán / Audit Log):
-                        </label>
-                        <input
-                          type="text"
-                          value={customAdjustmentReason}
-                          onChange={(e) => setCustomAdjustmentReason(e.target.value)}
-                          placeholder={`VD: Bổ sung ${passengerName || "thành viên"} theo yêu cầu của khách qua Zalo/Điện thoại`}
-                          className="w-full h-8 px-2.5 rounded border border-amber-300 bg-white text-xs text-gray-800 focus:outline-hidden focus:border-amber-500"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            <div className="space-y-1">
-              <label className="font-bold text-gray-700">Ghi chú riêng (Dị ứng, hỗ trợ xe lăn, say xe...)</label>
-              <textarea
-                value={passengerNotes}
-                onChange={(e) => setPassengerNotes(e.target.value)}
-                rows={2}
-                placeholder="VD: Ăn chay, dị ứng tôm cua, cần ghế ngồi phía trước xe..."
-                className="w-full p-2.5 rounded-lg border border-gray-300 text-xs focus:border-blue-500 focus:outline-hidden"
-              />
-            </div>
+            {passengerModalMode === "add" && <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3 sm:grid-cols-2">
+              <label className="space-y-1.5 font-semibold">Giá vé bổ sung (VNĐ) *<VietnameseMoneyInput value={passengerCustomPrice} onValueChange={setPassengerCustomPrice} className="h-10 w-full rounded-lg border border-amber-300 bg-white px-3 font-semibold tabular-nums" /></label>
+              <label className="space-y-1.5 font-semibold">Lý do bổ sung / Thỏa thuận *<Input maxLength={240} value={customAdjustmentReason} onChange={e => setCustomAdjustmentReason(e.target.value)} /></label>
+              <p className="text-[11px] leading-relaxed text-amber-900 sm:col-span-2">{hasBeenApproved ? "Giá tour đã chốt giữ nguyên. Tiền vé bổ sung được tạo thành phụ thu riêng; booking và lịch thanh toán tour không cần duyệt lại." : "Tiền vé bổ sung được cộng vào tổng giá tour trước lần duyệt đầu tiên."} Vé 0đ sẽ không tạo khoản thu.</p>
+            </div>}
+            {passengerError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-rose-700">{passengerError}</p>}
           </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t">
-            <Button variant="outline" size="sm" onClick={() => setPassengerModalOpen(false)}>
-              Hủy
-            </Button>
-            <Button size="sm" onClick={handleSavePassengerModal} className="bg-[#075985] hover:bg-[#F97316] text-white font-bold">
-              {passengerModalMode === "add" ? "✓ Thêm vào danh sách đoàn" : "✓ Cập nhật thông tin"}
-            </Button>
-          </div>
+          <div className="flex justify-end gap-2 border-t px-5 py-3"><Button size="sm" variant="outline" disabled={passengerSaving} onClick={() => setPassengerModalOpen(false)}>Hủy</Button>
+            <Button size="sm" disabled={passengerSaving || !passengerName.trim() || !passengerDob || (passengerModalMode === "add" && customAdjustmentReason.trim().length < 3)} onClick={handleSavePassengerModal}>{passengerSaving ? "Đang lưu…" : passengerModalMode === "add" ? "Thêm vào đoàn" : "Lưu hồ sơ"}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -4985,7 +4366,7 @@ export function AgencyBookingDetailPage({
 
       {/* MODAL: NHẬT KÝ ĐIỀU CHỈNH GIÁ & THÀNH VIÊN ĐOÀN (AUDIT LOG) */}
       <Dialog open={priceAdjustmentsModalOpen} onOpenChange={setPriceAdjustmentsModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[760px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <History className="w-5 h-5 text-amber-600" />
@@ -4994,12 +4375,7 @@ export function AgencyBookingDetailPage({
           </DialogHeader>
 
           <div className="space-y-4 pt-2 text-xs">
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 space-y-1">
-              <p className="font-bold">Theo dõi lịch sử tài chính &amp; biến động thành viên</p>
-              <p className="text-[11px] text-amber-800 leading-relaxed">
-                Mỗi khi công ty thỏa thuận thêm/bớt hành khách hoặc điều chỉnh giá tour theo yêu cầu ngoài hệ thống, dữ liệu thay đổi sẽ được ghi nhận vào nhật ký kiểm toán (Audit Trail) để đảm bảo minh bạch tài chính và đối soát hợp đồng.
-              </p>
-            </div>
+            <p className="text-slate-500">Lịch sử giá, người thực hiện và lý do đã thống nhất với khách.</p>
 
             {sortedPriceAdjustments && sortedPriceAdjustments.length > 0 ? (
               <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-200 bg-white shadow-2xs">
@@ -5026,21 +4402,22 @@ export function AgencyBookingDetailPage({
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                            isPositive
+                            adj.adjustmentAmount === 0 ? "bg-slate-100 text-slate-700 border border-slate-200" : isPositive
                               ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                               : "bg-rose-100 text-rose-800 border border-rose-200"
                           }`}>
-                            {isPositive ? `+${formatVND(adj.adjustmentAmount)}` : `-${formatVND(Math.abs(adj.adjustmentAmount))}`}
-                          </span>
-                          <span className="font-semibold text-gray-900">
-                            {adj.reason}
+                            {adj.adjustmentAmount === 0 ? "Giữ nguyên giá" : isPositive ? `+${formatVND(adj.adjustmentAmount)}` : `−${formatVND(Math.abs(adj.adjustmentAmount))}`}
                           </span>
                         </div>
                         <span className="text-[11px] text-gray-500 font-medium">
-                          {new Date(adj.createdAt).toLocaleString("vi-VN")}
+                          {formatVietnamDateTime(providerResponseInstant(adj.createdAt))}
                         </span>
                       </div>
 
+                      <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2.5">
+                        <p className="mb-1 text-[11px] font-semibold text-amber-900">Lý do điều chỉnh</p>
+                        <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-800">{adj.reason?.trim() || "Chưa ghi nhận lý do cho điều chỉnh này."}</p>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-gray-50/70 p-2 rounded-lg border border-gray-100 text-[11px]">
                         <div>
                           <span className="text-gray-400 block">Người thực hiện:</span>
@@ -5096,15 +4473,15 @@ export function AgencyBookingDetailPage({
       {/* MODAL: PHÂN CÔNG HDV THEO ĐIỂM ĐẾN & CHẶNG (3 PRESETS)   */}
       {/* ======================================================== */}
       <Dialog open={assignAttractionsModalOpen} onOpenChange={setAssignAttractionsModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-3xl h-[85vh] max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-gray-100">
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <Navigation className="w-5 h-5 text-[#F97316]" />
-              Phân công Hướng dẫn viên theo Điểm đến &amp; Chặng (`booking_attraction_checkins`)
+              Phân công Hướng dẫn viên theo Điểm đến &amp; Chặng
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2 text-xs">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 text-xs">
             {/* Context / Alliance Permission Banner */}
             <div className="bg-[#F0F9FF]/70 p-3.5 rounded-xl border border-[#F97316]/30 text-purple-900 space-y-1.5">
               <p className="font-bold flex items-center gap-1.5">
@@ -5124,17 +4501,17 @@ export function AgencyBookingDetailPage({
             </div>
 
             {/* 3 PRESET TABS */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1 bg-gray-100 rounded-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-3 items-stretch gap-2 p-1 bg-gray-100 rounded-xl">
               <button
                 type="button"
                 onClick={() => setAssignPresetMode("single")}
-                className={`p-2.5 rounded-lg text-left transition-all ${
+                className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${
                   assignPresetMode === "single"
-                    ? "bg-white text-purple-900 shadow-2xs font-bold ring-2 ring-purple-400/40"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                    ? "bg-white text-purple-900 shadow-2xs ring-purple-400/40"
+                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                 }`}
               >
-                <div className="flex items-center gap-1.5 text-xs font-bold mb-1 text-[#EA580C]">
+                <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-[#EA580C]">
                   <Zap className="w-3.5 h-3.5" />
                   1. Gán 1 HDV Toàn bộ
                 </div>
@@ -5146,13 +4523,13 @@ export function AgencyBookingDetailPage({
               <button
                 type="button"
                 onClick={() => setAssignPresetMode("co_guides")}
-                className={`p-2.5 rounded-lg text-left transition-all ${
+                className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${
                   assignPresetMode === "co_guides"
-                    ? "bg-white text-blue-900 shadow-2xs font-bold ring-2 ring-blue-400/40"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                    ? "bg-white text-blue-900 shadow-2xs ring-blue-400/40"
+                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                 }`}
               >
-                <div className="flex items-center gap-1.5 text-xs font-bold mb-1 text-[#075985]">
+                <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-[#075985]">
                   <Users className="w-3.5 h-3.5" />
                   2. Gán 2+ HDV (Song hành)
                 </div>
@@ -5164,13 +4541,13 @@ export function AgencyBookingDetailPage({
               <button
                 type="button"
                 onClick={() => setAssignPresetMode("custom")}
-                className={`p-2.5 rounded-lg text-left transition-all ${
+                className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${
                   assignPresetMode === "custom"
-                    ? "bg-white text-emerald-900 shadow-2xs font-bold ring-2 ring-emerald-400/40"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                    ? "bg-white text-emerald-900 shadow-2xs ring-emerald-400/40"
+                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                 }`}
               >
-                <div className="flex items-center gap-1.5 text-xs font-bold mb-1 text-emerald-700">
+                <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-emerald-700">
                   <MapPin className="w-3.5 h-3.5" />
                   3. Tùy chỉnh Từng điểm
                 </div>
@@ -5237,7 +4614,7 @@ export function AgencyBookingDetailPage({
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500">
-                    Khi lưu, BE sẽ tự động nhân bản (duplicate) các dòng trong bảng `booking_attraction_checkins` để mỗi HDV thực hiện check-in riêng biệt với nhau.
+                    Mỗi HDV được chọn sẽ tự check-in riêng tại từng điểm đến của công ty.
                   </p>
                 </div>
 
@@ -5282,16 +4659,7 @@ export function AgencyBookingDetailPage({
                   })}
                 </div>
 
-                {/* Calculation formula explanation */}
-                <div className="p-2.5 bg-[#E0F2FE]/60 rounded-lg text-[11px] text-blue-900 space-y-0.5">
-                  <p className="font-bold">
-                    💡 Quy tắc nhân bản bảng `booking_attraction_checkins`:
-                  </p>
-                  <p>
-                    {allItineraryAttractions.filter(a => a.isMyAgencyAttraction).length} điểm đến của công ty × {selectedMultiGuideIds.length} HDV ={" "}
-                    <strong>{allItineraryAttractions.filter(a => a.isMyAgencyAttraction).length * selectedMultiGuideIds.length} lượt check-in độc lập</strong>.
-                  </p>
-                </div>
+
               </div>
             )}
 
@@ -5386,17 +4754,15 @@ export function AgencyBookingDetailPage({
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => setAssignAttractionsModalOpen(false)}>
-                Hủy bỏ
-              </Button>
-              <Button
-                onClick={handleSaveAttractionAssignment}
-                className="bg-[#F97316] hover:bg-[#EA580C] text-white font-bold"
-              >
-                Xác nhận &amp; Lưu phân công
-              </Button>
-            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 px-6 py-3 border-t border-gray-100 bg-white">
+            <Button variant="outline" onClick={() => setAssignAttractionsModalOpen(false)} className="border-rose-300 bg-white text-rose-600 hover:bg-rose-600 hover:text-white hover:border-rose-600 font-semibold cursor-pointer transition-colors">
+              Hủy bỏ
+            </Button>
+            <Button onClick={handleSaveAttractionAssignment} className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Xác nhận &amp; Lưu phân công
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -5405,7 +4771,7 @@ export function AgencyBookingDetailPage({
       {/* MODAL: XEM ẢNH MINH CHỨNG CHECK-IN THỰC TẾ               */}
       {/* ======================================================== */}
       <Dialog open={previewProofModalOpen} onOpenChange={setPreviewProofModalOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <Camera className="w-5 h-5 text-emerald-600" />
@@ -5457,153 +4823,53 @@ export function AgencyBookingDetailPage({
       {/* ======================================================== */}
       {/* MODAL: ĐIỀU CHỈNH DỊCH VỤ TRỰC TIẾP (KHÁCH SẠN / ĂN UỐNG / ĐIỂM ĐẾN) */}
       {/* ======================================================== */}
-      <Dialog open={serviceEditModalOpen} onOpenChange={setServiceEditModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
-              {serviceEditType === "hotel" ? (
-                <>
-                  <Building2 className="w-5 h-5 text-[#075985]" />
-                  Cập nhật Khách sạn lưu trú
-                </>
-              ) : serviceEditType === "meal" ? (
-                <>
-                  <Utensils className="w-5 h-5 text-emerald-600" />
-                  Cập nhật Bữa ăn &amp; Nhà hàng (Ngày {editTargetDay})
-                </>
-              ) : (
-                <>
-                  <MapPin className="w-5 h-5 text-amber-600" />
-                  Cập nhật Điểm tham quan (Ngày {editTargetDay})
-                </>
-              )}
+      <Dialog open={serviceEditModalOpen} onOpenChange={open => !amendmentSaving && setServiceEditModalOpen(open)}>
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[820px]">
+          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4 text-left">
+            <DialogTitle className="flex items-center gap-2 pr-7 text-base font-bold text-slate-900">
+              {serviceEditType === "hotel" ? <Building2 className="h-5 w-5 text-sky-800" /> : serviceEditType === "meal" ? <Utensils className="h-5 w-5 text-emerald-700" /> : <MapPin className="h-5 w-5 text-amber-700" />}
+              {serviceEditType === "hotel" ? "Cập nhật khách sạn lưu trú" : serviceEditType === "meal" ? `Cập nhật bữa ăn & nhà hàng · Ngày ${editTargetDay}` : `Cập nhật điểm tham quan · Ngày ${editTargetDay}`}
             </DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 pt-1 text-xs">
-            <div className="p-3 bg-[#F0F9FF]/70 rounded-xl border border-[#CBD5E1] text-blue-900 space-y-1">
-              <p className="font-semibold flex items-center gap-1.5 text-xs text-blue-950">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                Cập nhật thông tin dịch vụ theo thỏa thuận với khách hàng
-              </p>
-              <p className="text-[11px] text-blue-800 leading-relaxed">
-                Nhân viên công ty có thể trực tiếp đổi dịch vụ và điều chỉnh lại mức giá tour tại đây. Dữ liệu sẽ lập tức được đồng bộ trên hệ thống mà khách hàng không cần phải hủy booking.
-              </p>
-            </div>
-
-            {/* Old / Current Service */}
-            {editOldName && (
-              <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex items-center justify-between">
-                <span className="text-gray-500">Dịch vụ hiện tại:</span>
-                <span className="font-semibold text-gray-800">{editOldName}</span>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 text-xs">
+            {editOldName && <div className="flex flex-wrap items-start justify-between gap-1.5 rounded-lg bg-slate-50 px-3 py-2.5">
+              <span className="shrink-0 text-slate-500">Dịch vụ hiện tại</span>
+              <span className="min-w-0 break-words font-semibold text-slate-800">{editOldName}</span>
+            </div>}
+            {serviceEditType !== "location" ? <BookingServicePicker key={`${serviceEditType}:${editItemId}:${serviceEditModalOpen}`} kind={serviceEditType}
+              value={replacement} onChange={setReplacement} /> : <label className="block space-y-1.5 font-semibold text-slate-700">Tên điểm tham quan mới *
+              <Input value={editNewName} onChange={e => setEditNewName(e.target.value)} maxLength={255} placeholder="VD: Vườn hoa thành phố Đà Lạt" />
+            </label>}
+            <div className="grid items-start gap-4 sm:grid-cols-2">
+              {hasBeenApproved ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                <p className="mb-1 flex items-center gap-1 font-semibold text-slate-800"><Lock className="h-3.5 w-3.5" /> Giá tour đã chốt: {formatVND(booking.baseTourPrice ?? booking.totalPrice)}</p>
+                Đổi dịch vụ giữ nguyên giá và trạng thái booking. Nếu phát sinh chi phí, dùng nút “Thêm phụ thu” trong phần Tài chính & Thanh toán.
+              </div> : <>
+              <div className="space-y-2.5 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                <label htmlFor="service-price-difference" className="block font-semibold text-amber-950">Chênh lệch giá tour (VNĐ)</label>
+                <VietnameseMoneyInput id="service-price-difference" signed value={editPriceDiff} onValueChange={setEditPriceDiff}
+                  placeholder="0" className="h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold tabular-nums outline-none focus:ring-2 focus:ring-amber-200" />
+                <div className="flex flex-wrap gap-1.5">
+                  {[{ value: "0", label: "Giữ nguyên" }, { value: "50000", label: "+50.000đ" }, { value: "100000", label: "+100.000đ" }, { value: "-50000", label: "−50.000đ" }].map(option =>
+                    <button type="button" key={option.value} onClick={() => setEditPriceDiff(option.value)} className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100">{option.label}</button>)}
+                </div>
+                <p className="text-[11px] text-amber-800">{Number(editPriceDiff) > 0 ? `Tăng +${formatVND(Number(editPriceDiff))}` : Number(editPriceDiff) < 0 ? `Giảm ${formatVND(Math.abs(Number(editPriceDiff)))}` : "Không thay đổi giá bán tour"}</p>
               </div>
-            )}
-
-            {/* New Service Name Input */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-gray-700 block">
-                Tên {serviceEditType === "hotel" ? "Khách sạn mới" : serviceEditType === "meal" ? "Nhà hàng / Món ăn mới" : "Điểm tham quan mới"}: <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={editNewName}
-                onChange={(e) => setEditNewName(e.target.value)}
-                placeholder={serviceEditType === "hotel" ? "VD: Khách Sạn Colline Đà Lạt (4*)" : serviceEditType === "meal" ? "VD: Nhà hàng Cơm Niêu Như Ngọc Đà Lạt" : "VD: Vườn Hoa Thành Phố Đà Lạt"}
-                className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs font-semibold focus:outline-hidden focus:border-blue-500 bg-white"
-              />
-            </div>
-
-            {/* Address or Room Note (for hotel) */}
-            {serviceEditType === "hotel" && (
-              <div className="space-y-1.5">
-                <label className="font-bold text-gray-700 block">Địa chỉ / Ghi chú phòng (tùy chọn):</label>
-                <input
-                  type="text"
-                  value={editAddressOrNote}
-                  onChange={(e) => setEditAddressOrNote(e.target.value)}
-                  placeholder="VD: 10 Phan Bội Châu, Phường 1, TP. Đà Lạt"
-                  className="w-full h-9 px-3 rounded-lg border border-gray-300 text-xs focus:outline-hidden focus:border-blue-500 bg-white"
-                />
-              </div>
-            )}
-
-            {/* Price Difference Adjustment */}
-            <div className="space-y-1.5 bg-amber-50/60 p-3 rounded-xl border border-amber-200">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-amber-950 block">Điều chỉnh chênh lệch giá tour (VNĐ):</label>
-                <span className="text-[11px] text-amber-800">
-                  {parseInt(editPriceDiff) > 0 ? `Tăng +${formatVND(parseInt(editPriceDiff))}` : parseInt(editPriceDiff) < 0 ? `Giảm ${formatVND(parseInt(editPriceDiff))}` : "Không thay đổi giá (0đ)"}
-                </span>
-              </div>
-              <input
-                type="number"
-                step={10000}
-                value={editPriceDiff}
-                onChange={(e) => setEditPriceDiff(e.target.value)}
-                placeholder="0"
-                className="w-full h-9 px-3 rounded-lg border border-amber-300 text-xs font-mono font-bold focus:outline-hidden focus:border-amber-500 bg-white"
-              />
-              <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                <button
-                  type="button"
-                  onClick={() => setEditPriceDiff("0")}
-                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 cursor-pointer"
-                >
-                  0đ (Giữ nguyên)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditPriceDiff("50000")}
-                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-amber-300 hover:bg-amber-100 text-amber-800 cursor-pointer"
-                >
-                  +50.000đ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditPriceDiff("100000")}
-                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-amber-300 hover:bg-amber-100 text-amber-800 cursor-pointer"
-                >
-                  +100.000đ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditPriceDiff("-50000")}
-                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 cursor-pointer"
-                >
-                  -50.000đ
-                </button>
+              </>}
+              <div className="space-y-2">
+                <label htmlFor="service-change-reason" className="block font-semibold text-slate-700">Lý do thay đổi & thỏa thuận với khách *</label>
+                <Textarea id="service-change-reason" value={editReason} onChange={e => setEditReason(e.target.value)} rows={4} maxLength={2000}
+                  placeholder="Ghi rõ lý do đổi dịch vụ và nội dung đã thống nhất với khách…" className="min-h-24 resize-y bg-white text-xs" />
+                <p className="text-[11px] text-slate-500">Lý do đổi được gửi đến khách; chênh lệch giá được ghi nhật ký tài chính.</p>
               </div>
             </div>
-
-            {/* Reason for change */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-gray-700 block">
-                Lý do thay đổi &amp; Thỏa thuận với khách: <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                rows={2}
-                value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
-                placeholder="VD: Đã gọi điện trao đổi với khách, thống nhất chuyển sang KS Colline do đối tác Heritage hết phòng giai đoạn này."
-                className="w-full p-2.5 rounded-lg border border-gray-300 text-xs focus:outline-hidden focus:border-blue-500 bg-white"
-              />
-              <p className="text-[10px] text-gray-500 italic">
-                Lý do này sẽ được ghi vào nhật ký biến động tài chính của booking để kiểm toán và hiển thị minh bạch cho các bên.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" size="sm" onClick={() => setServiceEditModalOpen(false)}>
-                Hủy bỏ
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveServiceEdit}
-                className="bg-[#075985] hover:bg-[#F97316] text-white font-bold cursor-pointer"
-              >
-                ✓ Lưu &amp; Cập nhật hệ thống
-              </Button>
-            </div>
+            <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-900">Giá dịch vụ chỉ để tham khảo. Thay đổi được ghi nhật ký và gửi thông báo cho khách; booking đã duyệt giữ nguyên trạng thái và lịch thanh toán.</p>
+            {amendmentError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-rose-700">{amendmentError}</p>}
+          </div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-white px-5 py-3">
+            <Button variant="outline" size="sm" disabled={amendmentSaving} onClick={() => setServiceEditModalOpen(false)}>Hủy bỏ</Button>
+            <Button size="sm" disabled={amendmentSaving || !canAmend || (serviceEditType === "location" ? !editNewName.trim() : !replacement?.name.trim())} onClick={handleSaveServiceEdit}
+              className="bg-[#075985] font-semibold text-white hover:bg-sky-900">{amendmentSaving ? "Đang lưu…" : "Lưu & cập nhật"}</Button>
           </div>
         </DialogContent>
       </Dialog>

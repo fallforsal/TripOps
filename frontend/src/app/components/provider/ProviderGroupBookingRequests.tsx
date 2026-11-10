@@ -623,7 +623,7 @@ export function ProviderGroupBookingRequests({
                             {formatDate(req.checkInDate)} → {formatDate(req.checkOutDate)}
                           </p>
                           <p className="text-sky-900 font-bold">
-                            {req.numberOfNights} đêm · {req.roomTypeRequested || "Deluxe / Superior"}
+                            {req.numberOfNights} đêm{req.roomTypeRequested ? ` · ${req.roomTypeRequested}` : ""}
                           </p>
                         </div>
                       )}

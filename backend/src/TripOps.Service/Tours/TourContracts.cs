@@ -8,7 +8,7 @@ public sealed record TourConfiguration(
     [StringLength(255)] string? Destination = null,
     [Range(1, 365)] int DurationDays = 1,
     [Range(0, 365)] int DurationNights = 0,
-    [Range(typeof(decimal), "0", "9999999999")] decimal BasePrice = 0,
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal BasePrice = 0,
     [Range(1, 100000)] int? MinGuests = null,
     [Range(1, 100000)] int? MaxGuests = null,
     [StringLength(255)] string? OperationPeriod = null,
@@ -22,11 +22,11 @@ public sealed record TourConfiguration(
     TimelineInput[]? Timelines = null,
     [StringLength(255)] string? DepartureLocation = null,
     [StringLength(50)] string? Code = null,
-    string[]? ProvinceCodes = null);
+    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
-    [Range(typeof(decimal), "0", "9999999999")] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0);
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0);
 public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, StringLength(255)] string Title,
     [StringLength(10000)] string? Description = null,
     ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
@@ -35,17 +35,17 @@ public sealed record ActivityInput([Required, StringLength(255)] string Name,
 /// <summary>Per-tour snapshot of an Agency-supplied hotel/restaurant (kept in the immutable tour version).</summary>
 public sealed record SupplierSnapshotInput([StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
     [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
-    [Range(typeof(decimal), "0", "9999999999")] decimal? ReferencePrice = null, [StringLength(2000)] string? Conditions = null);
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal? ReferencePrice = null, [StringLength(2000)] string? Conditions = null);
 public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "dinner")] string MealType, [Required, StringLength(255)] string RestaurantName,
     [StringLength(10000)] string? Description = null, bool IsDefault = true,
-    [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
+    [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     int? ServiceId = null, TimeSpan? Time = null,
     [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
     [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
-    [Range(typeof(decimal), "-9999999999", "9999999999")] decimal PriceDifference = 0,
+    [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null,
     [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
 
@@ -53,7 +53,7 @@ public sealed record SupplierRequest([Required, AllowedValues("HOTEL", "RESTAURA
     [Required, StringLength(255)] string Name, [StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
     [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
     [EmailAddress, StringLength(191)] string? ContactEmail = null, [Range(1, 5)] int? StarRating = null,
-    [Range(typeof(decimal), "0", "9999999999")] decimal? ReferencePrice = null,
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal? ReferencePrice = null,
     [StringLength(2000)] string? Conditions = null, [StringLength(2000)] string? Notes = null,
     [AllowedValues("ACTIVE", "ARCHIVED")] string Status = "ACTIVE");
 public sealed record SupplierDto(int Id, string Type, string Name, string? Address, string? Area, string? ContactName,
@@ -70,7 +70,7 @@ public sealed record AiDraftRequest([Required, StringLength(255)] string Destina
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
     DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null);
-public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration);
+public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
 public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
     string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,

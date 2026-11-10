@@ -1,3 +1,4 @@
+import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
 import { useEffect, useState } from "react";
 import { CustomTourRequest, TourCompany, User } from "@/app/types";
 import {
@@ -17,6 +18,7 @@ import { PageHeader } from "@/app/components/customer/PageHeader";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 
 interface CustomTourRequestPageProps {
+  sourceTour?: import("@/app/types").Tour;
   companies: TourCompany[];
   currentUser: User | null;
   onBack: () => void;
@@ -28,8 +30,30 @@ interface CustomTourRequestPageProps {
 const TODAY = new Date().toISOString().split("T")[0];
 const formatDateDisplay = (value: string) => value.split("-").reverse().join("/");
 
+function CompanyLogo({ src, name }: { src?: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="w-11 h-11 shrink-0 rounded-[6px] border border-[#CBD5E1] bg-white overflow-hidden">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={`Logo ${name}`}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-full h-full object-contain"
+        />
+      ) : (
+        <span className="w-full h-full flex items-center justify-center bg-[#F0F9FF] text-xs font-bold text-[#075985]">
+          {name.trim().slice(0, 2).toUpperCase()}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function CustomTourRequestPage({
   companies,
+  sourceTour,
   currentUser,
   onBack,
   onSubmit,
@@ -43,23 +67,26 @@ export function CustomTourRequestPage({
     contactName: currentUser?.name ?? "",
     contactEmail: currentUser?.email ?? "",
     contactPhone: currentUser?.phone ?? "",
-    destinations: "",
+    destinations: sourceTour?.destination || "",
     departureDate: TODAY,
     returnDate: TODAY,
     numberOfPeople: "",
     budgetPerPerson: "",
     hotelStars: "4",
     additionalInfo: "",
-    targetCompanyId: companies[0]?.id ?? "",
+    targetCompanyId: sourceTour?.companyId || companies[0]?.id || "",
   });
 
+  const [initialChanges, setInitialChanges] = useState<CustomTourRequest["initialChanges"]>();
+  const [editTemplate, setEditTemplate] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   useEffect(() => {
+    if (sourceTour?.companyId) { setForm((previous) => ({ ...previous, targetCompanyId: sourceTour.companyId! })); return; }
     setForm((previous) => companies.some((c) => c.id === previous.targetCompanyId)
       ? previous : { ...previous, targetCompanyId: companies[0]?.id ?? "" });
-  }, [companies]);
+  }, [companies, sourceTour?.companyId]);
 
   // Auto-format currency VND helper
   const formatCurrencyVND = (digits: string): string => {
@@ -138,24 +165,26 @@ export function CustomTourRequestPage({
     }
 
     setSubmitting(true);
-    try { await onSubmit({
-      userId: currentUser.id,
-      businessName: form.businessName.trim() || undefined,
-      businessEmail: form.businessEmail.trim() || undefined,
-      businessPhone: form.businessPhone.trim() || undefined,
-      contactName: form.contactName.trim(),
-      contactEmail: form.contactEmail.trim(),
-      contactPhone: form.contactPhone.trim(),
-      destinations: form.destinations.trim(),
-      departureDate: form.departureDate,
-      returnDate: form.returnDate,
-      numberOfPeople: form.numberOfPeople.trim(),
-      budgetPerPerson: form.budgetPerPerson.trim() || undefined,
-      hotelStars: form.hotelStars || undefined,
-      additionalInfo: form.additionalInfo.trim() || undefined,
-      targetCompanyId: form.targetCompanyId,
-      targetCompanyName: selectedCompany?.name ?? "",
-    }); setSubmitted(true); }
+    try {
+      await onSubmit({
+        initialChanges, sourceTourId: sourceTour?.id, userId: currentUser.id,
+        businessName: form.businessName.trim() || undefined,
+        businessEmail: form.businessEmail.trim() || undefined,
+        businessPhone: form.businessPhone.trim() || undefined,
+        contactName: form.contactName.trim(),
+        contactEmail: form.contactEmail.trim(),
+        contactPhone: form.contactPhone.trim(),
+        destinations: form.destinations.trim(),
+        departureDate: form.departureDate,
+        returnDate: form.returnDate,
+        numberOfPeople: form.numberOfPeople.trim(),
+        budgetPerPerson: form.budgetPerPerson.trim() || undefined,
+        hotelStars: form.hotelStars || undefined,
+        additionalInfo: form.additionalInfo.trim() || undefined,
+        targetCompanyId: form.targetCompanyId,
+        targetCompanyName: selectedCompany?.name ?? "",
+      }); setSubmitted(true);
+    }
     catch (error) { setErrorMsg(error instanceof Error ? error.message : "Không thể gửi yêu cầu."); }
     finally { setSubmitting(false); }
   };
@@ -242,6 +271,13 @@ export function CustomTourRequestPage({
         </div>
       )}
 
+      {sourceTour && <section className="rounded border border-sky-200 bg-sky-50 p-4 space-y-3">
+        <h3 className="font-bold text-sky-900">Tùy chỉnh từ Tour: {sourceTour.name}</h3>
+        <p>Tour gốc được giữ nguyên. Agency sẽ thiết kế và xác nhận lại theo đề xuất của bạn.</p>
+        <Button type="button" variant="outline" onClick={() => setEditTemplate(true)}>Chỉnh sửa lịch trình mẫu</Button>
+        {initialChanges && <p className="text-sky-800">Đã lưu đề xuất: {initialChanges.message}</p>}
+        {editTemplate && <CustomerPlanEditor requestId="" plan={initialChanges ? { ...sourceTour, ...initialChanges } : sourceTour} onSaveDraft={setInitialChanges} onCancel={() => setEditTemplate(false)} onDone={() => setEditTemplate(false)} />}
+      </section>}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Step 1: Chọn Agency */}
         <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
@@ -257,23 +293,23 @@ export function CustomTourRequestPage({
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {companies.map((c) => {
+            {companies.filter((c) => !sourceTour?.companyId || c.id === sourceTour.companyId).map((c) => {
               const isSelected = form.targetCompanyId === c.id;
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, targetCompanyId: c.id }))}
-                  className={`text-left p-3.5 rounded-[6px] border transition-colors ${
-                    isSelected
+                  className={`flex items-center gap-3 text-left p-3.5 rounded-[6px] border transition-colors ${isSelected
                       ? "border-[#075985] bg-[#F0F9FF]"
                       : "border-[#CBD5E1] bg-white hover:border-[#075985]"
-                  }`}
+                    }`}
                 >
-                  <p className="font-semibold text-xs text-[#0F172A]">{c.name}</p>
-                  <p className="text-[11px] text-[#475569] mt-1 line-clamp-2">
-                    {c.address}
-                  </p>
+                  <CompanyLogo src={c.logo} name={c.name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-xs text-[#0F172A]">{c.name}</p>
+                    <p className="text-[11px] text-[#475569] mt-1 line-clamp-2">{c.address}</p>
+                  </div>
                 </button>
               );
             })}

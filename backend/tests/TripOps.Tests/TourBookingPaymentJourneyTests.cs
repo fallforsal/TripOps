@@ -13,13 +13,13 @@ namespace TripOps.Tests;
 
 public sealed partial class BookingFlowTests
 {
-    // Cross-feature regression: create a private tour, confirm its services, agree its
-    // actual price, approve, sign the exact contract and settle through the fake gateway.
+    // Cross-feature regression: Agency approves a private tour booking independently of
+    // Provider responses; customer signs and settles through the fake gateway.
     // Both payment schedules use the same journey, not pre-approved fixture bookings.
     [Theory]
     [InlineData(30, false)]
-    [InlineData(3, true)]
-    public async Task Custom_tour_provider_quote_contract_and_payos_complete_one_journey(int daysUntilDeparture, bool fullPayment)
+    [InlineData(3, false)]
+    public async Task Custom_tour_contract_and_payos_complete_without_provider_confirmation(int daysUntilDeparture, bool fullPayment)
     {
         var clock = new TestClock { Fixed = DateTime.UtcNow };
         var gateway = new FakePayOs();
@@ -68,33 +68,20 @@ public sealed partial class BookingFlowTests
         Assert.Equal(plan.Id, Assert.Single(await Read<TourDto[]>(await customer.GetAsync(
             $"/api/v1/tour-design-requests/{request.Id}/plans"))).Id);
 
+        Assert.Equal(HttpStatusCode.NoContent, (await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(plan.Id, plan.Version))).StatusCode);
         var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, departure, "Demo Customer", "0900000000", "customer1@example.test", null,
                 [new ParticipantInput("Adult One", null, new DateTime(1990, 1, 1), null, null, null),
                     new ParticipantInput("Adult Two", null, new DateTime(1992, 1, 1), null, null, null)])));
         Assert.Null(booking.Contract);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(
-            $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/send", null)).StatusCode);
 
         var serviceRequests = await Read<ProviderRequestView[]>(await providerClient.GetAsync("/api/v1/provider/booking-requests"));
         Assert.Equal(2, serviceRequests.Length);
-        foreach (var row in serviceRequests)
-            await Read<ProviderRequestView>(await providerClient.PostAsJsonAsync(
-                $"/api/v1/provider/booking-requests/{row.Id}/respond",
-                new ProviderReply("confirm", row.ServiceId == hotelId ? 3000000 : 2000000, "Demo total service cost")));
-        await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",
-            new AgencyQuotationInput(1000000, [], "Confirmed service prices")));
-        var quotation = await Read<QuotationView>(await agency.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/send", null));
-        Assert.Equal(6000000, quotation.SaleTotal);
-        var customerQuote = Assert.Single(await Read<QuotationView[]>(await customer.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")));
-        Assert.Null(customerQuote.TotalCost); Assert.Null(customerQuote.AgencyProfit);
-        await Read<QuotationView>(await customer.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/{quotation.Version}/accept", null));
-
+        // Provider requests remain Pending. Agency approves independently, at the booked sale price.
+        Assert.All(serviceRequests, r => Assert.Equal("Pending", r.Status));
         var approved = await Read<BookingDto>(await agency.PostAsJsonAsync(
             $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
-        Assert.Equal(quotation.SaleTotal, approved.Contract!.TotalAmount);
+        Assert.Equal(booking.TotalAmount, approved.Contract!.TotalAmount);
         Assert.True(approved.Contract.RequiredBeforePayment);
         Assert.Equal(fullPayment ? 1 : 2, approved.PaymentSchedule!.Count);
         Assert.Equal(fullPayment ? "full" : "deposit", approved.PaymentSchedule[0].Stage);
@@ -107,6 +94,13 @@ public sealed partial class BookingFlowTests
         Assert.False(signed.Contract.RequiredBeforePayment);
         Assert.Equal("application/pdf", (await customer.GetAsync($"/api/v1/files/contracts/{booking.Id}/signed")).Content.Headers.ContentType!.MediaType);
 
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            await db.BookingSupplierRequests.Where(r => r.BookingId == booking.Id)
+                .ExecuteUpdateAsync(set => set.SetProperty(r => r.HoldUntil, DateTime.UtcNow.AddMinutes(-1)));
+        }
+        // An expired Provider hold does not gate the customer's payment either.
         var checkout = await Read<PayOsCheckoutDto>(await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null));
         Assert.Equal(fullPayment ? 6000000 : 3000000, checkout.Amount);
         gateway.Pay(OrderCode(checkout.TransactionCode));
@@ -115,6 +109,12 @@ public sealed partial class BookingFlowTests
         if (!fullPayment)
         {
             Assert.Equal("Confirmed", paid.Status);
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+                await db.BookingSupplierRequests.Where(r => r.BookingId == booking.Id)
+                    .ExecuteUpdateAsync(set => set.SetProperty(r => r.HoldUntil, DateTime.UtcNow.AddMinutes(-1)));
+            }
             var balance = await Read<PayOsCheckoutDto>(await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null));
             Assert.Equal(3000000, balance.Amount);
             gateway.Pay(OrderCode(balance.TransactionCode));
@@ -127,6 +127,20 @@ public sealed partial class BookingFlowTests
         using var check = app.Services.CreateScope();
         var persisted = check.ServiceProvider.GetRequiredService<TripOpsDbContext>();
         Assert.Equal(6000000, await persisted.PaymentTransactions.Where(t => t.BookingId == booking.Id && t.Status == PaymentTransactionStatus.Success).SumAsync(t => t.Amount));
+        Assert.All(await persisted.PaymentRequests.Where(r => r.BookingId == booking.Id).ToListAsync(), r => Assert.Null(r.QuotationId));
         Assert.Single(await persisted.ContractSignSessions.Where(s => s.CompletedAt != null).ToListAsync());
+        var fee = new BookingSurchargeInput(200000, "Agreed additional service", paid.TotalAmount, Guid.NewGuid());
+        var charged = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/surcharges", fee));
+        Assert.Equal("Paid", charged.Status);
+        Assert.Equal(paid.Contract!.Id, charged.Contract!.Id);
+        Assert.False(charged.Contract.RequiredBeforePayment);
+        Assert.Equal(6000000, charged.BaseTourAmount);
+        var feeCheckout = await Read<PayOsCheckoutDto>(await customer.PostAsync($"/api/v1/bookings/{booking.Id}/payments/payos", null));
+        Assert.Equal(200000, feeCheckout.Amount);
+        gateway.Pay(OrderCode(feeCheckout.TransactionCode));
+        var finished = (await Sync(customer, booking.Id)).Booking;
+        Assert.Equal(6200000, finished.PaidAmount);
+        Assert.Equal("Paid", finished.PaymentStatus);
+        Assert.Equal(6200000, (await Sync(customer, booking.Id)).Booking.PaidAmount);
     }
 }

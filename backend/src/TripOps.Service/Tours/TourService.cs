@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator)
+public sealed class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -355,6 +355,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     private void Snapshot(Tour tour, string actor, string note)
     {
         repository.AddVersion(tour, new TourVersion { VersionNumber = tour.Version ?? 1, CreatedBy = actor,
+            SharedToCustomer = tour.IsSharedToCustomer == true, NumberOfGuests = Configuration(tour).NumberOfGuests ?? (tour.DesignRequestId.HasValue ? db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).Select(r => r.NumberOfGuests).FirstOrDefault() : null),
             Price = tour.BasePrice, ChangeLog = note, SnapshotData = JsonSerializer.Serialize(new TourSnapshot(1,
                 tour.Version ?? 1, tour.IsRequest == true, tour.IsAiGenerated == true, State(tour.Status), State(tour.Visibility), Configuration(tour)), Json) });
     }
@@ -365,6 +366,25 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     }
     private async Task<TourDto> Save(Tour tour, string actor, string note, CancellationToken ct)
     {
+        if (tour.DesignRequestId.HasValue)
+        {
+            var request = await db.TourDesignRequests.SingleAsync(r => r.Id == tour.DesignRequestId, ct);
+            var bookings = await db.Bookings.Where(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected).ToListAsync(ct);
+            Require(bookings.All(b => b.PaymentStatus == PaymentStatus.Unpaid && b.Status == BookingStatus.Pending), "Plan đã chốt hoặc thanh toán; không thể sửa.");
+            foreach (var booking in bookings)
+            {
+                foreach (var q in await db.BookingQuotations.Where(q => q.BookingId == booking.Id && q.Status != "Superseded").ToListAsync(ct)) q.Status = "Superseded";
+                foreach (var r in await db.BookingSupplierRequests.Where(r => r.BookingId == booking.Id && r.Status != "Superseded").ToListAsync(ct)) r.Status = "Superseded";
+            }
+            if (Configuration(tour).NumberOfGuests.HasValue) request.NumberOfGuests = Configuration(tour).NumberOfGuests;
+            request.AgreedTourId = null; request.AgreedTourVersion = null; request.AgreedAt = null; request.Revision++;
+            if (tour.IsSharedToCustomer == true)
+            {
+                foreach (var other in await db.Tours.Where(t => t.DesignRequestId == request.Id && t.Id != tour.Id && t.IsSharedToCustomer == true).ToListAsync(ct))
+                    other.IsSharedToCustomer = false;
+                db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = request.Id, Message = "Agency đã gửi phiên bản Tour plan mới." });
+            }
+        }
         tour.ChangeNote = note;
         Snapshot(tour, actor, note);
         try { await repository.Save(ct); }
@@ -391,13 +411,14 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     {
         var user = await accounts.Current(actor, ct);
         Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
-        return Dto(await repository.CustomerRequestTour(actor, requestId, ct) ?? throw new TourException(404, "Tour chưa sẵn sàng cho khách xem."));
+        var dto = Dto(await repository.CustomerRequestTour(actor, requestId, ct) ?? throw new TourException(404, "Tour chưa sẵn sàng cho khách xem."));
+        return dto with { Configuration = DesignRequestService.CustomerConfiguration(dto.Configuration) };
     }
     public async Task<IReadOnlyList<TourDto>> CustomerRequestTours(string actor, int requestId, CancellationToken ct)
     {
         var user = await accounts.Current(actor, ct);
         Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
-        return (await repository.CustomerRequestTours(actor, requestId, ct)).Select(Dto).ToArray();
+        return (await repository.CustomerRequestTours(actor, requestId, ct)).Select(t => { var dto = Dto(t); return dto with { Configuration = DesignRequestService.CustomerConfiguration(dto.Configuration) }; }).ToArray();
     }
 
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
@@ -426,7 +447,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version ?? 1, Configuration(tour));
+        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(Configuration(tour)), tour.AgencyId);
     }
     private static string[]? ParseProvinceFilter(string? provinceCode)
     {
