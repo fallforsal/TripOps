@@ -173,3 +173,21 @@ UTC+7, regardless of the phone's timezone. The existing start-tour endpoint
 still uses a UTC calendar comparison, a separate pre-existing policy that
 should be aligned in a future backend change. The app respects the
 server-supplied `canRecordAttendance` for attendance controls.
+
+
+## Passenger contacts (attendance)
+The passenger card no longer shows a decorative avatar. It now displays a clearly
+labeled **SĐT** field from `BookingDto.participants[].phoneNumber`, or
+**Chưa cập nhật** if the backend does not supply one. When provided, there are
+buttons to **copy** the number or open the device dialer (via `url_launcher`).
+Calling opens the phone application; it does not place an automatic call.
+
+In the existing backend, each participant's `phoneNumber` is extracted from
+the participant note line `Điện thoại: ...`. If a passenger has no such contact
+data, Flutter intentionally does **not** substitute the booking contact's number.
+The assigned guide can still see attendance status normally; call/copy actions
+are independent of the departure-day attendance restriction.
+
+From this point on, development changes to the Guide Flutter app are committed
+to the persistent `hiep` branch, based on `develop`. Pull `hiep` to run
+new changes before merging them to `develop`.
