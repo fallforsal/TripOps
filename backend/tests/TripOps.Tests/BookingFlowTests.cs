@@ -293,9 +293,37 @@ public sealed partial class BookingFlowTests
         Assert.Single(guideTrips.Items);
         Assert.Equal(bookingId, guideTrips.Items[0].Id);
 
-        // 7. Guide điểm danh hành khách
+        // 7. Guide may check attendance only on the exact departure date (UTC).
         int participantId = assigned.Participants[0].Id;
-        var attendRes = await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{bookingId}/attendance", new AttendanceCheckinRequest(participantId, "CheckedIn"));
+        var attendanceUrl = $"/api/v1/guide/bookings/{bookingId}/attendance";
+        var checkedInRequest = new AttendanceCheckinRequest(participantId, "CheckedIn");
+        Assert.False(assigned.CanRecordAttendance);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest)).StatusCode);
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var futureParticipant = await db.BookingParticipants.SingleAsync(p => p.Id == participantId);
+            Assert.Equal(AttendanceStatus.Pending, futureParticipant.AttendanceStatus);
+            Assert.Null(futureParticipant.CheckedAt);
+            var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            trip.StartDate = DateTime.UtcNow.Date.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest)).StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            trip.StartDate = DateTime.UtcNow.Date;
+            await db.SaveChangesAsync();
+        }
+        var departureDayDetail =
+            await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.True(departureDayDetail!.CanRecordAttendance);
+        var attendRes = await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest);
         Assert.Equal(HttpStatusCode.OK, attendRes.StatusCode);
         var attended = await attendRes.Content.ReadFromJsonAsync<ParticipantDto>();
         Assert.NotNull(attended);
