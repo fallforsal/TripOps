@@ -4,7 +4,7 @@ class BookingSummary {
   const BookingSummary({
     required this.id, required this.code, required this.name,
     required this.startDate, required this.status, required this.guestCount,
-    this.customerName, this.contactPhone,
+    this.customerName, this.contactPhone, this.thumbnailUrl,
   });
   final int id;
   final String code;
@@ -14,6 +14,7 @@ class BookingSummary {
   final int guestCount;
   final String? customerName;
   final String? contactPhone;
+  final String? thumbnailUrl;
 
   bool get isCompleted => status == 'Completed';
   bool get isActive => const {'Confirmed', 'Paid', 'InProgress'}.contains(status);
@@ -27,6 +28,7 @@ class BookingSummary {
     guestCount: (j['totalGuests'] as num?)?.toInt() ?? 0,
     customerName: j['customerName']?.toString(),
     contactPhone: j['contactPhone']?.toString(),
+    thumbnailUrl: j['thumbnailUrl']?.toString(),
   );
 }
 

@@ -49,7 +49,7 @@ export interface AgencyBookingManagementProps {
 }
 
 const statusMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  pending: { label: "Chờ chốt giá & duyệt", bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-300" },
+  pending: { label: "Chờ duyệt", bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-300" },
   confirmed: { label: "Đã xác nhận", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
   cancelled: { label: "Đã hủy", bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
   completed: { label: "Hoàn thành", bg: "bg-[#F0F9FF]", text: "text-[#075985]", border: "border-[#CBD5E1]" },

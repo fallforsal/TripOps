@@ -69,31 +69,18 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync("/api/v1/tour-design-requests", input with { AgencyId = "other" })).StatusCode);
     }
     [Fact]
-    public async Task Expired_final_quote_cannot_be_accepted_and_sent_snapshot_cannot_be_overwritten()
+    public async Task Final_quotation_commands_are_no_longer_exposed()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
-        var (request, plan) = await SharedDesign(customer, agency);
-        Assert.Equal(HttpStatusCode.NoContent, (await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new { tourId = plan.Id, version = plan.Version })).StatusCode);
-        var b = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
-            [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
-        var initial = Assert.Single(await Read<QuotationView[]>(await agency.GetAsync($"/api/v1/bookings/{b.Id}/quotations")));
-        await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{b.Id}/quotations/draft", new AgencyQuotationInput(100000, initial.Costs!.Where(l => l.Source == "AGENCY_SUPPLIER").Select(l => new AgencyCostInput(l.SlotKey, 10000)).ToArray(), "Final", SaleTotal: 1000000)));
-        var q = await Read<QuotationView>(await agency.PostAsync($"/api/v1/bookings/{b.Id}/quotations/send", null));
-        using (var scope = app.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            var row = await db.BookingQuotations.SingleAsync(x => x.Id == q.Id);
-            row.SaleTotal++;
-            await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
-            db.ChangeTracker.Clear();
-            await db.BookingQuotations.Where(x => x.Id == q.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.ValidUntil, DateTime.UtcNow.AddMinutes(-1)));
-        }
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsync($"/api/v1/bookings/{b.Id}/quotations/{q.Version}/accept", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{b.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
+        foreach (var action in new[] { "send", "1/accept", "1/decision" })
+            Assert.Equal(HttpStatusCode.NotFound, (await agency.PostAsJsonAsync($"/api/v1/bookings/1/quotations/{action}", new { })).StatusCode);
+        foreach (var action in new[] { "draft", "terms" })
+            Assert.Equal(HttpStatusCode.NotFound, (await agency.PutAsJsonAsync($"/api/v1/bookings/1/quotations/{action}", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await customer.PostAsync("/api/v1/bookings/1/quotations/1/accept", null)).StatusCode);
     }
     [Fact]
-    public async Task Provider_counter_offer_requires_agency_decision_and_partial_supply_blocks_final_quote()
+    public async Task Provider_counter_offer_requires_agency_decision_and_partial_supply_blocks_approval()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency"); using var provider = await app.Login("provider");
@@ -124,7 +111,7 @@ public sealed partial class TourFlowTests
         var history = await Read<JsonElement>(await agency.GetAsync($"/api/v1/bookings/{b.Id}/quotations/supplier-requests/{hotel.Id}/history"));
         Assert.True(history.GetProperty("priceConfirmed").GetBoolean());
         Assert.Equal(2, history.GetProperty("responses").GetArrayLength());
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsync($"/api/v1/bookings/{b.Id}/quotations/send", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{b.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
     }
 
 }

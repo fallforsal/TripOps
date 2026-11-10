@@ -78,6 +78,11 @@ export interface BookingDto {
   startDate: string;
   endDate: string;
   totalGuests: number;
+  originalTotalPrice?: number;
+  baseTourAmount?: number;
+  surchargeAmount?: number;
+  hasBeenApproved?: boolean;
+  priceAdjustments?: { id: number; adjustedBy: string; previousTotalPrice: number; adjustmentAmount: number; newTotalPrice: number; reason: string; createdAt?: string }[];
   totalAmount: number;
   depositAmount: number;
   paidAmount: number;
@@ -108,26 +113,32 @@ export interface BookingDto {
     locations: {
       id: number;
       name: string;
+      originalName?: string;
       time?: string;
       attendanceStatus?: string;
+      changeReason?: string;
     }[];
     meals: {
       id: number;
       mealType: "breakfast" | "lunch" | "dinner";
       name: string;
+      originalName?: string;
       time?: string;
       serviceId?: number;
       priceDifference: number;
+      supplier?: { address?: string; contactPhone?: string };
     }[];
   }[];
   snapshotHotels?: {
     id: number;
     destination: string;
     name: string;
+    originalName?: string;
     stars?: number;
     nights?: number;
     serviceId?: number;
     priceDifference: number;
+    supplier?: { address?: string; contactPhone?: string };
   }[];
   /** Lịch thanh toán thật từ máy chủ (rỗng khi đơn còn chờ duyệt). */
   paymentSchedule?: PaymentScheduleItemDto[];
@@ -334,7 +345,7 @@ export interface PayoutAccountDto {
 export interface PaymentScheduleItemDto {
   id?: number | null;
   /** full = tour sát ngày khởi hành: thanh toán toàn bộ một lần, không có đợt 2. */
-  stage: "deposit" | "balance" | "full";
+  stage: "deposit" | "balance" | "full" | "surcharge";
   description: string;
   amount: number;
   outstanding: number;
@@ -440,16 +451,17 @@ export async function depositBooking(
   amount: number,
   transactionReference?: string,
   paymentProofUrl?: string,
+  paymentRequestId?: number,
 ): Promise<BookingDto> {
   return await http<BookingDto>(`/bookings/${id}/deposit`, {
     method: "POST",
-    body: JSON.stringify({ amount, transactionReference, paymentProofUrl }),
+    body: JSON.stringify({ amount, transactionReference, paymentProofUrl, paymentRequestId }),
   });
 }
 
-/** Tạo (hoặc dùng lại) link payOS cho phần cọc còn thiếu. Số tiền do backend tính. */
-export async function startPayOsPayment(id: number): Promise<PayOsCheckoutDto> {
-  return await http<PayOsCheckoutDto>(`/bookings/${id}/payments/payos`, {
+/** Tạo (hoặc dùng lại) link payOS cho khoản thu được chọn. Số tiền do backend tính. */
+export async function startPayOsPayment(id: number, paymentRequestId?: number): Promise<PayOsCheckoutDto> {
+  return await http<PayOsCheckoutDto>(`/bookings/${id}/payments/payos${paymentRequestId !== undefined ? `?paymentRequestId=${paymentRequestId}` : ""}`, {
     method: "POST",
   });
 }

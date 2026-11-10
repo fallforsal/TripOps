@@ -370,7 +370,7 @@ public sealed class TourService(TourRepository repository, AccountService accoun
         {
             var request = await db.TourDesignRequests.SingleAsync(r => r.Id == tour.DesignRequestId, ct);
             var bookings = await db.Bookings.Where(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected).ToListAsync(ct);
-            Require(bookings.All(b => b.PaymentStatus == PaymentStatus.Unpaid && b.AcceptedQuotationId == null), "Plan đã chốt hoặc thanh toán; không thể sửa.");
+            Require(bookings.All(b => b.PaymentStatus == PaymentStatus.Unpaid && b.Status == BookingStatus.Pending), "Plan đã chốt hoặc thanh toán; không thể sửa.");
             foreach (var booking in bookings)
             {
                 foreach (var q in await db.BookingQuotations.Where(q => q.BookingId == booking.Id && q.Status != "Superseded").ToListAsync(ct)) q.Status = "Superseded";

@@ -1173,8 +1173,22 @@ function Application() {
   };
 
   // Company adjusts total booking price & logs adjustment history
-  const handleUpdateBookingPrice = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleBookingChanged = (dto: import("@/app/services/wf05Bookings").BookingDto) => {
+    const updated = fromApiBooking(dto, tours, currentUser);
+    setBookings(prev => prev.map(b => b.id === updated.id ? updated : b));
+  };
+  const handleUpdateBookingPrice = async (bookingId: string, newPrice: number, note?: string): Promise<boolean> => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return false;
+    if (booking.hasBeenApproved || booking.status !== "pending") { toast.error("Giá tour đã khóa sau khi duyệt. Vui lòng tạo phụ thu riêng."); return false; }
+    try {
+      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${bookingId}/price-adjustments`, {
+        method: "POST", body: JSON.stringify({ newPrice, reason: note, expectedTotal: booking.totalPrice }),
+      });
+      handleBookingChanged(updated);
+      toast.success("Đã lưu giá mới và nhật ký trước khi duyệt booking.");
+      return true;
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Không lưu được giá mới."); return false; }
   };
 
   // Mã giao dịch mô phỏng cố định cho mỗi đợt: bấm lại / mạng chập chờn không ghi tiền hai lần.
@@ -1201,14 +1215,14 @@ function Application() {
     }
     try {
       const updated = fromApiBooking(
-        await depositBooking(Number(bookingId), request.amount, reference),
+        await depositBooking(Number(bookingId), request.amount, reference, undefined, Number(paymentRequestId)),
         tours,
         currentUser,
       );
       demoPaymentKeys.current.delete(keyId);
       setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
       if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(updated);
-      toast.success("Đã ghi nhận thanh toán cọc (mô phỏng).");
+      toast.success("Đã ghi nhận khoản thanh toán (mô phỏng).");
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không thể ghi nhận thanh toán.");
@@ -1217,9 +1231,9 @@ function Application() {
   };
 
   // Thanh toán cọc qua payOS: backend tính số tiền và tạo (hoặc dùng lại) link, trình duyệt chuyển sang payOS.
-  const handlePayWithPayOs = async (bookingId: string): Promise<void> => {
+  const handlePayWithPayOs = async (bookingId: string, paymentRequestId: string): Promise<void> => {
     try {
-      const checkout = await startPayOsPayment(Number(bookingId));
+      const checkout = await startPayOsPayment(Number(bookingId), Number(paymentRequestId));
       if (!isPayOsUrl(checkout.checkoutUrl)) {
         toast.error("Địa chỉ thanh toán không hợp lệ.");
         return;
@@ -1592,6 +1606,7 @@ function Application() {
               onMarkDepositPaid={handleMarkDepositPaid}
               onMarkFullyPaid={handleMarkFullyPaid}
               onUpdateBookingPrice={handleUpdateBookingPrice}
+              onBookingChanged={handleBookingChanged}
               onUpdateBookingPassengers={handleUpdateBookingPassengers}
               onUpdateBookingAgencies={handleUpdateBookingAgencies}
               onUpdateAttractionCheckins={handleUpdateAttractionCheckins}
@@ -1868,7 +1883,6 @@ function Application() {
                 window.clearTimeout(paymentPollTimer.current);
                 void checkPayment(id);
               }}
-              onUpdateBookingPassengers={handleUpdateBookingPassengers}
               onNavigateToComplaint={(b) => {
                 setComplaintInitialBooking(b);
                 setCurrentPage("my-complaints");

@@ -81,7 +81,7 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Custom_booking_requires_current_customer_accepted_quotation_before_approval()
+    public async Task Custom_booking_can_be_approved_at_booked_price_without_final_quotation()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
@@ -97,23 +97,18 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NoContent, (await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(plan.Id, plan.Version))).StatusCode);
         var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", create), HttpStatusCode.Created);
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync("/api/v1/bookings", create)).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
+        var originalTotal = booking.TotalAmount;
         var initial = Assert.Single(await Read<QuotationView[]>(await agency.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")));
-        await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",
-            new AgencyQuotationInput(500000, initial.Costs!.Where(l => l.Source == "AGENCY_SUPPLIER").Select(l => new AgencyCostInput(l.SlotKey, 100000)).ToArray(), "Giá chính thức", SaleTotal: 1500000)));
-        var sent = await Read<QuotationView>(await agency.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/send", null));
-        Assert.Equal(750000, sent.DepositAmount);
-        var visible = Assert.Single(await Read<QuotationView[]>(await customer.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")));
-        Assert.Null(visible.TotalCost); Assert.Null(visible.Costs); Assert.Null(visible.AgencyProfit);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/terms", new QuotationTerms(DateTime.UtcNow.AddDays(5), "Changed"))).StatusCode);
-        await Read<QuotationView>(await customer.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/{sent.Version}/accept", null));
+        Assert.Equal("Draft", initial.Status);
+        Assert.Equal(0, initial.SaleTotal);
         var approved = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
-        Assert.Equal(1500000, approved.TotalAmount);
+        Assert.Equal(originalTotal, approved.TotalAmount);
+        Assert.Equal(originalTotal, approved.Contract!.TotalAmount);
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/bookings/{booking.Id}/quotations")).StatusCode);
     }
 
     [Fact]
-    public async Task Platform_provider_confirms_real_cost_before_agency_can_send_quote()
+    public async Task Platform_provider_confirmation_allows_approval_without_changing_customer_price()
     {
         await using var app = new App(); await app.Initialize();
         await app.Inspect(async db => {
@@ -150,7 +145,7 @@ public sealed partial class TourFlowTests
             Assert.Equal($"Address {row.ServiceId}, Da Lat", row.FullAddress);
             Assert.Null(row.RespondedAt);
         });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(
+        Assert.Equal(HttpStatusCode.OK, (await agency.PostAsJsonAsync(
             $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await other.PostAsJsonAsync($"/api/v1/provider/booking-requests/{requests[0].Id}/respond",
@@ -178,29 +173,14 @@ public sealed partial class TourFlowTests
             $"/api/v1/bookings/{booking.Id}/quotations/supplier-requests")).StatusCode);
         var current = (await Read<QuotationView[]>(await agency.GetAsync(
             $"/api/v1/bookings/{booking.Id}/quotations")))[0];
-        Assert.True(current.RequiresCustomerAcceptance);
         Assert.Equal(3, current.Version);
         Assert.Equal(420000, current.TotalCost);
-        await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",
-            new AgencyQuotationInput(500000, [], "Provider đã xác nhận")));
-        var sent = await Read<QuotationView>(await agency.PostAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/send", null));
-        Assert.Equal(920000, sent.SaleTotal);
-        await Read<ProviderRequestView>(await provider.PostAsJsonAsync(
-            $"/api/v1/provider/booking-requests/{requests[0].Id}/respond",
-            new ProviderReply("confirm", 350000, "Giá thay đổi")));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/{sent.Version}/accept", null)).StatusCode);
-        var repriced = await Read<QuotationView>(await agency.PutAsJsonAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/draft",
-            new AgencyQuotationInput(500000, [], "Provider điều chỉnh giá")));
-        Assert.True(repriced.Version > sent.Version);
-        sent = await Read<QuotationView>(await agency.PostAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/send", null));
-        await Read<QuotationView>(await customer.PostAsync(
-            $"/api/v1/bookings/{booking.Id}/quotations/{sent.Version}/accept", null));
-        await Read<BookingDto>(await agency.PostAsJsonAsync(
+        var approved = await Read<BookingDto>(await agency.PostAsJsonAsync(
             $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
+        Assert.Equal(booking.TotalAmount, approved.TotalAmount);
+        Assert.Equal(booking.TotalAmount, approved.Contract!.TotalAmount);
+        Assert.Equal(HttpStatusCode.OK, (await provider.PostAsJsonAsync(
+            $"/api/v1/provider/booking-requests/{requests[0].Id}/respond", new ProviderReply("confirm", 350000, "After approval"))).StatusCode);
     }
 
     [Fact]
@@ -244,7 +224,7 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Rejected_platform_hotel_requires_agency_replacement_and_new_quotation()
+    public async Task Rejected_platform_hotel_requires_replacement_before_approval()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
@@ -272,7 +252,7 @@ public sealed partial class TourFlowTests
             $"/api/v1/provider/booking-requests/{providerRequest.Id}/respond",
             new ProviderReply("reject", null, "Hết phòng")));
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
-            (await agency.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/send", null)).StatusCode);
+            (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/change-plan",
                 new BookingPlanChange(draft.Id))).StatusCode);
@@ -288,9 +268,7 @@ public sealed partial class TourFlowTests
         Assert.Contains(rescheduled.Costs!, l => l.Name == "Agency hotel");
         Assert.DoesNotContain(await Read<ProviderRequestView[]>(await agency.GetAsync(
             $"/api/v1/bookings/{booking.Id}/quotations/supplier-requests")), r => r.Status == "Pending");
-        await Read<QuotationView>(await agency.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/draft",
-            new AgencyQuotationInput(500000, rescheduled.Costs!.Where(l => l.Source == "AGENCY_SUPPLIER")
-                .Select(l => new AgencyCostInput(l.SlotKey, 200000)).ToArray(), "Thay khách sạn")));
-        await Read<QuotationView>(await agency.PostAsync($"/api/v1/bookings/{booking.Id}/quotations/send", null));
+        await Read<BookingDto>(await agency.PostAsJsonAsync(
+            $"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
     }
 }

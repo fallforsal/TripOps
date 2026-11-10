@@ -14,12 +14,6 @@ public sealed class BookingQuotationsController(BookingQuotationService quotatio
     [ProducesResponseType<IReadOnlyList<QuotationView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(int bookingId, CancellationToken ct) =>
         Ok(await quotations.Quotations(Actor, bookingId, User.IsInRole("agency"), ct));
-    [HttpPut("terms"), Authorize(Roles = "agency")]
-    [ProducesResponseType<QuotationView>(200)]
-    public async Task<IActionResult> Terms(int bookingId, QuotationTerms input, CancellationToken ct) => Ok(await quotations.SetTerms(Actor, bookingId, input, ct));
-    [HttpPost("{version:int}/decision"), Authorize(Roles = "user")]
-    [ProducesResponseType<QuotationView>(200)]
-    public async Task<IActionResult> Decision(int bookingId, int version, QuotationDecision input, CancellationToken ct) => Ok(await quotations.Decide(Actor, bookingId, version, input, ct));
     [HttpPost("supplier-requests/{id:int}/counter/{accept:bool}"), Authorize(Roles = "agency")]
     [ProducesResponseType(204)]
     public async Task<IActionResult> Counter(int bookingId, int id, bool accept, CancellationToken ct)
@@ -32,21 +26,6 @@ public sealed class BookingQuotationsController(BookingQuotationService quotatio
     [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SupplierRequests(int bookingId, CancellationToken ct) =>
         Ok(await quotations.AgencyRequests(Actor, bookingId, ct));
-    [HttpPut("draft"), Authorize(Roles = "agency")]
-    [EndpointSummary("Set Agency supplier costs and Agency profit on the current draft")]
-    [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Price(int bookingId, AgencyQuotationInput input, CancellationToken ct) =>
-        Ok(await quotations.Price(Actor, bookingId, input, ct));
-    [HttpPost("send"), Authorize(Roles = "agency")]
-    [EndpointSummary("Send the fully confirmed quotation revision to the customer")]
-    [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Send(int bookingId, CancellationToken ct) =>
-        Ok(await quotations.Send(Actor, bookingId, ct));
-    [HttpPost("{version:int}/accept"), Authorize(Roles = "user")]
-    [EndpointSummary("Customer accepts the latest sent quotation before deposit")]
-    [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Accept(int bookingId, int version, CancellationToken ct) =>
-        Ok(await quotations.Accept(Actor, bookingId, version, ct));
     [HttpPost("change-plan"), Authorize(Roles = "user")]
     [EndpointSummary("Customer changes a custom Tour plan or service selection before deposit")]
     [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]

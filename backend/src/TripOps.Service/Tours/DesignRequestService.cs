@@ -30,7 +30,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         await Customer(actor, ct);
         var request = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == requestId && r.CustomerId == actor, ct)
             ?? throw new TourException(404, "Không tìm thấy yêu cầu thiết kế.");
-        Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId && b.AcceptedQuotationId != null && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Báo giá đã được chấp nhận; không thể sửa Plan.");
+        Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId && b.Status != BookingStatus.Pending && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Booking đã được duyệt; không thể sửa Plan.");
         Require(request.Status is not (CustomRequestStatus.Cancelled or CustomRequestStatus.Rejected),
             "Yêu cầu đã đóng.");
         Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId &&
