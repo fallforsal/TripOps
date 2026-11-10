@@ -91,6 +91,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
 import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
+import { DesignTourPricingTable } from "./DesignTourPricingTable";
 
 // Legacy fixture IDs are not rows in the Provider catalogue (the API uses numeric IDs).
 // Keep their price/details as an Agency supplier snapshot instead of posting a fake serviceId.
@@ -1187,6 +1188,8 @@ export interface TourFormPageProps {
   isCustomDesign?: boolean;
   customRequestData?: any;
   initialTour?: Tour;
+  ownershipCollaboration?: boolean;
+  onManageCoHosts?: () => void;
   customerMode?: boolean;
   customerContent?: import("react").ReactNode;
   customerSubmitLabel?: string;
@@ -1199,7 +1202,8 @@ function formatVND(n: number) {
 }
 
 export function TourFormPage(props: TourFormPageProps) {
-  const tour = props.tour ?? props.initialTour ?? null;
+  const ownershipCollaboration = props.ownershipCollaboration ?? Boolean((props.tour ?? props.initialTour)?.is_request && (props.tour ?? props.initialTour)?.agencyPricing);
+  let tour = props.tour ?? props.initialTour ?? null;
   const company: TourCompany = props.company || {
     id: props.companyId || "company-1",
     name: props.companyName || "Công ty Lữ hành",
@@ -1216,6 +1220,15 @@ export function TourFormPage(props: TourFormPageProps) {
     adminId: "",
     createdAt: "",
   };
+  if (ownershipCollaboration && tour?.agencyPricing) {
+    const own= tour.agencyPricing.find(p=>p.agencyId===company.id)?.tiers || [];
+    const leadId=tour.coHosts?.find(h=>h.role==="lead")?.companyId || tour.companyId;
+    const frames=tour.agencyPricing.find(p=>p.agencyId===leadId)?.tiers || [];
+    const rows=frames.map((t,i)=>({tierKey:t.key || `tier-${i}`,ageGroup:(t.maxAge??150)>=100?"adult":(t.maxAge??150)<=4?"child_under_2":`tier-${i}`,
+      ageGroupLabel:t.name,minAge:t.minAge??undefined,maxAge:t.maxAge??undefined,
+      price:own.find(p=>(p.key && p.key===t.key) || (!p.key && p.minAge===t.minAge && p.maxAge===t.maxAge))?.pricePerGuest || 0}));
+    tour={...tour,priceTable:rows,price:rows.find(t=>t.ageGroup==="adult")?.price || 0};
+  }
   const onBack = props.onBack ?? props.onCancel ?? (() => { });
   const onSubmit = props.onSubmit ?? props.onSave ?? (() => { });
   const customRequest =
@@ -1630,6 +1643,11 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   const handleRemovePartnerCoHost = (coHostId: string) => {
+    if (customRequest || tour?.is_request) {
+      if (props.onManageCoHosts) props.onManageCoHosts();
+      else window.location.hash = "#/agency/custom-requests";
+      return;
+    }
     const filtered = coHostsList.filter((ch) => ch.id !== coHostId);
     const tot = filtered.reduce(
       (s, c) =>
@@ -2907,6 +2925,7 @@ export function TourFormPage(props: TourFormPageProps) {
       return;
     }
     const newRow: TourPriceRow = {
+      tierKey: `tier-${crypto.randomUUID()}`,
       ageGroup: `custom_${Date.now()}`,
       ageGroupLabel: "Khung giá mới (VD: Người cao tuổi)",
       ageRange: "Từ 60 tuổi trở lên",
@@ -2961,7 +2980,7 @@ export function TourFormPage(props: TourFormPageProps) {
 
   // Tự động đồng bộ Bảng giá vé trọn gói từ Ma Trận Báo Giá Liên Minh khi là tour Liên minh
   useEffect(() => {
-    if (isCoHostedTour && coHostsList.length > 0) {
+    if (isCoHostedTour && !ownershipCollaboration && coHostsList.length > 0) {
       setPriceTable((prev) => {
         return prev.map((row) => {
           const tot = coHostsList.reduce(
@@ -3505,8 +3524,9 @@ export function TourFormPage(props: TourFormPageProps) {
       });
     }
 
-    const finalTourPrice =
-      isCoHostedTour && calculatedFinalPrice > 0 ? calculatedFinalPrice : price;
+    const finalTourPrice = ownershipCollaboration
+      ? (priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? price)
+      : isCoHostedTour && calculatedFinalPrice > 0 ? calculatedFinalPrice : price;
 
     const tourData: Partial<Tour> = {
       planGuestCount: isCustom ? planGuestCount : undefined,
@@ -3530,7 +3550,7 @@ export function TourFormPage(props: TourFormPageProps) {
       hotels: preparedHotels,
       itinerary: preparedItinerary,
       priceTable: priceTable.map((p) =>
-        p.ageGroup === "adult" ? { ...p, price: finalTourPrice } : p,
+        !ownershipCollaboration && p.ageGroup === "adult" ? { ...p, price: finalTourPrice } : p,
       ),
       inclusions: inclusions.filter((i) => i.trim().length > 0),
       exclusions: exclusions.filter((e) => e.trim().length > 0),
@@ -3774,10 +3794,7 @@ export function TourFormPage(props: TourFormPageProps) {
               >
                 <span>{ch.companyName}</span>
                 <span className="text-[10px] opacity-80">
-                  ({ch.role === "lead" ? "Chủ trì" : "Đối tác"} ·{" "}
-                  {ch.revenueSharePercentage ??
-                    Math.round(100 / coHostsList.length)}
-                  %)
+                  ({ch.role === "lead" ? "Chủ trì" : "Đối tác"})
                 </span>
               </span>
             ))}
@@ -3786,7 +3803,7 @@ export function TourFormPage(props: TourFormPageProps) {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => setShowAddCoHostModal(true)}
+                onClick={() => (customRequest || tour?.is_request) ? (props.onManageCoHosts ? props.onManageCoHosts() : (window.location.hash = "#/agency/custom-requests")) : setShowAddCoHostModal(true)}
                 className="bg-amber-400 hover:bg-amber-300 text-purple-950 font-bold text-xs h-7 px-2.5 gap-1 shadow-sm"
               >
                 <UserPlus className="w-3.5 h-3.5" />
@@ -3835,7 +3852,7 @@ export function TourFormPage(props: TourFormPageProps) {
         {activeTab === "general" && (
           <div className="space-y-6">
             {/* Partner Banner in Tab 1 */}
-            {isCoHostedTour && !isLeadCompany && (
+            {isCoHostedTour && !ownershipCollaboration && !isLeadCompany && (
               <div className="bg-[#F0F9FF] border border-[#F97316]/30 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-purple-900 shadow-2xs">
                 <Info className="w-5 h-5 text-[#F97316] flex-shrink-0" />
                 <div>
@@ -4207,10 +4224,12 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   type="number"
                   step={50000}
-                  value={price}
+                  value={ownershipCollaboration ? priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? 0 : price}
+                  disabled={ownershipCollaboration}
                   onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
                   className="mt-1 font-bold text-[#075985]"
                 />
+                {ownershipCollaboration && <p className="mt-1 text-xs text-slate-500">Nhập giá phần của bạn tại tab Bảng giá vé.</p>}
               </div>
 
               <div>
@@ -5280,7 +5299,7 @@ export function TourFormPage(props: TourFormPageProps) {
                     "Công ty đối tác";
                   const isDayCreatedByMe =
                     !isCoHostedTour || dayOwnerId === company.id;
-                  const isDayLocked = isCoHostedTour && !isDayCreatedByMe;
+                  const isDayLocked = !ownershipCollaboration && isCoHostedTour && !isDayCreatedByMe;
 
                   return (
                     <div
@@ -7298,7 +7317,11 @@ export function TourFormPage(props: TourFormPageProps) {
         {activeTab === "pricing" && (
           <div className="space-y-6">
             {/* BẢNG GIÁ VÉ THEO PHÂN LOẠI ĐỘ TUỔI & MA TRẬN BÁO GIÁ LIÊN MINH (GỘP 1 BẢNG DUY NHẤT) */}
-            {isCoHostedTour ? (
+            {ownershipCollaboration ? (
+              <DesignTourPricingTable rows={priceTable} onRowsChange={setPriceTable}
+                company={company} agencies={coHostsList} agencyPricing={tour?.agencyPricing}
+                isLead={isLeadCompany} onAdd={handleAddPriceRow} onRemove={handleRemovePriceRow}/>
+            ) : isCoHostedTour ? (
               <div className="bg-gradient-to-r from-purple-50 via-indigo-50/40 to-blue-50 border-2 border-[#F97316]/30 rounded-2xl p-5 space-y-4 shadow-sm">
                 {/* Thanh Tiêu đề & Quyền hạn */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#F97316]/30/80">
@@ -7370,7 +7393,7 @@ export function TourFormPage(props: TourFormPageProps) {
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => setShowAddCoHostModal(true)}
+                          onClick={() => (customRequest || tour?.is_request) ? (props.onManageCoHosts ? props.onManageCoHosts() : (window.location.hash = "#/agency/custom-requests")) : setShowAddCoHostModal(true)}
                           className="text-xs h-8 px-3 border-purple-300 text-[#EA580C] hover:bg-[#F97316]/15 font-bold gap-1 shadow-2xs"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
@@ -7428,11 +7451,6 @@ export function TourFormPage(props: TourFormPageProps) {
                                     )}
                                   </span>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-extrabold bg-white border border-[#CBD5E1] text-gray-700">
-                                      {ch.revenueSharePercentage ??
-                                        Math.round(100 / coHostsList.length)}
-                                      %
-                                    </span>
                                     {!isMe && isLeadCompany && (
                                       <button
                                         type="button"
@@ -7797,10 +7815,10 @@ export function TourFormPage(props: TourFormPageProps) {
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
                       <DollarSign className="w-4 h-4 text-emerald-600" />
-                      Bảng giá vé theo phân loại độ tuổi
+                      {ownershipCollaboration ? "Bảng giá riêng của Agency theo độ tuổi" : "Bảng giá vé theo phân loại độ tuổi"}
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Quy định đơn giá áp dụng cho từng đối tượng hành khách.
+                      {ownershipCollaboration ? "Chỉ cập nhật phần giá của công ty bạn. Hệ thống cộng giá các Agency để hiển thị cho Customer. " : "Quy định đơn giá áp dụng cho từng đối tượng hành khách. "}
                       Bạn có thể thêm, chỉnh sửa hoặc xóa các khung giá vé tùy
                       theo chính sách của tour.
                     </p>

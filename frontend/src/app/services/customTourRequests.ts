@@ -1,8 +1,9 @@
 import { http } from "@/app/lib/http";
-import type { CustomTourRequest, Tour, TourCompany } from "@/app/types";
+import type { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
+  coHosts?: TourCoHost[];
   rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
@@ -17,6 +18,7 @@ type RequestDto = {
 type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
+  coHosts: r.coHosts && r.coHosts.length > 1 ? r.coHosts : [], isCoHosted: Boolean(r.coHosts?.some(h => h.role === "partner" && h.status !== "rejected")),
   rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
   targetCompanyName: r.agencyName, contactName: r.contactName,

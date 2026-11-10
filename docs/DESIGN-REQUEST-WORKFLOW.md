@@ -2,6 +2,31 @@
 
 Customer gửi yêu cầu → Agency tiếp nhận hoặc từ chối kèm lý do → thiết kế mới hoặc clone tour của Agency → lưu nháp/hoàn tất nội bộ → bấm Chia sẻ → Customer xem và chat → Agency sửa/khôi phục rồi chia sẻ lại → Customer đặt tour → quy trình booking, hợp đồng, thanh toán dùng chung.
 
+## Đồng tổ chức tour theo yêu cầu
+
+- Agency chủ trì tiếp nhận yêu cầu rồi mời Agency đã được duyệt. Chặng, ngân sách và lời nhắn chỉ cung cấp thông tin, không phân quyền theo ngày.
+- Đối tác vào **Liên minh lữ hành** để chấp nhận/từ chối kèm lý do. Trước khi nhận, không đọc được bản thiết kế nội bộ hoặc liên hệ Customer.
+- Sau khi nhận, mỗi Agency thêm/sửa/xóa điểm tham quan, nhà hàng, khách sạn do mình tạo. API giữ nguyên nội dung của Agency khác dù một form gửi thiếu hoặc cố sửa những mục đó. ID và Agency sở hữu được lưu trong snapshot; các bảng điểm tham quan, nhà hàng, khách sạn dùng `agency_id` hiện có.
+- Tiêu đề/mô tả ngày trong `tour_timeline` được sửa chung. Không giao độc quyền ngày cho một Agency. Một chặng lưu trú/bữa ăn vẫn có một phương án mặc định; thêm chặng tiếp theo phải đúng ngày và số đêm.
+- Chỉ Agency chủ trì thêm/sửa/xóa tên khung vé, khoảng tuổi và thứ tự chung; Agency liên minh chỉ nhập số tiền của mình theo đúng khung đó. Ma trận FE hiển thị một cột mỗi Agency, chỉ cột công ty đang đăng nhập được sửa; cột cuối tự cộng giá bán, không hiển thị tỷ lệ phần trăm. `tour_pricing_tiers.agency_id` xác định chủ bảng giá. Snapshot giữ `agencyPricing` và khóa khung vé `key` để tái lập đúng phiên bản; đổi tên/khoảng tuổi giữ số tiền đối tác, xóa khung gỡ dòng tương ứng, thêm khung mới phải chờ đối tác nhập đủ giá trước khi hoàn tất. Khóa khung chỉ là metadata snapshot, không thêm cột SQL; `pricingTiers` và `basePrice` là tổng giá của các bên. Customer chỉ nhận giá tổng; response Customer loại `agencyPricing`, báo giá, ngân sách và lời nhắn nội bộ.
+- Chủ trì giữ quyền hoàn tất/chia sẻ. Lưu nội dung hoặc thay đổi thành viên tạo bản nháp mới; Customer tiếp tục thấy bản chia sẻ cũ. Khôi phục chỉ thay nội dung/bảng giá của chủ trì và thông tin ngày chung, giữ phần hiện hành của các đối tác.
+- Khi booking, tính tiền từng Agency theo số khách và độ tuổi từ đúng phiên bản chia sẻ; lưu `booking_agencies.original_amount`, `final_amount`, `net_payout` để quyết toán sau này. Tổng phân bổ bằng tổng booking; chênh lệch lựa chọn dịch vụ được gán cho chủ trì. Ví dụ một người lớn + một trẻ em: A = 1.500.000 + 750.000, B = 600.000 + 300.000; Customer trả 3.150.000đ, lưu phần A 2.250.000đ và B 900.000đ. Sửa bảng giá nguồn không tính lại phần đã chốt của booking. Điều chỉnh tổng booking trước duyệt chỉ điều chỉnh phần chủ trì, giữ phần đối tác.
+- Duyệt booking, hợp đồng và thanh toán vẫn theo luồng hiện tại của chủ trì. Có booking đang xử lý thì khóa sửa phương án nguồn/liên minh. Muốn thu hồi đối tác trước booking, đối tác cần gỡ phần nội dung và giá của mình trước.
+
+`tour_design_request_agencies` giữ đúng 10 cột: `id`, `request_id`, `agency_id`, `is_host`, `stage_area`, `suggested_budget`, `communication_notes`, `status`, `assigned_at`, `responded_at`. `is_host` phân biệt chủ trì/đối tác; trạng thái lời mời `pending`, `accepted`, `rejected`, `cancelled`; lý do từ chối lưu trong `communication_notes`. Unique `(request_id, agency_id)`. Không lưu giá hoặc ngày phân công ở bảng lời mời.
+
+Migration `20261110123114_AlignCoHostInvitationAndAgencyOwnership` chạy sau `20261110114121_RestoreDesignTourCoHosting`; giữ nguyên migration đã áp dụng. Migration đổi tên `request_id`, thêm `is_host`, bổ sung dòng chủ trì cho yêu cầu hiện có và bỏ 7 cột ngày/báo giá/lý do cũ. Trước khi bỏ, chuyển báo giá sang `tour_pricing_tiers`, gộp lý do từ chối vào ghi chú. Không thêm bảng lịch sử hay bảng báo giá mới. Snapshot phiên bản cũ giữ nguyên; lần lưu tiếp theo dùng cấu trúc quyền và bảng giá mới.
+
+Các API dưới `/api/v1/agency/tour-design-requests/{id}`:
+
+- `GET/POST /co-hosts`: xem/mời đối tác `{agencyId, segment?, budget?, notes?}`.
+- `POST /co-hosts/decision`: phản hồi `{action: "accept" | "reject", reason?}`.
+- `DELETE /co-hosts/{partnerAgencyId}`: chủ trì thu hồi hợp tác khi không còn phần đóng góp.
+- `GET /working-tour`: chủ trì hoặc đối tác đã nhận đọc bản hiện tại.
+- `PUT /segment`: đối tác lưu `{version, timelines, pricingTiers}`; API chỉ ghi phần do người gọi sở hữu, cho sửa thông tin ngày chung. `pricingTiers` chứa đúng khung chung (key, tên, tuổi, thứ tự) và số tiền riêng của người gọi. BE từ chối nếu đối tác sửa khung hoặc gửi thiếu/thừa dòng. Phiên bản cũ trả 409 để tải lại, tránh ghi đè thay đổi đồng thời.
+
+Team pull code rồi chạy `dotnet ef database update --project src/TripOps.Data --startup-project src/TripOps.Api` từ thư mục `backend`.
+
 ## Database và migration
 
 Migration: `20261109192041_SimplifyPrivateTourDesignWorkflow` (kèm Designer và ModelSnapshot).

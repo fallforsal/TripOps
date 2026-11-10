@@ -1166,3 +1166,23 @@ Table workflow_notifications {
 Ref: tours.cloned_from_tour_id > tours.id
 Ref: tours.(id, shared_version) > tour_versions.(tour_id, version)
 Ref: chat_messages.design_request_id > tour_design_requests.id
+
+
+// Thành viên liên minh; is_host đánh dấu Agency chủ trì.
+Table tour_design_request_agencies {
+  id int [pk, not null]
+  request_id int [not null]
+  agency_id varchar(36) [not null]
+  is_host boolean [not null]
+  stage_area varchar(255) [not null]
+  suggested_budget decimal(12,2)
+  communication_notes text
+  status varchar(20) [not null, note: 'pending, accepted, rejected, cancelled']
+  assigned_at timestamp [not null]
+  responded_at timestamp
+  indexes {
+    (request_id, agency_id) [unique]
+  }
+}
+Ref: tour_design_request_agencies.request_id > tour_design_requests.id
+Ref: tour_design_request_agencies.agency_id > users.id

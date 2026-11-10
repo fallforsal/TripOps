@@ -136,6 +136,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         var code = $"BK{DateTime.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
 
 
+        var stayOffsets=new Dictionary<TourAccommodation,int>();
+        var stayOffset=0;
+        foreach(var stay in tour.Accommodations.Where(h=>h.IsDefault==true)) {stayOffsets[stay]=stayOffset;stayOffset+=stay.NightsCount??0;}
+
         var booking = new Booking
         {
             BookingCode = code,
@@ -154,7 +158,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             ContactEmail = request.ContactEmail.Trim().ToLowerInvariant(),
             SpecialRequests = request.SpecialRequests?.Trim(),
             Participants = participants,
-            BookingAgencies = [new BookingAgency { AgencyId = tour.AgencyId!, IsHost = true, OriginalAmount = totalAmount, FinalAmount = totalAmount, NetPayout = totalAmount }],
+            BookingAgencies = await tourService.BookingAllocations(tour,participants,request.StartDate.Date,totalAmount,request.Participants.Select(p=>p.PricingTierId).ToArray(),ct),
             Timelines = Enumerable.Range(1, Math.Max(1, tour.DurationDays ?? 1)).Select(number => {
                 var day = tour.Timelines.SingleOrDefault(d => d.DayNumber == number);
                 return new BookingTimeline {
@@ -174,7 +178,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 CurrentStars = hotelSelections.TryGetValue(a.DestinationName,out var starsHotel) ? starsHotel.StarRating : a.StarRating,
                 IsCustomized = hotelSelections.ContainsKey(a.DestinationName),
                 PriceDifference = hotelSelections.TryGetValue(a.DestinationName,out var priceHotel) ? priceHotel.PriceDifference : 0,
-                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date, DateTo = request.StartDate.Date.AddDays(a.NightsCount ?? 1), Destination = a.DestinationName, OriginalHotelName = hotelSelections.TryGetValue(a.DestinationName,out var bookedHotel) ? bookedHotel.HotelName : a.HotelName, OriginalStars = hotelSelections.TryGetValue(a.DestinationName,out var bookedStars) ? bookedStars.StarRating : a.StarRating,
+                ServiceId = hotelSelections.TryGetValue(a.DestinationName,out var selectedHotel) ? selectedHotel.ServiceId : a.ServiceId, DateFrom = request.StartDate.Date.AddDays(stayOffsets[a]), DateTo = request.StartDate.Date.AddDays(stayOffsets[a]+(a.NightsCount ?? 1)), Destination = a.DestinationName, OriginalHotelName = hotelSelections.TryGetValue(a.DestinationName,out var bookedHotel) ? bookedHotel.HotelName : a.HotelName, OriginalStars = hotelSelections.TryGetValue(a.DestinationName,out var bookedStars) ? bookedStars.StarRating : a.StarRating,
                 NightsCount = a.NightsCount }).ToList()
         };
 

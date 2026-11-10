@@ -1,6 +1,7 @@
+import { DesignCollaborationPanel } from "./DesignCollaborationPanel";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ChevronDown, Copy, Eye, History, Loader2, Search, Send, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, Copy, Eye, History, Handshake, Loader2, Search, Send, Sparkles, XCircle } from "lucide-react";
 import { http } from "@/app/lib/http";
 import { fromApiTour, type ApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
 import { cloneDesignTour, shareDesignTour, saveDesignTour } from "@/app/services/customTourRequests";
@@ -25,6 +26,7 @@ const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
 export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour }: Props) {
+  const [collaborating, setCollaborating] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
@@ -52,7 +54,10 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     if (!active(request)) return;
     await perform(async () => {
       setTemplate(null);
-      if (existing) setEditing(fromApiTour(await http<ApiTour>(`/agency/tours/${existing.id}`)));
+      if (existing) {
+        const saved=fromApiTour(await http<ApiTour>(`/agency/tours/${existing.id}`));
+        setEditing(saved);
+      }
       else {
         setEditing(null);
         const source = await http<TourConfiguration | null>(`/agency/tour-design-requests/${request.id}/source`);
@@ -85,11 +90,13 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
       toast.success(`Đã khôi phục thành bản nháp v${saved.version}. Hoàn tất rồi chia sẻ khi đã kiểm tra.`);
     });
   };
-  const rows = useMemo(() => requests.filter(r => (filter === "all" || r.status === filter) &&
+  const rows = useMemo(() => requests.filter(r => r.targetCompanyId === company.id && (filter === "all" || r.status === filter) &&
     [r.id, r.destinations, r.contactName, r.contactEmail, r.contactPhone, r.businessName].some(v => v?.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)), [requests, filter, search]);
-  if (designing) return <TourFormPage company={company} tour={editing || template} customRequest={designing} isCustomTour={true}
-    onBack={() => setDesigning(null)} onSubmit={save} />;
+  const collaboration = requests.find(r => r.id === collaborating);
+  if (collaboration) return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={async () => { setOverrides({}); await onUpdateRequest(collaboration.id, {}); setRevision(n=>n+1); }}/>;
+  if (designing) return <TourFormPage company={company} tour={editing || template} customRequest={designing} isCustomTour={true} ownershipCollaboration
+    onManageCoHosts={() => { setCollaborating(designing.id); setDesigning(null); }} onBack={() => setDesigning(null)} onSubmit={save} />;
   const viewed = requests.find(r => r.id === viewing) || null;
   const expandedRequest = requests.find(r => r.id === expanded);
   return <div className="space-y-5">
@@ -112,7 +119,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
             {request.status === "pending" && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void decide(request,"reviewing")}><CheckCircle2/>Tiếp nhận</Button>}
             {!tour && (request.status === "pending" || request.status === "reviewing") && <Button aria-label={`Từ chối yêu cầu ${request.id}`} title="Từ chối yêu cầu" size="icon" variant="outline" disabled={busy} className="h-8 w-8 text-rose-600" onClick={() => void decide(request,"rejected")}><XCircle/></Button>}
             <Button size="sm" variant="outline" onClick={() => setViewing(request.id)}><Eye/>Xem chi tiết</Button>
-            {active(request) && <><Button size="sm" variant="outline" disabled={busy} onClick={() => void start(request,tour)}><Sparkles/>{tour ? "Sửa tour" : "Thiết kế"}</Button>
+            {active(request) && <><Button size="sm" variant="outline" disabled={busy} onClick={() => setCollaborating(request.id)}><Handshake/>Đồng tổ chức</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void start(request,tour)}><Sparkles/>{tour ? "Sửa tour" : "Thiết kế"}</Button>
               {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(""); setHistoryRequestId(request.id); }}><History/>Lịch sử / Khôi phục</Button>}
               {!tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setCloning(request); setSourceId(""); setError(""); }}><Copy/>Clone tour</Button>}
               {tour && tour.status === "completed" && sharedVersion !== tour.version && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void share(request,tour)}><Send/>Chia sẻ v{tour.version}</Button>}

@@ -110,7 +110,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await customer.PostAsJsonAsync(url,new {message=" "})).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await customer.PostAsJsonAsync(url,new {message=new string('x',2001)})).StatusCode);
         await app.Inspect(async db=> { Assert.Single(await db.ChatConversations.ToListAsync());Assert.Equal(2,await db.ChatMessages.CountAsync(m=>m.DesignRequestId==request.Id));
-            Assert.DoesNotContain(db.Model.GetEntityTypes(),t=>t.GetTableName() is "tour_plan_proposals" or "tour_design_request_agencies"); });
+            Assert.DoesNotContain(db.Model.GetEntityTypes(),t=>t.GetTableName() is "tour_plan_proposals"); });
         Assert.Equal(HttpStatusCode.NotFound,(await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan",new {tourId=1,version=1})).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/proposals")).StatusCode);
     }

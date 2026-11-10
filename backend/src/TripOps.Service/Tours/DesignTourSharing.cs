@@ -31,13 +31,15 @@ public sealed partial class TourService
         await LockDesignRequest(actor, requestId, ct);
         var request = await db.TourDesignRequests.SingleAsync(r => r.Id == requestId && r.AgencyId == actor, ct);
         Require(request.Status == CustomRequestStatus.InProgress, "Yêu cầu chưa tiếp nhận hoặc đã đóng.");
-        await Validate(input.Configuration, input.Complete, ct, actor);
+        TourConfiguration configuration;
         var id = await db.Tours.Where(t => t.DesignRequestId == requestId).Select(t => (int?)t.Id).SingleOrDefaultAsync(ct);
         Tour tour;
+        TourConfiguration? previousConfiguration = null;
         if (id.HasValue) {
             tour = await Owned(actor, id.Value, ct);
             if (!input.Version.HasValue) throw Conflict();
             Expected(tour, input.Version.Value);
+            previousConfiguration = Configuration(tour);
             await Baseline(tour, actor, ct);
             restoredVersion = await db.TourVersions.Where(v => v.TourId == tour.Id && v.VersionNumber == tour.Version)
                 .Select(v => v.RestoredFromVersion).SingleOrDefaultAsync(ct);
@@ -47,7 +49,11 @@ public sealed partial class TourService
             tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid():N}", IsRequest = true, DesignRequestId = requestId, Version = 1 };
             repository.Add(tour);
         }
-        Apply(tour, input.Configuration);
+        // Child content and age-price tables belong to the Agency that created them.
+        var original=previousConfiguration??input.Configuration with {Timelines=[],PricingTiers=[],AgencyPricing=[]};
+        configuration=await CollaborationConfiguration(request,MergeDesign(original,input.Configuration,actor,actor),ct);
+        await Validate(configuration,input.Complete,ct,actor,requestId);
+        Apply(tour, configuration);
         tour.Status = input.Complete ? TourStatus.Completed : TourStatus.Draft;
         tour.Visibility = TourVisibility.Hidden;
         var result = await Save(tour, actor, input.Reason?.Trim() is { Length: > 0 } note ? note : "Lưu phương án thiết kế", ct);
@@ -72,7 +78,7 @@ public sealed partial class TourService
             ?? throw new TourException(404, "Chưa có tour thiết kế.");
         Expected(tour, input.Version);
         Require(tour.Status == TourStatus.Completed, "Hãy hoàn tất và lưu tour trước khi chia sẻ.");
-        await Validate(Configuration(tour), true, ct, actor);
+        await Validate(Configuration(tour), true, ct, actor, requestId);
         if (tour.SharedVersion != tour.Version) {
             var version = await db.TourVersions.SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.Version, ct);
             version.SharedAt ??= DateTime.UtcNow; version.SharedBy ??= actor;
@@ -125,18 +131,18 @@ public sealed partial class TourService
             MinAge = p.MinAge, MaxAge = p.MaxAge, DisplayOrder = p.DisplayOrder, PricePerGuest = Money(p.PricePerGuest) }).ToList();
         tour.Timelines = (c.Timelines ?? []).Select(d => new TourTimeline {
             DayNumber = d.DayNumber, Title = d.Title, Description = d.Description,
-            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name, AgencyId = tour.AgencyId ?? "", Time = a.EstimatedTime.HasValue ? new DateTime(2000,1,1).Add(a.EstimatedTime.Value) : null
+            Attractions = (d.Activities ?? []).Select(a => new TouristAttraction { Name = a.Name, AgencyId = a.AgencyId ?? d.AgencyId ?? tour.AgencyId ?? "", Time = a.EstimatedTime.HasValue ? new DateTime(2000,1,1).Add(a.EstimatedTime.Value) : null
                  }).ToList(),
-            Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName, AgencyId = tour.AgencyId ?? "",
+            Meals = (d.Meals ?? []).Select(m => new TourMeal { MealType = m.MealType, RestaurantName = m.RestaurantName, AgencyId = m.AgencyId ?? d.AgencyId ?? tour.AgencyId ?? "",
                 ServiceId = m.ServiceId, SupplierSource = SupplierSources.Resolve(m.SupplierSource, m.ServiceId), AgencySupplierId = m.AgencySupplierId,
                 SupplierSnapshot = m.Supplier is null ? null : JsonSerializer.Serialize(m.Supplier, Json), Time = m.Time.HasValue ? new DateTime(2000,1,1).Add(m.Time.Value) : null, Description = m.Description, IsDefault = m.IsDefault, PriceDifference = Money(m.PriceDifference) }).ToList(),
         }).ToList();
-        tour.Accommodations = (c.Timelines ?? []).SelectMany(d => d.Accommodations ?? []).Select(a => new TourAccommodation {
-            Tour = tour, AgencyId = tour.AgencyId, ServiceId = a.ServiceId, HotelName = a.HotelName, DestinationName = a.DestinationName,
+        tour.Accommodations = (c.Timelines ?? []).SelectMany(d => (d.Accommodations ?? []).Select(a => new { Accommodation = a, Owner = a.AgencyId ?? d.AgencyId })).Select(item => { var a = item.Accommodation; return new TourAccommodation {
+            Tour = tour, AgencyId = item.Owner ?? tour.AgencyId, ServiceId = a.ServiceId, HotelName = a.HotelName, DestinationName = a.DestinationName,
             NightsCount = a.NightsCount, StarRating = a.StarRating, IsDefault = a.IsDefault,
             SupplierSource = SupplierSources.Resolve(a.SupplierSource, a.ServiceId), AgencySupplierId = a.AgencySupplierId,
             SupplierSnapshot = a.Supplier is null ? null : JsonSerializer.Serialize(a.Supplier, Json),
-            PriceDifference = Money(a.PriceDifference), AddressNotes = a.AddressNotes }).ToList();
+            PriceDifference = Money(a.PriceDifference), AddressNotes = a.AddressNotes }; }).ToList();
 
         return tour;
     }

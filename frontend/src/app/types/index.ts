@@ -103,6 +103,7 @@ export interface Location {
 }
 
 export interface TourAlternativeMeal {
+  createdByCompanyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -142,6 +143,7 @@ export interface TourMeal {
 }
 
 export interface TourAlternativeHotel {
+  createdByCompanyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -230,6 +232,7 @@ export interface TourDepartureDate {
 }
 
 export interface TourPriceRow {
+  tierKey?: string;
   ageGroup: "adult" | "child_2_11" | "child_under_2" | string;
   ageGroupLabel: string; // e.g. "Người lớn"
   ageRange?: string; // e.g. "Từ 12 tuổi"
@@ -486,6 +489,7 @@ export interface TourReview {
 }
 
 export interface Tour {
+  agencyPricing?: {agencyId:string;tiers:{key?:string|null;name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[]}[];
   sharedVersion?: number;
   planGuestCount?: number;
   updatedAt?: string;

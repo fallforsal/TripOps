@@ -10,6 +10,7 @@ import type {
 import { http } from "@/app/lib/http";
 
 type Tier = {
+  key?: string | null;
   name: string;
   minAge: number | null;
   maxAge: number | null;
@@ -17,12 +18,14 @@ type Tier = {
   displayOrder: number;
 };
 type Activity = {
+  id?: string; agencyId?: string;
   name: string;
   description: string | null;
   estimatedTime: string | null;
   orderIndex: number;
 };
 type Meal = {
+  id?: string; agencyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number | null;
   supplier?: TourSupplierSnapshot | null;
@@ -35,6 +38,7 @@ type Meal = {
   priceDifference: number;
 };
 type Accommodation = {
+  id?: string; agencyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number | null;
   supplier?: TourSupplierSnapshot | null;
@@ -57,6 +61,8 @@ type Day = {
   accommodations: Accommodation[];
 };
 export type TourConfiguration = {
+  agencyPricing?: import("@/app/types").Tour["agencyPricing"];
+  coHosts?: import("@/app/types").TourCoHost[];
   numberOfGuests?: number | null;
   code?: string | null;
   name: string;
@@ -173,6 +179,7 @@ const hotelOption = (
   delta = 0,
   nights = 1,
 ): Accommodation => ({
+  id: hotel.id, agencyId: hotel.createdByCompanyId,
   supplierSource: hotel.supplierSource || (hotel.isCustom || !hotel.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
   agencySupplierId: hotel.agencySupplierId || null,
   supplier: hotel.supplier || (hotel.isCustom ? { address: hotel.address, area: hotel.destination, referencePrice: hotel.pricePerNight, conditions: hotel.description } : null),
@@ -215,6 +222,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       const activities: Activity[] = (day.locations || []).map(
         (place, orderIndex) => ({
           name: place.name.trim(),
+          id: place.id, agencyId: place.createdByCompanyId,
           description: place.address?.trim() || null,
           estimatedTime: place.time ? `${place.time.slice(0, 5)}:00` : null,
           orderIndex,
@@ -225,6 +233,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           supplierSource: meal.supplierSource || (meal.isCustom || !meal.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
           agencySupplierId: meal.agencySupplierId || null,
           supplier: meal.supplier || (meal.isCustom ? { area: day.destinationCity || destination, referencePrice: meal.pricePerPerson, conditions: meal.description } : null),
+          id: meal.id, agencyId: meal.createdByCompanyId,
           mealType: meal.type,
           restaurantName: (meal.serviceName || meal.description || "").trim(),
           serviceId:
@@ -240,6 +249,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           supplierSource: option.supplierSource || (option.isCustom || !option.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
           agencySupplierId: option.agencySupplierId || null,
           supplier: option.supplier || (option.isCustom ? { address: option.address, area: day.destinationCity || destination, referencePrice: option.price, conditions: option.description } : null),
+          id: option.id, agencyId: option.createdByCompanyId || meal.createdByCompanyId,
           mealType: meal.type,
           restaurantName: option.restaurantName.trim(),
           serviceId:
@@ -264,6 +274,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
               hotelOption(
                 {
                   ...hotel,
+                  id: option.id, createdByCompanyId: option.createdByCompanyId || hotel.createdByCompanyId,
                   serviceId: option.serviceId,
                   supplierSource: option.supplierSource,
                   agencySupplierId: option.agencySupplierId,
@@ -292,6 +303,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
     });
   return {
     code: tour.tourCode?.trim() || null,
+    coHosts: tour.coHosts,
     name: tour.name?.trim() || "",
     description: tour.description || null,
     destination: destination || null,
@@ -313,6 +325,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       : tour.images || []
     ).filter(Boolean),
     pricingTiers: (tour.priceTable || []).map((row, displayOrder) => ({
+      key: row.tierKey || null,
       name: row.ageGroupLabel.trim(),
       minAge: row.minAge ?? null,
       maxAge: row.maxAge ?? null,
@@ -349,7 +362,9 @@ export function fromConfiguration(
     const defaultHotel = day.accommodations?.find((option) => option.isDefault);
     const hotel: TourHotel | undefined = defaultHotel
       ? {
-          id: `hotel-${day.dayNumber}`,
+          id: defaultHotel.id || `hotel-${day.dayNumber}-0`,
+          createdByCompanyId: defaultHotel.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+          createdByCompanyName: c.coHosts?.find(h => h.companyId === (defaultHotel.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
           name: defaultHotel.hotelName,
           serviceId: defaultHotel.serviceId
             ? String(defaultHotel.serviceId)
@@ -367,7 +382,8 @@ export function fromConfiguration(
           alternativeHotels: day.accommodations
             .filter((option) => !option.isDefault)
             .map((option, index) => ({
-              id: `hotel-${day.dayNumber}-${index}`,
+              id: option.id || `hotel-${day.dayNumber}-${index + 1}`,
+              createdByCompanyId: option.agencyId,
               serviceId: option.serviceId
                 ? String(option.serviceId)
                 : undefined,
@@ -387,7 +403,9 @@ export function fromConfiguration(
     const meals: TourMeal[] = (day.meals || [])
       .filter((m) => m.isDefault)
       .map((meal, index) => ({
-        id: `meal-${day.dayNumber}-${index}`,
+        id: meal.id || `meal-${day.dayNumber}-${index}`,
+        createdByCompanyId: meal.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+        createdByCompanyName: c.coHosts?.find(h => h.companyId === (meal.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
         type: meal.mealType,
         serviceId: meal.serviceId ? String(meal.serviceId) : undefined,
         supplierSource: meal.supplierSource || (meal.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
@@ -404,7 +422,8 @@ export function fromConfiguration(
             (option) => option.mealType === meal.mealType && !option.isDefault,
           )
           .map((option, alternative) => ({
-            id: `meal-${day.dayNumber}-${index}-${alternative}`,
+            id: option.id || `meal-${day.dayNumber}-${index}-${alternative}`,
+            createdByCompanyId: option.agencyId,
             serviceId: option.serviceId ? String(option.serviceId) : undefined,
             supplierSource: option.supplierSource || (option.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
             agencySupplierId: option.agencySupplierId || undefined,
@@ -425,9 +444,13 @@ export function fromConfiguration(
       description: day.description || "",
       destinationCity: c.destination || undefined,
       hotel,
+      createdByCompanyId: (day as typeof day & { agencyId?: string }).agencyId,
+      createdByCompanyName: c.coHosts?.find(h => h.companyId === (day as typeof day & { agencyId?: string }).agencyId)?.companyName,
       meals,
       locations: (day.activities || []).map((activity, index) => ({
-        id: `activity-${day.dayNumber}-${index}`,
+        id: activity.id || `activity-${day.dayNumber}-${index}`,
+        createdByCompanyId: activity.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+        createdByCompanyName: c.coHosts?.find(h => h.companyId === (activity.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
         name: activity.name,
         address: activity.description || "",
         latitude: 0,
@@ -438,6 +461,7 @@ export function fromConfiguration(
   });
   const hotels = itinerary.flatMap((day) => (day.hotel ? [day.hotel] : []));
   const priceTable: TourPriceRow[] = (c.pricingTiers || []).map((tier) => ({
+    tierKey: tier.key || undefined,
     ageGroup:
       (tier.minAge ?? 0) >= 12 && (tier.maxAge ?? 150) >= 100
         ? "adult"
@@ -471,6 +495,9 @@ export function fromConfiguration(
     highlights: lines(c.highlights),
     hotels,
     itinerary,
+    agencyPricing: c.agencyPricing,
+    coHosts: c.coHosts && c.coHosts.length > 1 ? c.coHosts.map(h=>({...h, quoteStatus:h.quotedAt?"submitted" as const:"draft" as const,quotePerGuest:h.quoteAdult})) : [],
+    isCoHosted: Boolean(c.coHosts?.some(h => h.role === "partner" && h.status === "accepted")),
     operationPeriod: c.operationPeriod || undefined,
     departureLocation: c.departureLocation || undefined,
     departureCity: c.departureLocation || undefined,

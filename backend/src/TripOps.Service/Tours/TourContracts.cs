@@ -22,16 +22,18 @@ public sealed record TourConfiguration(
     TimelineInput[]? Timelines = null,
     [StringLength(255)] string? DepartureLocation = null,
     [StringLength(50)] string? Code = null,
-    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null);
+    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null, DesignCoHostDto[]? CoHosts = null, AgencyPricingInput[]? AgencyPricing = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
-    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0);
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0,
+    [StringLength(100)] string? Key = null);
+public sealed record AgencyPricingInput(string AgencyId, PricingTierInput[] Tiers);
 public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, StringLength(255)] string Title,
     [StringLength(10000)] string? Description = null,
-    ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
+    ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null, string? AgencyId = null);
 public sealed record ActivityInput([Required, StringLength(255)] string Name,
-    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
+    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 /// <summary>Per-tour snapshot of an Agency-supplied hotel/restaurant (kept in the immutable tour version).</summary>
 public sealed record SupplierSnapshotInput([StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
     [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
@@ -40,14 +42,14 @@ public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "d
     [StringLength(10000)] string? Description = null, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     int? ServiceId = null, TimeSpan? Time = null,
-    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
     [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null,
-    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 
 public sealed record SupplierRequest([Required, AllowedValues("HOTEL", "RESTAURANT")] string Type,
     [Required, StringLength(255)] string Name, [StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,

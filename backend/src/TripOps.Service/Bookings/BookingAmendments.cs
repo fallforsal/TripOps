@@ -104,7 +104,11 @@ public sealed partial class BookingQuotationService
         b.TotalAmount = total;
         // Keep the host Agency's accounting amount in sync; participant ticket prices remain unchanged.
         var host = await Db.BookingAgencies.SingleOrDefaultAsync(a => a.BookingId == b.Id && a.AgencyId == actor, ct);
-        if (host != null) { host.FinalAmount = total; host.NetPayout = total; }
+        if (host != null) {
+            var others=await Db.BookingAgencies.Where(a=>a.BookingId==b.Id && a.AgencyId!=actor).SumAsync(a=>(decimal?)a.FinalAmount,ct)??0;
+            Require(total>=others,"Giá mới không được thấp hơn số tiền đã phân bổ cho Agency đối tác.");
+            host.FinalAmount=total-others;host.NetPayout=host.FinalAmount;
+        }
     }
 
     public async Task ChangePrice(string actor, int id, BookingPriceChange input, CancellationToken ct)

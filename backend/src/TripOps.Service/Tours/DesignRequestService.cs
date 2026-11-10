@@ -78,6 +78,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             request.InitialChangesJson = input.InitialChanges.Value.GetRawText();
         }
         db.TourDesignRequests.Add(request);
+        db.TourDesignRequestAgencies.Add(new TourDesignRequestAgency {TourDesignRequest=request,AgencyId=agency.Id,IsHost=true,Status="pending"});
         await db.SaveChangesAsync(ct);
         db.WorkflowNotifications.Add(new WorkflowNotification { UserId = agency.Id, RequestId = request.Id, Message = "Có yêu cầu thiết kế Tour mới." });
         await db.SaveChangesAsync(ct);
@@ -88,7 +89,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
     {
         if (agencyView) await tours.Agency(actor, ct); else await Customer(actor, ct);
         var requests = await db.TourDesignRequests.AsNoTracking()
-            .Where(r => agencyView ? r.AgencyId == actor : r.CustomerId == actor)
+            .Where(r => agencyView ? r.AgencyId == actor || db.TourDesignRequestAgencies.Any(a => a.TourDesignRequestId == r.Id && a.AgencyId == actor && (a.Status == "pending" || a.Status == "accepted")) : r.CustomerId == actor)
             .OrderByDescending(r => r.CreatedAt).Take(200).ToListAsync(ct);
         var agencyIds = requests.Select(r => r.AgencyId).Where(id => id != null).Distinct().ToArray();
         var agencies = await db.Users.AsNoTracking().Include(u => u.BusinessProfile)
@@ -96,10 +97,18 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         var ids = requests.Select(r => r.Id).ToArray();
         var designedTours = await db.Tours.AsNoTracking().Where(t => t.DesignRequestId.HasValue && ids.Contains(t.DesignRequestId.Value) &&
             t.Status != TourStatus.Deleted).ToListAsync(ct);
-        return requests.Select(r => Map(r, agencies.GetValueOrDefault(r.AgencyId ?? ""),
-            designedTours.Where(t => t.DesignRequestId == r.Id)
-                .OrderByDescending(t => t.SharedVersion.HasValue)
-                .ThenByDescending(t => t.CreatedAt).FirstOrDefault())).ToArray();
+        var result = new List<DesignRequestDto>();
+        foreach (var request in requests) {
+            var mapped = Map(request, agencies.GetValueOrDefault(request.AgencyId ?? ""), designedTours.FirstOrDefault(t => t.DesignRequestId == request.Id));
+            var hosts = await tours.CoHosts(request.Id, ct);
+            // Customer membership is exposed only by the immutable shared tour snapshot.
+            mapped = mapped with { CoHosts = agencyView ? hosts : null };
+            if (agencyView && request.AgencyId != actor && !hosts.Any(h => h.CompanyId == actor && h.Status == "accepted"))
+                mapped = mapped with { ContactEmail="", ContactPhone="", ContactName="Khách đoàn", BusinessEmail=null, BusinessPhone=null, AdditionalInfo=null,
+                    CoHosts=hosts.Where(h=>h.Role=="lead" || h.CompanyId==actor).ToArray() };
+            result.Add(mapped);
+        }
+        return result;
     }
     public async Task<DesignRequestDto> Cancel(string actor, int id, CancellationToken ct)
     {
@@ -128,6 +137,8 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         request.Status = action.Action == "review" ? CustomRequestStatus.InProgress : CustomRequestStatus.Rejected;
         request.RejectionReason = action.Action == "reject" ? action.Reason!.Trim() : null;
         request.RespondedAt = DateTime.UtcNow;
+        var host=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==actor,ct);
+        if(host!=null){host.IsHost=true;host.Status=action.Action=="review"?"accepted":"rejected";host.RespondedAt=DateTime.UtcNow;}
         db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = id,
             Message = action.Action == "reject" ? "Agency đã từ chối yêu cầu thiết kế: " + request.RejectionReason![..Math.Min(900, request.RejectionReason!.Length)] : "Agency đã tiếp nhận yêu cầu thiết kế tour." });
         request.UpdatedAt = DateTime.UtcNow;

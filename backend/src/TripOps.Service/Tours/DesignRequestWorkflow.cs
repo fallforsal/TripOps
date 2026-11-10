@@ -9,6 +9,10 @@ public sealed partial class DesignRequestService
     public sealed record PlanHistory(int TourId, int Version, string? ChangeNote, string? CreatedBy,
         DateTime? CreatedAt, int? NumberOfGuests, TourConfiguration Configuration, DateTime? SharedAt = null, int? RestoredFromVersion = null);
     internal static TourConfiguration CustomerConfiguration(TourConfiguration c) => c with {
+        AgencyPricing = null,
+        CoHosts = c.CoHosts?.Where(h => h.Status == "accepted").Select(h => h with {
+            EstimatedBudgetPerGuest=null, QuoteAdult=null, QuoteChild=null, QuoteInfant=null, QuoteNote=null, Notes=null, RejectionReason=null
+        }).ToArray(),
         Timelines = c.Timelines?.Select(d => d with {
             Meals = d.Meals?.Select(m => m with { Supplier = m.Supplier == null ? null : new SupplierSnapshotInput(Address: m.Supplier.Address, Area: m.Supplier.Area), AgencySupplierId = null }).ToArray(),
             Accommodations = d.Accommodations?.Select(h => h with { Supplier = h.Supplier == null ? null : new SupplierSnapshotInput(Address: h.Supplier.Address, Area: h.Supplier.Area), AgencySupplierId = null }).ToArray()

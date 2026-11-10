@@ -30,6 +30,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
     public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
     public DbSet<TourDesignRequest> TourDesignRequests => Set<TourDesignRequest>();
+    public DbSet<TourDesignRequestAgency> TourDesignRequestAgencies => Set<TourDesignRequestAgency>();
 
     // 4. Bookings & Operations
     public DbSet<Booking> Bookings => Set<Booking>();
@@ -157,6 +158,7 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<User>().ToTable("users");
         DatabaseDesignConfiguration.Configure(modelBuilder);
         BookingQuotationConfiguration.Configure(modelBuilder);
+        DesignCoHostConfiguration.Configure(modelBuilder);
         modelBuilder.Entity<TourDesignRequest>().Property(x => x.Revision).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.Status).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.AvailableQuantity).HasPrecision(19, 2);
