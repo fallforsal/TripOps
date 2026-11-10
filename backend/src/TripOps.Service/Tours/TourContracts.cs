@@ -31,7 +31,9 @@ public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, Str
     [StringLength(10000)] string? Description = null,
     ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
 public sealed record ActivityInput([Required, StringLength(255)] string Name,
-    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
+    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0,
+    [Range(-90.0, 90.0)] double? Latitude = null, [Range(-180.0, 180.0)] double? Longitude = null,
+    [Range(200, 20000)] int GeofenceRadiusMeters = 1500);
 /// <summary>Per-tour snapshot of an Agency-supplied hotel/restaurant (kept in the immutable tour version).</summary>
 public sealed record SupplierSnapshotInput([StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
     [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
