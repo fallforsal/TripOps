@@ -148,3 +148,28 @@ The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / th
 **Data policy:** No fake counts, placeholder photos, GPS verification, photo-upload success, invitation acceptance or fabricated backend data. Tour data remains sourced from the ASP.NET Core API. The design uses an illustrated gradient instead of stock images.
 
 **Verification:** `flutter analyze`, `flutter test`, and Android debug build run on GitHub Actions. Check final CI status before merging. Use an Android emulator to evaluate accessibility, small-screen wrapping, keyboard input, and operational flows against a working TripOps backend.
+
+
+## Attendance: departure day only
+
+The backend now enforces that **passenger attendance can be changed only when the
+booking's `startDate` equals today's **Vietnam-local calendar date (UTC+7)**,
+using the existing backend `PaymentRules.VietnamDate` helper. Earlier or later requests return
+HTTP 409 and do not change attendance, `checkedBy` or `checkedAt`.
+
+`GET /api/v1/guide/bookings/{id}` now includes the backward-compatible
+`canRecordAttendance` boolean. The app uses this server-authoritative value
+to disable "Có mặt", "Vắng mặt" and "Đặt lại: Chưa rõ" outside departure day
+and shows an explanation with the scheduled date. HDVs can still view prior
+attendance statuses. Older backend versions omit this field, so the app
+**fails closed** (disables attendance) until the backend update is deployed.
+
+The value is a snapshot of the time when the detail was fetched. Reopen
+or refresh the tour details after crossing midnight. The server always
+re-checks on write, even if a screen remains open past midnight.
+
+**Timezone note:** Attendance uses the entire Vietnam-local day, 00:00–23:59
+UTC+7, regardless of the phone's timezone. The existing start-tour endpoint
+still uses a UTC calendar comparison, a separate pre-existing policy that
+should be aligned in a future backend change. The app respects the
+server-supplied `canRecordAttendance` for attendance controls.
