@@ -64,7 +64,7 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
         await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
-    [HttpPut("{id:int}/locations/{locationId:int}/geofence"), Authorize(Roles = "agency")]
+    [HttpPut("locations/{locationId:int}/geofence"), Authorize(Roles = "agency")]
     [EndpointSummary("Configure stop geofence before guide check-in")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ConfigureGeofence(int id, int locationId,
