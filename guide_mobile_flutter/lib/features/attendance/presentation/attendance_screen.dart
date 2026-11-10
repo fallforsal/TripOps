@@ -29,10 +29,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (busy != null) return;
     try {
       final updated = await widget.guides.detail(current.id);
-      if (mounted) setState(() {
-        current = updated;
-        error = null;
-      });
+      if (mounted) {
+        setState(() {
+          current = updated;
+          error = null;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => error = readableError(e));
     }
