@@ -297,7 +297,7 @@ public sealed partial class BookingService
                 || (request.PaymentRequestId.HasValue && previous.PaymentRequestId != request.PaymentRequestId))
                 throw new BookingException(409, "Mã giao dịch đã được sử dụng.");
             await transaction.CommitAsync(ct);
-            return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+            return await Get(customerId,id,ct);
         }
 
         var now = UtcNow;
@@ -324,7 +324,7 @@ public sealed partial class BookingService
 
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // --------------------------------------------------------- Lịch thanh toán
@@ -591,7 +591,7 @@ public sealed partial class BookingService
         foreach (var fee in booking.PaymentRequests.Where(p => IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled).OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)) {
             var outstanding = Outstanding(booking, fee); var due = Deadline(fee);
             var status = outstanding == 0 ? "Paid" : due.HasValue && now > due ? "Overdue" : "Pending";
-            items.Add(new(fee.Id, "surcharge", fee.Description, fee.Amount, outstanding, fee.DueDate, Utc(due), status, Utc(fee.PaidAt), null));
+            items.Add(new(fee.Id, "surcharge", fee.Description, fee.Amount, outstanding, fee.DueDate, Utc(due), status, Utc(fee.PaidAt), null,fee.BeneficiaryAgencyId,booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==fee.BeneficiaryAgencyId)?.Agency?.BusinessProfile?.BusinessName??booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==fee.BeneficiaryAgencyId)?.Agency?.Name));
         }
     }
 

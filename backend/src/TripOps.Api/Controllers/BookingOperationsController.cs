@@ -28,12 +28,14 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
         var b = await db.Bookings.Include(x => x.Tour).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
         if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Bạn không có quyền sửa hành khách.");
         if (b.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.InProgress) throw new BookingException(409, "Booking không còn cho phép sửa hành khách.");
-        if (request.Participants.Select(p => p.Id).Distinct().Count() != request.Participants.Length || request.Participants.Length != b.Participants.Count) throw new BookingException(422, "Thêm/bớt khách cần chốt lại giá với Agency; thao tác này chỉ sửa hồ sơ hiện có.");
+        if (request.Participants.Length==0 || request.Participants.Select(p => p.Id).Distinct().Count() != request.Participants.Length) throw new BookingException(422, "Chỉ sửa thông tin hành khách đã có.");
         foreach (var input in request.Participants)
         {
             var p = b.Participants.SingleOrDefault(p => p.Id == input.Id) ?? throw new BookingException(422, "Passenger does not belong to booking.");
             if (input.DateOfBirth?.Date != p.DateOfBirth?.Date) throw new BookingException(422, "Đổi ngày sinh cần Agency kiểm tra lại phân khúc giá.");
-            p.FullName = input.FullName.Trim(); p.Gender = input.Gender; p.IdentityNumber = input.IdentityNumber; p.Note = input.Note; p.RoommateNote = input.RoommateNote; p.RestaurantNote = input.RestaurantNote;
+            foreach(var copy in b.Participants.Where(row=>row.ParticipantIndex==p.ParticipantIndex)) {
+                copy.FullName = input.FullName.Trim(); copy.Gender = input.Gender; copy.IdentityNumber = input.IdentityNumber; copy.Note = input.Note; copy.RoommateNote = input.RoommateNote; copy.RestaurantNote = input.RestaurantNote;
+            }
         }
         await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct));
     }
@@ -43,10 +45,17 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RemoveGuide(int id, string guideId, CancellationToken ct)
     {
-        var b = await db.Bookings.Include(x => x.Tour).Include(x => x.AssignedGuides).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
-        if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Agency does not own this booking.");
+        var b = await db.Bookings.Include(x => x.Tour).Include(x=>x.BookingAgencies).Include(x => x.AssignedGuides).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
+        if (!BookingAlliance.IsMember(b,Actor)) throw new BookingException(403, "Agency không thuộc booking.");
         if (b.Status is BookingStatus.InProgress or BookingStatus.Completed) throw new BookingException(409, "Cannot remove a guide after departure.");
         var assignment = b.AssignedGuides.SingleOrDefault(g => g.GuideId == guideId) ?? throw new BookingException(404, "Assignment not found.");
+        if(assignment.AgencyId!=Actor)throw new BookingException(403,"Chỉ được gỡ HDV của công ty mình.");
+        var routes=await db.BookingAttractionCheckins.Where(c=>c.BookingTimelineAttraction.BookingTimeline.BookingId==id && c.GuideId==guideId).ToListAsync(ct);
+        if(routes.Any(c=>c.AttendanceStatus!=AttractionCheckinStatus.Pending))throw new BookingException(409,"HDV đã check-in, không thể gỡ phân công.");
+        db.BookingAttractionCheckins.RemoveRange(routes);
+        foreach(var location in await db.BookingTimelineAttractions.Include(a=>a.Checkins).Where(a=>a.BookingTimeline.BookingId==id && a.GuideId==guideId).ToListAsync(ct)) {
+            location.GuideId=null;
+        }
         foreach (var p in b.Participants.Where(p => p.AssignedGuideId == guideId)) p.AssignedGuideId = null;
         await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
@@ -74,6 +83,7 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         var b = await Assigned(id, ct);
         if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress)) throw new BookingException(409, "Booking is not active.");
         var location = await db.BookingTimelineAttractions.SingleOrDefaultAsync(l => l.Id == locationId && l.BookingTimeline.BookingId == id, ct) ?? throw new BookingException(404, "Booking location not found.");
+        if((location.AgencyId??b.Tour!.AgencyId)!=b.AssignedGuides.Single(g=>g.GuideId==Actor).AgencyId)throw new BookingException(403,"HDV chỉ check-in điểm thuộc chặng công ty mình.");
         var check = await db.BookingAttractionCheckins.SingleOrDefaultAsync(c => c.BookingTimelineAttractionId == locationId && c.GuideId == Actor, ct);
         if (check is null) { check = new BookingAttractionCheckin { BookingTimelineAttractionId = locationId, GuideId = Actor, AgencyId = b.AssignedGuides.Single(g => g.GuideId == Actor).AgencyId }; db.BookingAttractionCheckins.Add(check); }
         check.AttendanceStatus = Enum.Parse<AttractionCheckinStatus>(request.Status, true); check.CheckinTime = DateTime.UtcNow; check.Note = request.Note; location.GuideId = Actor; location.AttendanceStatus = request.Status;

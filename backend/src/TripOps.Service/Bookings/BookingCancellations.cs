@@ -111,7 +111,7 @@ public sealed partial class BookingService
         });
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     /// <summary>Khách bổ sung/sửa tài khoản nhận hoàn khi yêu cầu còn chờ duyệt (ví dụ Agency hủy tour).</summary>
@@ -129,7 +129,7 @@ public sealed partial class BookingService
         open.RefundAccountHolder = account.Holder;
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // ------------------------------------------------------------ Agency
@@ -173,7 +173,7 @@ public sealed partial class BookingService
         }
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(agencyId,id,ct);
     }
 
     // ------------------------------------------------------------ Admin

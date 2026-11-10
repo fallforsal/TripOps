@@ -7,7 +7,6 @@ import {
   Service,
   GuideSchedule,
   TourCompany,
-  PaymentRequest,
   CustomTourRequest,
   BookingAgencyShare,
   BookingAssignedGuide,
@@ -47,7 +46,6 @@ interface AgencyDashboardProps {
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
-  onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
   onMarkFullyPaid?: (bookingId: string) => void;
   onBookingChanged?: (booking: import("@/app/services/wf05Bookings").BookingDto) => void;
@@ -83,7 +81,6 @@ export function AgencyDashboard({
   onRejectBooking,
   onAssignGuide,
   onUpdateAssignedGuides,
-  onCreatePaymentRequest,
   onMarkDepositPaid,
   onMarkFullyPaid,
   onUpdateBookingPrice,
@@ -200,7 +197,7 @@ export function AgencyDashboard({
               onRejectBooking={onRejectBooking}
               onAssignGuide={onAssignGuide}
               onUpdateAssignedGuides={onUpdateAssignedGuides}
-              onCreatePaymentRequest={onCreatePaymentRequest}
+
               onMarkDepositPaid={onMarkDepositPaid}
               onMarkFullyPaid={onMarkFullyPaid}
               onUpdateBookingPrice={onUpdateBookingPrice}
@@ -222,7 +219,7 @@ export function AgencyDashboard({
             onApproveBooking={onApproveBooking}
             onRejectBooking={onRejectBooking}
             onAssignGuide={onAssignGuide}
-            onCreatePaymentRequest={onCreatePaymentRequest}
+
             onMarkDepositPaid={onMarkDepositPaid}
             onMarkFullyPaid={onMarkFullyPaid}
             onGenerateContract={(id) => {}}

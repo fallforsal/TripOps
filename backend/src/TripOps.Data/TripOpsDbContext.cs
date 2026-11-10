@@ -159,6 +159,7 @@ public class TripOpsDbContext : DbContext
         DatabaseDesignConfiguration.Configure(modelBuilder);
         BookingQuotationConfiguration.Configure(modelBuilder);
         DesignCoHostConfiguration.Configure(modelBuilder);
+        modelBuilder.ConfigureBookingAlliance();
         modelBuilder.Entity<TourDesignRequest>().Property(x => x.Revision).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.Status).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.AvailableQuantity).HasPrecision(19, 2);

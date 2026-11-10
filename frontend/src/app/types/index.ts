@@ -388,6 +388,7 @@ export interface CustomMealChange {
 }
 
 export interface PaymentRequest {
+  beneficiaryAgencyId?:string;beneficiaryAgencyName?:string;
   id: string;
   bookingId: string;
   /** Số tiền còn phải trả của đợt (đợt đã trả: tổng tiền đợt). */
@@ -437,6 +438,7 @@ export interface BookingPriceAdjustment {
 
 // Bảng booking_agencies: Quản lý phân chia chặng, doanh thu và giải ngân cho từng công ty
 export interface BookingAgencyShare {
+  stageArea?:string;pricingTiers?:import("@/app/services/wf05Bookings").BookingAgencyDto["pricingTiers"];paidSurchargeAmount?:number;unpaidSurchargeAmount?:number;
   id?: string;
   bookingId: string;
   agencyId: string;
@@ -614,6 +616,8 @@ export interface BookingAssignedGuide {
 }
 
 export interface Booking {
+  agencyDirectory?:{agencyId:string;agencyName:string}[];
+  isPartnerView?: boolean;
   paidAmount?: number;
   tourEndDate?: string;
   bookingCode?: string;

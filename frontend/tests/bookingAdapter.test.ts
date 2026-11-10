@@ -236,3 +236,44 @@ test("balance deadline at 00:00 is shown as the end of the previous day", () => 
   assert.equal(formatVietnamDeadline("2026-11-22T17:00:00Z"), "23:59 22/11/2026");
   assert.equal(formatVietnamDeadline("2026-11-03T07:30:00Z"), "14:30 03/11/2026");
 });
+
+
+test("alliance booking retains stage rows, service owners, guide routes and fee beneficiaries", () => {
+  const b=fromApiBooking({...dto,totalGuests:1,participants:[
+    {...dto.participants[0],id:1,participantIndex:1,agencyId:"agency",isPrimary:true,price:1500000},
+    {...dto.participants[0],id:2,participantIndex:1,agencyId:"partner",isPrimary:false,price:600000},
+  ],bookingAgencies:[
+    {id:1,agencyId:"agency",agencyName:"Host",isHost:true,originalAmount:1500000,finalAmount:1500000,netPayout:1500000,settlementStatus:"Unpaid",paidSurchargeAmount:0,unpaidSurchargeAmount:0},
+    {id:2,agencyId:"partner",agencyName:"Partner",isHost:false,originalAmount:600000,finalAmount:650000,netPayout:650000,settlementStatus:"Unpaid",paidSurchargeAmount:0,unpaidSurchargeAmount:50000},
+  ],snapshotHotels:[{id:3,name:"Hotel B",agencyId:"partner"}],
+  snapshotDays:[{id:10,dayNumber:2,title:"Stage B",locations:[{id:11,name:"Visit B",agencyId:"partner"}],meals:[{id:12,mealType:"lunch",name:"Meal B",agencyId:"partner"}]}],
+  attractionCheckins:[{id:1,locationId:11,agencyId:"partner",guideId:"gb",guideName:"Guide B",status:"Pending"}],
+  paymentSchedule:[{id:8,stage:"surcharge",description:"Extra",amount:50000,outstanding:50000,status:"Pending",beneficiaryAgencyId:"partner",beneficiaryAgencyName:"Partner"}],
+  });
+  assert.equal(b.passengers?.length,2);assert.deepEqual(b.passengers?.map(p=>p.agencyId),["agency","partner"]);
+  assert.equal(b.isCoHosted,true);assert.equal(b.bookingAgencies?.[1].finalAmount,650000);
+  assert.equal(b.tour.hotels?.[0].createdByCompanyId,"partner");assert.equal(b.tour.itinerary[0].meals?.[0].createdByCompanyId,"partner");
+  assert.equal(b.attractionCheckins?.[0].agencyId,"partner");assert.equal(b.paymentRequests?.[0].beneficiaryAgencyId,"partner");
+});
+
+
+test("partner response remains scoped in the UI even when the tour catalogue contains the full tour",()=>{
+ const own={id:2,agencyId:"partner",agencyName:"Partner",isHost:false,originalAmount:600000,finalAmount:650000,netPayout:650000,settlementStatus:"Unpaid",paidSurchargeAmount:0,unpaidSurchargeAmount:50000};
+ const fullTour=fromApiBooking({...dto,totalAmount:99999999}).tour;
+ const b=fromApiBooking({...dto,isPartnerView:true,totalAmount:650000,baseTourAmount:600000,bookingAgencies:[own],snapshotDays:[],snapshotHotels:[],paymentSchedule:[],paymentTransactions:[]},[fullTour]);
+ assert.equal(b.tour.price,650000);
+ assert.equal(b.isPartnerView,true);assert.equal(b.isCoHosted,true);assert.equal(b.totalPrice,650000);assert.equal(b.bookingAgencies?.length,1);assert.equal(b.coHosts?.[0].role,"partner");
+ assert.deepEqual(b.paymentRequests,[]);assert.deepEqual(b.paymentTransactions,[]);assert.equal(b.travelContract,undefined);assert.deepEqual(b.tour.itinerary,[]);
+});
+
+
+test("partner sees the whole itinerary and ownership names while only its own financial allocation is present",()=>{
+ const agencies=[{agencyId:"agency",agencyName:"Host Travel"},{agencyId:"partner",agencyName:"Partner Travel"}];
+ const b=fromApiBooking({...dto,isPartnerView:true,agencyDirectory:agencies,totalAmount:650000,
+   bookingAgencies:[{id:2,agencyId:"partner",agencyName:"Partner Travel",isHost:false,originalAmount:600000,finalAmount:650000,netPayout:650000,settlementStatus:"Unpaid",paidSurchargeAmount:0,unpaidSurchargeAmount:50000}],
+   snapshotDays:[{id:10,dayNumber:1,title:"Host day",locations:[{id:11,name:"Host visit",agencyId:"agency"}],meals:[{id:12,mealType:"lunch",name:"Host meal",agencyId:"agency"}]},{id:20,dayNumber:2,title:"Partner day",locations:[{id:21,name:"Partner visit",agencyId:"partner"}],meals:[]}],
+   snapshotHotels:[{id:13,name:"Host hotel",agencyId:"agency"},{id:23,name:"Partner hotel",agencyId:"partner"}],paymentSchedule:[],paymentTransactions:[]});
+ assert.deepEqual(b.agencyDirectory,agencies);assert.equal(b.tour.itinerary.length,2);assert.equal(b.tour.hotels?.length,2);
+ assert.equal(b.tour.itinerary[0].locations[0].createdByCompanyId,"agency");assert.equal(b.tour.itinerary[1].locations[0].createdByCompanyId,"partner");
+ assert.equal(b.tour.itinerary[0].meals?.[0].createdByCompanyId,"agency");assert.equal(b.bookingAgencies?.length,1);assert.equal(b.totalPrice,650000);
+});

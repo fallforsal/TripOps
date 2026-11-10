@@ -19,6 +19,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
             b.StartDate.Date.AddDays(Math.Max(1, b.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(b.Tour?.DurationDays ?? 1).Max()) - 1) >= start.Date);
     }
     private IQueryable<Booking> Details() => db.Bookings
+        .Include(b => b.BookingAgencies).ThenInclude(a=>a.Agency).ThenInclude(a=>a.BusinessProfile)
         .Include(b => b.Customer)
         .Include(b => b.Tour!).ThenInclude(t => t.Agency).ThenInclude(a => a.BusinessProfile)
         .Include(b => b.Participants!).ThenInclude(p => p.AssignedGuide)
@@ -30,6 +31,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         .Include(b => b.Contracts)
         .Include(b => b.PriceAdjustments).ThenInclude(a => a.Adjuster)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
+        .Include(b => b.Timelines).ThenInclude(t => t.Attractions).ThenInclude(a=>a.Checkins).ThenInclude(c=>c.Guide)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
         .AsSplitQuery();
@@ -65,13 +67,13 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public async Task<(List<Booking> Rows, int Total)> ListForAgency(
         string agencyId, BookingStatus? status, string? search, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Bookings.AsNoTracking()
+        var query = db.Bookings.AsNoTracking().Include(b=>b.BookingAgencies)
             .Include(b => b.Tour)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
             .Include(b => b.PaymentRequests).AsSplitQuery()
-            .Where(b => b.Tour != null && b.Tour.AgencyId == agencyId);
+            .Where(b => b.Tour != null && (b.Tour.AgencyId == agencyId || b.BookingAgencies.Any(a=>a.AgencyId==agencyId)));
 
         if (status.HasValue)
             query = query.Where(b => b.Status == status.Value);
@@ -99,7 +101,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         var query = db.Bookings.AsNoTracking()
             .Include(b => b.Tour)
             .Include(b => b.Customer)
-            .Include(b => b.Participants)
+            .Include(b => b.Participants).Include(b=>b.AssignedGuides)
             .Include(b => b.PaymentTransactions)
             .Include(b => b.PaymentRequests).AsSplitQuery()
             .Where(b => b.AssignedGuides.Any(ag => ag.GuideId == guideId));

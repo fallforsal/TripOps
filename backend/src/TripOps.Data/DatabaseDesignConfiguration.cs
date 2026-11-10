@@ -316,7 +316,8 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<BookingParticipant>(entity =>
         {
             entity.Property(e => e.CreationKey).HasColumnName("creation_key").HasColumnType("uniqueidentifier");
-            entity.HasIndex(e => new { e.BookingId, e.CreationKey }).IsUnique().HasFilter("[creation_key] IS NOT NULL");
+            entity.HasIndex(e => new { e.BookingId, e.AgencyId, e.CreationKey }).IsUnique().HasFilter("[creation_key] IS NOT NULL");
+            entity.HasIndex(e => new { e.BookingId, e.ParticipantIndex, e.AgencyId }).IsUnique();
             entity.ToTable("booking_participants");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();

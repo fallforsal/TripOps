@@ -199,57 +199,9 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">
-                        NGÀY {day.day}: {day.title.toUpperCase()}
+                        {day.title || "Chưa nhập tiêu đề"}
                       </p>
-                      {tour.isCoHosted && tour.coHosts && (() => {
-                        const dayCompanies = new Map<string, string>();
-                        if (day.createdByCompanyId) {
-                          dayCompanies.set(day.createdByCompanyId, day.createdByCompanyName || "Công ty điều phối");
-                        }
-                        if (day.hotel?.createdByCompanyId) {
-                          dayCompanies.set(day.hotel.createdByCompanyId, day.hotel.createdByCompanyName || "Công ty lưu trú");
-                        }
-                        day.meals?.forEach((m) => {
-                          if (m.createdByCompanyId) {
-                            dayCompanies.set(m.createdByCompanyId, m.createdByCompanyName || "Công ty ẩm thực");
-                          }
-                        });
-                        day.locations?.forEach((loc) => {
-                          if (loc.createdByCompanyId) {
-                            dayCompanies.set(loc.createdByCompanyId, loc.createdByCompanyName || "Công ty tham quan");
-                          }
-                        });
 
-                        if (dayCompanies.size === 0) {
-                          tour.coHosts.forEach((ch) => {
-                            if (ch.assignedDays?.includes(day.day)) {
-                              dayCompanies.set(ch.companyId, ch.companyName);
-                            }
-                          });
-                        }
-
-                        const list = Array.from(dayCompanies.entries());
-                        if (list.length > 1) {
-                          return (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                              <Handshake className="w-3 h-3 text-amber-700" />
-                              🤝 Đồng phụ trách ({list.map(([_, n]) => n).join(" & ")})
-                            </span>
-                          );
-                        }
-
-                        if (list.length === 1) {
-                          const [_, cName] = list[0];
-                          return (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30 flex items-center gap-1 shadow-2xs">
-                              <Handshake className="w-3 h-3" />
-                              Phụ trách: {cName}
-                            </span>
-                          );
-                        }
-
-                        return null;
-                      })()}
                     </div>
                   </div>
                   {isOpen ? (
@@ -1492,12 +1444,8 @@ function CustomTab({
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-sm">
-                      Ngày {day.day}: {day.title}
-                      {day.meals && day.meals.length > 0 && (
-                        <span className="text-xs text-gray-500 font-normal ml-1.5">
-                          (Ăn {day.meals.map((m) => m.type === "breakfast" ? "sáng" : m.type === "lunch" ? "trưa" : "tối").join(", ")})
-                        </span>
-                      )}
+                      {day.title || "Chưa nhập tiêu đề"}
+
                     </p>
                   </div>
                 </div>

@@ -146,6 +146,7 @@ public virtual ICollection<BookingAttractionCheckin> Checkins { get; set; } = ne
 }
 
 public class BookingTimelineMeal : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int? ServiceId { get; set; }
 public int BookingTimelineId { get; set; }
 public DateTime? DateService { get; set; }
@@ -164,6 +165,7 @@ public virtual BookingTimeline BookingTimeline { get; set; } = null!;
 }
 
 public class BookingAccommodation : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int BookingId { get; set; }
 public int? ServiceId { get; set; }
 public string Destination { get; set; } = string.Empty;

@@ -2707,7 +2707,7 @@ export function TourFormPage(props: TourFormPageProps) {
       : isCustom && customRequest
         ? Array.from({ length: customDays }, (_, index) => ({
             id: `day-${index + 1}`, day: index + 1,
-            title: `Ngày ${index + 1}: ${customDestination}`,
+            title: "",
             description: "", destinationCity: customDestination,
             locations: [], meals: [],
           }))
@@ -2716,7 +2716,7 @@ export function TourFormPage(props: TourFormPageProps) {
           id: `day-1`,
           day: 1,
           date: "2026-03-01",
-          title: "TP.HCM – Đà Lạt (Ăn trưa, tối)",
+          title: "",
           description:
             "Hướng dẫn viên Viettravel đón đoàn tại điểm hẹn, xuất phát đi Đà Lạt. Tới nơi nhận phòng khách sạn, ăn trưa nhà hàng địa phương. Buổi chiều tham quan hồ Xuân Hương và Nhà thờ Con Gà. Tối dạo chợ đêm Đà Lạt và thưởng thức ẩm thực đặc sản.",
           destinationCity: "Đà Lạt",
@@ -2769,7 +2769,7 @@ export function TourFormPage(props: TourFormPageProps) {
           id: `day-2`,
           day: 2,
           date: "2026-03-02",
-          title: "Khám phá Đà Lạt (Ăn sáng, trưa, tối)",
+          title: "",
           description:
             "Sau bữa sáng tại khách sạn, đoàn khởi hành tham quan Thung lũng tình yêu, Mê Linh Coffee Garden và Thác Datanla. Buổi chiều ghé Quảng trường Lâm Viên ngắm hoàng hôn. Tối ăn nhà hàng đặc sản địa phương.",
           destinationCity: "Đà Lạt",
@@ -2832,7 +2832,7 @@ export function TourFormPage(props: TourFormPageProps) {
           id: `day-3`,
           day: 3,
           date: "2026-03-03",
-          title: "Đà Lạt – TP.HCM (Ăn sáng, trưa)",
+          title: "",
           description:
             "Ăn sáng tại khách sạn, trả phòng. Tham quan Ga Đà Lạt – công trình kiến trúc Pháp cổ điển. Ghé Vườn hoa thành phố chụp ảnh lưu niệm. Ăn trưa rồi lên xe trở về TP.HCM, kết thúc tour.",
           destinationCity: "Đà Lạt",
@@ -3258,7 +3258,7 @@ export function TourFormPage(props: TourFormPageProps) {
       date: new Date(Date.now() + nextDayNum * 86400000)
         .toISOString()
         .split("T")[0],
-      title: `Ngày ${nextDayNum}: Tiếp tục hành trình (Ăn trưa, tối)`,
+      title: "",
       description: "Đoàn tiếp tục tham quan các điểm du lịch nổi tiếng...",
       destinationCity: destination || "Điểm đến",
       createdByCompanyId: company.id,
@@ -5306,55 +5306,6 @@ export function TourFormPage(props: TourFormPageProps) {
                       key={day.id || dIdx}
                       className={`rounded-2xl border overflow-hidden bg-white shadow-2xs ${isCoHostedTour && !isDayCreatedByMe ? "border-[#F97316]/30" : "border-[#CBD5E1]"}`}
                     >
-                      {/* Banner hiển thị quyền chỉnh sửa khi tour liên minh */}
-                      {isCoHostedTour && (
-                        <div
-                          className={`border-b px-4 py-2 flex items-center justify-between text-xs ${isDayCreatedByMe
-                              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
-                              : "bg-[#F0F9FF]/90 border-[#F97316]/30 text-purple-900"
-                            }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {isDayCreatedByMe ? (
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                            ) : (
-                              <Handshake className="w-3.5 h-3.5 text-[#F97316] flex-shrink-0" />
-                            )}
-                            <span>
-                              {isDayCreatedByMe ? (
-                                <>
-                                  Lịch trình Ngày {day.day} do công ty bạn (
-                                  <strong className="font-bold">
-                                    {company.name}
-                                  </strong>
-                                  ) khởi tạo &amp; phụ trách.
-                                </>
-                              ) : (
-                                <>
-                                  Lịch trình Ngày {day.day} do{" "}
-                                  <strong className="font-bold text-purple-950">
-                                    {dayOwnerName}
-                                  </strong>{" "}
-                                  khởi tạo. Bạn có thể{" "}
-                                  <strong>thêm điểm tham quan và bữa ăn</strong>{" "}
-                                  thuộc trách nhiệm của mình.
-                                </>
-                              )}
-                            </span>
-                          </div>
-                          <span
-                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded flex items-center gap-1 border ${isDayCreatedByMe
-                                ? "bg-emerald-200 text-emerald-900 border-emerald-300"
-                                : "bg-[#F97316]/15 text-purple-800 border-purple-300"
-                              }`}
-                          >
-                            {isDayCreatedByMe
-                              ? "Đơn vị khởi tạo ngày"
-                              : "Phối hợp đóng góp"}
-                          </span>
-                        </div>
-                      )}
-
                       {/* Day header identical to thongtintour.png */}
                       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-100">
                         <div className="flex items-center gap-2.5">
@@ -5364,117 +5315,11 @@ export function TourFormPage(props: TourFormPageProps) {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-bold text-gray-900 text-sm">
-                                Ngày {day.day}:{" "}
-                                {day.title || `Lịch trình ngày ${day.day}`}
+                                {day.title || "Chưa nhập tiêu đề"}
                               </p>
-                              {(() => {
-                                const coHosts = coHostsList;
-                                if (!coHosts || coHosts.length === 0)
-                                  return null;
 
-                                // Scan companies that contributed to this day
-                                const dayCompanies = new Map<string, string>();
-                                if (day.createdByCompanyId) {
-                                  dayCompanies.set(
-                                    day.createdByCompanyId,
-                                    day.createdByCompanyName ||
-                                    "Công ty điều phối",
-                                  );
-                                }
-                                if (day.hotel?.createdByCompanyId) {
-                                  dayCompanies.set(
-                                    day.hotel.createdByCompanyId,
-                                    day.hotel.createdByCompanyName ||
-                                    "Công ty lưu trú",
-                                  );
-                                }
-                                day.meals?.forEach((m) => {
-                                  if (m.createdByCompanyId) {
-                                    dayCompanies.set(
-                                      m.createdByCompanyId,
-                                      m.createdByCompanyName ||
-                                      "Công ty ẩm thực",
-                                    );
-                                  }
-                                });
-                                day.locations?.forEach((loc) => {
-                                  if (loc.createdByCompanyId) {
-                                    dayCompanies.set(
-                                      loc.createdByCompanyId,
-                                      loc.createdByCompanyName ||
-                                      "Công ty tham quan",
-                                    );
-                                  }
-                                });
-
-                                // Fallback to assignedDays if not explicitly tagged yet
-                                if (dayCompanies.size === 0) {
-                                  coHosts.forEach((ch) => {
-                                    if (ch.assignedDays?.includes(day.day)) {
-                                      dayCompanies.set(
-                                        ch.companyId,
-                                        ch.companyName,
-                                      );
-                                    }
-                                  });
-                                }
-
-                                const companyList = Array.from(
-                                  dayCompanies.entries(),
-                                );
-                                const isMultiCompany = companyList.length > 1;
-
-                                if (isMultiCompany) {
-                                  return (
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                                        <Handshake className="w-3 h-3 text-amber-700" />
-                                        🤝 Các công ty cùng phối hợp (
-                                        {companyList
-                                          .map(([_, name]) => name)
-                                          .join(" & ")}
-                                        )
-                                      </span>
-                                    </div>
-                                  );
-                                }
-
-                                if (companyList.length === 1) {
-                                  const [cId, cName] = companyList[0];
-                                  const isMyCompany = cId === company.id;
-                                  return (
-                                    <span
-                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs ${isMyCompany
-                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                          : "bg-[#E0F2FE] text-blue-800 border border-[#CBD5E1]"
-                                        }`}
-                                    >
-                                      <Building2 className="w-3 h-3" />
-                                      {isMyCompany
-                                        ? `Công ty bạn phụ trách (${cName})`
-                                        : `Phụ trách: ${cName}`}
-                                    </span>
-                                  );
-                                }
-
-                                return null;
-                              })()}
                             </div>
-                            {day.meals && day.meals.length > 0 && (
-                              <span className="text-xs text-gray-400 font-normal">
-                                (
-                                {day.meals
-                                  .map((m) =>
-                                    m.type === "breakfast"
-                                      ? "Ăn sáng"
-                                      : m.type === "lunch"
-                                        ? "trưa"
-                                        : "tối",
-                                  )
-                                  .join(", ")}
-                                )
-                              </span>
-                            )}
+
                           </div>
                         </div>
 
@@ -5512,7 +5357,7 @@ export function TourFormPage(props: TourFormPageProps) {
                               updated[dIdx].title = e.target.value;
                               setItinerary(updated);
                             }}
-                            placeholder="VD: TP.HCM – Đà Lạt (Ăn trưa, tối)"
+                            placeholder="Nhập tiêu đề lịch trình, ví dụ: TP.HCM – Đà Lạt"
                             className={`text-xs mt-0.5 ${isDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-[#CBD5E1]" : ""}`}
                           />
                         </div>
@@ -8399,7 +8244,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     {d.day}
                                   </div>
                                   <span className="font-bold text-gray-900 text-xs sm:text-sm">
-                                    Ngày {d.day}: {d.title}
+                                    {d.title || "Chưa nhập tiêu đề"}
                                   </span>
                                 </div>
                                 {d.description && (
@@ -8694,117 +8539,12 @@ export function TourFormPage(props: TourFormPageProps) {
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <p className="font-bold text-gray-900 text-xs sm:text-sm">
-                                          NGÀY {d.day}: {d.title.toUpperCase()}
+                                          {d.title || "Chưa nhập tiêu đề"}
                                         </p>
-                                        {(() => {
-                                          if (!isCoHostedTour) return null;
-                                          const dayCompanies = new Map<
-                                            string,
-                                            string
-                                          >();
-                                          if (d.createdByCompanyId)
-                                            dayCompanies.set(
-                                              d.createdByCompanyId,
-                                              d.createdByCompanyName ||
-                                              "Công ty điều phối",
-                                            );
-                                          if (d.hotel?.createdByCompanyId)
-                                            dayCompanies.set(
-                                              d.hotel.createdByCompanyId,
-                                              d.hotel.createdByCompanyName ||
-                                              "Công ty lưu trú",
-                                            );
-                                          d.meals?.forEach((m) => {
-                                            if (m.createdByCompanyId)
-                                              dayCompanies.set(
-                                                m.createdByCompanyId,
-                                                m.createdByCompanyName ||
-                                                "Công ty ẩm thực",
-                                              );
-                                          });
-                                          d.locations?.forEach((loc) => {
-                                            if (loc.createdByCompanyId)
-                                              dayCompanies.set(
-                                                loc.createdByCompanyId,
-                                                loc.createdByCompanyName ||
-                                                "Công ty tham quan",
-                                              );
-                                          });
-                                          if (dayCompanies.size === 0) {
-                                            const coHosts =
-                                              tour?.coHosts ||
-                                              customRequest?.coHosts ||
-                                              coHostsList;
-                                            coHosts?.forEach(
-                                              (ch: TourCoHost) => {
-                                                if (
-                                                  ch.assignedDays?.includes(
-                                                    d.day,
-                                                  )
-                                                ) {
-                                                  dayCompanies.set(
-                                                    ch.companyId,
-                                                    ch.companyName,
-                                                  );
-                                                }
-                                              },
-                                            );
-                                          }
-                                          const list = Array.from(
-                                            dayCompanies.entries(),
-                                          );
-                                          if (list.length > 1) {
-                                            return (
-                                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                                                <Handshake className="w-3 h-3 text-amber-700" />
-                                                🤝 Đồng phụ trách (
-                                                {list
-                                                  .map(([_, n]) => n)
-                                                  .join(" & ")}
-                                                )
-                                              </span>
-                                            );
-                                          }
-                                          if (list.length === 1) {
-                                            const [_, cName] = list[0];
-                                            return (
-                                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E0F2FE] text-blue-800 border border-[#CBD5E1] flex items-center gap-1 shadow-2xs">
-                                                <Building2 className="w-3 h-3" />
-                                                Phụ trách: {cName}
-                                              </span>
-                                            );
-                                          }
-                                          return null;
-                                        })()}
+
                                       </div>
                                     </div>
-                                    {d.meals && d.meals.length > 0 && (
-                                      <div className="flex gap-1 flex-shrink-0">
-                                        {d.meals.map((m, mi) => {
-                                          const isBreakfast =
-                                            m.type === "breakfast";
-                                          const isLunch = m.type === "lunch";
-                                          const badgeColor = isBreakfast
-                                            ? "text-amber-700 bg-amber-50 border border-amber-200"
-                                            : isLunch
-                                              ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
-                                              : "text-[#EA580C] bg-[#F0F9FF] border border-[#F97316]/30";
-                                          const label = isBreakfast
-                                            ? "Sáng"
-                                            : isLunch
-                                              ? "Trưa"
-                                              : "Tối";
-                                          return (
-                                            <span
-                                              key={mi}
-                                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${badgeColor}`}
-                                            >
-                                              {label}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+
                                     {isOpen ? (
                                       <ChevronUp className="w-4 h-4 text-gray-400" />
                                     ) : (

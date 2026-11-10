@@ -67,7 +67,16 @@ export interface AssignedGuideDto {
   agencyId?: string;
 }
 
+export interface BookingAgencyDto {
+  id:number;agencyId:string;agencyName:string;isHost:boolean;originalAmount:number;finalAmount:number;netPayout:number;settlementStatus:string;
+  stageArea?:string;pricingTiers?:{name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[];
+  paidSurchargeAmount:number;unpaidSurchargeAmount:number;
+}
 export interface BookingDto {
+  isPartnerView?: boolean;
+  agencyDirectory?:{agencyId:string;agencyName:string}[];
+  bookingAgencies?:BookingAgencyDto[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;status:string;checkedAt?:string;note?:string}[];
   id: number;
   bookingCode: string;
   customerId: string;
@@ -118,9 +127,11 @@ export interface BookingDto {
       time?: string;
       attendanceStatus?: string;
       changeReason?: string;
+      agencyId?:string;
     }[];
     meals: {
       id: number;
+      agencyId?:string;
       mealType: "breakfast" | "lunch" | "dinner";
       name: string;
       originalName?: string;
@@ -131,6 +142,7 @@ export interface BookingDto {
     }[];
   }[];
   snapshotHotels?: {
+    agencyId?:string;
     id: number;
     destination: string;
     name: string;
@@ -344,6 +356,7 @@ export interface PayoutAccountDto {
 }
 
 export interface PaymentScheduleItemDto {
+  beneficiaryAgencyId?:string;beneficiaryAgencyName?:string;
   id?: number | null;
   /** full = tour sát ngày khởi hành: thanh toán toàn bộ một lần, không có đợt 2. */
   stage: "deposit" | "balance" | "full" | "surcharge";

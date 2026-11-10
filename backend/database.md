@@ -475,6 +475,7 @@ Table booking_locations {
 // 3. BỮA ĂN (Lưu nhà hàng gốc & nhà hàng mới - Hiển thị chữ "Mặc định")
 // ============================================================================
 Table booking_restaurants {
+  agency_id varchar(36)
   id int [pk, increment]
   service_id int
   booking_timeline_id int [not null]
@@ -498,6 +499,7 @@ Table booking_restaurants {
 // 4. KHÁCH SẠN LƯU TRÚ (Lưu khách sạn gốc & khách sạn đổi)
 // ============================================================================
 Table booking_hotels {
+  agency_id varchar(36)
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
   service_id int
@@ -583,6 +585,7 @@ Ref: booking_incidents.reported_by > users.id
 // 1. CÁC ĐỢT YÊU CẦU THANH TOÁN (PAYMENT MILESTONES)
 // ============================================================================
 Table payment_requests {
+  beneficiary_agency_id varchar(36)
   QuotationId int
   id int [pk, increment]
   booking_id int [not null, note: 'FK tới bookings.id']
@@ -1186,3 +1189,8 @@ Table tour_design_request_agencies {
 }
 Ref: tour_design_request_agencies.request_id > tour_design_requests.id
 Ref: tour_design_request_agencies.agency_id > users.id
+
+// Chủ sở hữu dịch vụ và đơn vị nhận phụ thu của booking liên minh.
+Ref: booking_hotels.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)
+Ref: booking_restaurants.agency_id > users.id
+Ref: payment_requests.(booking_id, beneficiary_agency_id) > booking_agencies.(booking_id, agency_id)

@@ -278,7 +278,7 @@ export function TourVersionHistoryModal({
                               {snap.itinerary?.map((d) => (
                                 <div key={d.id} className="p-2 border border-gray-100 rounded-lg bg-gray-50/50">
                                   <p className="font-semibold text-gray-800">
-                                    Ngày {d.day}: {d.title}
+                                    {d.title || "Chưa nhập tiêu đề"}
                                   </p>
                                   {d.hotel?.name && (
                                     <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">

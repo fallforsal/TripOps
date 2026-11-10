@@ -1,3 +1,4 @@
+import { AdminAllianceAllocationLedger } from "./AdminAllianceAllocationLedger";
 import { useState } from "react";
 import { Booking, SystemBankAccount } from "@/app/types";
 import {
@@ -418,6 +419,8 @@ export function AdminFinancialManagement({
         </div>
       </div>
 
+      <AdminAllianceAllocationLedger/>
+
       {/* SETTLEMENT TABLE: BOOKINGS WITH MONEY IN ESCROW */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden space-y-4 p-5">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -505,22 +508,9 @@ export function AdminFinancialManagement({
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 bg-[#F97316]/15 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#F97316]/30">
                               <Handshake className="w-3 h-3 text-[#F97316]" />
-                              Tour Liên Minh (2 Cty)
+                              Tour Liên Minh ({b.bookingAgencies?.length||b.coHosts?.length||2} Cty)
                             </span>
-                            <div className="space-y-0.5 text-[11px]">
-                              <p className="font-bold text-gray-900 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#075985] flex-shrink-0"></span>
-                                <span className="truncate">
-                                  {b.coHosts?.find((c) => c.role === "lead")?.companyName || b.companyName} ({b.coHosts?.find((c) => c.role === "lead")?.revenueSharePercentage ?? 40}%)
-                                </span>
-                              </p>
-                              <p className="font-bold text-purple-900 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#F97316] flex-shrink-0"></span>
-                                <span className="truncate">
-                                  {b.coHosts?.find((c) => c.role === "partner")?.companyName || "Đối tác"} ({b.coHosts?.find((c) => c.role === "partner")?.revenueSharePercentage ?? 60}%)
-                                </span>
-                              </p>
-                            </div>
+                            <div className="space-y-1 text-[11px]">{(b.bookingAgencies||[]).map(a=><p key={a.agencyId} className="font-medium text-slate-700">{a.agencyName}: {formatVND(a.finalAmount)}</p>)}</div>
                           </div>
                         ) : (
                           <span className="font-bold text-gray-800 flex items-center gap-1">

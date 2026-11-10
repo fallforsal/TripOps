@@ -128,7 +128,6 @@ import {
   GuideSchedule,
   RoomBooking,
   TourCompany,
-  PaymentRequest,
   ProviderGroupReservationRequest,
   CustomTourRequest,
   CustomHotelChange,
@@ -993,8 +992,13 @@ function Application() {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
   };
 
-  const handleUpdateAttractionCheckins = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateAttractionCheckins = async (bookingId:string,checkins:BookingAttractionCheckin[]) => {
+    const groups=new Map<string,string[]>();
+    for(const row of checkins.filter(c=>c.agencyId===currentUser?.id))groups.set(row.bookingTimelineAttractionId,[...(groups.get(row.bookingTimelineAttractionId)||[]),row.guideId]);
+    const current=bookings.find(b=>b.id===bookingId);
+    const locations=(current?.tour.itinerary||[]).flatMap(d=>d.locations.filter(l=>(l.createdByCompanyId||current?.companyId)===currentUser?.id).map(l=>({locationId:Number(l.id),guideIds:groups.get(l.id)||[]})));
+    const dto=await http<BookingDto>(`/agency/bookings/${bookingId}/guide-routing`,{method:"PUT",body:JSON.stringify({locations})});
+    setBookings(previous=>previous.map(b=>b.id===bookingId?fromApiBooking(dto,tours,currentUser):b));
   };
 
   const handleUpdateIncidents = (..._args: any[]) => {
@@ -1031,12 +1035,12 @@ function Application() {
     const current = bookings.find((b) => b.id === bookingId);
     if (!current) throw new Error("Không tìm thấy booking");
     for (const g of current.assignedGuides || [])
-      if (!updatedGuides.some((x) => x.guideId === g.guideId))
+      if (g.companyId===currentUser?.id && !updatedGuides.some((x) => x.guideId === g.guideId))
         await http(
           "/bookings/" + bookingId + "/guide-assignments/" + g.guideId,
           { method: "DELETE" },
         );
-    for (const g of updatedGuides)
+    for (const g of updatedGuides.filter(g=>g.companyId===currentUser?.id))
       await assignGuide(
         Number(bookingId),
         g.guideId,
@@ -1154,11 +1158,6 @@ function Application() {
   };
 
   const handleSuspendCompany = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
-  // Company admin - payment requests
-  const handleCreatePaymentRequest = (..._args: any[]) => {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
   };
 
@@ -1609,7 +1608,7 @@ function Application() {
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
               onUpdateAssignedGuides={handleUpdateAssignedGuides}
-              onCreatePaymentRequest={handleCreatePaymentRequest}
+
               onMarkDepositPaid={handleMarkDepositPaid}
               onMarkFullyPaid={handleMarkFullyPaid}
               onUpdateBookingPrice={handleUpdateBookingPrice}

@@ -1038,12 +1038,8 @@ export function UserBookingDetailPage({
                             </div>
                             <div>
                               <p className="font-bold text-gray-900 text-sm">
-                                Ngày {day.day}: {day.title}
-                                {day.meals && day.meals.length > 0 && (
-                                  <span className="text-xs text-gray-400 font-normal ml-1.5">
-                                    (Ăn {day.meals.map((m) => m.type === "breakfast" ? "sáng" : m.type === "lunch" ? "trưa" : "tối").join(", ")})
-                                  </span>
-                                )}
+                                {day.title || "Chưa nhập tiêu đề"}
+
                               </p>
                             </div>
                           </div>

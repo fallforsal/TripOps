@@ -341,6 +341,11 @@ namespace TripOps.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AgencyId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
                     b.Property<int>("BookingId")
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
@@ -431,9 +436,9 @@ namespace TripOps.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookingId");
-
                     b.HasIndex("ServiceId");
+
+                    b.HasIndex("BookingId", "AgencyId");
 
                     b.ToTable("booking_hotels", (string)null);
                 });
@@ -953,17 +958,20 @@ namespace TripOps.Data.Migrations
 
                     b.HasIndex("CheckedBy");
 
-                    b.HasIndex("BookingId", "CreationKey")
-                        .IsUnique()
-                        .HasFilter("[creation_key] IS NOT NULL");
-
                     b.HasIndex("BookingId", "ParticipantIndex")
                         .IsUnique()
                         .HasFilter("[is_primary] = 1");
 
                     b.HasIndex("BookingId", "AgencyId", "AssignedGuideId");
 
+                    b.HasIndex("BookingId", "AgencyId", "CreationKey")
+                        .IsUnique()
+                        .HasFilter("[creation_key] IS NOT NULL");
+
                     b.HasIndex("BookingId", "AgencyId", "ParticipantIndex")
+                        .IsUnique();
+
+                    b.HasIndex("BookingId", "ParticipantIndex", "AgencyId")
                         .IsUnique();
 
                     b.ToTable("booking_participants", (string)null);
@@ -1361,6 +1369,11 @@ namespace TripOps.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AgencyId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
                     b.Property<int>("BookingTimelineId")
                         .HasColumnType("int")
                         .HasColumnName("booking_timeline_id");
@@ -1434,6 +1447,8 @@ namespace TripOps.Data.Migrations
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
 
                     b.HasIndex("BookingTimelineId");
 
@@ -2042,6 +2057,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("amount");
 
+                    b.Property<string>("BeneficiaryAgencyId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("beneficiary_agency_id");
+
                     b.Property<int>("BookingId")
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
@@ -2093,6 +2113,8 @@ namespace TripOps.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("BookingId", "BeneficiaryAgencyId");
 
                     b.HasIndex("BookingId", "Id")
                         .IsUnique();
@@ -3728,6 +3750,12 @@ namespace TripOps.Data.Migrations
                         .HasForeignKey("ServiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TripOps.Data.Entities.BookingAgency", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId", "AgencyId")
+                        .HasPrincipalKey("BookingId", "AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Booking");
                 });
 
@@ -4001,6 +4029,11 @@ namespace TripOps.Data.Migrations
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingTimelineMeal", b =>
                 {
+                    b.HasOne("TripOps.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TripOps.Data.Entities.BookingTimeline", "BookingTimeline")
                         .WithMany("Meals")
                         .HasForeignKey("BookingTimelineId")
@@ -4184,6 +4217,12 @@ namespace TripOps.Data.Migrations
                     b.HasOne("TripOps.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TripOps.Data.Entities.BookingAgency", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId", "BeneficiaryAgencyId")
+                        .HasPrincipalKey("BookingId", "AgencyId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Booking");
