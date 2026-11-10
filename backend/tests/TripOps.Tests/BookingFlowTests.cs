@@ -313,9 +313,15 @@ public sealed partial class BookingFlowTests
         }
         Assert.Equal(HttpStatusCode.Conflict,
             (await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest)).StatusCode);
+        var pastDayDetail = await guide.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/guide/bookings/{bookingId}");
+        Assert.False(pastDayDetail!.CanRecordAttendance);
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var pastParticipant = await db.BookingParticipants.SingleAsync(p => p.Id == participantId);
+            Assert.Equal(AttendanceStatus.Pending, pastParticipant.AttendanceStatus);
+            Assert.Null(pastParticipant.CheckedAt);
             var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
             trip.StartDate = DateTime.UtcNow.Date;
             await db.SaveChangesAsync();
