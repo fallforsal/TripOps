@@ -50,6 +50,16 @@ public sealed partial class BookingFlowTests
         }
         Assert.Equal(HttpStatusCode.Conflict,
             (await guide.PostAsJsonAsync(firstUrl, near)).StatusCode);
+        // Multi-day tours remain eligible after departure day until completed.
+        using (var scope = app.Services.CreateScope()) {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var stored = await db.Bookings.SingleAsync(b => b.Id == booking.Id);
+            stored.StartDate = PaymentRules.VietnamDate(DateTime.UtcNow).AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+        var inProgressDay = await guide.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/guide/bookings/{booking.Id}");
+        Assert.True(inProgressDay!.CanCheckInLocations);
         using (var scope = app.Services.CreateScope()) {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             var stored = await db.Bookings.SingleAsync(b => b.Id == booking.Id);
