@@ -298,6 +298,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
+                              key: ValueKey('checkin-${stop.id}'),
                               onPressed: canCheck ? () => check(stop) : null,
                               icon: const Icon(Icons.gps_fixed, size: 17),
                               label: const Text('Xác nhận check-in GPS'),
