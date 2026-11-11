@@ -494,6 +494,7 @@ export interface Tour {
   revision?: number;
   hasDraftChanges?: boolean;
   createNewVersion?: boolean;
+  pendingTourImages?: { url: string; file: File }[];
   agencyPricing?: {agencyId:string;tiers:{key?:string|null;name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[]}[];
   sharedVersion?: number;
   planGuestCount?: number;
@@ -879,6 +880,7 @@ export interface RoomBooking {
 }
 // Thành viên trong đoàn khách - Khớp chuẩn với bảng booking_participants trong DATABASE_SCHEMA
 export interface GroupGuestMember {
+  age?: number;
   id: number | string;
   participantIndex: number; // participant_index: STT khách trong đoàn (1, 2, 3...)
   fullName: string; // full_name: Họ và tên
@@ -936,6 +938,8 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  sharedTourThumbnail?: string;
+  sharedTourName?: string;
   rejectionReason?: string;
   sharedVersion?: number;
   sourceTourId?: string;

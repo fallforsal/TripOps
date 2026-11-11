@@ -97,9 +97,16 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         var ids = requests.Select(r => r.Id).ToArray();
         var designedTours = await db.Tours.AsNoTracking().Where(t => t.DesignRequestId.HasValue && ids.Contains(t.DesignRequestId.Value) &&
             t.Status != TourStatus.Deleted).ToListAsync(ct);
+        var sharedPlans=await db.TourVersions.AsNoTracking().Where(v=>v.Tour.DesignRequestId.HasValue && ids.Contains(v.Tour.DesignRequestId.Value) && v.VersionNumber==v.Tour.SharedVersion)
+            .ToDictionaryAsync(v=>v.TourId,v=>v.SnapshotData,ct);
         var result = new List<DesignRequestDto>();
         foreach (var request in requests) {
             var mapped = Map(request, agencies.GetValueOrDefault(request.AgencyId ?? ""), designedTours.FirstOrDefault(t => t.DesignRequestId == request.Id));
+            if(mapped.DesignedTourId is int planId && sharedPlans.TryGetValue(planId,out var snapshotJson)) {
+                var shared=System.Text.Json.JsonSerializer.Deserialize<TourSnapshot>(snapshotJson,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+                mapped=mapped with {SharedTourThumbnail=shared.Configuration.Images?.FirstOrDefault(),SharedTourName=shared.Configuration.Name};
+            }
+            if(!agencyView) mapped=mapped with {CurrentVersion=mapped.SharedVersion};
             var hosts = await tours.CoHosts(request.Id, ct);
             // Customer membership is exposed only by the immutable shared tour snapshot.
             mapped = mapped with { CoHosts = agencyView ? hosts : null };

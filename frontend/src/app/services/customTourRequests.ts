@@ -1,8 +1,10 @@
+import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import { http } from "@/app/lib/http";
 import type { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
+  sharedTourThumbnail?: string | null; sharedTourName?: string | null;
   coHosts?: TourCoHost[];
   rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
   id: number; customerId: string; agencyId: string; agencyName: string;
@@ -18,6 +20,7 @@ type RequestDto = {
 type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
+  sharedTourThumbnail:r.sharedTourThumbnail || undefined, sharedTourName:r.sharedTourName || undefined,
   coHosts: r.coHosts && r.coHosts.length > 1 ? r.coHosts : [], isCoHosted: Boolean(r.coHosts?.some(h => h.role === "partner" && h.status !== "rejected")),
   rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
@@ -72,5 +75,7 @@ export const shareDesignTour = async (requestId: string, revision: number, versi
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version }) }));
 export const getDesignVersion = async (requestId: string, version: number) =>
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/versions/${version}`));
-export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, revision?: number) =>
-  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/tour`, { method: "PUT", body: JSON.stringify({ revision: revision ?? null, createNewVersion: tour.createNewVersion === true, version: tour.version, configuration: toConfiguration(tour), complete: tour.status === "completed", reason: tour.changeNote }) }));
+export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, revision?: number) => {
+  const body=tourSaveBody({revision:revision??null,createNewVersion:tour.createNewVersion===true,version:tour.version,configuration:toConfiguration(tour),complete:tour.status==="completed",reason:tour.changeNote},tour);
+  return fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/${body instanceof FormData ? "tour-with-images" : "tour"}`,{method:"PUT",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined}));
+};

@@ -105,7 +105,6 @@ public sealed partial class TourFlowTests
         Assert.Equal("Private hotel", hotel.HotelName);
         Assert.Equal("18 Tran Phu, Da Lat", hotel.Supplier!.Address);
         Assert.Null(hotel.Supplier.ReferencePrice); Assert.Null(hotel.Supplier.ContactName); Assert.Null(hotel.Supplier.ContactPhone);
-        var history = await Read<DesignRequestService.PlanHistory[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history"));
-        Assert.Null(Assert.Single(history).Configuration.Timelines![0].Accommodations![0].Supplier!.ReferencePrice);
+        Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")).StatusCode);
     }
 }

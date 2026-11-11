@@ -20,8 +20,9 @@ public sealed partial class DesignRequestService
     };
     public async Task<IReadOnlyList<PlanHistory>> History(string actor, int id, bool agency, CancellationToken ct)
     {
+        if (!agency) throw new TourException(403,"Chỉ Agency được xem các phiên bản tour.");
         _ = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == id &&
-            (agency ? r.AgencyId == actor : r.CustomerId == actor), ct) ?? throw new TourException(404, "Không tìm thấy yêu cầu.");
+            r.AgencyId == actor, ct) ?? throw new TourException(404, "Không tìm thấy yêu cầu.");
         var rows = await db.TourVersions.AsNoTracking().Where(v => v.Tour.DesignRequestId == id && (agency || v.SharedAt != null))
             .OrderByDescending(v => v.VersionNumber).ToListAsync(ct);
         return rows.Select(v => {

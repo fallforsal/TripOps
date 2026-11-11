@@ -1,3 +1,4 @@
+import { serviceThumbnail } from "@/app/lib/servicePresentation";
 import { useState, useEffect } from "react";
 import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
 import {
@@ -1227,7 +1228,7 @@ function CustomTab({
                             : services.find((s) => s.category === "hotel" && (s.name.toLowerCase().includes(opt.name.toLowerCase()) || opt.name.toLowerCase().includes(s.name.toLowerCase())));
 
                           const mapsUrl = opt.mapUrl || getGoogleMapsSearchUrl(opt.name, opt.address, destination);
-                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500";
+                          const imgUrl = serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500";
                           const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Đối tác";
 
                           return (
@@ -1808,7 +1809,7 @@ function CustomTab({
                                             (s.name.toLowerCase().includes(opt.name.toLowerCase()) ||
                                               opt.name.toLowerCase().includes(s.name.toLowerCase()))
                                           );
-                                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500";
+                                          const imgUrl = serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500";
                                           const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Heritage";
 
                                           return (

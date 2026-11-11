@@ -411,7 +411,7 @@ export function ProviderGroupRequestDetailPage({
 
                 <div className="flex items-center justify-between text-xs text-gray-700">
                   <span className="text-gray-500">Quy mô đoàn:</span>
-                  <span className="font-bold text-gray-900">{request.numberOfGuests} khách ({request.adultGuests} NL, {request.childGuests} TE)</span>
+                  <span className="font-bold text-gray-900">{request.numberOfGuests} khách</span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-gray-700">
@@ -564,7 +564,7 @@ export function ProviderGroupRequestDetailPage({
                 <tr>
                   <th className="py-3 px-3 text-center w-12">#</th>
                   <th className="py-3 px-4">Thành viên đoàn</th>
-                  <th className="py-3 px-3">Đối tượng</th>
+                  <th className="py-3 px-3">Độ tuổi</th>
                   {isRestaurant ? (
                     // RESTAURANT COLUMNS (No CCCD, No roommateNote)
                     <>
@@ -600,7 +600,6 @@ export function ProviderGroupRequestDetailPage({
                         ? "Nam"
                         : "Khác";
 
-                    const isChild = guest.tierName?.toLowerCase().includes("trẻ") || false;
 
                     return (
                       <tr
@@ -626,12 +625,12 @@ export function ProviderGroupRequestDetailPage({
                         <td className="py-3 px-3">
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              isChild
+                              guest.age !== undefined && guest.age < 12
                                 ? "bg-amber-100 text-amber-900 border border-amber-200"
                                 : "bg-sky-100 text-sky-900 border border-sky-200"
                             }`}
                           >
-                            {guest.tierName || "Người lớn"}
+                            {guest.age !== undefined ? `${guest.age} tuổi` : "Chưa có ngày sinh"}
                           </span>
                         </td>
 

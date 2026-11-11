@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Service.Tours;
+using TripOps.Service.Accounts;
+using TripOps.Api.Infrastructure;
 
 namespace TripOps.Api.Controllers;
 
@@ -38,9 +40,6 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [EndpointSummary("View the current shared snapshot of the customer-owned private tour")]
     [ProducesResponseType<IReadOnlyList<TourDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Plans(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTours(Actor, id, ct));
-    [HttpGet("{id:int}/history")]
-    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]
-    public async Task<IActionResult> History(int id, CancellationToken ct) => Ok(await requests.History(Actor, id, false, ct));
     [HttpGet("{id:int}/messages")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.RequestMessage>>(200)]
     public async Task<IActionResult> Messages(int id, CancellationToken ct) => Ok(await requests.Messages(Actor, id, ct));
@@ -59,7 +58,7 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
 
 [ApiController, Route("api/v1/agency/tour-design-requests"), Authorize(Roles = "agency")]
 [Tags("Custom Tour Requests")]
-public sealed class AgencyDesignRequestsController(DesignRequestService requests, TourService tours) : ControllerBase
+public sealed class AgencyDesignRequestsController(DesignRequestService requests, TourService tours,CloudinaryStorage storage) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet]
@@ -83,6 +82,20 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SaveTour(int id, SaveDesignTourInput input, CancellationToken ct) =>
         Ok(await tours.SaveForRequest(Actor, id, input, ct));
+    [HttpPut("{id:int}/tour-with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save the selected design version and upload its local images together")]
+    [ProducesResponseType<TourDto>(200)]
+    public async Task<IActionResult> SaveWithImages(int id,[FromForm] TourSaveForm form,CancellationToken ct)
+    {
+        await tours.Agency(Actor,ct);await requests.Source(Actor,id,ct);
+        var input=form.Read<SaveDesignTourInput>();
+        if(input.Revision.HasValue) {
+            var current=await tours.DesignVersion(Actor,id,input.Version??1,ct);
+            if(current.Revision!=input.Revision)throw new TourException(409,"Tour đã thay đổi. Vui lòng tải lại.");
+        }
+        var configuration=await form.Upload(input.Configuration,storage,Actor,ct);
+        return Ok(await tours.SaveForRequest(Actor,id,input with {Configuration=configuration},ct));
+    }
     [HttpPost("{id:int}/clone")]
     [EndpointSummary("Clone an Agency-owned tour into the accepted design request")]
     [ProducesResponseType<TourDto>(StatusCodes.Status201Created)]

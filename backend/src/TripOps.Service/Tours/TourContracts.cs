@@ -73,7 +73,6 @@ public sealed record TourDto(int Id, string AgencyId, string? Code, string Statu
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
     DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null, int Revision = 1, bool HasDraftChanges = false);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
-public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
     string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,
     string? HiddenReason = null, string? ThumbnailUrl = null, string[]? Images = null, int? Capacity = null, bool IsPaused = false);

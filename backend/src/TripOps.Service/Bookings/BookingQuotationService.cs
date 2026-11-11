@@ -23,7 +23,7 @@ public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, s
     decimal? AvailableQuantity = null, string? ThumbnailUrl = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
-    string? RoommateNote, string? RestaurantNote);
+    string? RoommateNote, string? RestaurantNote, int? Age = null);
 /// <summary>Yêu cầu dịch vụ hiển thị cho Provider: các trường của ProviderRequestView kèm thông tin booking,
 /// công ty lữ hành và đoàn khách. Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
 public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
@@ -32,7 +32,7 @@ public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, str
     DateTime? RespondedAt, string? ProviderId, string? ProviderName, string? ProviderPhone, string? FullAddress,
     DateTime CreatedAt, string BookingCode, string TourName,
     string AgencyName, string? AgencyPhone, string? AgencyEmail, string? MealType, string? SpecialRequests,
-    string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests);
+    string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests, TimeSpan? ServiceTime = null);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note,
     decimal? AvailableQuantity = null, DateTime? HoldUntil = null);
 public sealed record BookingPlanChange(int TourId, HotelChoiceInput[]? HotelChoices = null,
@@ -148,15 +148,14 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         }
         return lines;
     }
-    public async Task<QuotationView> ChangePlan(string actor, int bookingId, BookingPlanChange input, CancellationToken ct,
-        bool agency = false)
+    public async Task<QuotationView> ChangePlan(string actor, int bookingId, BookingPlanChange input, CancellationToken ct)
     {
         await using var transaction = await repository.BeginPaymentChange(bookingId, ct);
         var booking = await db.Bookings.Include(b => b.Participants).Include(b => b.Accommodations)
             .Include(b => b.Timelines).ThenInclude(d => d.Meals)
             .Include(b => b.Timelines).ThenInclude(d => d.Attractions).Include(b => b.Tour)
             .AsSplitQuery().SingleOrDefaultAsync(b => b.Id == bookingId &&
-                (agency ? b.Tour!.AgencyId == actor : b.CustomerId == actor), ct)
+                b.Tour!.AgencyId == actor, ct)
             ?? throw new BookingException(404, "Không tìm thấy booking.");
         Require(await db.BookingAgencies.CountAsync(a=>a.BookingId==bookingId,ct)<2,"Booking liên minh cần đổi dịch vụ hoặc chặng riêng; không thay toàn bộ phương án.");
         Require(!await db.BookingContracts.AnyAsync(c => c.BookingId == bookingId, ct) && booking.Status == BookingStatus.Pending,
@@ -186,8 +185,6 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         booking.TourVersion = tour.Version ?? 1;
         booking.TourConfigurationData = tour.ConfigurationData;
         var guestCount = input.Participants?.Length ?? booking.Participants.Count;
-        Require(agency || input.Participants == null,
-            "Chỉ Agency được thay đổi danh sách hành khách của booking đã tạo.");
         Require(guestCount > 0 && (!tour.MinGuests.HasValue || guestCount >= tour.MinGuests) &&
             (!tour.MaxGuests.HasValue || guestCount <= tour.MaxGuests), "Số khách không phù hợp Tour plan.");
         Require(input.Participants is null || input.Participants.All(p => !string.IsNullOrWhiteSpace(p.FullName) && p.FullName.Length <= 150),
@@ -363,10 +360,10 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             TourId = tour.Id, TourVersion = tour.Version ?? 1, EstimatedSale = booking.TotalAmount,
             NumberOfGuests = BookingAlliance.GuestCount(booking), PlanSnapshotJson = PlanSnapshot(booking),
             TotalCost = lines.Sum(l => l.Total), LinesJson = JsonSerializer.Serialize(lines, Json),
-            Reason = "Khách đổi Tour plan hoặc phương án dịch vụ" };
+            Reason = "Agency đổi phương án tour hoặc dịch vụ" };
         db.BookingQuotations.Add(next);
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
-        return View(next, agency);
+        return View(next, true);
     }
 
     public async Task<IReadOnlyList<QuotationView>> Quotations(string actor, int bookingId, bool agency, CancellationToken ct)
@@ -417,8 +414,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 b.Tour?.Agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
                 closed ? b.CancelReason : null, closed ? b.CancelledAt : null,
                 b.Participants.Where(p => p.Status != "INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(b,r.SlotKey)).OrderBy(p => p.ParticipantIndex)
-                    .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote))
-                    .ToArray());
+                    .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
+                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null))
+                    .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay);
         }).ToArray();
     }
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)

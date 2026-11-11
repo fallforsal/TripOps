@@ -45,7 +45,8 @@ export type ProviderInboxRow = {
   createdAt: string; respondedAt: string | null; bookingCode: string; tourName: string;
   agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
   specialRequests: string | null; cancelReason: string | null; cancelledAt: string | null;
-  guests: Array<{ fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
+  serviceTime?: string | null;
+  guests: Array<{ age?: number | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
 };
 
 const STATUS_MAP: Record<string, ProviderGroupReservationRequest["status"]> = {
@@ -86,6 +87,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
       fullName: g.fullName,
       gender: g.gender === "Nữ" || /^f/i.test(g.gender || "") ? "female" : "male",
       tierName: g.tierName || undefined,
+      age: g.age ?? undefined,
       roommateNote: g.roommateNote || undefined,
       dietaryNote: g.restaurantNote || undefined,
     })),
@@ -95,6 +97,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
     serviceType: isHotel ? "hotel" : "restaurant",
     mealType: isHotel ? undefined : meal,
     servingDate: isHotel ? undefined : day(r.serviceDateFrom),
+    serviceTime: isHotel ? undefined : r.serviceTime?.slice(0,5) || undefined,
     quotedTotalPrice: r.quotedCost ?? undefined,
     providerNote: status === "confirmed" ? r.note || undefined : undefined,
     rejectionReason: status === "rejected" ? r.note || undefined : undefined,

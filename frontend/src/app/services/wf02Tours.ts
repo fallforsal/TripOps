@@ -1,3 +1,5 @@
+import { toTourApiTime } from "@/app/lib/tourClockTime";
+import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import type {
   DailyItinerary,
   Tour,
@@ -226,7 +228,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           name: place.name.trim(),
           id: place.id, agencyId: place.createdByCompanyId,
           description: place.address?.trim() || null,
-          estimatedTime: place.time ? `${place.time.slice(0, 5)}:00` : null,
+          estimatedTime: toTourApiTime(place.time, `Ngày ${dayNumber}, điểm ${orderIndex + 1} (${place.name || "chưa có tên"})`),
           orderIndex,
         }),
       );
@@ -242,7 +244,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
             meal.supplierSource !== "AGENCY_SUPPLIER" && !meal.isCustom && meal.serviceId && /^\d+$/.test(meal.serviceId)
               ? Number(meal.serviceId)
               : null,
-          time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
+          time: toTourApiTime(meal.time, `Ngày ${dayNumber}, bữa ${meal.type === "breakfast" ? "sáng" : meal.type === "lunch" ? "trưa" : "tối"}`),
           description: meal.description || null,
           isDefault: true,
           priceDifference: 0,
@@ -258,7 +260,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
             option.supplierSource !== "AGENCY_SUPPLIER" && !option.isCustom && option.serviceId && /^\d+$/.test(option.serviceId)
               ? Number(option.serviceId)
               : null,
-          time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
+          time: toTourApiTime(meal.time, `Ngày ${dayNumber}, bữa ${meal.type === "breakfast" ? "sáng" : meal.type === "lunch" ? "trưa" : "tối"}`),
           description: option.description || null,
           isDefault: false,
           priceDifference: option.priceDifference,
@@ -611,16 +613,6 @@ export async function moderationTours(): Promise<Tour[]> {
 }
 export const getAgencyTour = (id: string) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}`);
-export async function uploadTourImage(file: File): Promise<string> {
-  const body = new FormData();
-  body.append("image", file);
-  return (
-    await http<{ url: string }>("/agency/tours/images", {
-      method: "POST",
-      body,
-    })
-  ).url;
-}
 export async function eligibleServices(
   category: string,
 ): Promise<EligibleService[]> {
@@ -635,24 +627,14 @@ export async function eligibleServices(
 }
 export const getPublicTour = (id: string) =>
   http<PublicTour>(`/tours/${idNumber(id)}`);
-export const createAgencyTour = (data: Partial<Tour>) =>
-  http<ApiTour>("/agency/tours", {
-    method: "POST",
-    body: JSON.stringify(toConfiguration(data)),
-  });
-export const updateAgencyTour = (
-  id: string,
-  version: number,
-  data: Partial<Tour>,
-) =>
-  http<ApiTour>(`/agency/tours/${idNumber(id)}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      revision: version,
-      configuration: toConfiguration(data),
-      changeNote: data.changeNote || "Agency updated tour",
-    }),
-  });
+export const createAgencyTour = (data: Partial<Tour>) => {
+  const body=tourSaveBody(toConfiguration(data),data);
+  return http<ApiTour>(body instanceof FormData ? "/agency/tours/with-images" : "/agency/tours",{method:"POST",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined});
+};
+export const updateAgencyTour = (id:string,revision:number,data:Partial<Tour>) => {
+  const body=tourSaveBody({revision,configuration:toConfiguration(data),changeNote:data.changeNote || "Agency updated tour"},data);
+  return http<ApiTour>(`/agency/tours/${idNumber(id)}${body instanceof FormData ? "/with-images" : ""}`,{method:"PUT",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined});
+};
 export const publishAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/publish`, {
     method: "POST",

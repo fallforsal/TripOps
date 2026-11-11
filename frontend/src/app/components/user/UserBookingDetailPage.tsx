@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { CustomerBookingPlanEditor } from "./CustomerBookingPlanEditor";
 import { CustomerBookingServiceCard, useCustomerBookingServices } from "./CustomerBookingServiceCard";
 import type { Tour, Service } from "@/app/types";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
@@ -57,8 +56,6 @@ import type { ContractDto, RefundAccountInput, SignSessionStartDto } from "@/app
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
-  plans?: Tour[];
-  onPlanChanged?: () => void;
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
   booking: Booking;
   systemBank?: SystemBankAccount;
@@ -144,8 +141,6 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function UserBookingDetailPage({
-  plans = [],
-  onPlanChanged,
   booking,
   systemBank = defaultSystemBankAccount,
   onBack,
@@ -170,6 +165,8 @@ export function UserBookingDetailPage({
   const [copiedContent, setCopiedContent] = useState(false);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
   const [priceAdjustmentsModalOpen, setPriceAdjustmentsModalOpen] = useState(false);
+
+  const [passengersExpanded, setPassengersExpanded] = useState(true);
 
   // Passenger management state
   const passengersList = booking.passengers || [];
@@ -287,11 +284,6 @@ export function UserBookingDetailPage({
   return (
     <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
       <div className="w-full min-w-0 px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
-        <CustomerBookingPlanEditor bookingId={booking.id} plans={plans}
-          currentTourId={booking.tourId} currentStartDate={booking.tourStartDate} passengers={booking.passengers || []}
-          currentTourSnapshot={booking.tour} currentSpecialRequests={booking.bookingNotes}
-          canChange={booking.status === "pending" && !booking.hasBeenApproved && booking.paymentStatus === "unpaid"}
-          onChanged={onPlanChanged} />
         {/* PAYMENT SUCCESS TOAST */}
         {paymentSuccessToast && (
           <div className="bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
@@ -720,14 +712,15 @@ export function UserBookingDetailPage({
                     Thông tin hành khách phục vụ bảo hiểm du lịch và điểm danh đoàn. Vui lòng liên hệ Agency nếu cần thay đổi.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-
-                </div>
+                <Button variant="outline" size="sm" aria-expanded={passengersExpanded} aria-controls="customer-passengers" onClick={() => setPassengersExpanded(value => !value)}>
+                  {passengersExpanded ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+                  {passengersExpanded ? "Thu gọn danh sách đoàn" : "Mở danh sách đoàn"}
+                </Button>
               </div>
 
               {bookedServices.error && <p role="alert" className="text-xs text-amber-700">Không tải được bài dịch vụ. Vui lòng tải lại trang.</p>}
 
-              {displayPassengers.length > 0 ? (
+              {passengersExpanded && <div id="customer-passengers">{displayPassengers.length > 0 ? (
                 <div className="w-full overflow-x-auto" role="region" aria-label="Danh sách hành khách" tabIndex={0}>
                   <table className="w-full min-w-[1080px] text-sm [&_td]:align-top [&_th]:align-top">
                     <thead>
@@ -832,7 +825,7 @@ export function UserBookingDetailPage({
                   </p>
 
                 </div>
-              )}
+              )}</div>}
             </div>
 
             {/* DEDICATED ACCOMMODATION / HOTEL SECTION (MATCHING TourDetailPage.tsx & BookingFormPage.tsx) */}

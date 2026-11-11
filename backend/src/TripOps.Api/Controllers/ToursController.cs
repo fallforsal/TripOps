@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Service.Accounts;
+using TripOps.Api.Infrastructure;
 using TripOps.Service.Tours;
 
 namespace TripOps.Api.Controllers;
@@ -12,17 +13,26 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-    [HttpPost("images"), RequestSizeLimit(6 * 1024 * 1024)]
-    [EndpointSummary("Upload a PNG or JPEG tour image from the Agency's computer")]
-    [ProducesResponseType<TourImageUploadResponse>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> UploadImage(IFormFile? image, CancellationToken ct)
+    [HttpPost("with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save a new tour and upload selected local images together")]
+    [ProducesResponseType<TourDto>(201)]
+    public async Task<IActionResult> CreateWithImages([FromForm] TourSaveForm form,CancellationToken ct)
     {
-        await tours.Agency(Actor, ct);
-        if (image is null || image.Length is <= 0 or > 5 * 1024 * 1024)
-            throw new TourException(400, "A PNG or JPEG image up to 5 MB is required.");
-        using var stream = new MemoryStream();
-        await image.CopyToAsync(stream, ct);
-        return Ok(new TourImageUploadResponse(await storage.UploadTourImage(Actor, stream.ToArray(), image.ContentType, ct)));
+        await tours.Agency(Actor,ct);
+        var configuration=await form.Upload(form.Read<TourConfiguration>(),storage,Actor,ct);
+        var tour=await tours.Create(Actor,configuration,ct);
+        return CreatedAtAction(nameof(Get),new {id=tour.Id},tour);
+    }
+    [HttpPut("{id:int}/with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save the selected tour configuration and its local images together")]
+    [ProducesResponseType<TourDto>(200)]
+    public async Task<IActionResult> UpdateWithImages(int id,[FromForm] TourSaveForm form,CancellationToken ct)
+    {
+        var input=form.Read<UpdateTourRequest>();
+        var current=await tours.Get(Actor,id,false,ct);
+        if(input.Revision!=current.Revision)throw new TourException(409,"Tour đã thay đổi. Vui lòng tải lại.");
+        var configuration=await form.Upload(input.Configuration,storage,Actor,ct);
+        return Ok(await tours.Update(Actor,id,input with {Configuration=configuration},ct));
     }
 
     [HttpPost]

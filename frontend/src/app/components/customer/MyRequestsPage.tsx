@@ -6,12 +6,15 @@ import { customerRequestPlans } from "@/app/services/customTourRequests";
 import { Button } from "@/app/components/ui/button";
 import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
 import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
-import { DesignVersionHistory } from "@/app/components/common/DesignVersionHistory";
 import { StatusBadge } from "@/app/components/customer/StatusBadge";
 interface Props { services?: Service[]; requests: CustomTourRequest[]; tours?: Tour[]; onCancelRequest: (id: string) => Promise<void>; onNavigateToCreate: () => void; onViewTour?: (tour: Tour) => void; onBookTour?: (tour: Tour) => void | Promise<void>; }
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, onViewTour, onBookTour, services = [] }: Props) {
+  const groups=[{id:"pending",label:"Chờ tiếp nhận"},{id:"reviewing",label:"Đang thiết kế"},{id:"designed",label:"Đã chia sẻ"},{id:"closed",label:"Đã hủy / Từ chối"}];
+  const [status,setStatus]=useState(()=>requests.some(r=>r.status==="designed") ? "designed" : "pending");
+  const inGroup=(request:CustomTourRequest,group:string)=>group==="closed" ? ["cancelled","rejected"].includes(request.status) : group==="designed" ? ["designed","quoted","accepted"].includes(request.status) : request.status===group;
+  const rows=requests.filter(request=>inGroup(request,status));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
   const [plan, setPlan] = useState<Tour | null>(null);
@@ -48,12 +51,23 @@ export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, 
     </section>
     {plan && <TourAccommodationSummary tour={plan} services={services}/>}
     <DesignRequestMessages requestId={selected.id} closed={selected.status === "rejected" || selected.status === "cancelled"}/>
-    <DesignVersionHistory key={`${selected.id}-${reload}`} requestId={selected.id}/>
     {!selected.designedTourId && (selected.status === "pending" || selected.status === "reviewing") && <div className="flex justify-end"><Button variant="outline" disabled={busy} className="text-rose-700" onClick={async () => { if (!confirm("Hủy yêu cầu thiết kế này?")) return; setBusy(true); try { await onCancelRequest(selected.id); } catch(e) { setError(e instanceof Error ? e.message : "Không thể hủy yêu cầu."); } finally { setBusy(false); } }}>Hủy yêu cầu</Button></div>}
     <CustomRequestDetailModal isOpen={viewing} onClose={() => setViewing(false)} request={selected} matchingTour={plan} userRole="customer" onViewTour={onViewTour}/>
   </div>;
   return <div className="space-y-5 pb-12"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><h1 className="text-2xl font-bold text-[#075985]">Yêu cầu thiết kế tour của tôi</h1><p className="mt-1 text-sm text-slate-500">Trao đổi với Agency và chọn phương án phù hợp cho chuyến đi.</p></div><Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" onClick={onNavigateToCreate}><Plus/>Tạo yêu cầu mới</Button></div>
-    {!requests.length && <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">Bạn chưa gửi yêu cầu thiết kế tour.</p>}
-    {requests.map(request => <section key={request.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">#{request.id} · {request.destinations}</h2><p className="mt-1 text-sm text-slate-500">Gửi tới {request.targetCompanyName} · {date(request.createdAt)}</p></div><StatusBadge type="custom_request" status={request.status}/></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600">{request.numberOfPeople} khách · {date(request.departureDate)} – {date(request.returnDate)}</p><Button variant="outline" onClick={() => setSelectedId(request.id)}>Xem phương án & trao đổi</Button></div>{request.rejectionReason && <p className="mt-3 text-sm text-rose-700">Lý do từ chối: {request.rejectionReason}</p>}</section>)}
+    <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2" role="tablist" aria-label="Trạng thái yêu cầu thiết kế">
+      {groups.map(group=><button key={group.id} type="button" role="tab" aria-selected={status===group.id} aria-controls="design-request-list" onClick={()=>setStatus(group.id)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${status===group.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>{group.label} <span className="ml-1.5 opacity-80">({requests.filter(request=>inGroup(request,group.id)).length})</span></button>)}
+    </div>
+    <div id="design-request-list" role="tabpanel" className="space-y-4">
+      {!rows.length && <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">{requests.length ? "Chưa có yêu cầu trong trạng thái này." : "Bạn chưa gửi yêu cầu thiết kế tour."}</p>}
+      {rows.map(request=><section key={request.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row">
+        {request.sharedTourThumbnail && <img src={request.sharedTourThumbnail} alt={request.sharedTourName || request.destinations} className="h-36 w-full shrink-0 rounded-xl object-cover sm:h-32 sm:w-44"/>}
+        <div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-slate-900">{request.sharedTourName || request.destinations}</h2><p className="mt-1 text-xs text-slate-500">Yêu cầu #{request.id} · {request.targetCompanyName} · {date(request.createdAt)}</p></div><StatusBadge type="custom_request" status={request.status}/></div>
+          <p className="mt-3 text-sm text-slate-600">{request.numberOfPeople} khách · {date(request.departureDate)} – {date(request.returnDate)}</p>
+          {request.rejectionReason && <p className="mt-3 text-sm text-rose-700">Lý do từ chối: {request.rejectionReason}</p>}
+          <div className="mt-3 flex justify-end"><Button variant="outline" onClick={()=>setSelectedId(request.id)}><Eye className="h-4 w-4"/>Xem phương án & trao đổi</Button></div>
+        </div>
+      </section>)}
+    </div>
   </div>;
 }

@@ -1848,10 +1848,6 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
-              plans={selectedUserBooking.tour?.customRequestId
-                ? tours.filter((t) => t.customRequestId === selectedUserBooking.tour.customRequestId)
-                : tours.filter((t) => t.id === selectedUserBooking.tourId)}
-              onPlanChanged={() => setBookingReload((v) => v + 1)}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking
@@ -1899,7 +1895,6 @@ function Application() {
             onBookTour={async (t) => {
               const existing = userBookings.find((b) => b.tour?.customRequestId === t.customRequestId && b.status !== "cancelled" && b.status !== "rejected");
               if (existing) {
-                await http(`/bookings/${existing.id}/quotations/change-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(t.id) }) });
                 await handleViewUserBookingDetail(existing);
               } else handleOpenBookingForm(t);
             }}

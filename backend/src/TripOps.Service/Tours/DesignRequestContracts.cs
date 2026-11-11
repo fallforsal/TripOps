@@ -24,7 +24,7 @@ public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId
     DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
     string? HotelStars, string? AdditionalInfo, string? BusinessName, string? BusinessEmail,
     string? BusinessPhone, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
-    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null);
+    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null, string? SharedTourThumbnail = null, string? SharedTourName = null);
 
 public sealed record DesignCoHostDto(string CompanyId, string CompanyName, string Role, string Status,
     int[] AssignedDays, string? AssignedSegments = null, decimal? EstimatedBudgetPerGuest = null,

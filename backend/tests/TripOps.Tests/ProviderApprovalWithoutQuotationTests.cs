@@ -22,6 +22,25 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
+    public async Task Provider_inbox_returns_actual_booking_meal_time_and_age_at_service_date()
+    {
+        await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");using var provider=await app.Login("provider");
+        var booking=await PublishedBookingWithProviderServices(customer,agency);
+        await app.Inspect(async db=>{
+            var row=await db.Bookings.Include(b=>b.Participants).Include(b=>b.Timelines).ThenInclude(d=>d.Meals).SingleAsync(b=>b.Id==booking.Id);
+            var participants=row.Participants.OrderBy(p=>p.ParticipantIndex).ToArray();
+            participants[0].DateOfBirth=row.StartDate.AddYears(-30);participants[1].DateOfBirth=row.StartDate.AddYears(-7);
+            row.Timelines.SelectMany(d=>d.Meals).Single().Time=row.StartDate.Date.AddHours(18).AddMinutes(45);
+            await db.SaveChangesAsync();
+        });
+        var inbox=await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        var meal=Assert.Single(inbox,r=>r.SlotKey.StartsWith("meal:"));
+        Assert.Equal(new TimeSpan(18,45,0),meal.ServiceTime);
+        Assert.Equal(new int?[]{30,7},meal.Guests.Select(guest=>guest.Age));
+        Assert.Null(Assert.Single(inbox,r=>r.SlotKey.StartsWith("hotel:")).ServiceTime);
+    }
+
+    [Fact]
     public async Task Published_booking_approves_after_both_services_confirm_and_keeps_booked_price()
     {
         await using var app = new App(); await app.Initialize();

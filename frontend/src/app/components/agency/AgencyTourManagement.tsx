@@ -1,5 +1,7 @@
+import { DeferredImageUploads } from "@/app/lib/deferredImageUploads";
+import { orderTimeline, moveTimeline } from "@/app/lib/tourTimelineOrder";
 import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
-import { uploadTourImage, agencySuppliers, createAgencySupplier, updateAgencySupplier, type AgencySupplier } from "@/app/services/wf02Tours";
+import { agencySuppliers, createAgencySupplier, updateAgencySupplier, type AgencySupplier } from "@/app/services/wf02Tours";
 import { useState, useRef, useEffect } from "react";
 import {
   Tour,
@@ -1326,12 +1328,12 @@ export function TourFormPage(props: TourFormPageProps) {
       ? tour.images
       : tour?.image
         ? [tour.image]
-        : [
-          "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800",
-          "https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800",
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-        ];
+        : [];
   const [images, setImages] = useState<string[]>(initialImages);
+  const [stagedImages] = useState(()=>new DeferredImageUploads());
+  useEffect(()=>()=>stagedImages.dispose(),[stagedImages]);
+  useEffect(()=>{stagedImages.retain(images);},[images,stagedImages]);
+  const [timelineOrders,setTimelineOrders]=useState<Record<string,string[]>>({});
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(0);
 
   // Operation period & Departure location
@@ -3050,28 +3052,20 @@ export function TourFormPage(props: TourFormPageProps) {
     });
   };
 
-  // Handle local image file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Preview files locally; Cloudinary receives them only in the save request.
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSaving(true);
     setSaveError("");
     try {
-      const urls = await Promise.all(files.map(uploadTourImage));
-      setImages((prev) => [...prev, ...urls]);
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Không thể tải ảnh");
-    } finally {
-      setSaving(false);
-    }
+      const urls=stagedImages.stage(files);
+      setImages(prev=>[...prev,...urls]);
+    } catch(error) { setSaveError(error instanceof Error ? error.message : "Không thể chọn ảnh"); }
+    finally { e.target.value=""; }
   };
 
   const removeImage = (idx: number) => {
-    if (images.length <= 1) return;
-    const updated = images.filter((_, i) => i !== idx);
-    setImages(updated);
-    if (thumbnailIndex >= updated.length) {
-      setThumbnailIndex(0);
-    }
+    setImages(previous=>previous.filter((_,i)=>i!==idx));
+    setThumbnailIndex(current=>current===idx ? 0 : current>idx ? current-1 : current);
   };
 
   // Drag and drop state & swap for attraction points
@@ -3115,128 +3109,24 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   const handleSortDayByTime = (dayIdx: number) => {
-    const updated = [...itinerary];
-    const day = updated[dayIdx];
-    if (day) day.meals ??= [];
-    if (!day) return;
-
-    if (day.locations && day.locations.length > 0) {
-      day.locations.sort(
-        (a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time),
-      );
-    }
-    if (day.meals && day.meals.length > 0) {
-      day.meals.sort(
-        (a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time),
-      );
-    }
-    setItinerary(updated);
+    const id=itinerary[dayIdx]?.id;
+    if(id)setTimelineOrders(previous=>{const next={...previous};delete next[id];return next;});
   };
 
-  const minutesToTimeString = (mins: number): string => {
-    const h = Math.floor(mins / 60) % 24;
-    const m = mins % 60;
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+  const moveTimelineItem = (dayIdx:number,from:number,to:number,items:Array<{key:string;minutes:number}>) => {
+    const id=itinerary[dayIdx]?.id;
+    if(id)setTimelineOrders(previous=>({...previous,[id]:moveTimeline(items,from,to)}));
   };
 
-  const moveTimelineItem = (
-    dayIdx: number,
-    fromTimelineIdx: number,
-    toTimelineIdx: number,
-    dayItems: Array<{
-      kind: "location" | "meal";
-      lIdx?: number;
-      mIdx?: number;
-      minutes: number;
-    }>,
-  ) => {
-    const updated = [...itinerary];
-    const day = updated[dayIdx];
-    if (day) day.meals ??= [];
-    if (
-      !day ||
-      toTimelineIdx < 0 ||
-      toTimelineIdx >= dayItems.length ||
-      fromTimelineIdx === toTimelineIdx
-    )
-      return;
-
-    const fromItem = dayItems[fromTimelineIdx];
-    const toItem = dayItems[toTimelineIdx];
-    if (!fromItem || !toItem) return;
-
-    const fromTime =
-      fromItem.kind === "location"
-        ? day.locations[fromItem.lIdx!]?.time
-        : day.meals![fromItem.mIdx!]?.time;
-    const toTime =
-      toItem.kind === "location"
-        ? day.locations[toItem.lIdx!]?.time
-        : day.meals![toItem.mIdx!]?.time;
-
-    let newFromTime = toTime;
-    let newToTime = fromTime;
-
-    if (!newFromTime || !newToTime || newFromTime === newToTime) {
-      const baseMinutes = parseTimeToMinutes(fromTime || "12:00");
-      if (toTimelineIdx > fromTimelineIdx) {
-        newFromTime = minutesToTimeString(baseMinutes + 30);
-        newToTime = minutesToTimeString(baseMinutes);
-      } else {
-        newFromTime = minutesToTimeString(Math.max(360, baseMinutes - 30));
-        newToTime = minutesToTimeString(baseMinutes);
-      }
-    }
-
-    if (fromItem.kind === "location" && day.locations[fromItem.lIdx!]) {
-      day.locations[fromItem.lIdx!].time = newFromTime;
-    } else if (fromItem.kind === "meal" && day.meals![fromItem.mIdx!]) {
-      day.meals![fromItem.mIdx!].time = newFromTime;
-    }
-
-    if (toItem.kind === "location" && day.locations[toItem.lIdx!]) {
-      day.locations[toItem.lIdx!].time = newToTime;
-    } else if (toItem.kind === "meal" && day.meals![toItem.mIdx!]) {
-      day.meals![toItem.mIdx!].time = newToTime;
-    }
-
-    if (fromItem.kind === "location" && toItem.kind === "location") {
-      const locs = [...day.locations];
-      const [moved] = locs.splice(fromItem.lIdx!, 1);
-      locs.splice(toItem.lIdx!, 0, moved);
-      day.locations = locs;
-    }
-
-    if (fromItem.kind === "meal" && toItem.kind === "meal") {
-      const meals = [...(day.meals || [])];
-      const [moved] = meals.splice(fromItem.mIdx!, 1);
-      meals.splice(toItem.mIdx!, 0, moved);
-      day.meals = meals;
-    }
-
-    setItinerary(updated);
-  };
-
-  const moveLocation = (dayIdx: number, fromIdx: number, toIdx: number) => {
-    const updated = [...itinerary];
-    const locs = [...updated[dayIdx].locations];
-    if (toIdx < 0 || toIdx >= locs.length || fromIdx === toIdx) return;
-
-    // Lưu lại chuỗi thời gian của các vị trí trước khi dịch chuyển
-    const times = locs.map((l) => l.time);
-
-    const [moved] = locs.splice(fromIdx, 1);
-    locs.splice(toIdx, 0, moved);
-
-    // Gán lại khung giờ theo thứ tự vị trí mới để bảo đảm sắp xếp timeline trực quan & chính xác
-    for (let i = 0; i < locs.length; i++) {
-      if (times[i]) {
-        locs[i].time = times[i];
-      }
-    }
-
-    updated[dayIdx].locations = locs;
-    setItinerary(updated);
+  const moveLocation = (dayIdx:number,fromIdx:number,toIdx:number) => {
+    const day=itinerary[dayIdx];if(!day)return;
+    const entries=orderTimeline([
+      ...day.locations.map((loc,index)=>({key:`location:${loc.id || index}`,minutes:parseTimeToMinutes(loc.time)})),
+      ...(day.meals || []).map((meal,index)=>({key:`meal:${meal.id || index}`,minutes:parseTimeToMinutes(meal.time)}))
+    ],timelineOrders[day.id]);
+    const from=entries.findIndex(entry=>entry.key===`location:${day.locations[fromIdx]?.id || fromIdx}`);
+    const to=entries.findIndex(entry=>entry.key===`location:${day.locations[toIdx]?.id || toIdx}`);
+    moveTimelineItem(dayIdx,from,to,entries);
   };
 
   // Helpers for Days
@@ -3511,6 +3401,7 @@ export function TourFormPage(props: TourFormPageProps) {
       numberOfNights,
       price: finalTourPrice,
       image: chosenThumbnail,
+      pendingTourImages: stagedImages.entries(images),
       images,
       operationPeriod,
       minGuests,
@@ -3880,6 +3771,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 </div>
               </div>
 
+              {images.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-sm text-slate-500">Chưa có ảnh tour. Chọn ảnh từ máy tính để xem trước và đặt ảnh đại diện.</p>}
               {/* Thumbnails grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
                 {images.map((img, idx) => {
@@ -3909,7 +3801,7 @@ export function TourFormPage(props: TourFormPageProps) {
                           Chọn làm Thumbnail
                         </div>
                       )}
-                      {images.length > 1 && (
+                      {images.length > 0 && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -5560,6 +5452,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     kind: "location";
                                     loc: (typeof day.locations)[0];
                                     lIdx: number;
+                                    key: string;
                                     arrayOrder: number;
                                     minutes: number;
                                   }
@@ -5567,6 +5460,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     kind: "meal";
                                     meal: TourMeal;
                                     mIdx: number;
+                                    key: string;
                                     arrayOrder: number;
                                     minutes: number;
                                   };
@@ -5574,6 +5468,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                 const items: UnifiedItem[] = [
                                   ...(day.locations || []).map((loc, lIdx) => ({
                                     kind: "location" as const,
+                                    key: `location:${loc.id || lIdx}`,
                                     loc,
                                     lIdx,
                                     arrayOrder: lIdx,
@@ -5581,6 +5476,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                   })),
                                   ...(day.meals || []).map((meal, mIdx) => ({
                                     kind: "meal" as const,
+                                    key: `meal:${meal.id || mIdx}`,
                                     meal,
                                     mIdx,
                                     arrayOrder: mIdx,
@@ -5588,12 +5484,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                   })),
                                 ];
 
-                                items.sort((a, b) => {
-                                  if (a.minutes !== b.minutes) {
-                                    return a.minutes - b.minutes;
-                                  }
-                                  return a.arrayOrder - b.arrayOrder;
-                                });
+                                const ordered=orderTimeline(items,timelineOrders[day.id]);
+                                items.splice(0,items.length,...ordered);
 
                                 if (items.length === 0) {
                                   return (

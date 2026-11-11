@@ -132,52 +132,56 @@ public sealed partial class TourFlowTests
     }
     private static Task<TourDto> Create(HttpClient agency, TourConfiguration? config = null) => CreateCore(agency, config ?? Complete());
 
-    [Fact]
-    public async Task Agency_uploads_tour_images_and_primary_order_survives_draft_and_publication()
+    private static readonly byte[] TourPng=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg==");
+    private static MultipartFormDataContent TourForm<T>(T payload,params byte[][] images)
     {
-        await using var app = new App(withCloudinary: true); await app.Initialize();
-        using var agency = await app.Login("agency"); using var customer = await app.Login("customer");
-        using var anonymous = app.CreateClient();
-        static MultipartFormDataContent Image(byte[] bytes)
-        {
-            var form = new MultipartFormDataContent();
-            var image = new ByteArrayContent(bytes); image.Headers.ContentType = new("image/png");
-            form.Add(image, "image", "tour.png");
-            return form;
-        }
-        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg==");
-        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync($"{Root}/images", form)).StatusCode);
-        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsync($"{Root}/images", form)).StatusCode);
-        using (var form = Image("not an image"u8.ToArray())) Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsync($"{Root}/images", form)).StatusCode);
-        Assert.Equal(0, app.Cloud.Calls);
-
-        string[] urls = new string[2];
-        for (var i = 0; i < urls.Length; i++)
-        {
-            using var form = Image(png);
-            var response = await agency.PostAsync($"{Root}/images", form);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            urls[i] = (await response.Content.ReadFromJsonAsync<TourImageUploadResponse>())!.Url;
-        }
-        Assert.Equal(2, app.Cloud.Calls);
-        var tour = await Create(agency, Complete() with { Images = [urls[1], urls[0]] });
-        Assert.Equal(urls[1], tour.Configuration.Images![0]);
-        var saved = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
-        Assert.Equal([urls[1], urls[0]], saved.Configuration.Images!);
-        tour = await Command(agency, tour, "publish");
-        var publicTour = (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
-        Assert.Equal([urls[1], urls[0]], publicTour.Configuration.Images!);
+        var form=new MultipartFormDataContent();form.Add(new StringContent(JsonSerializer.Serialize(payload,new JsonSerializerOptions(JsonSerializerDefaults.Web))),"payload");
+        foreach(var bytes in images) {var file=new ByteArrayContent(bytes);file.Headers.ContentType=new("image/png");form.Add(file,"images","tour.png");}
+        return form;
     }
-
     [Fact]
-    public async Task Tour_image_upload_reports_missing_server_cloudinary_configuration()
+    public async Task Tour_images_upload_only_with_save_and_thumbnail_order_is_preserved()
     {
-        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
-        using var form = new MultipartFormDataContent();
-        var image = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg=="));
-        image.Headers.ContentType = new("image/png"); form.Add(image, "image", "tour.png");
-        var response = await agency.PostAsync($"{Root}/images", form);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        await using var app=new App(withCloudinary:true);await app.Initialize();using var agency=await app.Login("agency");using var customer=await app.Login("customer");using var anonymous=app.CreateClient();
+        var configuration=Complete() with {Images=["upload:1","upload:0"]};
+        using(var form=TourForm(configuration,TourPng,TourPng))Assert.Equal(HttpStatusCode.Unauthorized,(await anonymous.PostAsync(Root+"/with-images",form)).StatusCode);
+        using(var form=TourForm(configuration,TourPng,TourPng))Assert.Equal(HttpStatusCode.Forbidden,(await customer.PostAsync(Root+"/with-images",form)).StatusCode);
+        using(var form=TourForm(configuration,TourPng,"not an image"u8.ToArray()))Assert.Equal(HttpStatusCode.BadRequest,(await agency.PostAsync(Root+"/with-images",form)).StatusCode);
+        Assert.Equal(0,app.Cloud.Calls);
+        TourDto tour;
+        using(var form=TourForm(configuration,TourPng,TourPng))tour=await Read<TourDto>(await agency.PostAsync(Root+"/with-images",form),HttpStatusCode.Created);
+        Assert.Equal(2,app.Cloud.Calls);Assert.EndsWith("image2.png",tour.Configuration.Images![0]);Assert.EndsWith("image1.png",tour.Configuration.Images[1]);
+        var images=tour.Configuration.Images;
+        using(var form=TourForm(new UpdateTourRequest(tour.Revision,tour.Configuration with {Images=["upload:0",images[0]]},"Changed cover"),TourPng))tour=await Read<TourDto>(await agency.PutAsync($"{Root}/{tour.Id}/with-images",form));
+        Assert.EndsWith("image3.png",tour.Configuration.Images![0]);Assert.Equal(images[0],tour.Configuration.Images[1]);
+        tour=await Command(agency,tour,"publish");
+        var visible=await Read<PublicTourDto>(await anonymous.GetAsync($"/api/v1/tours/{tour.Id}"));Assert.Equal(tour.Configuration.Images,visible.Configuration.Images);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed,(await agency.PostAsync(Root+"/images",TourForm(configuration,TourPng))).StatusCode);
+    }
+    [Fact]
+    public async Task Tour_save_reports_missing_cloudinary_and_creates_no_record()
+    {
+        await using var app=new App();await app.Initialize();using var agency=await app.Login("agency");
+        using var form=TourForm(Complete() with {Images=["upload:0"]},TourPng);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,(await agency.PostAsync(Root+"/with-images",form)).StatusCode);
+        await app.Inspect(async db=>Assert.Empty(await db.Tours.ToListAsync()));
+    }
+    [Fact]
+    public async Task Private_tour_images_save_in_selected_version_and_customer_thumbnail_matches_shared_version()
+    {
+        await using var app=new App(withCloudinary:true);await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");
+        var request=await DesignRequest(customer);await Receive(agency,request.Id);var url=$"/api/v1/agency/tour-design-requests/{request.Id}";
+        TourDto first;
+        using(var form=TourForm(new SaveDesignTourInput(null,Complete("Shared v1") with {Images=["upload:0"]}),TourPng))first=await Read<TourDto>(await agency.PutAsync(url+"/tour-with-images",form));
+        var shared=await Share(agency,request.Id,first);
+        var second=await Read<TourDto>(await agency.PutAsJsonAsync(url+"/tour",new SaveDesignTourInput(shared.Revision,Complete("Private v2") with {Images=["https://example.test/private-v2.jpg"]},CreateNewVersion:true,Version:1)));
+        var list=await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"));var row=Assert.Single(list);
+        Assert.Equal(first.Configuration.Images![0],row.SharedTourThumbnail);Assert.Equal("Shared v1",row.SharedTourName);Assert.Equal(1,row.CurrentVersion);
+        Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")).StatusCode);
+        Assert.Equal(2,(await Read<DesignRequestService.PlanHistory[]>(await agency.GetAsync(url+"/history"))).Length);
+        var reshared=await Share(agency,request.Id,second);
+        list=await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"));
+        Assert.Equal("https://example.test/private-v2.jpg",Assert.Single(list).SharedTourThumbnail);
     }
     private static async Task<TourDto> CreateCore(HttpClient agency, TourConfiguration config) =>
         await Read<TourDto>(await agency.PostAsJsonAsync(Root, config), HttpStatusCode.Created);

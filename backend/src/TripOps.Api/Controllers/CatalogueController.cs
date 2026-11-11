@@ -14,6 +14,13 @@ public sealed record CatalogueItem(string Id, string ProviderId, string Provider
     string? HiddenReason = null, int? Capacity = null, bool IsPaused = false)
 {
     public string ThumbnailUrl => Image;
+    public string? Ward { get; init; }
+    public string? Street { get; init; }
+    public string? PriceUnit { get; init; }
+    public string[] Amenities { get; init; } = [];
+    public string[] Policies { get; init; } = [];
+    public DateTime? CreatedAt { get; init; }
+    public DateTime? UpdatedAt { get; init; }
 }
 
 [ApiController, Route("api/v1/catalogue"), Tags("Service Management")]
@@ -35,6 +42,10 @@ public sealed class CatalogueController(TripOpsDbContext db) : ControllerBase
             !string.IsNullOrWhiteSpace(s.FullAddress) ? s.FullAddress : string.Join(", ", new[] { s.Street, s.Ward, s.Province }.Where(x => !string.IsNullOrWhiteSpace(x))),
             s.ThumbnailUrl, ServiceMedia.AdditionalImages(s.Images, s.ThumbnailUrl), s.StarRating, s.Rating,
             "approved", s.Latitude, s.Longitude,
-            s.SubCategory, s.FullAddress, s.OperatingHours, s.HiddenReason, s.Capacity, s.IsPaused)));
+            s.SubCategory, s.FullAddress, s.OperatingHours, s.HiddenReason, s.Capacity, s.IsPaused) {
+                Ward = s.Ward, Street = s.Street, PriceUnit = s.PriceUnit,
+                Amenities = ServiceMedia.TextItems(s.Amenities), Policies = ServiceMedia.TextItems(s.Policies),
+                CreatedAt = s.CreatedAt, UpdatedAt = s.UpdatedAt
+            }));
     }
 }

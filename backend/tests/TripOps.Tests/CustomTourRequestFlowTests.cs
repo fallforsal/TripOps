@@ -59,7 +59,7 @@ public sealed partial class TourFlowTests
         var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/tour",new SaveDesignTourInput(plan.Revision,plan.Configuration with {Name="Not shared",BasePrice=9000000},CreateNewVersion:true,Version:plan.Version)));
         if(completeAgain)await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete",new TourCommand(edited.Revision)));
         var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));Assert.Equal(plan.Configuration.Name,visible.Configuration.Name);Assert.Equal(plan.Version,visible.Version);
-        Assert.Single(await Read<DesignRequestService.PlanHistory[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")));
+        Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")).StatusCode);
         var booking=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible)),HttpStatusCode.Created);
         Assert.Equal(plan.Configuration.BasePrice*2,booking.TotalAmount);
         await app.Inspect(async db=>Assert.Equal(plan.Version,(await db.Bookings.SingleAsync(b=>b.Id==booking.Id)).TourVersion));

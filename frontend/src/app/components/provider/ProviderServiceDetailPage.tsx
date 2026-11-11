@@ -1,3 +1,4 @@
+import { serviceGallery } from "@/app/lib/servicePresentation";
 import { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -103,11 +104,7 @@ export function ProviderServiceDetailPage({
     );
   }
 
-  const primaryThumb = service.thumbnailUrl || service.image;
-  const rawImages = service.images || [];
-  const imagesList = primaryThumb
-    ? (rawImages.includes(primaryThumb) ? rawImages : [primaryThumb, ...rawImages])
-    : (rawImages.length > 0 ? rawImages : ["https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"]);
+  const imagesList = serviceGallery(service);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showImageManager, setShowImageManager] = useState(false);
