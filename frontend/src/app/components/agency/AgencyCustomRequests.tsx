@@ -1,3 +1,4 @@
+import { confirmAction, requestText } from "@/app/lib/notificationDialogs";
 import { TourDetailPage } from "@/app/components/user/TourDetailPage";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
 import { selectCustomerDesignVersion } from "@/app/lib/designVersionSelection";
@@ -11,7 +12,7 @@ import { toast } from "@/app/lib/notifications";
 import { CheckCircle2, Copy, Eye, History, Handshake, Loader2, Search, Sparkles, XCircle, MoreHorizontal, MessageSquare, CalendarDays, Users, MapPin } from "lucide-react";
 import { http } from "@/app/lib/http";
 import { fromApiTour, type ApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
-import { cloneDesignTour, shareDesignTour, saveDesignTour, getDesignVersion } from "@/app/services/customTourRequests";
+import { cloneDesignTour, shareDesignTour, saveDesignTour, getDesignVersion, designRequestLifecycle } from "@/app/services/customTourRequests";
 import type { CustomTourRequest, Tour, TourCompany, Service } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
@@ -22,16 +23,16 @@ import { DesignVersionHistory } from "@/app/components/common/DesignVersionHisto
 import type { DesignRequestDecision } from "./DesignRequestAgencyActions";
 
 interface Props {
-  services?: Service[]; requests: CustomTourRequest[]; company: TourCompany; tours: Tour[]; allCompanies?: TourCompany[];
+  onViewBooking?: (id:string)=>void; services?: Service[]; requests: CustomTourRequest[]; company: TourCompany; tours: Tour[]; allCompanies?: TourCompany[];
   onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
   onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
   onEditTour: (id: string, tour: Partial<Tour>) => void | Promise<void>;
   onViewTour?: (tour: Tour) => void;
 }
-const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Khách đang xem", rejected: "Đã từ chối", cancelled: "Đã hủy" };
+const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Khách đang xem", rejected: "Đã từ chối", cancelled: "Đã hủy", booked:"Đã đặt tour", closed:"Đã đóng", archived:"Lưu trữ" };
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
-export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour, services = [] }: Props) {
+export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour, onViewBooking, services = [] }: Props) {
   const [preview, setPreview] = useState<Tour | null>(null);
   const [collaborating, setCollaborating] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("all");
@@ -114,9 +115,16 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     }
     setRevision(value => value + 1);
   };
-  const rows = useMemo(() => requests.filter(r => r.targetCompanyId === company.id && (filter === "all" || r.status === filter) &&
-    [r.id, r.destinations, r.contactName, r.contactEmail, r.contactPhone, r.businessName].some(v => v?.toLowerCase().includes(search.toLowerCase())))
-    .sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)), [requests, filter, search]);
+  const matchesTab = (r:CustomTourRequest,tab:string) => tab==="archived" ? !!r.archivedAt : !r.archivedAt && (tab==="all" ? ["pending","reviewing","designed"].includes(r.status) : tab==="closed" ? ["closed","rejected","cancelled"].includes(r.status) : r.status===tab);
+  const lifecycle = async (request:CustomTourRequest, action:"archive"|"unarchive"|"close"|"reopen") => {
+    let reason:string|undefined;
+    if(action==="close") {const input=await requestText("Khách hàng sẽ thấy lý do này và không thể booking mới cho đến khi Agency mở lại.","",{title:"Đóng yêu cầu thiết kế",confirmLabel:"Đóng yêu cầu",tone:"warning"});if(input==null)return;reason=input.trim();if(!reason){toast.warning("Hãy nhập lý do đóng yêu cầu.");return;}}
+    if(action==="reopen" && !(await confirmAction("Mở lại yêu cầu để tiếp tục thiết kế và cho khách booking?",{title:"Mở lại yêu cầu",confirmLabel:"Mở lại"})))return;
+    await perform(async()=>{await designRequestLifecycle(request.id,action,reason);await onUpdateRequest(request.id,{});toast.success(action==="close"?"Đã đóng yêu cầu.":action==="reopen"?"Đã mở lại yêu cầu.":action==="archive"?"Đã chuyển vào lưu trữ. Phương án khách đang xem vẫn giữ nguyên.":"Đã bỏ lưu trữ.");});
+  };
+  const rows = useMemo(() => requests.filter(r => r.targetCompanyId === company.id && matchesTab(r,filter) &&
+    [r.id,r.destinations,r.contactName,r.contactEmail,r.contactPhone,r.businessName].some(v=>v?.toLowerCase().includes(search.toLowerCase())))
+    .sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)),[requests,filter,search,company.id]);
   const collaboration = requests.find(r => r.id === collaborating);
   if (preview) return <div className="space-y-3"><div className="rounded-lg bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">Xem trước phiên bản v{preview.version} · Nội dung này chưa thay đổi phiên bản khách đang xem.</div><TourDetailPage tour={preview} services={services} currentUser={company} previewOnly onBack={() => setPreview(null)}/></div>;
   if (collaboration) return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={() => collaborationChanged(collaboration)}/>;
@@ -137,9 +145,9 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
         <p className="flex items-center gap-1.5 text-xs text-slate-500"><Eye className="h-4 w-4 text-sky-700"/>Chọn phiên bản là cập nhật ngay cho khách</p>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-4" role="tablist" aria-label="Trạng thái yêu cầu">
-        {["all", "pending", "reviewing", "designed", "rejected", "cancelled"].map(status => <button type="button" role="tab" aria-selected={filter === status} aria-controls="agency-design-request-rows" key={status}
+        {["all", "pending", "reviewing", "designed", "booked", "closed", "archived"].map(status => <button type="button" role="tab" aria-selected={filter === status} aria-controls="agency-design-request-rows" key={status}
           className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm transition-colors ${filter === status ? "border-sky-700 font-semibold text-sky-800" : "border-transparent text-slate-500 hover:text-slate-900"}`} onClick={() => setFilter(status)}>
-          {status === "all" ? "Tất cả" : labels[status]}<span className={`rounded-md px-1.5 py-0.5 text-xs ${filter === status ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500"}`}>{requests.filter(r => r.targetCompanyId === company.id && (status === "all" || r.status === status)).length}</span>
+          {status === "all" ? "Đang xử lý" : labels[status]}<span className={`rounded-md px-1.5 py-0.5 text-xs ${filter === status ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500"}`}>{requests.filter(r => r.targetCompanyId === company.id && matchesTab(r,status)).length}</span>
         </button>)}
       </div>
       <div className="overflow-x-auto" id="agency-design-request-rows" role="tabpanel">
@@ -162,7 +170,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
               <td className="px-4 py-5"><p className="flex items-start gap-1.5 font-semibold text-slate-800"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sky-700"/>{request.destinations}</p>
                 <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500"><CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0"/>{date(request.departureDate)} – {date(request.returnDate)}</p>
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5"/>{request.numberOfPeople} khách</p>
-                {request.rejectionReason && <p className="mt-3 text-xs text-rose-700">{request.rejectionReason}</p>}
+                {(request.closeReason || request.rejectionReason) && <p className="mt-3 text-xs text-rose-700">{request.closeReason || request.rejectionReason}</p>}
               </td>
               <td className="px-4 py-5">{request.budgetPerPerson ? <><p className="font-semibold tabular-nums text-slate-800">{money(Number(request.budgetPerPerson))}</p><p className="mt-0.5 text-xs text-slate-400">mỗi khách</p><p className="mt-3 text-xs text-slate-500">Tổng dự kiến</p><p className="mt-1 text-xs font-medium tabular-nums text-slate-600">{money(Number(request.budgetPerPerson) * Number(request.numberOfPeople))}</p></> : <span className="text-sm text-slate-500">Thỏa thuận</span>}</td>
               <td className="px-4 py-5">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} sharedVersion={sharedVersion} reload={revision} disabled={busy || !editable}
@@ -172,9 +180,13 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
                 {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => void viewVersion(request,selectedVersion)}><Eye className="h-3.5 w-3.5"/>Xem tour</Button>}
                 {request.status === "pending" ? <Button size="sm" disabled={busy} className="bg-sky-800 text-white hover:bg-sky-900" onClick={() => void decide(request,"reviewing")}><CheckCircle2 className="h-4 w-4"/>Tiếp nhận</Button>
                   : editable ? <Button size="sm" variant="outline" disabled={busy} className="border-sky-200 text-sky-800 hover:bg-sky-50" onClick={() => void start(request,tour,selectedVersion)}><Sparkles className="h-3.5 w-3.5"/>{tour ? "Chỉnh sửa" : "Thiết kế"}</Button> : null}
+                {request.bookingId && <Button size="sm" onClick={()=>onViewBooking?.(request.bookingId!)}>Xem booking</Button>}
                 {tour && <Button size="sm" variant="ghost" disabled={busy} className="text-sky-800" onClick={() => openWorkspace(request)}><History className="h-3.5 w-3.5"/>Phiên bản & đối tác</Button>}
                 <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 text-slate-500" disabled={busy} aria-label={`Thao tác yêu cầu ${request.id}`}><MoreHorizontal className="h-5 w-5"/></Button></DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-52">
+                    <DropdownMenuItem onSelect={()=>void lifecycle(request,request.archivedAt?"unarchive":"archive")}>{request.archivedAt?"Bỏ lưu trữ":"Lưu trữ yêu cầu"}</DropdownMenuItem>
+                    {active(request) || request.status==="pending" ? <DropdownMenuItem onSelect={()=>void lifecycle(request,"close")}>Đóng yêu cầu</DropdownMenuItem> : request.status==="closed" ? <DropdownMenuItem onSelect={()=>void lifecycle(request,"reopen")}>Mở lại yêu cầu</DropdownMenuItem> : null}
+                    <DropdownMenuSeparator/>
                     <DropdownMenuItem onSelect={() => setViewing(request.id)}><Eye/>Xem hồ sơ yêu cầu</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => openWorkspace(request,"messages")}><MessageSquare/>Trao đổi với khách</DropdownMenuItem>
                     {editable && <DropdownMenuItem onSelect={() => openWorkspace(request,"partners")}><Handshake/>Đồng tổ chức tour</DropdownMenuItem>}
@@ -197,7 +209,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
         <div className="min-h-0 overflow-y-auto pr-1 pt-3">
           <TabsContent value="versions"><DesignVersionHistory key={`${request.id}-${revision}`} requestId={request.id} agency currentVersion={currentTour(request)?.version} sharedVersion={overrides[request.id]?.sharedVersion ?? request.sharedVersion} disabled={busy} readOnly={!active(request)} onView={async version => { await viewVersion(request,version); }} onEdit={async version => { setHistoryRequestId(null); await start(request,currentTour(request),version); }} onSelect={async version => { await chooseVersion(request,version); }}/></TabsContent>
           <TabsContent value="partners"><DesignCollaborationPanel embedded request={request} company={company} onClose={() => setHistoryRequestId(null)} onChanged={() => collaborationChanged(request)}/></TabsContent>
-          <TabsContent value="messages"><DesignRequestMessages requestId={request.id} agency closed={!active(request) && request.status!=="pending"}/></TabsContent>
+          <TabsContent value="messages"><DesignRequestMessages requestId={request.id} agency closed={["closed","rejected","cancelled"].includes(request.status)}/></TabsContent>
         </div>
       </Tabs>)}
     </DialogContent></Dialog>

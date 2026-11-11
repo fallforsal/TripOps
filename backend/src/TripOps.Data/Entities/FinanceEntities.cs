@@ -9,6 +9,7 @@ public int BookingId { get; set; }
 public string? Stage { get; set; }
 public string Description { get; set; } = string.Empty;
 public decimal Amount { get; set; }
+public decimal CreditAmount { get; set; }
 public DateTime? DueDate { get; set; }
 /// <summary>Hạn thanh toán chính xác (UTC). NULL với khoản cũ chỉ có ngày (due_date).</summary>
 public DateTime? DueAt { get; set; }

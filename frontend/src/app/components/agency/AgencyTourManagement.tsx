@@ -1,3 +1,4 @@
+import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
 import { confirmAction } from "@/app/lib/notificationDialogs";
@@ -1364,18 +1365,10 @@ export function TourFormPage(props: TourFormPageProps) {
   const [newHighlight, setNewHighlight] = useState("");
 
   // Co-Hosting Alliance & Segment Quotation States (Hỗ trợ liên minh đa công ty)
-  const [coHostsList, setCoHostsList] = useState<TourCoHost[]>(() => {
-    if (tour?.coHosts && tour.coHosts.length > 0)
-      return JSON.parse(JSON.stringify(tour.coHosts));
-    if (customRequest?.coHosts && customRequest.coHosts.length > 0)
-      return JSON.parse(JSON.stringify(customRequest.coHosts));
-    return [];
-  });
-  const isCoHostedTour = !!(
-    customRequest?.isCoHosted ||
-    tour?.isCoHosted ||
-    coHostsList.length > 0
-  );
+  const [coHostsList, setCoHostsList] = useState<TourCoHost[]>(() =>
+    structuredClone(normalizeDesignHosts(tour?.coHosts?.length ? tour.coHosts : customRequest?.coHosts,
+      customRequest?.targetCompanyId || tour?.companyId || company.id)));
+  const isCoHostedTour = hasDesignPartners(coHostsList);
   const leadHost =
     coHostsList.find((ch) => ch.role === "lead") ||
     (coHostsList.length > 0 ? coHostsList[0] : undefined);

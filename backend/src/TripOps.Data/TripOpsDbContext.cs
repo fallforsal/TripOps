@@ -26,6 +26,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<TouristAttraction> TouristAttractions => Set<TouristAttraction>();
     public DbSet<TourMeal> TourMeals => Set<TourMeal>();
     public DbSet<TourAccommodation> TourAccommodations => Set<TourAccommodation>();
+    public DbSet<TourVersionAgency> TourVersionAgencies => Set<TourVersionAgency>();
     public DbSet<TourVersion> TourVersions => Set<TourVersion>();
     public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
     public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
@@ -43,6 +44,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingAttractionCheckin> BookingAttractionCheckins => Set<BookingAttractionCheckin>();
     public DbSet<BookingIncident> BookingIncidents => Set<BookingIncident>();
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
+    public DbSet<BookingFinancialChange> BookingFinancialChanges => Set<BookingFinancialChange>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
     public DbSet<BookingSupplierRequest> BookingSupplierRequests => Set<BookingSupplierRequest>();
     public DbSet<BookingQuotation> BookingQuotations => Set<BookingQuotation>();
@@ -160,6 +162,7 @@ public class TripOpsDbContext : DbContext
         BookingQuotationConfiguration.Configure(modelBuilder);
         DesignCoHostConfiguration.Configure(modelBuilder);
         modelBuilder.ConfigureBookingAlliance();
+        modelBuilder.ConfigureBookingFinancialChanges();
         modelBuilder.Entity<TourDesignRequest>().Property(x => x.Revision).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.Status).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.AvailableQuantity).HasPrecision(19, 2);

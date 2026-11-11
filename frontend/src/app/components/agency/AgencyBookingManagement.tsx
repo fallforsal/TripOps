@@ -373,11 +373,11 @@ export function AgencyBookingManagement({
                         )}
 
                         {/* Co-Hosting Alliance Badge */}
-                        {(booking.isCoHosted || booking.tour?.isCoHosted) && (
+                        {(booking.isCoHosted ?? booking.tour?.isCoHosted ?? false) && (
                           <div className="mt-1 flex items-center gap-1">
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs">
                               <Handshake className="w-3 h-3 text-amber-700" />
-                              Tour Liên Minh ({booking.coHosts?.map((c) => c.companyName).join(" & ") || booking.tour?.coHosts?.map((c) => c.companyName).join(" & ") || "2 Bên Phối Hợp"})
+                              Tour Liên Minh ({(booking.coHosts ?? booking.tour?.coHosts)?.map((c) => c.companyName).join(" & ") || "2 Bên Phối Hợp"})
                             </span>
                           </div>
                         )}

@@ -50,6 +50,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
+            .Include(b => b.RefundRequests)
+            .Include(b => b.Contracts)
             .Include(b => b.PaymentRequests).AsSplitQuery()
             .Where(b => b.CustomerId == customerId);
 
@@ -72,6 +74,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
+            .Include(b => b.RefundRequests)
+            .Include(b => b.Contracts)
             .Include(b => b.PaymentRequests).AsSplitQuery()
             .Where(b => b.Tour != null && (b.Tour.AgencyId == agencyId || b.BookingAgencies.Any(a=>a.AgencyId==agencyId)));
 
@@ -103,6 +107,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants).Include(b=>b.AssignedGuides)
             .Include(b => b.PaymentTransactions)
+            .Include(b => b.RefundRequests)
+            .Include(b => b.Contracts)
             .Include(b => b.PaymentRequests).AsSplitQuery()
             .Where(b => b.AssignedGuides.Any(ag => ag.GuideId == guideId));
 
@@ -124,7 +130,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
                                        t.Status != TourStatus.Deleted &&
                                        ((t.Status == TourStatus.Completed && t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
                                         (t.IsRequest == true && t.SharedVersion.HasValue && t.DesignRequestId.HasValue &&
-                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId && r.Status == CustomRequestStatus.InProgress))) &&
+                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId && (r.Status == CustomRequestStatus.InProgress || r.Status == CustomRequestStatus.Closed || r.Status == CustomRequestStatus.Booked)))) &&
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
@@ -142,6 +148,12 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.BookingParticipants.Include(p => p.Booking)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
+    public async Task MarkDesignBooked(int? requestId,CancellationToken ct)
+    {
+        if(!requestId.HasValue)return;
+        var request=await db.TourDesignRequests.SingleAsync(r=>r.Id==requestId,ct);
+        request.Status=CustomRequestStatus.Booked;request.UpdatedAt=DateTime.UtcNow;
+    }
     public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct, int? expectedVersion = null, int? expectedRevision = null)
     {
         if (!tour.DesignRequestId.HasValue) return true;

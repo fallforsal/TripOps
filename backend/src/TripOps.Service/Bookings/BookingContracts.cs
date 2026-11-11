@@ -93,7 +93,8 @@ public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName)
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note);
 
 public sealed record BookingAgencyDto(int Id,string AgencyId,string AgencyName,bool IsHost,decimal OriginalAmount,decimal FinalAmount,decimal NetPayout,
-    string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0);
+    string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0,
+    decimal SurchargeAmount=0,decimal ReductionAmount=0,decimal PendingRefundAmount=0,decimal PlatformFee=0);
 
 /// <summary>
 /// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.

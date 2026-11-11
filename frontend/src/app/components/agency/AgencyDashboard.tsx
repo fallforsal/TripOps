@@ -1,3 +1,4 @@
+import { countPendingCoHostInvites } from "@/app/lib/designAlliance";
 import { AgencyDesignCoHosting } from "./DesignCollaborationPanel";
 import { useEffect, useState } from "react";
 import {
@@ -137,17 +138,7 @@ export function AgencyDashboard({
   ).length;
 
   // Count incoming pending co-host invitations for this company
-  const pendingCoHostInvitesCount =
-    customTourRequests.filter((r) =>
-      r.coHosts?.some(
-        (ch) => ch.companyId === company.id && ch.status === "pending"
-      )
-    ).length +
-    tours.filter((t) =>
-      t.coHosts?.some(
-        (ch) => ch.companyId === company.id && ch.status === "pending"
-      )
-    ).length;
+  const pendingCoHostInvitesCount = countPendingCoHostInvites(customTourRequests,tours,company.id);
 
   const currentSelectedBooking = selectedBookingId
     ? companyBookings.find((b) => b.id === selectedBookingId) || bookings.find((b) => b.id === selectedBookingId)
@@ -247,6 +238,7 @@ export function AgencyDashboard({
       case "custom-requests":
         return (
           <AgencyCustomRequests
+            onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
             services={services}
             requests={companyCustomRequests}
             company={company}

@@ -40,8 +40,29 @@ Chạy từ thư mục `backend` sau khi cấu hình SQL Server trên máy. Migr
 
 Ô chọn phiên bản gọi API `/share` trực tiếp, không cần bước bấm Chia sẻ riêng. GET `/versions/{number}` dùng để xem trước/chỉnh sửa và không đổi `shared_version`.
 
-DELETE `/api/v1/agency/tour-design-requests/{id}/co-hosts/{agencyId}` thu hồi lời mời. Thêm `?removeContent=true` để gỡ đối tác đã nhận kèm hoạt động, khách sạn, nhà hàng và bảng giá của họ trong **bản đang làm việc**. Chỉ Agency chủ trì được làm, không gỡ Agency chủ trì, không thay đổi khi đã có booking còn hiệu lực. Membership được đánh dấu `cancelled` để thu hồi quyền truy cập và có thể mời lại.
+Thành viên từng phương án được lưu trong `tour_version_agencies`. `tour_design_request_agencies` giữ tư cách hợp tác toàn yêu cầu và trạng thái lưu trữ riêng của mỗi Agency.
 
-Các phiên bản khác vẫn được lưu để xem lại. Nếu bản Customer đang xem chứa đối tác bị gỡ thì bỏ `shared_version`; Agency cần kiểm tra và chọn lại phương án hợp lệ. Phiên bản còn chứa đối tác chưa chấp nhận/đã rời liên minh không được hiển thị cho Customer. Chỉnh sửa và lưu lại sẽ loại nội dung của thành viên không còn tham gia khỏi bản đó. Không sửa booking đã phát sinh.
+- `GET .../co-hosts?version=N` và `GET .../working-tour?version=N` đọc đúng liên minh/cấu hình vN.
+- Lời mời và phản hồi gửi `version` trong body. Đối tác chỉ truy cập/sửa version họ đã chấp nhận; lời mời đang chờ chỉ xem thông tin mời.
+- `DELETE .../co-hosts/{agencyId}?version=N&removeContent=true` bỏ đối tác, nội dung và bảng giá **chỉ trong vN**. Đánh dấu membership của bản đó `excluded`, không hủy tư cách ở các bản khác. Nếu khách đang xem vN thì bỏ lựa chọn; Agency kiểm tra và chọn lại phiên bản.
+- `DELETE .../co-hosts/{agencyId}?terminate=true` chấm dứt hợp tác **toàn yêu cầu**. Giữ nguyên cấu hình lịch sử nhưng thu hồi quyền đối tác. Bản còn họ không được chọn/booking cho đến khi Agency mời lại đúng bản và đối tác nhận lời. Không tự tạo version khi mời lại.
+- Lưu version mới sao chép danh sách thành viên của version nguồn. Sau đó có thể bỏ B khỏi v2, v1 vẫn gồm A+B và có thể chọn lại nguyên bản.
+- Khi có booking còn hiệu lực, khóa sửa tour nguồn, lời mời và thay đổi liên minh. Chỉnh dịch vụ tiếp trên booking, không sửa cấu hình/tiền của booking từ phương án nguồn.
+
+## Đóng, lưu trữ và hoàn thành yêu cầu
+
+`POST /api/v1/agency/tour-design-requests/{id}/lifecycle` với `{ "action": "archive|unarchive|close|reopen", "reason": "..." }`.
+
+- `archive/unarchive`: ẩn/hiện trong công việc riêng của Agency. Customer vẫn xem và booking; không thay `shared_version` hay `revision` của tour.
+- `close`: chỉ chủ trì, lý do bắt buộc tối đa 2000 ký tự. Customer xem lý do và phương án cũ nhưng không booking mới/nhắn tin trên yêu cầu đã đóng. Nội dung nguồn cũng khóa chỉnh sửa.
+- `reopen`: chỉ chủ trì, chỉ khi không có booking còn hiệu lực; tiếp tục thiết kế và đặt tour. Tăng revision để yêu cầu tải lại phương án cũ.
+- Booking thành công ghi `tour_design_requests.status = booked`, chuyển yêu cầu sang tab **Đã đặt tour**, trả `bookingId`. Nếu booking hủy/từ chối, danh sách hiển thị **Đã đóng** và yêu cầu Agency chủ động mở lại trước khi khách đặt lần nữa.
+- Đã đóng/từ chối/hủy và Lưu trữ có tab riêng. Hoạt động lưu trữ không được gửi sang Customer.
+
+## Migration mới và kiểm tra thủ công
+
+`20261111125921_VersionScopedAllianceAndDesignLifecycle` thêm `tour_version_agencies`, hai cột `tour_design_requests.closed_at/close_reason` và `tour_design_request_agencies.archived_at`. Backfill thành viên từ từng snapshot cũ; lời mời chưa nằm trong snapshot chỉ gắn bản đang làm việc. Yêu cầu đã có booking chuyển sang booked. Không xóa tour, version hay booking. Down sẽ bỏ dữ liệu membership mới, thông tin đóng/lưu trữ và chuyển booked/closed về in_progress.
+
+Hướng dẫn từng tình huống và kết quả mong đợi: [DESIGN-LIFECYCLE-TEST.md](DESIGN-LIFECYCLE-TEST.md).
 
 Migration `20261111115754_RemoveDesignRequestBusinessContacts` xóa đúng hai cột `tour_design_requests.business_email` và `business_phone`. Giữ `business_name`, `contact_name`, `contact_email`, `contact_phone`. Entity, DTO và ba tài liệu DBML đã đồng bộ. Team pull code rồi chạy lệnh `dotnet ef database update --project src/TripOps.Data --startup-project src/TripOps.Api` trong `backend`. Down migration chỉ tạo lại cột nullable, không khôi phục dữ liệu đã xóa.

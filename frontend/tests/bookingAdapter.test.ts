@@ -277,3 +277,31 @@ test("partner sees the whole itinerary and ownership names while only its own fi
  assert.equal(b.tour.itinerary[0].locations[0].createdByCompanyId,"agency");assert.equal(b.tour.itinerary[1].locations[0].createdByCompanyId,"partner");
  assert.equal(b.tour.itinerary[0].meals?.[0].createdByCompanyId,"agency");assert.equal(b.bookingAgencies?.length,1);assert.equal(b.totalPrice,650000);
 });
+
+const bookedHost={id:1,agencyId:"agency",agencyName:"Host A",isHost:true,originalAmount:10000000,finalAmount:10000000,netPayout:10000000,settlementStatus:"Unpaid",paidSurchargeAmount:0,unpaidSurchargeAmount:0};
+const bookedPartner={...bookedHost,id:2,agencyId:"partner",agencyName:"Partner B",isHost:false};
+test("booking single-agency v1 never inherits alliance metadata from current tour v2",()=>{
+  const currentTour={...fromApiBooking(dto).tour,version:2,isCoHosted:true,coHosts:[
+    {companyId:"agency",companyName:"A",role:"lead" as const,status:"accepted" as const},
+    {companyId:"partner",companyName:"B",role:"partner" as const,status:"accepted" as const}
+  ]};
+  for(const snapshotDays of [undefined,[],[{id:1,dayNumber:1,title:"Booked day",locations:[],meals:[]}]]) {
+    const booking=fromApiBooking({...dto,bookingAgencies:[bookedHost],snapshotDays},[currentTour]);
+    assert.equal(booking.isCoHosted,false);assert.equal(booking.tour.isCoHosted,false);
+    assert.deepEqual(booking.coHosts?.map(h=>h.companyId),["agency"]);
+    assert.deepEqual(booking.tour.coHosts?.map(h=>h.companyId),["agency"]);
+    assert.equal(currentTour.isCoHosted,true);assert.equal(currentTour.coHosts.length,2);
+  }
+});
+test("booking alliance membership remains when current source tour has only its lead",()=>{
+  const currentTour={...fromApiBooking(dto).tour,version:3,isCoHosted:false,coHosts:[]};
+  const booking=fromApiBooking({...dto,bookingAgencies:[bookedHost,bookedPartner]},[currentTour]);
+  assert.equal(booking.isCoHosted,true);assert.equal(booking.tour.isCoHosted,true);
+  assert.deepEqual(booking.tour.coHosts?.map(h=>h.companyId),["agency","partner"]);
+});
+test("missing booking allocation data never invents agencies from a newer catalogue version",()=>{
+  const currentTour={...fromApiBooking(dto).tour,isCoHosted:true,coHosts:[{companyId:"partner",companyName:"B",role:"partner" as const,status:"pending" as const}]};
+  const booking=fromApiBooking({...dto,bookingAgencies:undefined},[currentTour]);
+  assert.equal(booking.isCoHosted,false);assert.equal(booking.tour.isCoHosted,false);
+  assert.deepEqual(booking.coHosts,[]);assert.deepEqual(booking.tour.coHosts,[]);
+});

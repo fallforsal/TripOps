@@ -753,6 +753,88 @@ namespace TripOps.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.BookingFinancialChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AgencyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(19,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("nvarchar(240)")
+                        .HasColumnName("reason");
+
+                    b.Property<int?>("RefundRequestId")
+                        .HasColumnType("int")
+                        .HasColumnName("refund_request_id");
+
+                    b.Property<Guid>("RequestKey")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("request_key");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(240)
+                        .HasColumnType("nvarchar(240)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<string>("Status")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RefundRequestId");
+
+                    b.HasIndex("RequestedBy");
+
+                    b.HasIndex("BookingId", "AgencyId");
+
+                    b.HasIndex("BookingId", "RequestKey")
+                        .IsUnique();
+
+                    b.ToTable("booking_financial_changes", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.BookingIncident", b =>
                 {
                     b.Property<int>("Id")
@@ -2081,6 +2163,12 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("created_by");
 
+                    b.Property<decimal>("CreditAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(19,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("credit_amount");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -3087,6 +3175,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("business_name");
 
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("closed_at");
+
                     b.Property<string>("ContactEmail")
                         .IsRequired()
                         .HasMaxLength(191)
@@ -3201,6 +3298,10 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(36)
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("archived_at");
 
                     b.Property<DateTime>("AssignedAt")
                         .HasColumnType("datetime2")
@@ -3531,6 +3632,68 @@ namespace TripOps.Data.Migrations
                     b.ToTable("tour_versions", (string)null);
                 });
 
+            modelBuilder.Entity("TripOps.Data.Entities.TourVersionAgency", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AgencyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<string>("CommunicationNotes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("communication_notes");
+
+                    b.Property<bool>("IsHost")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_host");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("responded_at");
+
+                    b.Property<string>("StageArea")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("stage_area");
+
+                    b.Property<string>("Status")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal?>("SuggestedBudget")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("suggested_budget");
+
+                    b.Property<int>("TourVersionId")
+                        .HasColumnType("int")
+                        .HasColumnName("tour_version_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("TourVersionId", "AgencyId")
+                        .IsUnique();
+
+                    b.ToTable("tour_version_agencies", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.TouristAttraction", b =>
                 {
                     b.Property<int>("Id")
@@ -3855,6 +4018,29 @@ namespace TripOps.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Booking");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.BookingFinancialChange", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.RefundRequest", "RefundRequest")
+                        .WithMany()
+                        .HasForeignKey("RefundRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TripOps.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.BookingAgency", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId", "AgencyId")
+                        .HasPrincipalKey("BookingId", "AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RefundRequest");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.BookingIncident", b =>
@@ -4501,6 +4687,25 @@ namespace TripOps.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Tour");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.TourVersionAgency", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TripOps.Data.Entities.TourVersion", "TourVersion")
+                        .WithMany()
+                        .HasForeignKey("TourVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
+
+                    b.Navigation("TourVersion");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.TouristAttraction", b =>

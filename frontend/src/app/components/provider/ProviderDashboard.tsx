@@ -1,7 +1,7 @@
-import { bookingRefusalReason } from "@/app/lib/bookingRefusal";
+import { toGroupRequest, type ProviderInboxRow } from "@/app/services/providerRequests";
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
 import { http } from "@/app/lib/http";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/app/lib/notifications";
 import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
@@ -36,78 +36,6 @@ interface ProviderDashboardProps {
   ) => void | Promise<void>;
   onUpdateProfile?: (updatedUser: Partial<User>) => void;
   onLogout?: () => void;
-}
-
-/** Một dòng từ GET /provider/booking-requests. */
-export type ProviderInboxRow = {
-  id: number; bookingId: number; serviceId: number; slotKey: string; serviceName: string;
-  serviceDateFrom: string | null; serviceDateTo: string | null; quantity: number; unit: string;
-  estimatedCost: number; quotedCost: number | null; status: string; note: string | null;
-  createdAt: string; respondedAt: string | null; bookingCode: string; tourName: string;
-  agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
-  specialRequests: string | null; cancelReason: string | null; cancelledAt: string | null;
-  serviceTime?: string | null;
-  guests: Array<{ age?: number | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
-};
-
-const STATUS_MAP: Record<string, ProviderGroupReservationRequest["status"]> = {
-  Pending: "pending", Confirmed: "confirmed", Rejected: "rejected", Cancelled: "cancelled",
-};
-
-/** Chuyển dữ liệu máy chủ sang mẫu giao diện yêu cầu dịch vụ (chia khách sạn / nhà hàng). */
-export function toGroupRequest(r: ProviderInboxRow, providerId: string): ProviderGroupReservationRequest {
-  const isHotel = r.slotKey.startsWith("hotel:");
-  const day = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
-  const isChild = (tier: string | null) => /tr[eẻ]|em b[eé]|child|infant/i.test(tier || "");
-  const guests = r.guests ?? []; // máy chủ bản cũ chưa trả danh sách đoàn
-  const children = guests.filter((g) => isChild(g.tierName)).length;
-  const meal = r.mealType === "breakfast" || r.mealType === "lunch" || r.mealType === "dinner" ? r.mealType : undefined;
-  const status = STATUS_MAP[r.status] ?? "pending";
-  return {
-    id: String(r.id),
-    bookingId: String(r.bookingId),
-    bookingCode: r.bookingCode || `#${r.bookingId}`,
-    tourName: r.tourName || `Booking #${r.bookingId}`,
-    serviceId: String(r.serviceId),
-    serviceName: r.serviceName,
-    providerId,
-    agencyId: "",
-    agencyName: r.agencyName || "Công ty lữ hành",
-    agencyContactName: r.agencyName || "Công ty lữ hành",
-    agencyPhone: r.agencyPhone || "",
-    agencyEmail: r.agencyEmail || "",
-    checkInDate: day(r.serviceDateFrom),
-    checkOutDate: day(r.serviceDateTo || r.serviceDateFrom),
-    numberOfNights: isHotel ? Number(r.quantity) || 1 : 0,
-    numberOfGuests: guests.length || Number(r.quantity) || 0,
-    adultGuests: guests.length - children,
-    childGuests: children,
-    passengers: guests.map((g, i) => ({
-      id: i + 1,
-      participantIndex: i + 1,
-      fullName: g.fullName,
-      gender: g.gender === "Nữ" || /^f/i.test(g.gender || "") ? "female" : "male",
-      tierName: g.tierName || undefined,
-      age: g.age ?? undefined,
-      roommateNote: g.roommateNote || undefined,
-      dietaryNote: g.restaurantNote || undefined,
-    })),
-    specialRequests: [r.specialRequests, `Giá tham khảo: ${r.estimatedCost.toLocaleString("vi-VN")} ₫ cho ${r.quantity} ${r.unit}`]
-      .filter(Boolean).join(" · "),
-    status,
-    serviceType: isHotel ? "hotel" : "restaurant",
-    mealType: isHotel ? undefined : meal,
-    servingDate: isHotel ? undefined : day(r.serviceDateFrom),
-    serviceTime: isHotel ? undefined : r.serviceTime?.slice(0,5) || undefined,
-    quotedTotalPrice: r.quotedCost ?? undefined,
-    providerNote: status === "confirmed" ? r.note || undefined : undefined,
-    rejectionReason: status === "rejected" ? r.note || undefined : undefined,
-    cancellationReason: status === "cancelled" ? bookingRefusalReason(r.specialRequests || undefined, r.cancelReason || undefined) : undefined,
-    cancelledAt: r.cancelledAt || undefined,
-    cancelledByName: status === "cancelled" ? "Booking đã hủy" : undefined,
-    createdAt: r.createdAt || new Date().toISOString(),
-    respondedAt: r.respondedAt || undefined,
-  };
 }
 
 export function ProviderDashboard({
@@ -148,17 +76,38 @@ export function ProviderDashboard({
   const [editingService, setEditingService] = useState<Service | null>(null);
   // Yêu cầu dịch vụ thật từ máy chủ (khách sạn + nhà hàng), hiển thị bằng giao diện chia Lưu trú / Nhà hàng.
   const [apiRequests, setApiRequests] = useState<ProviderGroupReservationRequest[]>([]);
-  const loadRequests = async () => {
-    const rows = await http<ProviderInboxRow[]>("/provider/booking-requests");
-    setApiRequests(rows.map((r) => toGroupRequest(r, currentUser.id)));
-  };
+  const knownRequestIds = useRef<Set<string> | null>(null);
+  const requestLoadInFlight = useRef(false);
+  const loadRequests = useCallback(async () => {
+    if (requestLoadInFlight.current) return;
+    requestLoadInFlight.current = true;
+    try {
+      const rows = await http<ProviderInboxRow[]>("/provider/booking-requests");
+      const next = rows.map((r) => toGroupRequest(r, currentUser.id));
+      const added = next.filter(r => r.status === "pending" && knownRequestIds.current && !knownRequestIds.current.has(r.id));
+      knownRequestIds.current = new Set(next.map(r => r.id));
+      setApiRequests(next);
+      if (added.length) toast.info(`Có ${added.length} yêu cầu dịch vụ mới: ${added.map(r => r.serviceName).join(", ")}`);
+    } finally {
+      requestLoadInFlight.current = false;
+    }
+  }, [currentUser.id]);
+  useEffect(() => { knownRequestIds.current = null; }, [currentUser.id]);
   useEffect(() => {
     void loadRequests().catch((error) => {
-      setApiRequests([]);
       toast.error(error instanceof Error ? `Không tải được yêu cầu dịch vụ: ${error.message}` : "Không tải được yêu cầu dịch vụ.");
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser.id]);
+    // Cập nhật cả badge lẫn danh sách khi Agency đổi dịch vụ ở một phiên đăng nhập khác.
+    const reload = () => { if (document.visibilityState !== "hidden") void loadRequests().catch(() => undefined); };
+    const timer = window.setInterval(reload, 15000);
+    window.addEventListener("focus", reload);
+    document.addEventListener("visibilitychange", reload);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", reload);
+      document.removeEventListener("visibilitychange", reload);
+    };
+  }, [loadRequests, activeSection]);
 
   const activeRequestsList = apiRequests;
   const pendingGroupCount = activeRequestsList.filter((r) => r.status === "pending").length;

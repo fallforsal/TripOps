@@ -11,7 +11,7 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet("co-hosts")]
     [EndpointSummary("List the lead Agency and invited co-host partners")]
-    public async Task<ActionResult<DesignCoHostDto[]>> List(int id,CancellationToken ct) => Ok(await tours.GetCoHosts(Actor,id,ct));
+    public async Task<ActionResult<DesignCoHostDto[]>> List(int id,CancellationToken ct,[FromQuery] int? version=null) => Ok(await tours.GetCoHosts(Actor,id,ct,version));
     [HttpPost("co-hosts")]
     [EndpointSummary("Lead Agency invites an approved partner with optional collaboration notes")]
     public async Task<ActionResult<DesignCoHostDto[]>> Invite(int id,InviteDesignCoHost input,CancellationToken ct) => Ok(await tours.InviteCoHost(Actor,id,input,ct));
@@ -22,10 +22,10 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     [HttpDelete("co-hosts/{partner}")]
     [EndpointSummary("Lead Agency withdraws a co-host invitation or partnership")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] bool removeContent = false) {await tours.RemoveCoHost(Actor,id,partner,ct,removeContent);return NoContent();}
+    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] bool removeContent = false,[FromQuery] int? version=null,[FromQuery] bool terminate=false) {await tours.RemoveCoHost(Actor,id,partner,ct,removeContent,version,terminate);return NoContent();}
     [HttpGet("working-tour")]
     [EndpointSummary("Lead or accepted co-host reads the current private working tour")]
-    public async Task<ActionResult<TourDto>> WorkingTour(int id,CancellationToken ct) => Ok(await tours.CollaborativeTour(Actor,id,ct));
+    public async Task<ActionResult<TourDto>> WorkingTour(int id,CancellationToken ct,[FromQuery] int? version=null) => Ok(await tours.CollaborativeTour(Actor,id,ct,version));
     [HttpGet("versions/{number:int}")]
     public async Task<ActionResult<TourDto>> Version(int id,int number,CancellationToken ct) => Ok(await tours.DesignVersion(Actor,id,number,ct));
     [HttpPut("segment")]

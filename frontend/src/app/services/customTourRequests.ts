@@ -1,9 +1,11 @@
+import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
 import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import { http } from "@/app/lib/http";
 import type { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
+  archivedAt?: string; closedAt?: string; closeReason?: string; bookingId?: number; collaborationVersions?: number[]; hasCollaborations?: boolean;
   sharedTourThumbnail?: string | null; sharedTourName?: string | null;
   coHosts?: TourCoHost[];
   rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
@@ -20,8 +22,9 @@ type RequestDto = {
 type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
+  archivedAt:r.archivedAt,closedAt:r.closedAt,closeReason:r.closeReason,bookingId:r.bookingId?String(r.bookingId):undefined,collaborationVersions:r.collaborationVersions,hasCollaborations:r.hasCollaborations,
   sharedTourThumbnail:r.sharedTourThumbnail || undefined, sharedTourName:r.sharedTourName || undefined,
-  coHosts: r.coHosts && r.coHosts.length > 1 ? r.coHosts : [], isCoHosted: Boolean(r.coHosts?.some(h => h.role === "partner" && h.status !== "rejected")),
+  coHosts: normalizeDesignHosts(r.coHosts,r.agencyId), isCoHosted: hasDesignPartners(normalizeDesignHosts(r.coHosts,r.agencyId)),
   rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
   targetCompanyName: r.agencyName, contactName: r.contactName,
@@ -78,3 +81,5 @@ export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, rev
   const body=tourSaveBody({revision:revision??null,createNewVersion:tour.createNewVersion===true,version:tour.version,configuration:toConfiguration(tour),complete:tour.status==="completed",reason:tour.changeNote},tour);
   return fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/${body instanceof FormData ? "tour-with-images" : "tour"}`,{method:"PUT",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined}));
 };
+
+export const designRequestLifecycle = (id:string,action:"archive"|"unarchive"|"close"|"reopen",reason?:string) => http(`/agency/tour-design-requests/${id}/lifecycle`,{method:"POST",body:JSON.stringify({action,reason})});

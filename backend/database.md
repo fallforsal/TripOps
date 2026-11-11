@@ -300,6 +300,8 @@ Table tour_design_requests {
   special_requirements text // Các điểm tham quan, hoạt động tour, lửa trại... hay ghi chú khác
 
   // 5. TRẠNG THÁI XỬ LÝ CỦA HỆ THỐNG
+  closed_at timestamp
+  close_reason varchar(2000)
   status varchar(50) [default: 'pending'] // pending, in_progress, rejected, cancelled
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
@@ -371,7 +373,6 @@ Table bookings {
 // ============================================================================
 
 Table booking_participants {
-  creation_key varchar(36)
   id int [pk, increment]
   booking_id int [not null, note: 'FK trỏ tới bookings.id']
   creation_key uniqueidentifier [note: 'Khóa chống tạo trùng khi Agency gửi lại yêu cầu thêm khách; unique theo booking_id khi khác NULL']
@@ -605,6 +606,7 @@ Table payment_requests {
     (booking_id, id) [unique]
     (booking_id, stage) [unique, name: 'UX_payment_requests_active_stage', note: 'Lọc: stage IS NOT NULL AND status IN (Pending, Overdue, Paid) — mỗi đơn chỉ một khoản đang hiệu lực cho mỗi đợt']
   }
+  credit_amount decimal(19,2) [not null, default: 0, note: 'Approved credit against this installment']
 }
 
 // ============================================================================
@@ -1184,6 +1186,7 @@ Table tour_design_request_agencies {
   communication_notes text
   status varchar(20) [not null, note: 'pending, accepted, rejected, cancelled']
   assigned_at timestamp [not null]
+  archived_at timestamp
   responded_at timestamp
   indexes {
     (request_id, agency_id) [unique]
@@ -1196,3 +1199,42 @@ Ref: tour_design_request_agencies.agency_id > users.id
 Ref: booking_hotels.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)
 Ref: booking_restaurants.agency_id > users.id
 Ref: payment_requests.(booking_id, beneficiary_agency_id) > booking_agencies.(booking_id, agency_id)
+
+
+Table tour_version_agencies {
+  id int [pk, increment]
+  tour_version_id int [not null, ref: > tour_versions.id]
+  agency_id varchar(36) [not null, ref: > users.id]
+  is_host boolean [not null]
+  status varchar(20) [not null]
+  stage_area varchar(255) [not null]
+  suggested_budget decimal(12,2)
+  communication_notes text
+  assigned_at timestamp [not null]
+  responded_at timestamp
+  indexes {
+    (tour_version_id, agency_id) [unique]
+  }
+}
+
+
+// Lead-reviewed price changes; reductions do not cancel the booking.
+Table booking_financial_changes {
+  id int [pk, increment]
+  booking_id int [not null]
+  agency_id varchar(36) [not null]
+  requested_by varchar(36) [not null, ref: > users.id]
+  request_key uniqueidentifier [not null]
+  amount decimal(19,2) [not null, note: 'Positive = surcharge; negative = approved reduction']
+  reason varchar(240) [not null]
+  status varchar(20) [not null, note: 'Pending, Approved, Rejected']
+  created_at timestamp [not null]
+  reviewed_by varchar(36)
+  review_note varchar(240)
+  reviewed_at timestamp
+  refund_request_id int [ref: > refund_requests.id]
+  indexes {
+    (booking_id, request_key) [unique]
+  }
+}
+Ref: booking_financial_changes.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)

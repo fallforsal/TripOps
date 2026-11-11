@@ -291,7 +291,7 @@ public sealed partial class TourFlowTests
         tour = await Command(agency, tour, "hide", reason: "Maintenance");
         Assert.Equal(HttpStatusCode.NotFound, (await publicClient.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(tour.Revision, Complete("New itinerary"), "Updated itinerary")));
-        Assert.Equal("draft", tour.Status); Assert.Equal("hidden", tour.Visibility);
+        Assert.Equal("completed", tour.Status); Assert.Equal("hidden", tour.Visibility);
         Assert.Equal(1, tour.Version); Assert.Equal("New itinerary", tour.Configuration.Name);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.GetAsync($"{Root}/{tour.Id}/versions")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/versions/1/restore",new TourCommand(tour.Revision,"Not supported"))).StatusCode);
@@ -650,7 +650,12 @@ public sealed partial class TourFlowTests
         Assert.Empty((await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=KHANH_HOA"))!.Items);
         Assert.Equal(3, (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!.Configuration.ProvinceCodes!.Length);
 
-        // Removing every province is allowed for a draft, deletes all rows, and publishing is then rejected.
+        // Saving an open tour preserves public visibility and still requires a province.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Revision,tour.Configuration with {ProvinceCodes=[]},"Invalid public edit"))).StatusCode);
+        Assert.Equal(3,(await StoredProvinceRows(app,tour.Id)).Length);
+        // A hidden tour can be incomplete while editing; publishing validates it again.
+        tour=await Command(agency,tour,"hide",reason:"Edit coverage");
         var cleared = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
             new UpdateTourRequest(tour.Revision, tour.Configuration with { ProvinceCodes = [] }, "Clear")));
         Assert.Empty(await StoredProvinceRows(app, tour.Id));

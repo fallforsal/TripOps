@@ -12,6 +12,7 @@ public class TourDesignRequestAgency : BaseEntity<int>
     public string Status { get; set; } = "pending";
     public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
     public DateTime? RespondedAt { get; set; }
+    public DateTime? ArchivedAt { get; set; }
     public TourDesignRequest TourDesignRequest { get; set; } = null!;
     public User Agency { get; set; } = null!;
 }

@@ -35,11 +35,13 @@ public sealed partial class TourService
         var id = await db.Tours.Where(t => t.DesignRequestId == requestId).Select(t => (int?)t.Id).SingleOrDefaultAsync(ct);
         Tour tour;
         TourConfiguration? previousConfiguration = null;
+        int? sourceVersion = null;
         if (id.HasValue) {
             tour = await Owned(actor, id.Value, ct);
             if (!input.Revision.HasValue) throw Conflict();
             Expected(tour, input.Revision.Value);
             var target = input.Version ?? tour.Version ?? 1;
+            sourceVersion=target;
             previousConfiguration = target == tour.Version ? Configuration(tour) :
                 JsonSerializer.Deserialize<TourSnapshot>((await repository.Version(tour.Id,target,ct)
                     ?? throw new TourException(404,"Không tìm thấy phiên bản tour.")).SnapshotData,Json)!.Configuration;
@@ -53,12 +55,23 @@ public sealed partial class TourService
         }
         // Child content and age-price tables belong to the Agency that created them.
         var original=previousConfiguration??input.Configuration with {Timelines=[],PricingTiers=[],AgencyPricing=[]};
-        configuration=await CollaborationConfiguration(request,MergeDesign(original,input.Configuration,actor,actor),ct);
+        configuration=await CollaborationConfiguration(request,MergeDesign(original,input.Configuration,actor,actor),ct,sourceVersion);
         await Validate(configuration,input.Complete,ct,actor,requestId);
         Apply(tour, configuration);
         tour.Status = input.Complete ? TourStatus.Completed : TourStatus.Draft;
         tour.Visibility = TourVisibility.Hidden;
         var result = await Save(tour, actor, input.Reason?.Trim() is { Length: > 0 } note ? note : "Lưu phương án thiết kế", ct);
+        if(input.CreateNewVersion && sourceVersion.HasValue) {
+            var targetRow=await db.TourVersions.SingleAsync(v=>v.TourId==tour.Id && v.VersionNumber==tour.Version,ct);
+            var sourceRows=await db.TourVersionAgencies.AsNoTracking().Where(a=>a.TourVersion.TourId==tour.Id && a.TourVersion.VersionNumber==sourceVersion).ToListAsync(ct);
+            var existing=await db.TourVersionAgencies.Where(a=>a.TourVersionId==targetRow.Id).ToListAsync(ct);
+            foreach(var row in sourceRows) {
+                var next=existing.SingleOrDefault(a=>a.AgencyId==row.AgencyId);
+                if(next==null){next=new TourVersionAgency{TourVersionId=targetRow.Id,AgencyId=row.AgencyId};db.TourVersionAgencies.Add(next);}
+                next.IsHost=row.IsHost;next.Status=row.Status;next.StageArea=row.StageArea;next.SuggestedBudget=row.SuggestedBudget;next.CommunicationNotes=row.CommunicationNotes;next.AssignedAt=row.AssignedAt;next.RespondedAt=row.RespondedAt;
+            }
+            await db.SaveChangesAsync(ct);
+        }
         await tx.CommitAsync(ct);
         return result;
     }
@@ -96,9 +109,7 @@ public sealed partial class TourService
             ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
         // Existing data may have a working copy from the old draft model. Saving reconciles it first.
         var configuration = target == tour.Version ? Configuration(tour) : JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!.Configuration;
-        var removedPartners=await db.TourDesignRequestAgencies.Where(a=>a.TourDesignRequestId==requestId && !a.IsHost && a.Status!="accepted").Select(a=>a.AgencyId).ToListAsync(ct);
-        Require(!removedPartners.Any(partner => HasCoHostContent(configuration,partner) || (configuration.CoHosts??[]).Any(h=>h.CompanyId==partner)),
-            "Phiên bản còn nội dung của Agency chưa tham gia hoặc đã rời liên minh. Hãy chỉnh sửa và lưu phiên bản trước khi hiển thị cho khách.");
+        await ValidateVersionMembers(requestId,target,ct);
         await Validate(configuration, true, ct, actor, requestId);
         if (tour.HasDraftChanges && target == tour.Version) {
             version.SnapshotData=JsonSerializer.Serialize(new TourSnapshot(1,target,true,tour.IsAiGenerated==true,"completed","hidden",configuration),Json);
@@ -116,8 +127,8 @@ public sealed partial class TourService
     {
         var user = await accounts.Current(actor, ct);
         Require(user.Role == UserRole.Customer, "Cần tài khoản khách hàng.");
-        _ = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == requestId && r.CustomerId == actor && r.Status == CustomRequestStatus.InProgress, ct)
-            ?? throw new TourException(404, "Không tìm thấy yêu cầu đang xử lý.");
+        _ = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == requestId && r.CustomerId == actor && (r.Status == CustomRequestStatus.InProgress || r.Status == CustomRequestStatus.Closed || r.Status == CustomRequestStatus.Booked), ct)
+            ?? throw new TourException(404, "Không tìm thấy yêu cầu.");
         var tour = await db.Tours.AsNoTracking().SingleOrDefaultAsync(t => t.DesignRequestId == requestId && t.SharedVersion.HasValue && t.Status != TourStatus.Deleted, ct)
             ?? throw new TourException(404, "Agency chưa chia sẻ phương án.");
         var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.SharedVersion, ct);
@@ -129,6 +140,7 @@ public sealed partial class TourService
     public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct)
     {
         if (identity.IsRequest != true) return identity;
+        await ValidateVersionMembers(identity.DesignRequestId!.Value,identity.SharedVersion??0,ct);
         var version = await db.TourVersions.AsNoTracking().SingleOrDefaultAsync(v => v.TourId == identity.Id && v.VersionNumber == identity.SharedVersion, ct)
             ?? throw new TourException(409, "Phương án chưa được chia sẻ.");
         return MaterializeSnapshot(identity, version);

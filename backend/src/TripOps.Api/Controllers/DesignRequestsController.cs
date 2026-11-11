@@ -65,6 +65,9 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
     [EndpointSummary("List custom tour requests addressed to the signed-in Agency")]
     [ProducesResponseType<IReadOnlyList<DesignRequestDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await requests.List(Actor, true, ct));
+    [HttpPost("{id:int}/lifecycle")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> Lifecycle(int id,DesignLifecycleInput input,CancellationToken ct) {await requests.Lifecycle(Actor,id,input,ct);return NoContent();}
     [HttpPost("{id:int}/action")]
     [EndpointSummary("Receive an Agency-owned design request or reject it with a reason")]
     [ProducesResponseType<DesignRequestDto>(StatusCodes.Status200OK)]

@@ -55,6 +55,8 @@ const STATUS_CONFIG: Record<
   CustomTourRequest["status"],
   { label: string; bg: string; text: string; border: string; icon: React.ReactNode }
 > = {
+  booked: { label: "Đã đặt tour", bg: "bg-emerald-50", text: "text-emerald-800", border: "border-emerald-200", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  closed: { label: "Đã đóng", bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200", icon: <XCircle className="w-3.5 h-3.5" /> },
   pending: {
     label: "Chờ xử lý",
     bg: "bg-amber-50",
@@ -466,7 +468,7 @@ export function CustomRequestDetailModal({
                 onDecide={onAgencyDecision}
               />
             )}
-            {userRole === "agency" && onStartDesignTour && request.status !== "pending" && request.status !== "cancelled" && request.status !== "rejected" && (
+            {userRole === "agency" && onStartDesignTour && request.status !== "pending" && ["reviewing","designed"].includes(request.status) && (
               <Button
                 type="button"
                 disabled={agencyActionBusy}

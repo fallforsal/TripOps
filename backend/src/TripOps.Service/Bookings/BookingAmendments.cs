@@ -22,7 +22,8 @@ public sealed record BookingServiceChange(
     decimal ExpectedTotal, decimal PriceDifference = 0,
     int? ServiceId = null, int? AgencySupplierId = null,
     [StringLength(255)] string? Name = null,
-    SupplierSnapshotInput? Supplier = null, [Range(1, 5)] int? Stars = null);
+    SupplierSnapshotInput? Supplier = null, [Range(1, 5)] int? Stars = null,
+    [Range(typeof(decimal),"-9999999999","9999999999")] decimal ProposedAmount=0,Guid? FinancialRequestId=null);
 public sealed record BookingLocationChange(
     [Range(1, int.MaxValue)] int ItemId,
     [Required, StringLength(255)] string Name,
@@ -47,7 +48,7 @@ public sealed partial class BookingQuotationService
         if (!BookingAlliance.IsMember(b,actor) || (hostOnly && b.Tour?.AgencyId!=actor)) throw new BookingException(403, "Bạn không có quyền thay đổi booking này.");
         Require(b.Status is BookingStatus.Pending or BookingStatus.Confirmed or BookingStatus.Deposited or BookingStatus.Paid,
             "Booking đã hủy, kết thúc hoặc đang thực hiện không thể thay đổi.");
-        Require(!b.RefundRequests.Any(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved),
+        Require(!b.RefundRequests.Any(r => r.Reason!=BookingBilling.PriceReductionReason && r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved),
             "Booking đang có yêu cầu hủy, không thể thay đổi.");
         var visibleTotal=b.Tour!.AgencyId==actor?b.TotalAmount:b.BookingAgencies.Single(a=>a.AgencyId==actor).FinalAmount;
         if (visibleTotal != expectedTotal) throw new BookingException(409, "Giá booking đã thay đổi. Vui lòng tải lại trang.");
@@ -180,6 +181,7 @@ public sealed partial class BookingQuotationService
         await using var tx = await Repository.BeginPaymentChange(id, ct);
         var b = await Amendable(actor, id, input.ExpectedTotal, ct,false);
         Require(b.Tour?.AgencyId==actor || input.PriceDifference==0,"Agency đối tác không được thay đổi giá booking.");
+        Require(input.PriceDifference==0||input.ProposedAmount==0,"Chỉ điều chỉnh trực tiếp hoặc gửi đề nghị, không đồng thời cả hai.");
         Require(!BookingBilling.HasBeenApproved(b) || input.PriceDifference == 0,
             "Giá tour đã khóa sau khi duyệt. Đổi dịch vụ không thay đổi giá; hãy tạo phụ thu riêng nếu phát sinh.");
         Require(input.Kind is "hotel" or "meal", "Loại dịch vụ không hợp lệ.");
@@ -234,7 +236,7 @@ public sealed partial class BookingQuotationService
                 ServiceDateTo = hotel != null ? hotel.DateTo : meal!.Time ?? meal.DateService,
                 Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity), ReplyDeadline = DateTime.UtcNow.AddHours(48) });
             Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = service.ProviderId, BookingId = id,
-                Message = "Agency thay đổi dịch vụ booking, cần xác nhận lại giá và khả năng cung cấp." });
+                Message = $"Yêu cầu dịch vụ mới cho booking {b.BookingCode}: {name}. Agency đã thay {oldName}; vui lòng xác nhận giá và khả năng cung cấp." });
         }
         var reason = $"Đổi {oldName} → {name}. {input.Reason}";
         Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length >= 3, "Cần nhập lý do thay đổi.");
@@ -250,6 +252,17 @@ public sealed partial class BookingQuotationService
             TotalCost = lines.Sum(l => l.Total), LinesJson = JsonSerializer.Serialize(lines, Json),
             NumberOfGuests = guests, PlanSnapshotJson = PlanSnapshot(b), Reason = reason });
         Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = b.CustomerId!, BookingId = id, Message = reason });
+        if(input.ProposedAmount!=0) {
+            Require(input.FinancialRequestId.HasValue&&input.FinancialRequestId!=Guid.Empty,"Thiếu mã đề nghị điều chỉnh.");
+            Require(input.ProposedAmount==Money(input.ProposedAmount),"Đề nghị điều chỉnh phải là số nguyên VNĐ.");
+            Require(!await Db.BookingFinancialChanges.AnyAsync(x=>x.BookingId==id&&x.RequestKey==input.FinancialRequestId,ct),"Đề nghị đã được gửi; hãy tải lại trang.");
+            var owner=hotel?.AgencyId??meal!.AgencyId??actor;
+            Require(b.BookingAgencies.Single(a=>a.AgencyId==owner).SettlementStatus!=SettlementStatus.Paid,"Phần tiền đã được quyết toán.");
+            Db.BookingFinancialChanges.Add(new BookingFinancialChange{BookingId=id,AgencyId=owner,RequestedBy=actor,
+                RequestKey=input.FinancialRequestId!.Value,Amount=input.ProposedAmount,Reason=reason[..Math.Min(240,reason.Length)]});
+            Db.WorkflowNotifications.Add(new WorkflowNotification{UserId=b.Tour!.AgencyId,BookingId=id,
+                Message=$"Có đề nghị điều chỉnh {input.ProposedAmount:N0}đ do đổi {name}. Chủ trì cần phê duyệt trước khi thu/giảm tiền khách."});
+        }
         await Db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
 }

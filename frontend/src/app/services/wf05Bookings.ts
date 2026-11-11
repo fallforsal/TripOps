@@ -71,6 +71,7 @@ export interface BookingAgencyDto {
   id:number;agencyId:string;agencyName:string;isHost:boolean;originalAmount:number;finalAmount:number;netPayout:number;settlementStatus:string;
   stageArea?:string;pricingTiers?:{name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[];
   paidSurchargeAmount:number;unpaidSurchargeAmount:number;
+  surchargeAmount?:number;reductionAmount?:number;pendingRefundAmount?:number;platformFee?:number;
 }
 export interface BookingDto {
   isPartnerView?: boolean;

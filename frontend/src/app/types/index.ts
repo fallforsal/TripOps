@@ -438,6 +438,7 @@ export interface BookingPriceAdjustment {
 
 // Bảng booking_agencies: Quản lý phân chia chặng, doanh thu và giải ngân cho từng công ty
 export interface BookingAgencyShare {
+  surchargeAmount?:number;reductionAmount?:number;pendingRefundAmount?:number;
   stageArea?:string;pricingTiers?:import("@/app/services/wf05Bookings").BookingAgencyDto["pricingTiers"];paidSurchargeAmount?:number;unpaidSurchargeAmount?:number;
   id?: string;
   bookingId: string;
@@ -491,6 +492,7 @@ export interface TourReview {
 }
 
 export interface Tour {
+  designReadOnly?: boolean;
   revision?: number;
   hasDraftChanges?: boolean;
   createNewVersion?: boolean;
@@ -576,7 +578,7 @@ export interface TourCoHost {
   companyPhone?: string;
   companyEmail?: string;
   role: "lead" | "partner"; // 'lead': Công ty chủ trì, 'partner': Công ty đối tác
-  status: "pending" | "accepted" | "rejected"; // Trạng thái lời mời
+  status: "pending" | "accepted" | "rejected" | "revoked"; // Trạng thái lời mời
   rejectionReason?: string;
   assignedDays?: number[]; // Ngày phụ trách trong lịch trình (tự động nhận diện từ các ngày có đóng góp)
   assignedSegments?: string; // Tên chặng (ví dụ: "Chặng Đà Lạt - Nha Trang")
@@ -938,6 +940,12 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  archivedAt?: string;
+  closedAt?: string;
+  closeReason?: string;
+  bookingId?: string;
+  collaborationVersions?: number[];
+  hasCollaborations?: boolean;
   sharedTourThumbnail?: string;
   sharedTourName?: string;
   rejectionReason?: string;
@@ -963,7 +971,7 @@ export interface CustomTourRequest {
   targetCompanyId: string;
   targetCompanyName: string;
   // Lifecycle
-  status: "pending" | "reviewing" | "designed" | "quoted" | "accepted" | "rejected" | "cancelled";
+  status: "pending" | "reviewing" | "designed" | "quoted" | "accepted" | "rejected" | "cancelled" | "closed" | "booked";
   createdAt: string;
   // Company response & Designed tour
   companyNote?: string;
@@ -980,6 +988,7 @@ export interface CustomTourRequest {
 // REFUND REQUESTS (Theo DATABASE_SCHEMA - Copy.md: Table refund_requests)
 // ============================================================================
 export type RefundReasonType =
+  | "PRICE_REDUCTION"
   | "CUSTOMER_REQUEST"
   | "TOUR_CANCELLED"
   | "SERVICE_QUALITY"

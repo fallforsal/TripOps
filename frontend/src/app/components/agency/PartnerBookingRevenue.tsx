@@ -9,7 +9,9 @@ export function PartnerBookingRevenue({booking,agencyId}:{booking:Booking;agency
     <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Wallet className="h-4 w-4 text-sky-800"/>Doanh thu chặng của bạn</h3>
     <dl className="space-y-3 text-xs">
       <div className="flex justify-between gap-3"><dt className="text-slate-500">Giá trị chặng{booking.hasBeenApproved?" đã chốt":" dự kiến"}</dt><dd className="font-semibold tabular-nums">{money(booking.hasBeenApproved?share.originalAmount:share.finalAmount)}</dd></div>
-      <div className="flex justify-between gap-3"><dt className="text-slate-500">Phụ thu thuộc công ty bạn</dt><dd className="font-semibold tabular-nums">{money((share.paidSurchargeAmount||0)+(share.unpaidSurchargeAmount||0))}</dd></div>
+      <div className="flex justify-between gap-3"><dt className="text-slate-500">Phụ thu thuộc công ty bạn</dt><dd className="font-semibold tabular-nums">{money(share.surchargeAmount??((share.paidSurchargeAmount||0)+(share.unpaidSurchargeAmount||0)))}</dd></div>
+      {!!share.reductionAmount&&<div className="flex justify-between gap-3 text-emerald-700"><dt>Giảm giá do công ty bạn chịu</dt><dd className="font-semibold tabular-nums">−{money(share.reductionAmount)}</dd></div>}
+      {!!share.pendingRefundAmount&&<div className="flex justify-between gap-3 text-amber-700"><dt>Tiền chờ hoàn cho khách</dt><dd>{money(share.pendingRefundAmount)}</dd></div>}
       <div className="flex justify-between gap-3 border-t pt-3"><dt className="font-medium">Tổng doanh thu phân bổ</dt><dd className="font-bold tabular-nums text-sky-800">{money(share.finalAmount)}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-slate-500">Phụ thu đã thanh toán</dt><dd className="tabular-nums text-emerald-700">{money(share.paidSurchargeAmount||0)}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-slate-500">Phụ thu chưa thanh toán</dt><dd className="tabular-nums text-amber-700">{money(share.unpaidSurchargeAmount||0)}</dd></div>

@@ -232,8 +232,9 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         var ids = entries.Where(e => e.SupplierId.HasValue).Select(e => e.SupplierId!.Value).Distinct().ToArray();
         if (ids.Length == 0) return;
         Require(actor is not null, "Cần agency đăng nhập để dùng danh bạ nhà cung cấp.");
-        // Day ownership is set by the server from accepted co-host assignments.
-        var partners = designRequestId.HasValue ? await db.TourDesignRequestAgencies.Where(a => a.TourDesignRequestId == designRequestId && a.Status == "accepted" && a.TourDesignRequest.AgencyId == actor).Select(a => a.AgencyId).ToArrayAsync(ct) : [];
+        // Both request membership and participation in this version are required.
+        var versionOwners=(config.CoHosts??[]).Where(h=>h.Status=="accepted").Select(h=>h.CompanyId).ToArray();
+        var partners = designRequestId.HasValue ? await db.TourDesignRequestAgencies.Where(a => a.TourDesignRequestId == designRequestId && a.Status == "accepted" && a.TourDesignRequest.AgencyId == actor && versionOwners.Contains(a.AgencyId)).Select(a => a.AgencyId).ToArrayAsync(ct) : [];
         var allowedOwners = new[] { actor! }.Concat(partners).Distinct().ToArray();
         var owned = await db.AgencySuppliers.AsNoTracking().Where(s => ids.Contains(s.Id) && allowedOwners.Contains(s.AgencyId)).ToListAsync(ct);
         foreach (var e in entries.Where(e => e.SupplierId.HasValue))
@@ -381,6 +382,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         if (tour.DesignRequestId.HasValue)
         {
             var request = await db.TourDesignRequests.SingleAsync(r => r.Id == tour.DesignRequestId, ct);
+            Require(request.Status == CustomRequestStatus.InProgress, "Yêu cầu đã đóng hoặc đã có booking. Hãy mở lại yêu cầu nếu được phép.");
             Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Yêu cầu đã có booking. Hãy thay đổi dịch vụ trên booking, không sửa phương án nguồn.");
             request.Revision++;
             var current = await db.TourVersions.SingleOrDefaultAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.Version, ct);
@@ -399,6 +401,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         try { await repository.Save(ct); }
         catch (DbUpdateConcurrencyException) { throw Conflict(); }
         catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 }) { throw Conflict(); }
+        if(tour.DesignRequestId.HasValue)await EnsureVersionMembers(tour,ct);
         return Dto(tour);
     }
 

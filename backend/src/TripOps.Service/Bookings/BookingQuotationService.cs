@@ -386,9 +386,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
 
     public async Task<IReadOnlyList<ProviderInboxView>> ProviderRequests(string actor, CancellationToken ct)
     {
-        // Yêu cầu đã bị thay thế (đổi kế hoạch) không còn hiệu lực nên không hiện cho Provider.
+        // Giữ yêu cầu đã thay thế trong lịch sử; Provider không thể phản hồi yêu cầu cũ.
         var views = (await RequestViews(db.BookingSupplierRequests.AsNoTracking()
-                .Where(r => r.ProviderId == actor && r.Status != "Superseded")).ToListAsync(ct))
+                .Where(r => r.ProviderId == actor)).ToListAsync(ct))
             .ToDictionary(v => v.Id);
         var ids = views.Keys.ToArray();
         var rows = await db.BookingSupplierRequests.AsNoTracking().Where(r => ids.Contains(r.Id))
@@ -412,7 +412,8 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 v.ProviderPhone, v.FullAddress, r.CreatedAt, b.BookingCode,
                 b.Tour?.Name ?? "Tour", b.Tour?.Agency?.Name ?? "Công ty lữ hành", b.Tour?.Agency?.Phone,
                 b.Tour?.Agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
-                closed ? b.CancelReason : null, closed ? b.CancelledAt : null,
+                closed ? b.CancelReason : r.Status == "Superseded" ? "Agency đã thay dịch vụ cho lịch phục vụ này. Yêu cầu cũ không còn hiệu lực." : null,
+                closed ? b.CancelledAt : null,
                 b.Participants.Where(p => p.Status != "INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(b,r.SlotKey)).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
                         p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null))

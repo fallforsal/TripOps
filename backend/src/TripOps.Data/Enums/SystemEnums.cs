@@ -64,7 +64,9 @@ public enum CustomRequestStatus
     Pending,
     InProgress,
     Cancelled,
-    Rejected
+    Rejected,
+    Booked,
+    Closed
 }
 
 public enum BookingStatus

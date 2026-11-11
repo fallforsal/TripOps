@@ -1,3 +1,4 @@
+import { BookingFinancialChangesPanel } from "@/app/components/agency/BookingFinancialChangesPanel";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { useState, useMemo } from "react";
@@ -264,12 +265,8 @@ export function UserBookingDetailPage({
   };
 
   // Multi-company co-hosting logic
-  const isCoHosted = Boolean(booking.isCoHosted || booking.tour?.isCoHosted);
-  const coHosts = (booking.coHosts && booking.coHosts.length > 0)
-    ? booking.coHosts
-    : (booking.tour?.coHosts && booking.tour.coHosts.length > 0)
-    ? booking.tour.coHosts
-    : [];
+  const isCoHosted = booking.isCoHosted ?? booking.tour?.isCoHosted ?? false;
+  const coHosts = booking.coHosts ?? booking.tour?.coHosts ?? [];
   const leadCoHost = coHosts.find((c) => c.role === "lead");
   const partnerCoHosts = coHosts.filter((c) => c.role !== "lead");
 
@@ -1388,6 +1385,7 @@ export function UserBookingDetailPage({
             </div>
 
             {!isClosedBooking && <>
+            <BookingFinancialChangesPanel customer bookingId={booking.id} expectedTotal={booking.totalPrice} refreshKey={booking.totalPrice} />
             {/* FINANCE & PAYMENT STATUS CARD */}
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -1405,6 +1403,7 @@ export function UserBookingDetailPage({
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
                   {booking.hasBeenApproved && <div className="space-y-1 border-b border-slate-200 pb-2 text-xs">
                     <div className="flex justify-between gap-2"><span className="text-slate-500">Giá tour đã chốt</span><strong>{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></div>
+                    {(booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)>booking.totalPrice&&<div className="flex justify-between gap-2 text-emerald-700"><span>Giảm giá đã duyệt</span><strong>−{formatVND((booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)-booking.totalPrice)}</strong></div>}
                     <div className="flex justify-between gap-2"><span className="text-slate-500">Phụ thu phát sinh</span><strong className="text-amber-700">+{formatVND(booking.surchargeAmount ?? 0)}</strong></div>
                   </div>}
                   <div className="flex justify-between items-center flex-wrap gap-2">

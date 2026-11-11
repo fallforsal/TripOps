@@ -76,7 +76,7 @@ public sealed partial class BookingQuotationService
         Require(input.DateOfBirth.Date<=DateTime.UtcNow.Date && input.DateOfBirth.Year>=1900,"Ngày sinh không hợp lệ.");
         Require(input.TicketPrice>=0 && input.TicketPrice==Money(input.TicketPrice),"Giá vé phải là số nguyên không âm.");
         Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length is >=3 and <=240,"Cần nhập lý do bổ sung hành khách.");
-        Require(!b.Tour!.MaxGuests.HasValue || BookingAlliance.GuestCount(b)+1<=b.Tour.MaxGuests,"Số khách đã vượt sức chứa tối đa của tour.");
+        // Min/max guests apply to the initial sale, not to Agency-managed booking rosters.
         var identity=input.IdentityNumber?.Trim();Require(string.IsNullOrEmpty(identity)||!b.Participants.Any(p=>p.Status!="INACTIVE" && p.IdentityNumber==identity),"CCCD/hộ chiếu đã có trong đoàn.");
         var config=await BookingAlliance.BookedConfiguration(Db,b,ct);var age=BookingAlliance.Age(input.DateOfBirth,b.StartDate);
         var next=b.Participants.Select(p=>p.ParticipantIndex).DefaultIfEmpty(0).Max()+1;
@@ -119,7 +119,7 @@ public sealed partial class BookingQuotationService
             }
             row.Status=active?"ACTIVE":"INACTIVE";row.StatusNote=input.Reason.Trim();row.UpdatedAt=DateTime.UtcNow;
         }
-        Require(BookingAlliance.GuestCount(b)>0 && b.TotalAmount>0,"Đoàn phải còn ít nhất một hành khách; nếu không hãy hủy booking.");
+        Require(b.TotalAmount>=0,"Tổng giá booking không được âm.");
         await RefreshStageRoster(b,changed,"Cập nhật chặng tham gia của "+person.FullName+": "+input.Reason.Trim(),ct);
         await Db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
     }

@@ -24,6 +24,8 @@ public sealed partial class BookingQuotationService
     public async Task<BookingDto> AllianceDetails(Booking b,BookingDto dto,bool financial,CancellationToken ct)
     {
         var config=await BookingAlliance.BookedConfiguration(Db,b,ct);
+        var refunds=await Db.BookingFinancialChanges.AsNoTracking().Include(x=>x.RefundRequest)
+            .Where(x=>x.BookingId==b.Id&&x.RefundRequestId!=null).ToListAsync(ct);
         var agencies=b.BookingAgencies.OrderByDescending(a=>a.IsHost).Select(a=> {
             var fees=b.PaymentRequests.Where(p=>BookingBilling.IsSurcharge(p) && p.Status!=PaymentRequestStatus.Cancelled && (p.BeneficiaryAgencyId??b.Tour!.AgencyId)==a.AgencyId).ToArray();
             decimal Paid(PaymentRequest p)=>b.PaymentTransactions.Where(t=>t.PaymentRequestId==p.Id && t.Status==PaymentTransactionStatus.Success).Sum(t=>t.Amount);
@@ -31,7 +33,12 @@ public sealed partial class BookingQuotationService
                 financial?a.OriginalAmount??0:0,financial?a.FinalAmount:0,financial?a.NetPayout??0:0,a.SettlementStatus?.ToString()??"Unpaid",
                 config?.CoHosts?.FirstOrDefault(h=>h.CompanyId==a.AgencyId)?.AssignedSegments,
                 financial?config?.AgencyPricing?.SingleOrDefault(p=>p.AgencyId==a.AgencyId)?.Tiers:null,
-                financial?fees.Sum(Paid):0,financial?fees.Sum(p=>Math.Max(0,p.Amount-Paid(p))):0);
+                financial?fees.Sum(p=>Math.Min(Paid(p),Math.Max(0,p.Amount-p.CreditAmount))):0,
+                financial?fees.Sum(p=>Math.Max(0,p.Amount-p.CreditAmount-Paid(p))):0,
+                financial?fees.Sum(p=>p.Amount):0,
+                financial?Math.Max(0,(BookingBilling.HasBeenApproved(b)?a.OriginalAmount??0:a.FinalAmount)+fees.Sum(p=>p.Amount)-a.FinalAmount):0,
+                financial?refunds.Where(x=>x.AgencyId==a.AgencyId&&x.RefundRequest!.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved).Sum(x=>x.RefundRequest!.OriginalPaidAmount):0,
+                financial?a.PlatformFee??0:0);
         }).ToArray();
         return dto with {BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note))).ToArray()};
     }

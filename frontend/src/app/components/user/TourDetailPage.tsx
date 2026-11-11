@@ -2407,7 +2407,7 @@ export function TourDetailPage({
                   )}
                 </div>
                 <p className="text-xs text-purple-200 leading-relaxed">
-                  {previewOnly ? "Bạn đang xem nội dung của phiên bản này. Quay lại yêu cầu để chỉnh sửa hoặc chọn phiên bản khách được xem." : "Đây là phiên bản Agency đã chọn cho bạn. Nếu muốn điều chỉnh hoặc dùng lại phiên bản trước, hãy mở yêu cầu và trao đổi với Agency."}
+                  {previewOnly ? "Bạn đang xem lại nội dung của phiên bản này. Các thao tác đặt tour không khả dụng tại đây." : "Đây là phiên bản Agency đã chọn cho bạn. Nếu muốn điều chỉnh hoặc dùng lại phiên bản trước, hãy mở yêu cầu và trao đổi với Agency."}
                 </p>
                 {onOpenRequest && <button type="button" onClick={onOpenRequest}
                   className="rounded border border-purple-200 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
@@ -2614,7 +2614,7 @@ export function TourDetailPage({
                     Xóa vĩnh viễn tour này
                   </Button>
                 </div>
-              ) : previewOnly ? <p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-800">Bản xem trước của Agency</p> : (
+              ) : previewOnly ? <p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-800">Chỉ xem nội dung phương án</p> : (
                 <>
                   <Button
                     onClick={handleBook}

@@ -390,6 +390,11 @@ public sealed partial class BookingService
         refund.Status = RefundStatus.Completed;
         refund.ApprovedRefundAmount = amount;
         refund.CompletedAt = now;
+        if(refund.Reason==BookingBilling.PriceReductionReason) {
+            var paid=PaidAmount(booking);
+            booking.PaymentStatus=paid>=booking.TotalAmount?PaymentStatus.Paid:paid>0?PaymentStatus.PartiallyPaid:PaymentStatus.Unpaid;
+            booking.UpdatedAt=now;return;
+        }
         if (amount > 0) booking.PaymentStatus = PaymentStatus.Refunded;
         CloseOpenRequests(booking);
         booking.Status = BookingStatus.Cancelled;
@@ -410,6 +415,8 @@ public sealed partial class BookingService
     {
         var paid = PaidAmount(booking);
         var amount = Money(requested);
+        if(refund.Reason==BookingBilling.PriceReductionReason && amount!=SuggestedRefund(refund))
+            throw new BookingException(422,"Khoản hoàn giảm giá phải đúng số tiền đã được chủ trì phê duyệt.");
         if (amount > paid)
             throw new BookingException(422, $"Số tiền hoàn không được vượt số khách đã trả ({paid.ToString("N0", Vietnamese)}đ).");
         note = note?.Trim();
@@ -434,6 +441,8 @@ public sealed partial class BookingService
         var refund = booking.RefundRequests.Single(r => r.Id == refundId);
         if (refund.Status is not (RefundStatus.Pending or RefundStatus.Reviewing))
             throw new BookingException(409, "Yêu cầu này đã được xử lý.");
+        if(refund.Reason==BookingBilling.PriceReductionReason)
+            throw new BookingException(409,"Khoản giảm đã được chủ trì duyệt; nền tảng cần hoàn đúng số tiền, không hủy nghĩa vụ hoàn.");
         refund.Status = RefundStatus.Rejected;
         refund.RejectionReason = request.Reason.Trim();
         refund.ReviewedBy = adminId;
@@ -448,6 +457,8 @@ public sealed partial class BookingService
     /// <summary>Chỉ hủy được đơn chưa khởi hành, chưa hủy; không chồng yêu cầu; không hủy khi đang có link payOS còn hạn.</summary>
     private void EnsureCancellable(Booking booking)
     {
+        if(booking.RefundRequests.Any(r=>r.Reason==BookingBilling.PriceReductionReason&&r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved))
+            throw new BookingException(409,"Đang xử lý hoàn tiền giảm giá; hãy hoàn tất khoản này trước khi yêu cầu hủy tour.");
         if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.InProgress)
             throw new BookingException(422, $"Không thể hủy đơn đặt đang ở trạng thái {booking.Status}.");
         if (OpenCancellation(booking) is not null)
@@ -457,7 +468,7 @@ public sealed partial class BookingService
     }
 
     private static RefundRequest? OpenCancellation(Booking booking) =>
-        booking.RefundRequests.FirstOrDefault(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
+        booking.RefundRequests.FirstOrDefault(r => r.Reason!=BookingBilling.PriceReductionReason && r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
 
     /// <summary>Đợt thu đã quá hạn mà chưa trả đủ (dùng khi Agency hủy vì khách không thanh toán).</summary>
     private PaymentRequest? OverdueStage(Booking booking, DateTime now) => booking.PaymentRequests
@@ -504,7 +515,7 @@ public sealed partial class BookingService
 
     private static CancellationRequestDto? Cancellation(Booking booking)
     {
-        var refund = booking.RefundRequests.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
+        var refund = booking.RefundRequests.Where(r=>r.Reason!=BookingBilling.PriceReductionReason).OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
         return refund is null ? null : new CancellationRequestDto(
             refund.Id, refund.Reason, refund.ReasonDetail, refund.Status.ToString(), RequestedByRole(refund),
             FeePercentOf(refund, booking.TotalAmount), refund.RefundFee ?? 0, refund.OriginalPaidAmount, SuggestedRefund(refund),

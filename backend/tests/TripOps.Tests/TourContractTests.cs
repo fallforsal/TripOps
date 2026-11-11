@@ -145,8 +145,9 @@ public sealed partial class TourFlowTests
         Assert.Equal(3, published.Configuration.DurationDays); Assert.Equal(2, published.Configuration.DurationNights);
 
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(3, published.Configuration with { Message = "Rà soát chương trình" }, "Cập nhật sau công bố")));
-        Assert.Equal(4, tour.Revision); Assert.Equal(1,tour.Version); Assert.Equal("draft", tour.Status);
-        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
+        Assert.Equal(4, tour.Revision); Assert.Equal(1,tour.Version); Assert.Equal("completed", tour.Status); Assert.Equal("public",tour.Visibility);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
+        Assert.Equal("Rà soát chương trình",(await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!.Configuration.Message);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.GetAsync($"{Root}/{tour.Id}/versions")).StatusCode);
         await app.Inspect(async db => {
             // Two rows are mutually exclusive options for one two-night stay, not four booked nights.

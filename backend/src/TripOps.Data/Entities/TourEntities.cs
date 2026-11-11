@@ -110,6 +110,8 @@ public virtual Tour Tour { get; set; } = null!;
 }
 
 public class TourDesignRequest : BaseEntity<int> {
+public DateTime? ClosedAt { get; set; }
+public string? CloseReason { get; set; }
 public string? InitialChangesJson { get; set; }
 public int? SourceTourId { get; set; }
 public string? SourceSnapshotJson { get; set; }

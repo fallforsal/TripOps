@@ -33,6 +33,10 @@ public sealed partial class TourFlowTests
         var shared=await Share(lead,request.Id,final);
         var input=DesignBooking(shared) with {Participants=[new("Adult",null,new DateTime(1990,1,1),null,null,null),new("Child",null,new DateTime(2018,1,1),null,null,null)]};
         var created=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",input),HttpStatusCode.Created);
+        await app.Inspect(async db=>{
+            var tour=await db.Tours.SingleAsync(t=>t.Id==created.TourId);
+            tour.MinGuests=2;tour.MaxGuests=2;await db.SaveChangesAsync();
+        });
         var detail=await Read<BookingDto>(await partner.GetAsync($"/api/v1/agency/bookings/{created.Id}"));
         Assert.Equal(2,detail.TotalGuests);Assert.Equal(2,detail.Participants.Count);Assert.Single(detail.BookingAgencies!);
         Assert.True(detail.IsPartnerView);Assert.Equal(900000,detail.TotalAmount);Assert.Equal(0,detail.DepositAmount);
@@ -128,5 +132,16 @@ public sealed partial class TourFlowTests
         Assert.Equal(joined.TotalAmount,(await Read<BookingDto>(await lead.PutAsJsonAsync(baseUrl+$"/participants/{bOnly.ParticipantIndex}/stages",join))).TotalAmount);
         var customerView=await Read<BookingDto>(await customer.GetAsync($"/api/v1/bookings/{created.Id}"));
         Assert.Equal(3,customerView.Participants.Count);Assert.All(customerView.BookingAgencies!,a=>Assert.Null(a.PricingTiers));
+        // Agency additions exceed the tour template's max; removals may go below its min, including zero.
+        var current=await Read<BookingDto>(await lead.GetAsync(baseUrl));
+        Assert.Equal(current.TotalAmount,current.BookingAgencies!.Sum(a=>a.FinalAmount));
+        var allocated=current.BookingAgencies!.Select(a=>(a.AgencyId,a.FinalAmount)).ToArray();
+        var payments=current.PaymentSchedule!.Select(p=>(p.Id,p.Amount,p.BeneficiaryAgencyId)).ToArray();
+        foreach(var person in current.Participants.Select(p=>p.ParticipantIndex!.Value).Distinct().ToArray())
+            current=await Read<BookingDto>(await lead.PutAsJsonAsync(baseUrl+$"/participants/{person}/stages",
+                new ParticipantStagesInput([],"Khách rút khỏi toàn bộ chặng",current.TotalAmount,Guid.NewGuid())));
+        Assert.Equal(0,current.TotalGuests);Assert.All(current.Participants,p=>Assert.Equal("INACTIVE",p.Status));
+        Assert.Equal(allocated,current.BookingAgencies!.Select(a=>(a.AgencyId,a.FinalAmount)).ToArray());
+        Assert.Equal(payments,current.PaymentSchedule!.Select(p=>(p.Id,p.Amount,p.BeneficiaryAgencyId)).ToArray());
     }
 }

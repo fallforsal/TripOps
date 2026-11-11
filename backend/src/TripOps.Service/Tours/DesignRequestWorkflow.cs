@@ -51,7 +51,8 @@ public sealed partial class DesignRequestService
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
         var r = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == id && (r.CustomerId == actor || r.AgencyId == actor), ct)
             ?? throw new TourException(404, "Không tìm thấy yêu cầu.");
-        Require(r.Status is not (CustomRequestStatus.Cancelled or CustomRequestStatus.Rejected), "Yêu cầu đã đóng.");
+        Require(r.Status is not (CustomRequestStatus.Cancelled or CustomRequestStatus.Rejected or CustomRequestStatus.Closed), "Yêu cầu đã đóng.");
+        Require(r.Status != CustomRequestStatus.Booked || await db.Bookings.AnyAsync(b=>b.DesignRequestId==id && b.Status!=BookingStatus.Cancelled && b.Status!=BookingStatus.Rejected,ct), "Yêu cầu đã đóng. Hãy liên hệ Agency để mở lại.");
         var pair = new[] { r.CustomerId!, r.AgencyId! }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         var conversation = await db.ChatConversations.SingleOrDefaultAsync(c => c.UserOneId == pair[0] && c.UserTwoId == pair[1], ct);
         if (conversation == null) {

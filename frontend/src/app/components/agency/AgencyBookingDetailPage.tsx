@@ -5,6 +5,7 @@ import { confirmAction } from "@/app/lib/notificationDialogs";
 import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { PartnerBookingRevenue } from "./PartnerBookingRevenue";
 import { BookingStagePassengers } from "./BookingStagePassengers";
+import { BookingFinancialChangesPanel } from "./BookingFinancialChangesPanel";
 import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
 import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
 import { BookingServicePicker, type BookingReplacement } from "./BookingServicePicker";
@@ -300,17 +301,8 @@ export function AgencyBookingDetailPage({
   const [newReplacementGuideId, setNewReplacementGuideId] = useState<string>("");
 
   // Stage list and Co-host Alliance support
-  const stagesList: TourCoHost[] = useMemo(() => {
-    if (booking.coHosts && booking.coHosts.length > 0) {
-      return booking.coHosts;
-    }
-    if (booking.tour?.coHosts && booking.tour.coHosts.length > 0) {
-      return booking.tour.coHosts;
-    }
-    return [];
-  }, [booking]);
-
-  const isCoHostedTour = Boolean(booking.isCoHosted || stagesList.length > 1);
+  const stagesList: TourCoHost[] = useMemo(() => booking.coHosts ?? booking.tour?.coHosts ?? [], [booking]);
+  const isCoHostedTour = booking.isCoHosted ?? (stagesList.length > 1);
 
   // Agencies List state (representing booking_agencies table)
   // Agencies List state (representing booking_agencies table)
@@ -331,7 +323,7 @@ export function AgencyBookingDetailPage({
         };
       });
     }
-    const cHosts = booking.coHosts || booking.tour?.coHosts || [];
+    const cHosts = booking.coHosts ?? booking.tour?.coHosts ?? [];
     if (cHosts.length > 0) {
       return cHosts.map((ch, idx) => {
         const isLead = ch.role === "lead" || ch.companyId === booking.companyId || idx === 0;
@@ -375,7 +367,7 @@ export function AgencyBookingDetailPage({
       if (companyId === booking.companyId) return true;
       const myAgency = agenciesList.find((a) => a.agencyId === companyId);
       if (myAgency) return Boolean(myAgency.isHost || (myAgency as any).role === "lead");
-      const myCoHost = (booking.coHosts || booking.tour?.coHosts)?.find((c) => c.companyId === companyId);
+      const myCoHost = (booking.coHosts ?? booking.tour?.coHosts)?.find((c) => c.companyId === companyId);
       if (myCoHost) return myCoHost.role === "lead";
       return false;
     }
@@ -383,7 +375,7 @@ export function AgencyBookingDetailPage({
       if (companyName === booking.companyName) return true;
       const myAgencyByName = agenciesList.find((a) => a.agencyName === companyName);
       if (myAgencyByName) return Boolean(myAgencyByName.isHost || (myAgencyByName as any).role === "lead");
-      const myCoHostByName = (booking.coHosts || booking.tour?.coHosts)?.find((c) => c.companyName === companyName);
+      const myCoHostByName = (booking.coHosts ?? booking.tour?.coHosts)?.find((c) => c.companyName === companyName);
       if (myCoHostByName) return myCoHostByName.role === "lead";
     }
     return true;
@@ -882,6 +874,8 @@ export function AgencyBookingDetailPage({
   useEffect(() => { if (serviceEditModalOpen) { setReplacement(null); setAmendmentError(""); } }, [serviceEditModalOpen]);
   const [editNewName, setEditNewName] = useState("");
   const [editPriceDiff, setEditPriceDiff] = useState<string>("0");
+  const financialRequestKey=useRef(crypto.randomUUID());
+  useEffect(()=>{if(serviceEditModalOpen)financialRequestKey.current=crypto.randomUUID();},[serviceEditModalOpen]);
   const [editReason, setEditReason] = useState("");
   const [editAddressOrNote, setEditAddressOrNote] = useState("");
 
@@ -895,18 +889,21 @@ export function AgencyBookingDetailPage({
       if (!replacement?.name.trim() || (!replacement.serviceId && !replacement.supplier?.address?.trim())) {
         setAmendmentError("Vui lòng chọn dịch vụ hoặc nhập đủ tên và địa chỉ ngoài sàn."); return;
       }
-      const diff = hasBeenApproved ? 0 : Number(editPriceDiff);
-      if (!Number.isSafeInteger(diff) || booking.totalPrice + diff <= 0 || editReason.trim().length < 3) {
+      const diff = canChangePrice ? Number(editPriceDiff) : 0;
+      if (!Number.isSafeInteger(diff) || !Number.isSafeInteger(Number(editPriceDiff)) || booking.totalPrice + diff <= 0 || editReason.trim().length < 3) {
         setAmendmentError("Nhập chênh lệch hợp lệ, tổng giá phải lớn hơn 0 và cần có lý do thay đổi."); return;
       }
       setAmendmentSaving(true); setAmendmentError("");
       try {
         const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/service-changes`, {
           method: "POST", body: JSON.stringify({ kind: serviceEditType, itemId: Number(editItemId), ...replacement,
-            reason: editReason.trim(), priceDifference: diff, expectedTotal: booking.totalPrice }),
+            reason: editReason.trim(), priceDifference: diff, expectedTotal: booking.totalPrice,
+            proposedAmount: canChangePrice ? 0 : Number(editPriceDiff), financialRequestId: financialRequestKey.current }),
         });
         onBookingChanged?.(updated);
         window.dispatchEvent(new Event("booking-suppliers-changed"));
+        window.dispatchEvent(new Event("booking-financial-changed"));
+        if(!canChangePrice && Number(editPriceDiff)!==0) toast.success("Đã đổi dịch vụ và gửi đề nghị điều chỉnh cho chủ trì.");
         setServiceEditModalOpen(false);
       } catch (e) { setAmendmentError(e instanceof Error ? e.message : "Không lưu được dịch vụ."); }
       finally { setAmendmentSaving(false); }
@@ -916,7 +913,7 @@ export function AgencyBookingDetailPage({
     if(!companyId || !location || (location.createdByCompanyId || booking.companyId)!==companyId) {
       setAmendmentError("Chỉ Agency tạo địa điểm này được thay đổi."); return;
     }
-    const diff = hasBeenApproved ? 0 : Number(editPriceDiff);
+    const diff = canChangePrice ? Number(editPriceDiff) : 0;
     if (!editNewName.trim() || editNewName.trim().length > 255 || editReason.trim().length < 3 ||
         !Number.isSafeInteger(diff) || booking.totalPrice + diff <= 0) {
       setAmendmentError("Nhập tên điểm, lý do thay đổi và chênh lệch giá hợp lệ."); return;
@@ -1484,6 +1481,7 @@ export function AgencyBookingDetailPage({
         <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : bookingCancellationReason(booking.bookingNotes, booking.cancellationReason)}</p>
       </div>}
 
+      {!isClosedBooking && <BookingFinancialChangesPanel bookingId={booking.id} expectedTotal={booking.totalPrice} isHost={isCurrentCompanyLead} canAmend={canAmend} agencies={agenciesList} onChanged={onBookingChanged} refreshKey={booking.totalPrice} />}
       <BookingStagePassengers booking={booking} rows={passengersList} isHost={isCurrentCompanyLead} viewerAgencyId={companyId} canAmend={canAmend}
         onAdd={handleOpenAddPassenger} onEdit={handleOpenEditPassenger} onChanged={dto=>{
           setPassengersList(fromApiBooking(dto,[booking.tour]).passengers||[]);onBookingChanged?.(dto);
@@ -1541,7 +1539,7 @@ export function AgencyBookingDetailPage({
           {/* ======================================================== */}
           {/* CO-HOSTING ALLIANCE BREAKDOWN CARD */}
           {/* ======================================================== */}
-          {!isClosedBooking && (booking.isCoHosted || booking.tour?.isCoHosted) && (
+          {!isClosedBooking && isCoHostedTour && (
             <div className="bg-gradient-to-br from-amber-50/70 via-purple-50/50 to-blue-50/50 rounded-2xl border-2 border-amber-300 p-6 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -3046,6 +3044,7 @@ export function AgencyBookingDetailPage({
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
                 {hasBeenApproved && <div className="space-y-1 border-b border-slate-200 pb-2 text-xs">
                   <div className="flex justify-between gap-2"><span className="flex items-center gap-1 text-slate-500"><Lock className="h-3 w-3" /> Giá tour đã chốt</span><strong>{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></div>
+                  {(booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)>booking.totalPrice&&<div className="flex justify-between gap-2 text-emerald-700"><span>Giảm giá đã duyệt</span><strong>−{formatVND((booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)-booking.totalPrice)}</strong></div>}
                   <div className="flex justify-between gap-2"><span className="text-slate-500">Phụ thu phát sinh</span><strong className="text-amber-700">+{formatVND(booking.surchargeAmount ?? 0)}</strong></div>
                 </div>}
                 <div className="flex justify-between items-center gap-3">
@@ -4246,12 +4245,12 @@ export function AgencyBookingDetailPage({
               <Input value={editNewName} onChange={e => setEditNewName(e.target.value)} maxLength={255} placeholder="VD: Vườn hoa thành phố Đà Lạt" />
             </label>}
             <div className="grid items-start gap-4 sm:grid-cols-2">
-              {hasBeenApproved ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+              {serviceEditType === "location" && !canChangePrice ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
                 <p className="mb-1 flex items-center gap-1 font-semibold text-slate-800"><Lock className="h-3.5 w-3.5" /> {isCurrentCompanyLead?"Giá tour đã chốt":"Giá trị chặng đã chốt"}: {formatVND(booking.baseTourPrice ?? booking.totalPrice)}</p>
-                Đổi dịch vụ giữ nguyên giá và trạng thái booking. Nếu phát sinh chi phí, dùng nút “Thêm phụ thu” trong phần Tài chính & Thanh toán.
+                Đổi dịch vụ giữ nguyên giá và trạng thái booking. Nếu phát sinh tăng/giảm tiền khách phải trả, gửi đề nghị tại phần “Điều chỉnh & Phụ thu”.
               </div> : <>
               <div className="space-y-2.5 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
-                <label htmlFor="service-price-difference" className="block font-semibold text-amber-950">Chênh lệch giá tour (VNĐ)</label>
+                <label htmlFor="service-price-difference" className="block font-semibold text-amber-950">{canChangePrice ? "Chênh lệch giá tour (VNĐ)" : "Đề nghị tăng / giảm (VNĐ)"}</label>
                 <VietnameseMoneyInput id="service-price-difference" signed value={editPriceDiff} onValueChange={setEditPriceDiff}
                   placeholder="0" className="h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold tabular-nums outline-none focus:ring-2 focus:ring-amber-200" />
                 <div className="flex flex-wrap gap-1.5">
@@ -4259,6 +4258,7 @@ export function AgencyBookingDetailPage({
                     <button type="button" key={option.value} onClick={() => setEditPriceDiff(option.value)} className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100">{option.label}</button>)}
                 </div>
                 <p className="text-[11px] text-amber-800">{Number(editPriceDiff) > 0 ? `Tăng +${formatVND(Number(editPriceDiff))}` : Number(editPriceDiff) < 0 ? `Giảm ${formatVND(Math.abs(Number(editPriceDiff)))}` : "Không thay đổi giá bán tour"}</p>
+                {!canChangePrice && <p className="text-[11px] text-slate-600">Đây là đề nghị chờ chủ trì duyệt, chưa thay đổi tiền khách phải trả hoặc doanh thu phân bổ.</p>}
               </div>
               </>}
               <div className="space-y-2">

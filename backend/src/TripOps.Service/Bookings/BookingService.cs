@@ -184,6 +184,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         };
 
         await quotations.InitializeAllianceRoster(booking,ct);
+        await repository.MarkDesignBooked(booking.DesignRequestId,ct);
         repository.Add(booking);
         await repository.SaveChangesAsync(ct);
 
@@ -474,8 +475,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),
         p.Status ?? "ACTIVE", p.AssignedGuide?.Name, p.Price, p.TierName, p.AgencyId, p.ParticipantIndex, p.IsPrimary, p.Note, p.RoommateNote, p.RestaurantNote, p.CheckedBy, p.CheckedAt, p.AssignedGuideId);
     private static int TotalGuests(Booking booking) => BookingAlliance.GuestCount(booking);
-    private static decimal PaidAmount(Booking booking) => booking.PaymentTransactions
-        .Where(t => t.Status == PaymentTransactionStatus.Success).Sum(t => t.Amount);
+    private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
     private static string? ParticipantNote(string? note, string? phone) => string.IsNullOrWhiteSpace(phone)

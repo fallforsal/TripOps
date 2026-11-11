@@ -1782,6 +1782,7 @@ function Application() {
         ) : currentPage === "tour-detail" && selectedTour ? (
           <TourDetailPage
             tour={selectedTour}
+            previewOnly={selectedTour.designReadOnly}
             services={services}
             currentUser={currentUser}
             onBack={() => {
@@ -1883,6 +1884,7 @@ function Application() {
           </ErrorBoundary>
         ) : currentPage === "my-requests" ? (
           <MyRequestsPage
+            onViewBooking={id=>{window.location.hash=`#/my-bookings/${encodeURIComponent(id)}`;}}
             services={services}
             requests={customTourRequests.filter(
               (r) => !currentUser || r.userId === currentUser.id,

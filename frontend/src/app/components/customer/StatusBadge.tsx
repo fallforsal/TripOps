@@ -126,6 +126,8 @@ export function StatusBadge({
     }
   } else if (type === "custom_request") {
     switch (status) {
+      case "booked": label="Đã đặt tour";bg="bg-emerald-50";text="text-emerald-800";border="border-emerald-200";Icon=CheckCircle2;break;
+      case "closed": label="Đã đóng yêu cầu";bg="bg-slate-100";text="text-slate-700";border="border-slate-200";Icon=XCircle;break;
       case "pending":
         label = "Chờ Agency tiếp nhận";
         bg = "bg-[#FFFBEB]";
