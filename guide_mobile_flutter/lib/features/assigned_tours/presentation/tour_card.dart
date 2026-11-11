@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/tour_thumbnail.dart';
 import '../domain/booking_models.dart';
 import '../domain/tour_catalog.dart';
 
@@ -43,14 +44,7 @@ class TourCard extends StatelessWidget {
             ]),
             const SizedBox(height: 12),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 56, height: 58,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F6F4),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Icon(Icons.landscape_outlined, color: deepTeal, size: 27),
-              ),
+              TourThumbnail(thumbnailUrl: tour.thumbnailUrl),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

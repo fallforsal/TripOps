@@ -19,6 +19,7 @@ import { AdminRefundManagement } from "./AdminRefundManagement";
 import { RefundRequest } from "@/app/types";
 import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 import { AdminTourModeration } from "./AdminTourModeration";
+import { AdminSettlementManagement } from "./AdminSettlementManagement";
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -180,6 +181,9 @@ export function AdminDashboard({
           />
         );
 
+      case "settlements":
+        return <AdminSettlementManagement />;
+
       case "finance":
         return (
           <AdminFinancialManagement
@@ -219,15 +223,6 @@ export function AdminDashboard({
               setActiveSection("partner-approvals");
               window.location.hash = "#/admin/partner-approvals";
             }}
-          />
-        );
-      case "partner-approvals":
-      case "companies":
-      case "approve-providers":
-        return (
-          <PartnerApprovalManagement
-            focusUserId={focusPartnerUserId}
-            onFocusHandled={() => setFocusPartnerUserId(null)}
           />
         );
       default:

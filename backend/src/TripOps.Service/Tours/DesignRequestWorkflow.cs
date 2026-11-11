@@ -39,6 +39,14 @@ public sealed partial class DesignRequestService
             ?? throw new TourException(404, "Không tìm thấy yêu cầu.");
         await db.ChatMessages.Where(m => m.DesignRequestId == id && m.SenderId != actor && m.IsRead != true)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsRead, true).SetProperty(m => m.ReadAt, DateTime.UtcNow), ct);
+        var conversationIds = await db.ChatMessages.Where(m => m.DesignRequestId == id)
+            .Select(m => m.ConversationId).Distinct().ToListAsync(ct);
+        foreach (var conversationId in conversationIds)
+        {
+            var conversation = await db.ChatConversations.AsNoTracking().SingleAsync(c => c.Id == conversationId, ct);
+            // Đọc một yêu cầu không đồng nghĩa đã đọc các yêu cầu khác trong cùng cuộc hội thoại.
+            await chatEvents.Updated([conversation.UserOneId, conversation.UserTwoId], conversationId);
+        }
         var rows = await db.ChatMessages.AsNoTracking().Where(m => m.DesignRequestId == id && m.IsDeleted != true)
             .OrderByDescending(m => m.Id).Take(200).Select(m => new { m.Id, m.SenderId, m.Content, m.CreatedAt, m.Sender.Name }).ToListAsync(ct);
         return rows.OrderBy(m => m.Id).Select(m => new RequestMessage(m.SenderId, m.Content, m.CreatedAt ?? DateTime.UnixEpoch, m.Name, m.SenderId == actor)).ToArray();
@@ -62,10 +70,13 @@ public sealed partial class DesignRequestService
         var now = DateTime.UtcNow;
         conversation.LastMessageContent = input.Message.Trim(); conversation.LastMessageSenderId = actor;
         conversation.LastMessageAt = now; conversation.Status = "active";
-        db.ChatMessages.Add(new ChatMessage { Conversation = conversation, SenderId = actor,
-            DesignRequestId = id, Content = input.Message.Trim(), CreatedAt = now });
+        var message = new ChatMessage { Conversation = conversation, SenderId = actor,
+            DesignRequestId = id, Content = input.Message.Trim(), CreatedAt = now };
+        db.ChatMessages.Add(message);
         db.WorkflowNotifications.Add(new WorkflowNotification { UserId = actor == r.CustomerId ? r.AgencyId! : r.CustomerId!, RequestId = id, Message = "Có trao đổi mới trong yêu cầu thiết kế tour." });
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await chatEvents.Message([conversation.UserOneId, conversation.UserTwoId],
+            new TripOps.Service.Chat.MessageDto(message.Id, conversation.Id, actor, message.Content, message.CreatedAt, null, null));
     }
     public async Task<JsonElement?> InitialChanges(string actor, int id, CancellationToken ct)
     {

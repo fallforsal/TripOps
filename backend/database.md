@@ -56,6 +56,12 @@ Table business_profiles {
   approved_at timestamp
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+
+  // TÀI KHOẢN NHẬN TIỀN QUYẾT TOÁN (Agency tự nhập)
+  bank_name varchar(100) [note: 'Tên ngân hàng, phải có trong danh sách chi hộ payOS (VietnamBanks)']
+  bank_account_number varchar(50)
+  bank_account_holder varchar(150) [note: 'Tên chủ tài khoản (in hoa không dấu)']
+  bank_account_updated_at timestamp [note: 'Lần đổi tài khoản gần nhất; vừa đổi trong 24 giờ thì không chuyển tự động']
 }
 
 // ============================================================================
@@ -723,9 +729,21 @@ Table booking_agencies {
   // 2. THÔNG TIN GIẢI NGÂN CỦA NỀN TẢNG (DISBURSEMENT / PAYOUT)
   platform_fee decimal(12, 2) [default: 0, note: 'Phí hoa hồng nền tảng giữ lại (VD: 10%)']
   net_payout decimal(12, 2) [default: 0, note: 'Tiền thực tế công ty nhận được (final_amount - platform_fee)']
-  settlement_status varchar(30) [default: 'UNPAID', note: 'UNPAID (Chưa giải ngân), READY (Đã hoàn thành tour, chờ chuyển), PAID (Đã giải ngân)']
+  settlement_status varchar(30) [default: 'Unpaid', note: 'Unpaid (tour chưa xong), Ready (HDV đã bấm hoàn thành, chờ chuyển), Processing (đang chi hộ payOS), Paid (đã chuyển), Failed (chi hộ lỗi, chờ Admin), OnHold (Admin tạm giữ)']
   payout_transferred_at timestamp [note: 'Thời điểm nền tảng chuyển khoản thực tế']
   bank_reference_code varchar(100) [note: 'Mã ủy nhiệm chi / GD ngân hàng']
+  tour_completed_at timestamp [note: 'Lúc hướng dẫn viên bấm hoàn thành tour; mốc tính ngày chuyển tự động']
+  auto_payout_at timestamp [note: 'Từ thời điểm này được chuyển tự động (mặc định hoàn thành + 2 ngày). NULL = chỉ Admin chuyển tay']
+  fee_percent decimal(5, 2) [note: 'Tỷ lệ phí sàn (%) chốt lúc tour hoàn thành, VD 10']
+  payout_method varchar(20) [note: 'PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay)']
+  payout_reference varchar(60) [note: 'Mã lệnh chi SETTLE-{id}-{lần}; unique khi khác NULL; là khóa chống chi trùng gửi payOS']
+  payout_gateway_id varchar(100) [note: 'Mã lệnh chi phía payOS']
+  payout_attempts int [not null, default: 0, note: 'Số lần đã tạo lệnh chi hộ']
+  payout_note varchar(500) [note: 'Lỗi chi hộ / lý do tạm giữ / ghi chú Admin gần nhất']
+  payout_bank_name varchar(100) [note: 'Bản chụp tài khoản nhận lúc chuyển']
+  payout_account_number varchar(50)
+  payout_account_holder varchar(150)
+  settled_by varchar(36) [note: 'users.id của Admin thực hiện; NULL khi hệ thống tự chuyển (liên kết logic, chưa có khóa ngoại)']
 
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
@@ -804,6 +822,8 @@ Table complaints {
     // ============================================================================
 
     Table chat_conversations {
+      pair_low varchar(36) [note: 'Persisted computed canonical user id (min)']
+      pair_high varchar(36) [note: 'Persisted computed canonical user id (max)']
       id int [pk, increment]
       user_one_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ nhất']
       user_two_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ hai']
@@ -825,6 +845,7 @@ Table complaints {
 
     Table chat_messages {
       design_request_id int
+      client_message_id uniqueidentifier [note: 'Idempotency key, unique with conversation_id and sender_id when non-null']
       id int [pk, increment]
       conversation_id int [not null, note: 'FK tới chat_conversations.id']
       sender_id varchar(36) [not null, note: 'FK tới users.id - Người gửi']
@@ -1084,6 +1105,8 @@ Ref: complaints.admin_id > users.id
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id
 Ref: booking_agencies.agency_id > users.id
+// Liên kết logic (chưa có khóa ngoại): Admin thực hiện quyết toán.
+Ref: booking_agencies.settled_by > users.id
 
 // Các liên kết khóa ngoại
 Ref: payment_requests.booking_id > bookings.id
@@ -1238,3 +1261,7 @@ Table booking_financial_changes {
   }
 }
 Ref: booking_financial_changes.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)
+// Chỉ là liên kết logic để dbdiagram vẽ đường nối: database hiện CHƯA có khóa ngoại cho 3 cột này.
+Ref: workflow_notifications.UserId > users.id
+Ref: workflow_notifications.BookingId > bookings.id
+Ref: workflow_notifications.RequestId > tour_design_requests.id

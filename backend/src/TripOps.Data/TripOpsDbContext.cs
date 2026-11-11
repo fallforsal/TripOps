@@ -174,6 +174,21 @@ public class TripOpsDbContext : DbContext
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
         });
         modelBuilder.Entity<Tour>().Property(t => t.Id).UseIdentityColumn();
+        modelBuilder.Entity<ChatConversation>(e => {
+            // Computed canonical pair also protects reversed requests and direct database writes.
+            e.Property<string>("pair_low").HasMaxLength(36).HasComputedColumnSql("CASE WHEN user_one_id < user_two_id THEN user_one_id ELSE user_two_id END", stored: true);
+            e.Property<string>("pair_high").HasMaxLength(36).HasComputedColumnSql("CASE WHEN user_one_id < user_two_id THEN user_two_id ELSE user_one_id END", stored: true);
+            e.HasIndex("pair_low", "pair_high").IsUnique().HasFilter(null);
+            e.ToTable("chat_conversations", t => t.HasCheckConstraint("CK_chat_distinct_users", "user_one_id <> user_two_id"));
+            e.HasIndex(x => new { x.UserOneId, x.LastMessageAt });
+            e.HasIndex(x => new { x.UserTwoId, x.LastMessageAt });
+        });
+        modelBuilder.Entity<ChatMessage>(e => {
+            e.Property(x => x.ClientMessageId).HasColumnName("client_message_id");
+            e.HasIndex(x => new { x.ConversationId, x.SenderId, x.ClientMessageId }).IsUnique().HasFilter("[client_message_id] IS NOT NULL");
+            e.HasIndex(x => new { x.ConversationId, x.Id });
+            e.HasIndex(x => new { x.ConversationId, x.SenderId, x.IsRead });
+        });
         DatabaseDesignDefaults.Configure(modelBuilder, Database.IsSqlServer());
         if (!Database.IsSqlServer())
             foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetProperties()))

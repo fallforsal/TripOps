@@ -27,6 +27,7 @@ import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
+import { AgencyPayoutPanel } from "@/app/components/agency/AgencyPayoutPanel";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -252,7 +253,12 @@ export function AgencyDashboard({
         );
       
       case "business-account":
-  return <BusinessAccountContainer />;
+        return (
+          <>
+            <BusinessAccountContainer />
+            <AgencyPayoutPanel />
+          </>
+        );
 
       case "co-hosting":
         return <AgencyDesignCoHosting requests={companyCustomRequests} company={company} onChanged={async () => { await onUpdateCustomRequest?.("", {}); }}/>;

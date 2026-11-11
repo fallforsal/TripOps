@@ -99,10 +99,10 @@ public sealed class OpenApiTests
         foreach (var tag in new[] { "Authentication", "Partner Management", "Service Management", "Tour Management", "Tour Moderation", "Tour Publishing", "Health" }) Assert.Contains(tag, tags);
         Assert.DoesNotContain("Tour Approval", tags);
         foreach (var item in operations) {
-            Assert.False(string.IsNullOrWhiteSpace(item.Operation.GetProperty("summary").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(item.Operation.GetProperty("summary").GetString()), $"Missing summary for {item.Method} {item.Path}");
             var responses = item.Operation.GetProperty("responses");
             foreach (var response in responses.EnumerateObject().Where(r => r.Name.StartsWith('2') && r.Name != "204" && !item.Path.StartsWith("/api/v1/files/")))
-                Assert.True(response.Value.GetProperty("content").GetProperty("application/json").TryGetProperty("schema", out _), $"Missing response schema for {item.Method} {item.Path}");
+                Assert.True(response.Value.TryGetProperty("content", out var content) && content.TryGetProperty("application/json", out var jsonContent) && jsonContent.TryGetProperty("schema", out _), $"Missing response schema for {item.Method} {item.Path}");
         }
         var paths = root.GetProperty("paths");
         Assert.True(paths.GetProperty("/api/v1/agency/tours").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));

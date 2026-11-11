@@ -60,6 +60,10 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.ApprovedAt).HasColumnName("approved_at").HasColumnType("datetime2");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
+            entity.Property(e => e.BankName).HasColumnName("bank_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasColumnName("bank_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.BankAccountHolder).HasColumnName("bank_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountUpdatedAt).HasColumnName("bank_account_updated_at").HasColumnType("datetime2");
         });
         modelBuilder.Entity<Service>(entity =>
         {
@@ -531,6 +535,19 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.SettlementStatus).HasConversion<string>();
             entity.Property(e => e.PayoutTransferredAt).HasColumnName("payout_transferred_at").HasColumnType("datetime2");
             entity.Property(e => e.BankReferenceCode).HasColumnName("bank_reference_code").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.TourCompletedAt).HasColumnName("tour_completed_at").HasColumnType("datetime2");
+            entity.Property(e => e.AutoPayoutAt).HasColumnName("auto_payout_at").HasColumnType("datetime2");
+            entity.Property(e => e.FeePercent).HasColumnName("fee_percent").HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.PayoutMethod).HasColumnName("payout_method").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.PayoutReference).HasColumnName("payout_reference").HasColumnType("nvarchar(60)").HasMaxLength(60);
+            entity.Property(e => e.PayoutGatewayId).HasColumnName("payout_gateway_id").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.PayoutAttempts).HasColumnName("payout_attempts").HasColumnType("int").HasDefaultValue(0).IsRequired();
+            entity.Property(e => e.PayoutNote).HasColumnName("payout_note").HasColumnType("nvarchar(500)").HasMaxLength(500);
+            entity.Property(e => e.PayoutBankName).HasColumnName("payout_bank_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.PayoutAccountNumber).HasColumnName("payout_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.PayoutAccountHolder).HasColumnName("payout_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.SettledBy).HasColumnName("settled_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
+            entity.HasIndex(e => e.PayoutReference).IsUnique().HasFilter("[payout_reference] IS NOT NULL");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.BookingId, e.AgencyId }).IsUnique();

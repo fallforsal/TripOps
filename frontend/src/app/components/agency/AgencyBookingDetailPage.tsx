@@ -3143,7 +3143,7 @@ export function AgencyBookingDetailPage({
                     <CheckCircle className="w-4 h-4 text-emerald-600" />
                     Admin sàn đã quyết toán tiền tour:
                   </p>
-                  <p>Số tiền đã nhận: <strong className="text-emerald-700 text-xs">{formatVND(booking.settledAmount ?? 0)}</strong> {booking.platformFeeRate ? `(Đã khấu trừ ${booking.platformFeeRate}% phí sàn ${formatVND(booking.platformFeeAmount ?? 0)})` : "(Miễn phí sàn 0% - Giải ngân 100%)"}</p>
+                  <p>Số tiền đã nhận: <strong className="text-emerald-700 text-xs">{formatVND(booking.settledAmount ?? 0)}</strong> {booking.platformFeeRate ? `(Đã khấu trừ ${booking.platformFeeRate}% phí sàn ${formatVND(booking.platformFeeAmount ?? 0)})` : "(Đã khấu trừ 10% phí sàn)"}</p>
                   {booking.settledAt && <p className="text-gray-500">Ngày quyết toán: {booking.settledAt}</p>}
                 </div>
               ) : booking.status === "completed" ? (

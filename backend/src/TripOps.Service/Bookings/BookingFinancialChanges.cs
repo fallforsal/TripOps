@@ -40,7 +40,7 @@ public sealed partial class BookingQuotationService
         Require(actor==b.Tour!.AgencyId||beneficiary==actor,"Đối tác chỉ được đề nghị cho phần tiền của mình.");
         var allocation=b.BookingAgencies.SingleOrDefault(a=>a.AgencyId==beneficiary);
         Require(allocation!=null,"Agency không thuộc booking.");
-        Require(allocation!.SettlementStatus!=SettlementStatus.Paid,"Phần tiền đã được quyết toán.");
+        Require(allocation!.SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền đã được quyết toán.");
         Require(input.Amount!=0&&input.Amount==Money(input.Amount)&&input.Amount is >=-9999999999m and <=9999999999m,"Số tiền điều chỉnh phải là số nguyên khác 0.");
         Require(input.Reason.Trim().Length is >=3 and <=240,"Cần nhập lý do điều chỉnh.");
         Db.BookingFinancialChanges.Add(new BookingFinancialChange{BookingId=id,AgencyId=beneficiary,RequestedBy=actor,
@@ -61,7 +61,7 @@ public sealed partial class BookingQuotationService
         Require(input.Decision!="reject"||input.Note?.Trim().Length>=3,"Cần nhập lý do từ chối.");
         var allocation=b.BookingAgencies.Single(a=>a.AgencyId==change.AgencyId);
         if(input.Decision=="approve") {
-            Require(allocation.SettlementStatus!=SettlementStatus.Paid,"Phần tiền của Agency đã được quyết toán.");
+            Require(allocation.SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền của Agency đã được quyết toán.");
             Require(!b.PaymentTransactions.Any(t=>t.PaymentMethod=="PAYOS"&&t.Status==PaymentTransactionStatus.Pending&&t.ExpiresAt>DateTime.UtcNow),
                 "Đang có link thanh toán còn hiệu lực. Hãy kiểm tra giao dịch hoặc chờ link hết hạn trước khi duyệt điều chỉnh.");
             var approved=BookingBilling.HasBeenApproved(b);

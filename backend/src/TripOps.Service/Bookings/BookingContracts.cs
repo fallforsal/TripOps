@@ -88,7 +88,8 @@ public sealed record BookingDto(
     decimal? OriginalTotalPrice = null,
     IReadOnlyList<BookingPriceAdjustmentDto>? PriceAdjustments = null,
     decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
-    IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null);
+    IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null,
+    bool CanRecordAttendance = false, DateTime? AttendanceDate = null);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note);
 
@@ -240,7 +241,8 @@ public sealed record BookingListItem(
     decimal PaidAmount,
     string Status,
     string PaymentStatus,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? ThumbnailUrl = null);
 
 public sealed record ParticipantDto(
     int Id,

@@ -19,6 +19,8 @@ public sealed class BookingFinancialChangesController(BookingQuotationService fi
         await finance.ReviewFinancialChange(Actor,id,changeId,input,ct);return await bookings.Get(Actor,id,ct);
     }
     [HttpPut("refunds/{refundId:int}/account"),Authorize(Roles="user")]
+    [EndpointSummary("Set the customer bank account for an approved price-reduction refund")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Account(int id,int refundId,RefundAccountRequest input,CancellationToken ct) {
         await bookings.UpdatePriceRefundAccount(Actor,id,refundId,input,ct);return NoContent();
     }

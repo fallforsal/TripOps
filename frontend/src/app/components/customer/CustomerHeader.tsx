@@ -1,3 +1,4 @@
+import { ChatButton } from "../chat/ChatPanel";
 import { useState } from "react";
 import {
   CalendarDays,
@@ -150,6 +151,7 @@ export function CustomerHeader({
           </nav>
         )}
         <div className="trip-header-actions">
+          <ChatButton />
           {onOpenAIAdvisor && (
             <button
               className="trip-ai-trigger"

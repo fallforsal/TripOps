@@ -157,7 +157,7 @@ public sealed partial class BookingQuotationService
         var beneficiary=input.BeneficiaryAgencyId??(b.BookingAgencies.Count<=1?actor:null);
         Require(beneficiary!=null && b.BookingAgencies.Any(a=>a.AgencyId==beneficiary),"Hãy chọn Agency trong booking nhận khoản phụ thu.");
         var allocation=b.BookingAgencies.Single(a=>a.AgencyId==beneficiary);
-        Require(allocation.SettlementStatus!=SettlementStatus.Paid,"Phần tiền của Agency đã được quyết toán; không thể thêm phụ thu.");
+        Require(allocation.SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền của Agency đã được quyết toán; không thể thêm phụ thu.");
         var now = DateTime.UtcNow;
         var lastBaseDeadline = b.PaymentRequests.Where(p => !BookingBilling.IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled)
             .Select(p => p.DueAt ?? now).DefaultIfEmpty(now).Max();
@@ -257,7 +257,7 @@ public sealed partial class BookingQuotationService
             Require(input.ProposedAmount==Money(input.ProposedAmount),"Đề nghị điều chỉnh phải là số nguyên VNĐ.");
             Require(!await Db.BookingFinancialChanges.AnyAsync(x=>x.BookingId==id&&x.RequestKey==input.FinancialRequestId,ct),"Đề nghị đã được gửi; hãy tải lại trang.");
             var owner=hotel?.AgencyId??meal!.AgencyId??actor;
-            Require(b.BookingAgencies.Single(a=>a.AgencyId==owner).SettlementStatus!=SettlementStatus.Paid,"Phần tiền đã được quyết toán.");
+            Require(b.BookingAgencies.Single(a=>a.AgencyId==owner).SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền đã được quyết toán.");
             Db.BookingFinancialChanges.Add(new BookingFinancialChange{BookingId=id,AgencyId=owner,RequestedBy=actor,
                 RequestKey=input.FinancialRequestId!.Value,Amount=input.ProposedAmount,Reason=reason[..Math.Min(240,reason.Length)]});
             Db.WorkflowNotifications.Add(new WorkflowNotification{UserId=b.Tour!.AgencyId,BookingId=id,

@@ -6,7 +6,7 @@ on:
       - '.github/workflows/guide-flutter.yml'
   push:
     branches:
-      - feat/guide-flutter-clean-20261108
+      - hiep
     paths:
       - 'guide_mobile_flutter/**'
       - '.github/workflows/guide-flutter.yml'

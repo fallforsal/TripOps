@@ -804,6 +804,8 @@ Table complaints {
     // ============================================================================
 
     Table chat_conversations {
+      pair_low varchar(36) [note: 'Persisted computed canonical user id (min)']
+      pair_high varchar(36) [note: 'Persisted computed canonical user id (max)']
       id int [pk, increment]
       user_one_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ nhất']
       user_two_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ hai']
@@ -825,6 +827,7 @@ Table complaints {
 
     Table chat_messages {
       design_request_id int
+      client_message_id uniqueidentifier [note: 'Idempotency key, unique with conversation_id and sender_id when non-null']
       id int [pk, increment]
       conversation_id int [not null, note: 'FK tới chat_conversations.id']
       sender_id varchar(36) [not null, note: 'FK tới users.id - Người gửi']

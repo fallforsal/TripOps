@@ -4,6 +4,7 @@ using TripOps.Data.Enums;
 using TripOps.Data.Repositories;
 using TripOps.Service.Accounts;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
 using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
@@ -214,7 +215,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
             return BookingAlliance.PartnerView(booking,dto,actorId);
         if(isGuide && !isAgency && !isAdmin) {
             var ownAgency=booking.AssignedGuides.Single(a=>a.GuideId==actorId).AgencyId;
-            dto=dto with {Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency)};
+            dto=dto with {Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency),
+                CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
+                AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
             dto=dto with {Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
                 var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
@@ -383,13 +386,38 @@ public sealed partial class BookingService(BookingRepository repository, Account
     public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
         (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
 
+    // Tour media is stored as JSON arrays. Prefer the explicit thumbnail, then
+    // use the first valid gallery image (older tours may lack ThumbnailUrls).
+    // Uploaded images use public /api/v1/files/tours/... paths; others are HTTPS.
+    private static string? TourThumbnail(Tour? tour)
+    {
+        if (tour is null) return null;
+        foreach (var json in new[] { tour.ThumbnailUrls, tour.Images })
+        {
+            if (string.IsNullOrWhiteSpace(json)) continue;
+            try
+            {
+                foreach (var url in JsonSerializer.Deserialize<string[]>(json) ?? [])
+                {
+                    var candidate = url?.Trim();
+                    if (string.IsNullOrWhiteSpace(candidate) || candidate.Length > 2048) continue;
+                    if (candidate.StartsWith("/api/v1/files/tours/", StringComparison.Ordinal) ||
+                        Uri.TryCreate(candidate, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                        return candidate;
+                }
+            }
+            catch (JsonException) { /* Ignore malformed legacy media and try Images. */ }
+        }
+        return null;
+    }
+
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
             b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
             b.StartDate, BookingAlliance.GuestCount(b,b.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch)).ToList();
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch, TourThumbnail(b.Tour))).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -401,10 +429,13 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!booking.AssignedGuides.Any(ag => ag.GuideId == guideId))
             throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền điểm danh.");
 
+        var guideAgency = booking.AssignedGuides.Single(g => g.GuideId == guideId).AgencyId;
         var participant = booking.Participants.FirstOrDefault(p => p.Id == request.ParticipantId)
             ?? throw new BookingException(404, "Không tìm thấy hành khách trong danh sách đoàn.");
 
         if(participant.AgencyId!=booking.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId || participant.Status=="INACTIVE")throw new BookingException(403,"HDV chỉ điểm danh hành khách đang tham gia chặng của công ty mình.");
+        if (!GuideBookingRules.CanRecordAttendance(booking, guideAgency, UtcNow))
+            throw new BookingException(409, "Chỉ được điểm danh vào ngày khởi hành hoặc ngày bắt đầu chặng được phân công.");
         if (Enum.TryParse<AttendanceStatus>(request.Status, true, out var status))
             participant.AttendanceStatus = status;
         else
@@ -466,7 +497,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
-                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b));
+                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow));
 
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;

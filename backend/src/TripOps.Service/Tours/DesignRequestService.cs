@@ -8,7 +8,8 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage)
+public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage,
+    TripOps.Service.Chat.IChatEvents chatEvents)
 {
     private static void Require(bool ok, string message) { if (!ok) throw new TourException(422, message); }
     private async Task Customer(string actor, CancellationToken ct)

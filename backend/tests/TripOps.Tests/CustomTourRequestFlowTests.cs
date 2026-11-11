@@ -124,4 +124,25 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NotFound,(await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan",new {tourId=1,version=1})).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/proposals")).StatusCode);
     }
+    [Fact]
+    public async Task Rejected_platform_hotel_can_be_replaced_with_agency_supplier_before_approval()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
+        using var provider = await app.Login("provider");
+        var config = Complete() with { Timelines = [new TimelineInput(1, "Arrival",
+            Activities: [new ActivityInput("Visit", EstimatedTime: TimeSpan.FromHours(9))],
+            Accommodations: [new AccommodationInput("Platform hotel", "Da Lat", ServiceId: 102)]), new TimelineInput(2, "Departure")] };
+        var (_, plan) = await SharedDesign(customer, agency, config);
+        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", DesignBooking(plan)), HttpStatusCode.Created);
+        var providerRequest = Assert.Single(await Read<ProviderRequestView[]>(await provider.GetAsync("/api/v1/provider/booking-requests")));
+        await Read<ProviderRequestView>(await provider.PostAsJsonAsync($"/api/v1/provider/booking-requests/{providerRequest.Id}/respond",
+            new ProviderReply("reject", null, "Hết phòng")));
+        var changed = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/service-changes",
+            new BookingServiceChange("hotel", booking.SnapshotHotels!.Single().Id, "Đổi sang khách sạn riêng đã xác nhận", booking.TotalAmount,
+                Name: "Agency hotel", Supplier: new SupplierSnapshotInput("Private address", ContactPhone: "0900000000"))));
+        Assert.Equal("Agency hotel", changed.SnapshotHotels!.Single().Name);
+        Assert.DoesNotContain(await Read<ProviderRequestView[]>(await provider.GetAsync("/api/v1/provider/booking-requests")), r => r.Status == "Pending");
+        await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
+    }
 }

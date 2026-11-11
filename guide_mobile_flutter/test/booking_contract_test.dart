@@ -34,6 +34,7 @@ void main() {
       'endDate': '2026-11-12T00:00:00',
       'totalGuests': 2,
       'agencyName': 'Trip Agency',
+      'canRecordAttendance': true,
       'participants': [
         {'id': 8, 'fullName': 'Nguyễn An', 'attendanceStatus': 'CheckedIn',
          'status': 'ACTIVE', 'phoneNumber': '0900000001'},
@@ -54,6 +55,7 @@ void main() {
     });
 
     expect(detail.endDate, DateTime(2026, 11, 12));
+    expect(detail.canRecordAttendance, isTrue);
     expect(detail.passengers.single.status, 'CheckedIn');
     expect(detail.days.single.stops.single.id, 25);
     expect(detail.incidents.single.status, 'Reported');
@@ -65,4 +67,31 @@ void main() {
     expect(parseCalendarDate('2026-11-08T00:00:00+07:00'),
       DateTime(2026, 11, 8));
   });
+  test('missing attendance permission defaults to disabled for older backends', () {
+    final detail = BookingDetail.fromJson({
+      'id': 18,
+      'bookingCode': 'BK-18',
+      'tourName': 'Hành trình',
+      'status': 'Confirmed',
+      'startDate': '2026-11-10T00:00:00',
+      'endDate': '2026-11-11T00:00:00',
+      'totalGuests': 1,
+    });
+    expect(detail.canRecordAttendance, isFalse);
+    expect(detail.attendanceDate, isNull);
+  });
+
+  test('assigned stage attendance date is independent of the tour departure date', () {
+    final detail = BookingDetail.fromJson({
+      'id': 18,
+      'bookingCode': 'BK-18',
+      'startDate': '2026-11-10T00:00:00',
+      'endDate': '2026-11-14T00:00:00',
+      'canRecordAttendance': true,
+      'attendanceDate': '2026-11-12T00:00:00',
+    });
+    expect(detail.canRecordAttendance, isTrue);
+    expect(detail.attendanceDate, DateTime(2026, 11, 12));
+  });
+
 }
