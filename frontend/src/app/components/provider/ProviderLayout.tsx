@@ -1,3 +1,4 @@
+import { ChatButton } from "../chat/ChatPanel";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -183,7 +184,8 @@ export function ProviderLayout({
         </div>
       )}
 
-      <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
+      <ChatButton />
+            <SidebarLogoutButton onLogout={onLogout} collapsed={collapsed} />
     </div>
   );
 

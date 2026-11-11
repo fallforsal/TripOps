@@ -221,15 +221,6 @@ export function AdminDashboard({
             }}
           />
         );
-      case "partner-approvals":
-      case "companies":
-      case "approve-providers":
-        return (
-          <PartnerApprovalManagement
-            focusUserId={focusPartnerUserId}
-            onFocusHandled={() => setFocusPartnerUserId(null)}
-          />
-        );
       default:
         return null;
     }
