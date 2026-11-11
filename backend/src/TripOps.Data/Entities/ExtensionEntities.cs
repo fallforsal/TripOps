@@ -18,6 +18,7 @@ public virtual ICollection<ChatMessage> Messages { get; set; } = new List<ChatMe
 public class ChatMessage : BaseEntity<int> {
 public Guid? ClientMessageId { get; set; }
 public int ConversationId { get; set; }
+public int? DesignRequestId { get; set; }
 public string SenderId { get; set; } = string.Empty;
 public string Content { get; set; } = string.Empty;
 public string ContentType { get; set; } = "text";

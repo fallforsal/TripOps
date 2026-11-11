@@ -1,0 +1,40 @@
+/* Notification colors are shared by every role and portalled dialog. */
+:root {
+  --notice-info: #075985; --notice-info-bg: #f0f9ff; --notice-info-border: #bae6fd;
+  --notice-success: #047857; --notice-success-bg: #ecfdf5; --notice-success-border: #a7f3d0;
+  --notice-warning: #92400e; --notice-warning-bg: #fffbeb; --notice-warning-border: #fde68a;
+  --notice-error: #b91c1c; --notice-error-bg: #fef2f2; --notice-error-border: #fecaca;
+}
+.tripops-toaster { font-family: var(--font-sans); }
+.tripops-toaster [data-sonner-toast] {
+  --normal-bg: #fff; --normal-text: #0f172a; --normal-border: #cbd5e1;
+  --success-bg: var(--notice-success-bg); --success-text: var(--notice-success); --success-border: var(--notice-success-border);
+  --error-bg: var(--notice-error-bg); --error-text: var(--notice-error); --error-border: var(--notice-error-border);
+  --warning-bg: var(--notice-warning-bg); --warning-text: var(--notice-warning); --warning-border: var(--notice-warning-border);
+  --info-bg: var(--notice-info-bg); --info-text: var(--notice-info); --info-border: var(--notice-info-border);
+  border-radius: 12px; padding: 16px; gap: 12px;
+  box-shadow: 0 6px 22px rgb(15 23 42 / 10%);
+  font-family: var(--font-sans); overflow-wrap: anywhere;
+}
+.tripops-toaster .tripops-toast-title { font-size: 14px; line-height: 1.5; font-weight: 600; }
+.tripops-toaster .tripops-toast-description { font-size: 13px; line-height: 1.5; color: inherit; opacity: .85; }
+.tripops-toaster [data-close-button] { background: #fff; border-color: #cbd5e1; color: #475569; }
+[data-slot="alert-dialog-content"] { --dialog-accent: var(--notice-warning); --dialog-tint: var(--notice-warning-bg); --dialog-border: var(--notice-warning-border); }
+[data-slot="alert-dialog-content"][data-tone="info"] { --dialog-accent: var(--notice-info); --dialog-tint: var(--notice-info-bg); --dialog-border: var(--notice-info-border); }
+[data-slot="alert-dialog-content"][data-tone="success"] { --dialog-accent: var(--notice-success); --dialog-tint: var(--notice-success-bg); --dialog-border: var(--notice-success-border); }
+[data-slot="alert-dialog-content"][data-tone="error"] { --dialog-accent: var(--notice-error); --dialog-tint: var(--notice-error-bg); --dialog-border: var(--notice-error-border); }
+[data-slot="alert-dialog-content"] {
+  background: #fff; color: #0f172a; border: 1px solid #e2e8f0; border-top: 4px solid var(--dialog-accent);
+  border-radius: 16px; box-shadow: 0 20px 60px rgb(15 23 42 / 20%); font-family: var(--font-sans);
+  max-height: 85dvh; overflow-y: auto;
+}
+[data-slot="alert-dialog-title"] { color: var(--dialog-accent); font-size: 18px; line-height: 1.5; font-weight: 600; }
+[data-slot="alert-dialog-description"] { color: #475569; font-size: 14px; line-height: 1.65; }
+.notification-dialog-icon { display: inline-flex; padding: 10px; border-radius: 12px; color: var(--dialog-accent); background: var(--dialog-tint); }
+[data-slot="alert-dialog-action"] { background: var(--dialog-accent); color: #fff; border: 1px solid var(--dialog-accent); font-weight: 600; }
+[data-slot="alert-dialog-action"]:hover { background: var(--dialog-accent); filter: brightness(.92); }
+[data-slot="alert-dialog-cancel"] { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+[data-slot="alert-dialog-cancel"]:hover { background: #f8fafc; }
+@media (prefers-reduced-motion: reduce) {
+  .tripops-toaster *, [data-slot="alert-dialog-content"], [data-slot="alert-dialog-overlay"] { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

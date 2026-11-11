@@ -1,4 +1,8 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { ServiceOptionCard } from "@/app/components/service/ServiceOptionCard";
+import { serviceThumbnail } from "@/app/lib/servicePresentation";
 import { useState, useEffect } from "react";
+import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
 import {
   Tour,
   Service,
@@ -71,9 +75,9 @@ interface TourDetailPageProps {
   onBack: () => void;
   onBookNow?: (tour: Tour, customData?: TourDetailCustomData) => void;
   onOpenRequest?: () => void;
-  onCustomize?: (tour: Tour) => void;
   onShowLogin?: () => void;
   isAdmin?: boolean;
+  previewOnly?: boolean;
   onToggleHideTour?: (tourId: string, reason?: string) => void;
   onDeleteTour?: (tourId: string) => void;
 }
@@ -100,6 +104,7 @@ function formatVND(n: number) {
 
 // -------- Program Tab --------
 function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
+  const [viewingMealService, setViewingMealService] = useState<Service | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(
     new Set(tour.itinerary.slice(0, 1).map((d) => d.id)),
   );
@@ -162,6 +167,8 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
         </section>
       )}
 
+      {(tour.is_request || tour.tourType === "custom_request") && <TourAccommodationSummary tour={tour} services={services}/>}
+
       {/* Highlights */}
       {tour.highlights.length > 0 && (
         <section>
@@ -195,57 +202,9 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">
-                        NGÀY {day.day}: {day.title.toUpperCase()}
+                        {day.title || "Chưa nhập tiêu đề"}
                       </p>
-                      {tour.isCoHosted && tour.coHosts && (() => {
-                        const dayCompanies = new Map<string, string>();
-                        if (day.createdByCompanyId) {
-                          dayCompanies.set(day.createdByCompanyId, day.createdByCompanyName || "Công ty điều phối");
-                        }
-                        if (day.hotel?.createdByCompanyId) {
-                          dayCompanies.set(day.hotel.createdByCompanyId, day.hotel.createdByCompanyName || "Công ty lưu trú");
-                        }
-                        day.meals?.forEach((m) => {
-                          if (m.createdByCompanyId) {
-                            dayCompanies.set(m.createdByCompanyId, m.createdByCompanyName || "Công ty ẩm thực");
-                          }
-                        });
-                        day.locations?.forEach((loc) => {
-                          if (loc.createdByCompanyId) {
-                            dayCompanies.set(loc.createdByCompanyId, loc.createdByCompanyName || "Công ty tham quan");
-                          }
-                        });
 
-                        if (dayCompanies.size === 0) {
-                          tour.coHosts.forEach((ch) => {
-                            if (ch.assignedDays?.includes(day.day)) {
-                              dayCompanies.set(ch.companyId, ch.companyName);
-                            }
-                          });
-                        }
-
-                        const list = Array.from(dayCompanies.entries());
-                        if (list.length > 1) {
-                          return (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                              <Handshake className="w-3 h-3 text-amber-700" />
-                              🤝 Đồng phụ trách ({list.map(([_, n]) => n).join(" & ")})
-                            </span>
-                          );
-                        }
-
-                        if (list.length === 1) {
-                          const [_, cName] = list[0];
-                          return (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30 flex items-center gap-1 shadow-2xs">
-                              <Handshake className="w-3 h-3" />
-                              Phụ trách: {cName}
-                            </span>
-                          );
-                        }
-
-                        return null;
-                      })()}
                     </div>
                   </div>
                   {isOpen ? (
@@ -335,9 +294,6 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                     <div className="flex-1 border border-gray-200 rounded-xl p-3 bg-white hover:border-blue-300 transition-colors shadow-2xs">
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                                            Tham quan
-                                          </span>
                                           <h5 className="text-xs sm:text-sm font-bold text-gray-900">{loc.name}</h5>
                                         </div>
                                         <a
@@ -366,6 +322,9 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                 const isBreakfast = mealType === "breakfast";
                                 const isLunch = mealType === "lunch";
                                 const address = mealAddress(meal, services);
+                                const service = meal.supplierSource !== "AGENCY_SUPPLIER" && !meal.isCustom && meal.serviceId
+                                  ? services.find(post => post.id === meal.serviceId)
+                                  : undefined;
 
                                 return (
                                   <div key={meal.id || `meal-${idx}`} className="relative flex items-start gap-2.5">
@@ -420,6 +379,17 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                             +{meal.alternativeMeals.length} phương án ẩm thực
                                           </span>
                                         )}
+                                        <div className="flex items-center gap-2">
+                                        {service && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setViewingMealService(service)}
+                                            aria-label={`Xem bài dịch vụ ${service.name}`}
+                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                          >
+                                            <Eye className="w-3 h-3" /> Xem bài dịch vụ
+                                          </button>
+                                        )}
                                         {address && (
                                           <a
                                             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([meal.serviceName, address].filter(Boolean).join(", "))}`}
@@ -430,6 +400,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                             <MapPin className="w-3 h-3" /> Bản đồ
                                           </a>
                                         )}
+                                        </div>
                                       </div>
                                       <p className="text-xs text-gray-600 mt-1 leading-relaxed flex items-start gap-1.5">
                                         <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
@@ -461,6 +432,12 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
       {tour.companyNote && (
         <p className="text-center text-red-600 font-bold text-lg py-4">{tour.companyNote}</p>
       )}
+      <ServiceBlogDetailModal
+        service={viewingMealService}
+        isOpen={Boolean(viewingMealService)}
+        onClose={() => setViewingMealService(null)}
+        hidePrice
+      />
     </div>
   );
 }
@@ -575,40 +552,6 @@ function PricingTab({ tour }: { tour: Tour }) {
 }
 
 // -------- Custom Tab --------
-
-const SYSTEM_HOTELS = [
-  { name: "Khách sạn Đà Lạt Palace Heritage", pricePerNight: 2800000, description: "Khách sạn cổ kính – View hồ Xuân Hương thơ mộng" },
-  { name: "Dalat Edensee Lake Resort & Spa", pricePerNight: 3200000, description: "Resort ven hồ Tuyền Lâm – Không gian nghỉ dưỡng đẳng cấp" },
-  { name: "Ana Mandara Villas Dalat Resort", pricePerNight: 3550000, description: "Khu resort biệt thự Pháp cổ giữa rừng thông bạt ngàn" },
-  { name: "MerPerle Dalat Hotel", pricePerNight: 4000000, description: "Khách sạn phong cách cổ điển lộng lẫy, dịch vụ chuẩn mực" },
-  { name: "Tuyền Lâm Lake View Resort", pricePerNight: 4600000, description: "Khu nghỉ dưỡng cao cấp hòa quyện thiên nhiên hồ Tuyền Lâm" },
-  { name: "Terracotta Hotel & Resort Dalat", pricePerNight: 3100000, description: "Resort bán đảo hồ Tuyền Lâm với nhiều tiện ích thư giãn" },
-  { name: "TTC Hotel Premium Ngọc Lan", pricePerNight: 2450000, description: "Khách sạn ngay chợ Đà Lạt, view toàn cảnh hồ Xuân Hương" },
-  { name: "Khách sạn Sammy Đà Lạt", pricePerNight: 2200000, description: "Khách sạn phong cách Pháp trung tâm thành phố, tiện nghi" },
-  { name: "Khách sạn Golf 3 Đà Lạt", pricePerNight: 2000000, description: "Khách sạn ngay phố đi bộ, thuận tiện mua sắm và ẩm thực" },
-];
-
-const SYSTEM_RESTAURANTS: Array<{ name: string; mealType: "breakfast" | "lunch" | "dinner"; pricePerPerson: number; description: string }> = [
-  // Bữa sáng (Breakfast)
-  { name: "Buffet sáng tiêu chuẩn tại Khách sạn", mealType: "breakfast", pricePerPerson: 70000, description: "Buffet sáng phong phú nhiều món Á - Âu kèm trà, cà phê tại khách sạn" },
-  { name: "Bánh căn Lệ Đà Lạt", mealType: "breakfast", pricePerPerson: 50000, description: "Bánh căn giòn rụm xíu mại trứng cút, nước mắm hành mỡ cay nồng" },
-  { name: "Bánh mì xíu mại Hoàng Diệu", mealType: "breakfast", pricePerPerson: 45000, description: "Bánh mì giòn chấm chén xíu mại nóng hổi béo ngậy đặc sản Đà Lạt" },
-  { name: "Phở thố đá Chu Gia Đà Lạt", mealType: "breakfast", pricePerPerson: 85000, description: "Phở bò thố đá sôi sục giữ trọn hương vị tươi ngọt đậm đà" },
-  { name: "Bún bò Huế ấp Ánh Sáng", mealType: "breakfast", pricePerPerson: 65000, description: "Tô bún bò đậm đà thơm mùi sả ruốc hương vị cố đô giữa lòng phố núi" },
-
-  // Bữa trưa (Lunch)
-  { name: "Nhà hàng Hương Rừng Đà Lạt", mealType: "lunch", pricePerPerson: 120000, description: "Đặc sản gà đồi, cơm lam, rau củ tươi organic Đà Lạt" },
-  { name: "Nhà hàng Trúc Lâm Viên", mealType: "lunch", pricePerPerson: 140000, description: "Cơm niêu gia đình, cá kho tộ, canh atiso sườn non" },
-  { name: "Nhà hàng Làng Nướng Đà Lạt", mealType: "lunch", pricePerPerson: 160000, description: "Thịt rừng nướng ngói, rau rừng xào tỏi thơm lừng" },
-  { name: "Nhà hàng Leguda Buffet Rau Cáp Treo", mealType: "lunch", pricePerPerson: 150000, description: "Buffet không giới hạn các loại rau tươi sạch trên đỉnh đồi Robin" },
-
-  // Bữa tối (Dinner)
-  { name: "Nhà hàng Chợ Đêm & Phố Ẩm Thực Đà Lạt", mealType: "dinner", pricePerPerson: 90000, description: "Ẩm thực đường phố: bánh tráng nướng, sữa đậu nành, dâu lắc" },
-  { name: "Nhà hàng Dalat Palace Ristorante", mealType: "dinner", pricePerPerson: 320000, description: "Ẩm thực Âu - Á cao cấp sang trọng" },
-  { name: "Nhà hàng Lẩu Gà Lá É Tao Ngộ", mealType: "dinner", pricePerPerson: 130000, description: "Đặc sản lẩu gà lá é trứ danh thơm cay ấm bụng đêm sương mù" },
-  { name: "Nhà hàng Quán Nướng Chu", mealType: "dinner", pricePerPerson: 180000, description: "Các món nướng đá nóng, bò tơ nướng sa tế đậm đà" },
-  { name: "Nhà hàng La Viet Coffee & Fine Dining", mealType: "dinner", pricePerPerson: 220000, description: "Trải nghiệm ẩm thực phong cách hiện đại kết hợp cà phê nguyên bản" },
-];
 
 interface HotelChoice {
   mode: "system" | "custom" | "provider";
@@ -726,7 +669,7 @@ function getDestinationGroups(tour: Tour): DestinationHotelState[] {
         defaultHotel: defHotel,
         hotelChoice: defHotel
           ? { mode: "system", systemName: defHotel.name, systemStars: defHotel.stars || 4, systemPricePerNight: defHotel.pricePerNight }
-          : { mode: "system", systemName: SYSTEM_HOTELS[0].name, systemStars: 4, systemPricePerNight: SYSTEM_HOTELS[0].pricePerNight },
+          : { mode: "system" },
       });
     }
   });
@@ -1103,12 +1046,7 @@ function CustomTab({
         {Object.values(destHotels).map((group) => {
           const { destination, nightCount, defaultHotel: defHotel, hotelChoice: choice } = group;
           const isExpanded = expandedHotelDest === destination;
-          const selectedSystem = choice.mode === "system"
-            ? SYSTEM_HOTELS.find((h) => h.name === choice.systemName)
-            : null;
-          const priceDiffPerNight = selectedSystem && defHotel
-            ? selectedSystem.pricePerNight - defHotel.pricePerNight
-            : 0;
+          const priceDiffPerNight = choice.priceDifference || 0;
 
           return (
             <div key={destination} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -1144,7 +1082,7 @@ function CustomTab({
                       Đối tác Nền tảng
                     </span>
                   )}
-                  {choice.mode === "system" && (choice.priceDifference !== undefined ? choice.priceDifference !== 0 : selectedSystem && priceDiffPerNight !== 0) && (
+                  {choice.mode === "system" && (priceDiffPerNight !== 0) && (
                     <span className={`text-xs font-bold ${(choice.priceDifference ?? priceDiffPerNight) > 0 ? "text-amber-600" : "text-emerald-600"}`}>
                       {(choice.priceDifference ?? priceDiffPerNight) > 0 ? "+" : ""}{formatVND(choice.priceDifference ?? priceDiffPerNight)}
                     </span>
@@ -1227,23 +1165,6 @@ function CustomTab({
                               mapUrl: (alt as any).mapUrl || (alt as any).googleMapsUrl,
                             });
                           });
-                        } else {
-                          // Fallback to SYSTEM_HOTELS if no alternatives configured yet
-                          SYSTEM_HOTELS.forEach((h: any) => {
-                            if (h.name !== defHotel?.name) {
-                              const diff = defHotel ? h.pricePerNight - defHotel.pricePerNight : 0;
-                              options.push({
-                                name: h.name,
-                                stars: h.stars || 4,
-                                description: h.description,
-                                diff,
-                                pricePerNight: h.pricePerNight,
-                                serviceId: h.serviceId,
-                                address: h.address,
-                                mapUrl: h.mapUrl || h.googleMapsUrl,
-                              });
-                            }
-                          });
                         }
 
                         return options.map((opt, optIdx) => {
@@ -1253,11 +1174,19 @@ function CustomTab({
                             : services.find((s) => s.category === "hotel" && (s.name.toLowerCase().includes(opt.name.toLowerCase()) || opt.name.toLowerCase().includes(s.name.toLowerCase())));
 
                           const mapsUrl = opt.mapUrl || getGoogleMapsSearchUrl(opt.name, opt.address, destination);
-                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500";
+                          const imgUrl = serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500";
                           const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Đối tác";
+                          const selectOption = () => updateDestHotel(destination, {
+                            mode: "system",
+                            systemName: opt.name,
+                            systemStars: opt.stars,
+                            systemPricePerNight: opt.pricePerNight,
+                            priceDifference: opt.diff,
+                          });
 
                           return (
-                            <div
+                            <ServiceOptionCard
+                              label={`Khách sạn: ${opt.name}`} selected={isSel} onSelect={selectOption}
                               key={opt.name}
                               className={`rounded-2xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 ${
                                 isSel
@@ -1306,11 +1235,7 @@ function CustomTab({
                                       </p>
                                     )}
                                     <div className="mt-1">
-                                      {opt.diff === 0 ? (
-                                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-                                          Tiêu chuẩn tour (0đ chênh lệch)
-                                        </span>
-                                      ) : (
+                                      {opt.diff !== 0 && (
                                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded border inline-block ${
                                           opt.diff > 0
                                             ? "text-amber-800 bg-amber-50 border-amber-200"
@@ -1345,25 +1270,9 @@ function CustomTab({
                                   <span>Xem bài viết &amp; Bản đồ</span>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => updateDestHotel(destination, {
-                                    mode: "system",
-                                    systemName: opt.name,
-                                    systemStars: opt.stars,
-                                    systemPricePerNight: opt.pricePerNight,
-                                    priceDifference: opt.diff,
-                                  })}
-                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                                    isSel
-                                      ? "bg-emerald-600 text-white cursor-default"
-                                      : "bg-[#075985] text-white hover:bg-[#F97316] cursor-pointer"
-                                  }`}
-                                >
-                                  {isSel ? "✓ Đang chọn" : "Chọn khách sạn này"}
-                                </button>
+
                               </div>
-                            </div>
+                            </ServiceOptionCard>
                           );
                         });
                       })()}
@@ -1470,12 +1379,8 @@ function CustomTab({
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-sm">
-                      Ngày {day.day}: {day.title}
-                      {day.meals && day.meals.length > 0 && (
-                        <span className="text-xs text-gray-500 font-normal ml-1.5">
-                          (Ăn {day.meals.map((m) => m.type === "breakfast" ? "sáng" : m.type === "lunch" ? "trưa" : "tối").join(", ")})
-                        </span>
-                      )}
+                      {day.title || "Chưa nhập tiêu đề"}
+
                     </p>
                   </div>
                 </div>
@@ -1753,11 +1658,6 @@ function CustomTab({
                                       )}
                                     </div>
                                   )}
-                                  {!isCustom && !isSystemChanged && mealChoice?.mode !== "provider" && (
-                                    <span className="text-[10px] text-gray-400 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                      Theo tour (0đ)
-                                    </span>
-                                  )}
                                   {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
                                 </div>
                               </button>
@@ -1778,7 +1678,7 @@ function CustomTab({
                                       <Utensils className="w-3.5 h-3.5" />
                                       Nhà hàng theo Tour
                                     </button>
-                                    {defaultMeal.allowCustomMealRequest !== false && (
+                                    {defaultMeal.allowCustomMealRequest === true && (
                                       <button
                                         type="button"
                                         onClick={() => updateMealChoice(day.id, mealType, { mode: "custom" })}
@@ -1818,17 +1718,6 @@ function CustomTab({
                                               pricePerPerson: (defaultMeal.pricePerPerson || 0) + alt.priceDifference,
                                             });
                                           });
-                                        } else {
-                                          // Fallback sang danh mục nhà hàng hệ thống
-                                          SYSTEM_RESTAURANTS.filter((r) => r.mealType === mealType && r.name !== defaultMeal.serviceName).forEach((r) => {
-                                            const diff = r.pricePerPerson - (defaultMeal.pricePerPerson ?? 0);
-                                            options.push({
-                                              name: r.name,
-                                              description: r.description,
-                                              diff,
-                                              pricePerPerson: r.pricePerPerson,
-                                            });
-                                          });
                                         }
 
                                         return options.map((opt, optIdx) => {
@@ -1838,11 +1727,18 @@ function CustomTab({
                                             (s.name.toLowerCase().includes(opt.name.toLowerCase()) ||
                                               opt.name.toLowerCase().includes(s.name.toLowerCase()))
                                           );
-                                          const imgUrl = linkedService?.images?.[0] || linkedService?.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500";
+                                          const imgUrl = serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500";
                                           const providerName = linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Heritage";
+                                          const selectOption = () => updateMealChoice(day.id, mealType, {
+                                            mode: "system",
+                                            systemName: opt.name,
+                                            systemPrice: opt.pricePerPerson,
+                                            priceDifference: opt.diff,
+                                          });
 
                                           return (
-                                            <div
+                                            <ServiceOptionCard
+                                              label={`Nhà hàng: ${opt.name}`} selected={isSel} onSelect={selectOption}
                                               key={opt.name}
                                               className={`rounded-2xl border-2 transition-all p-3 flex flex-col justify-between gap-2.5 ${
                                                 isSel
@@ -1882,11 +1778,7 @@ function CustomTab({
                                                       <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{opt.description}</p>
                                                     )}
                                                     <div className="mt-1">
-                                                      {opt.diff === 0 ? (
-                                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-                                                          Đã bao gồm trong tour (0đ chênh lệch)
-                                                        </span>
-                                                      ) : (
+                                                      {opt.diff !== 0 && (
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${
                                                           opt.diff > 0
                                                             ? "text-amber-800 bg-amber-50 border-amber-200"
@@ -1921,12 +1813,7 @@ function CustomTab({
 
                                                 <button
                                                   type="button"
-                                                  onClick={() => updateMealChoice(day.id, mealType, {
-                                                    mode: "system",
-                                                    systemName: opt.name,
-                                                    systemPrice: opt.pricePerPerson,
-                                                    priceDifference: opt.diff,
-                                                  })}
+                                                  onClick={selectOption}
                                                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                                                     isSel
                                                       ? "bg-emerald-600 text-white cursor-default"
@@ -1936,7 +1823,7 @@ function CustomTab({
                                                   {isSel ? "✓ Đang chọn" : "Chọn món này"}
                                                 </button>
                                               </div>
-                                            </div>
+                                            </ServiceOptionCard>
                                           );
                                         });
                                       })()}
@@ -2273,9 +2160,9 @@ export function TourDetailPage({
   onBack,
   onBookNow,
   onOpenRequest,
-  onCustomize,
   onShowLogin,
   isAdmin,
+  previewOnly = false,
   onToggleHideTour,
   onDeleteTour,
 }: TourDetailPageProps) {
@@ -2503,7 +2390,6 @@ export function TourDetailPage({
               )}
             </div>
 
-            {!isCustomTour && onCustomize && <Button variant="outline" className="border-sky-700 text-sky-800" onClick={() => onCustomize(tour)}>Tùy chỉnh Tour này</Button>}
             {/* Custom Tour Banner */}
             {isCustomTour && (
               <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-2xl p-4.5 shadow-md space-y-2 border border-purple-700">
@@ -2521,11 +2407,11 @@ export function TourDetailPage({
                   )}
                 </div>
                 <p className="text-xs text-purple-200 leading-relaxed">
-                  Đây là phương án Agency đã gửi. Bạn có thể mở yêu cầu thiết kế, sửa bản riêng của mình và gửi lại để Agency kiểm tra dịch vụ, báo giá và tạo phiên bản mới.
+                  {previewOnly ? "Bạn đang xem lại nội dung của phiên bản này. Các thao tác đặt tour không khả dụng tại đây." : "Đây là phiên bản Agency đã chọn cho bạn. Nếu muốn điều chỉnh hoặc dùng lại phiên bản trước, hãy mở yêu cầu và trao đổi với Agency."}
                 </p>
                 {onOpenRequest && <button type="button" onClick={onOpenRequest}
                   className="rounded border border-purple-200 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
-                  Mở yêu cầu để tùy biến và trao đổi
+                  Mở yêu cầu để trao đổi với Agency
                 </button>}
                 {tour.changeNote && (
                   <div className="bg-black/30 rounded-lg p-2.5 text-xs text-amber-300 italic border border-white/10">
@@ -2728,7 +2614,7 @@ export function TourDetailPage({
                     Xóa vĩnh viễn tour này
                   </Button>
                 </div>
-              ) : (
+              ) : previewOnly ? <p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-800">Chỉ xem nội dung phương án</p> : (
                 <>
                   <Button
                     onClick={handleBook}
@@ -2871,28 +2757,28 @@ export function TourDetailPage({
           </Dialog>
 
           {/* Admin Delete Confirmation Modal */}
-          <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-            <DialogContent className="max-w-md rounded-2xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-rose-700 text-base">
+          <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+            <AlertDialogContent tone="error" className="max-w-md rounded-2xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2 text-rose-700 text-base">
                   <Trash2 className="w-5 h-5 text-rose-600" />
                   Xác nhận xóa vĩnh viễn tour
-                </DialogTitle>
-                <DialogDescription className="text-xs text-gray-600">
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-gray-600">
                   Bạn có chắc chắn muốn xóa tour <strong>"{tour.name}"</strong>? Tour này sẽ bị gỡ bỏ hoàn toàn khỏi hệ thống sàn và không thể khôi phục.
-                </DialogDescription>
-              </DialogHeader>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
 
               <div className="flex justify-end gap-2 pt-3">
-                <Button
+                <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                   variant="outline"
                   size="sm"
                   onClick={() => setShowDeleteModal(false)}
                   className="rounded-xl text-xs"
                 >
                   Hủy
-                </Button>
-                <Button
+                </Button></AlertDialogCancel>
+                <Button data-slot="alert-dialog-action"
                   size="sm"
                   onClick={() => {
                     onDeleteTour?.(tour.id);
@@ -2904,8 +2790,8 @@ export function TourDetailPage({
                   Xác nhận Xóa vĩnh viễn
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </div>

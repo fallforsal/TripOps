@@ -51,10 +51,10 @@ public sealed partial class TourFlowTests
         var loaded = await Read<TourDto>(await agency.GetAsync($"{Root}/{tour.Id}"));
         Assert.Equal("Hotel address", loaded.Configuration.Timelines![0].Accommodations![0].Supplier!.Address);
         Assert.Equal(150000, loaded.Configuration.Timelines[0].Meals![0].Supplier!.ReferencePrice);
-        var version = await Read<TourVersionDto>(await agency.GetAsync($"{Root}/{tour.Id}/versions/{published.Version}"));
-        Assert.Contains("Hotel address", version.SnapshotData);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.GetAsync($"{Root}/{tour.Id}/versions/{published.Version}")).StatusCode);
+        await app.Inspect(async db => Assert.NotNull((await db.Tours.SingleAsync(t=>t.Id==tour.Id)).ConfigurationData));
         // Existing tours remain editable even though their saved supplier links are archived.
-        await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(loaded.Version, loaded.Configuration, "Keep historical suppliers")));
+        await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(loaded.Revision, loaded.Configuration, "Keep historical suppliers")));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed partial class TourFlowTests
             new AccommodationInput("Partner hotel", "Da Lat", IsDefault: false, PriceDifference: 100000,
                 ServiceId: 102, SupplierSource: SupplierSources.PlatformPartner)] }, days[1]] };
         var tour = await Create(agency, config);
-        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version)));
+        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision)));
         Assert.Equal("completed", published.Status);
         Assert.Equal(supplier.Id, published.Configuration.Timelines![0].Accommodations![0].AgencySupplierId);
         await Read<SupplierDto>(await agency.PutAsJsonAsync($"/api/v1/agency/suppliers/{supplier.Id}",
@@ -132,7 +132,7 @@ public sealed partial class TourFlowTests
                 Supplier: new SupplierSnapshotInput("New address", "Da Lat", ReferencePrice: 200000))]
         }, days[1]] };
         var tour2 = await Create(agency, second);
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour2.Id}/publish", new TourCommand(tour2.Version)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour2.Id}/publish", new TourCommand(tour2.Revision)));
         Assert.Equal(2, (await Read<SupplierDto[]>(await agency.GetAsync("/api/v1/agency/suppliers"))).Length);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await other.PostAsJsonAsync(Root, config)).StatusCode);
     }
@@ -147,7 +147,7 @@ public sealed partial class TourFlowTests
             new AccommodationInput("Missing supplier details", "Da Lat", SupplierSource: SupplierSources.AgencySupplier)] }, days[1]] };
         var tour = await Create(agency, invalid);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
-            (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
+            (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision))).StatusCode);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed partial class TourFlowTests
             Accommodations = [new AccommodationInput("Partner hotel", "Da Lat", ServiceId: 102,
                 SupplierSource: SupplierSources.PlatformPartner)] }, days[1]] };
         var tour = await Create(agency, partner);
-        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version)));
+        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision)));
         Assert.Equal("completed", published.Status);
         Assert.Equal(102, published.Configuration.Timelines![0].Accommodations![0].ServiceId);
         Assert.Equal(103, published.Configuration.Timelines![0].Meals![0].ServiceId);

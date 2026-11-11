@@ -1,24 +1,27 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
 import { http } from "@/app/lib/http";
 import type { BookingDto } from "@/app/services/wf05Bookings";
+import type { BookingAgencyShare } from "@/app/types";
 
-export function BookingSurchargeDialog({ open, onOpenChange, bookingId, expectedTotal, onChanged }:
-  { open: boolean; onOpenChange: (open: boolean) => void; bookingId: string; expectedTotal: number; onChanged?: (booking: BookingDto) => void }) {
+export function BookingSurchargeDialog({ open, onOpenChange, bookingId, expectedTotal, agencies, onChanged }:
+  { open: boolean; onOpenChange: (open: boolean) => void; bookingId: string; expectedTotal: number; agencies:BookingAgencyShare[]; onChanged?: (booking: BookingDto) => void }) {
+  const [beneficiary,setBeneficiary]=useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const requestId = useRef("");
-  useEffect(() => { if (open) { setAmount(""); setReason(""); setError(""); requestId.current = crypto.randomUUID(); } }, [open]);
+  useEffect(() => { if (open) { setAmount(""); setReason(""); setError("");setBeneficiary(agencies.length===1?agencies[0].agencyId:""); requestId.current = crypto.randomUUID(); } }, [open]);
   const save = async () => {
     if (saving) return;
     setSaving(true); setError("");
     try {
       const updated = await http<BookingDto>(`/agency/bookings/${bookingId}/surcharges`, { method: "POST",
-        body: JSON.stringify({ amount: Number(amount), reason: reason.trim(), expectedTotal, requestId: requestId.current }) });
+        body: JSON.stringify({ amount: Number(amount), reason: reason.trim(), expectedTotal, requestId: requestId.current,beneficiaryAgencyId:beneficiary }) });
       onChanged?.(updated); onOpenChange(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được phụ thu."); }
     finally { setSaving(false); }
@@ -30,14 +33,15 @@ export function BookingSurchargeDialog({ open, onOpenChange, bookingId, expected
       <label className="space-y-1.5 text-sm font-semibold">Số tiền phụ thu (VNĐ) *
         <VietnameseMoneyInput value={amount} onValueChange={setAmount} placeholder="VD: 200.000" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-semibold tabular-nums" />
       </label>
+      <label className="space-y-1.5 text-sm font-semibold">Agency nhận khoản phụ thu *<select value={beneficiary} onChange={e=>setBeneficiary(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="">Chọn Agency thụ hưởng</option>{agencies.map(a=><option key={a.agencyId} value={a.agencyId}>{a.agencyName}</option>)}</select><span className="block text-xs font-normal text-slate-500">Khoản này được cộng vào phần quyết toán của Agency đã chọn.</span></label>
       <label className="space-y-1.5 text-sm font-semibold">Lý do phụ thu đã thống nhất với khách *
         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={240} placeholder="VD: Phụ thu nâng cấp phòng theo yêu cầu của khách" className="w-full rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal" />
       </label>
-      <p className="text-xs text-slate-500">Khách thanh toán các khoản tour trước, sau đó đến phụ thu. Hạn phụ thu tối thiểu 24 giờ và không sớm hơn hạn thanh toán tour.</p>
-      {error && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-xs text-rose-700">{error}</p>}
+      <p className="text-xs text-slate-500">Khách có thể thanh toán phụ thu độc lập. Đợt 2 của giá tour vẫn chờ hoàn tất tiền cọc.</p>
+      {error && <NotificationMessage tone="error" message={error} />}
       <div className="flex justify-end gap-2 border-t pt-3">
         <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Hủy bỏ</Button>
-        <Button disabled={saving || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0 || reason.trim().length < 3} onClick={save}>{saving ? "Đang lưu…" : "Tạo phụ thu"}</Button>
+        <Button disabled={saving || !beneficiary || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0 || reason.trim().length < 3} onClick={save}>{saving ? "Đang lưu…" : "Tạo phụ thu"}</Button>
       </div>
     </DialogContent>
   </Dialog>;

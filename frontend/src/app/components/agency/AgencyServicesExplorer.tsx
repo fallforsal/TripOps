@@ -1,3 +1,4 @@
+import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
 import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -151,11 +152,7 @@ const formatPriceSummary = (service: Service) => {
   return "Liên hệ báo giá";
 };
 
-const formatAddress = (service: Service) => {
-  const parts = [service.street, service.ward, service.province].filter(Boolean);
-  if (parts.length > 0) return parts.join(", ");
-  return service.location || "Việt Nam";
-};
+const formatAddress = serviceAddress;
 
 const provinceCoordinates: Record<string, [number, number, number]> = {
   "Lâm Đồng": [11.9404, 108.4583, 12],
@@ -618,10 +615,7 @@ export function AgencyServicesExplorer({
   // VIEW: FULL SERVICE POST DETAIL
   // =========================================================================
   if (selectedService) {
-    const imagesList =
-      selectedService.images && selectedService.images.length > 0
-        ? selectedService.images
-        : [selectedService.image];
+    const imagesList = serviceGallery(selectedService);
 
     const meta = getCategoryMeta(selectedService.category);
     const CategoryIcon = meta.icon;
@@ -878,6 +872,13 @@ export function AgencyServicesExplorer({
                         ? `${selectedService.stars} Sao ⭐`
                         : "Tiêu chuẩn du lịch"}
                     </span>
+                  </div>
+                )}
+
+                {selectedService.operatingHours && (
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-500 block mb-0.5">Khung giờ hoạt động / đón khách:</span>
+                    <span className="font-semibold text-gray-900 text-sm">{selectedService.operatingHours}</span>
                   </div>
                 )}
 

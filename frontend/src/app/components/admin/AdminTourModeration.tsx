@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { useState } from "react";
 import { Tour, Service } from "@/app/types";
 import {
@@ -555,17 +556,17 @@ export function AdminTourModeration({
       {/* ========================================================================= */}
       {/* MODAL 3: XÁC NHẬN XÓA VĨNH VIỄN TOUR */}
       {/* ========================================================================= */}
-      <Dialog open={!!deletingTour} onOpenChange={() => setDeletingTour(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
+      <AlertDialog open={!!deletingTour} onOpenChange={() => setDeletingTour(null)}>
+        <AlertDialogContent tone="error" className="max-w-md rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-600" />
               Xác nhận xóa vĩnh viễn Tour
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500 mt-1">
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-gray-500 mt-1">
               Hành động này sẽ xóa hoàn toàn tour này khỏi cơ sở dữ liệu và không thể hoàn tác.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
           {deletingTour && (
             <div className="space-y-4 pt-2">
@@ -576,7 +577,7 @@ export function AdminTourModeration({
               </p>
 
               <div className="flex items-center justify-end gap-2 pt-2">
-                <Button
+                <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                   type="button"
                   variant="outline"
                   size="sm"
@@ -584,8 +585,8 @@ export function AdminTourModeration({
                   className="rounded-xl text-xs"
                 >
                   Hủy bỏ
-                </Button>
-                <Button
+                </Button></AlertDialogCancel>
+                <Button data-slot="alert-dialog-action"
                   type="button"
                   size="sm"
                   variant="destructive"
@@ -597,8 +598,8 @@ export function AdminTourModeration({
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

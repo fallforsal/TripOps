@@ -41,7 +41,7 @@ void main() {
         guides: _FakeGuideRepository(),
       ),
     ));
-    expect(find.textContaining('Chỉ được điểm danh vào ngày khởi hành'),
+    expect(find.textContaining('Chỉ được điểm danh vào ngày bắt đầu chặng được giao'),
       findsOneWidget);
     final check = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Có mặt'),
@@ -67,7 +67,7 @@ void main() {
         guides: _FakeGuideRepository(),
       ),
     ));
-    expect(find.textContaining('Chỉ được điểm danh vào ngày khởi hành'),
+    expect(find.textContaining('Chỉ được điểm danh vào ngày bắt đầu chặng được giao'),
       findsNothing);
     final check = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Có mặt'),

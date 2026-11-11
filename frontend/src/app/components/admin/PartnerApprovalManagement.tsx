@@ -1,7 +1,8 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { partnerService, type PartnerApplication } from "@/app/services/partnerService";
 import { usePartnerApplications } from "@/app/hooks/usePartnerApplications";
 import { useState, useMemo, useEffect } from "react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import {
   Building2,
   CheckCircle2,
@@ -743,11 +744,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
                   )}
                 </div>
 
-                {reviewError && (
-                  <p role="alert" className="text-xs text-rose-700 mb-2">
-                    {reviewError}
-                  </p>
-                )}
+                {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
                 <DialogFooter className="gap-2 sm:gap-0">
                   <Button
@@ -820,11 +817,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
             </div>
           </div>
 
-          {reviewError && (
-            <p role="alert" className="text-xs text-rose-700">
-              {reviewError}
-            </p>
-          )}
+          {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
@@ -939,11 +932,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
             </div>
           </div>
 
-          {reviewError && (
-            <p role="alert" className="text-xs text-rose-700">
-              {reviewError}
-            </p>
-          )}
+          {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button

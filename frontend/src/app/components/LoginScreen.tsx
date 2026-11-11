@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
 import { User } from "@/app/types";
 import { login } from "@/app/services/authService";
@@ -169,11 +170,7 @@ export function LoginScreen({
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              {error && (
-                <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-[4px] text-xs text-[#B91C1C]">
-                  {error}
-                </div>
-              )}
+              {error && <NotificationMessage message={error} /> }
 
               {/* Email */}
               <div className="space-y-1.5">

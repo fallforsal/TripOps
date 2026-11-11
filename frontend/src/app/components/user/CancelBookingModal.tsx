@@ -1,3 +1,4 @@
+import { toast } from "@/app/lib/notifications";
 import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { Booking } from "@/app/types";
@@ -29,7 +30,7 @@ export function CancelBookingModal({
     const finalReason =
       selectedReason === "Khác" ? reason : selectedReason;
     if (!finalReason.trim()) {
-      alert("Vui lòng nhập lý do hủy tour");
+      toast.warning("Vui lòng nhập lý do hủy tour");
       return;
     }
     onCancel(booking.id, finalReason);

@@ -143,7 +143,7 @@ public sealed partial class BookingService
         contract.ReviewNote = null;
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // ------------------------------------------------------------ Agency kiểm tra
@@ -167,14 +167,14 @@ public sealed partial class BookingService
         contract.ReviewNote = string.IsNullOrWhiteSpace(note) ? null : note;
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(agencyId,id,ct);
     }
 
     // ------------------------------------------------------------ hỗ trợ
 
     private async Task EnsureContractAccess(string actorId, Booking booking, CancellationToken ct)
     {
-        if (booking.CustomerId == actorId || booking.Tour?.AgencyId == actorId) return;
+        if (booking.CustomerId == actorId || booking.Tour?.AgencyId==actorId) return;
         var user = await Accounts.Current(actorId, ct);
         if (user.Role != UserRole.Admin)
             throw new BookingException(403, "Bạn không có quyền xem hợp đồng của đơn này.");
@@ -210,8 +210,8 @@ public sealed partial class BookingService
             profile?.BusinessName ?? agency?.Name ?? "Công ty lữ hành", profile?.TaxCode, profile?.BusinessAddress, agency?.Email, agency?.Phone,
             booking.ContactName, booking.ContactPhone, booking.ContactEmail,
             booking.BookingCode, booking.Tour?.Name ?? "Tour du lịch", booking.StartDate, EndDate(booking), TotalGuests(booking),
-            booking.Participants.Where(p => p.Status != "INACTIVE").OrderBy(p => p.ParticipantIndex)
-                .Select(p => (p.FullName, p.TierName, (decimal?)p.Price)).ToList(),
+            booking.Participants.Where(p => p.Status != "INACTIVE").GroupBy(p=>p.ParticipantIndex).OrderBy(g=>g.Key)
+                .Select(g => (g.First().FullName, g.First().TierName, (decimal?)g.Sum(p=>p.Price))).ToList(),
             booking.Timelines.OrderBy(t => t.DayNumber).Select(t => (t.DayNumber, t.Title)).ToList(),
             booking.Accommodations.Select(h => (h.Destination, h.CurrentHotelName ?? h.OriginalHotelName, h.NightsCount)).ToList(),
             contract.TotalAmount, schedule);

@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { partnerService } from "@/app/services/partnerService";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useState } from "react";
@@ -302,12 +303,7 @@ export function BusinessProfileOnboardingPage({
                   </p>
                 </div>
 
-                {errorMessage && (
-                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
+                {errorMessage && <NotificationMessage tone="error" message={errorMessage} />}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <input

@@ -1,3 +1,5 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { toast } from "@/app/lib/notifications";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useState, useRef, useMemo } from "react";
 import {
@@ -431,7 +433,7 @@ export function BookingFormPage({
         `Mau_Danh_Sach_Khach_Tour_${tour.tourCode || "Tour"}.xlsx`,
       );
     } catch (err: any) {
-      alert(
+      toast.error(
         "Không thể tải file mẫu: " + (err?.message || "Lỗi không xác định"),
       );
     }
@@ -657,7 +659,7 @@ export function BookingFormPage({
   const [submitError, setSubmitError] = useState("");
   const handleConfirm = async () => {
     if (!guestValidation.isValid || !isStep2Valid) {
-      alert(
+      toast.warning(
         guestValidation.warningMessage ||
           "Vui lòng kiểm tra lại điều kiện số lượng khách tối thiểu của tour.",
       );
@@ -1023,37 +1025,9 @@ export function BookingFormPage({
               </div>
 
               {/* Excel Feedback Alerts */}
-              {excelSuccess && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs text-emerald-800 mb-4 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="font-semibold">{excelSuccess}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExcelSuccess(null)}
-                    className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
+              {excelSuccess && <NotificationMessage tone="success" message={excelSuccess} />}
 
-              {excelError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between text-xs text-red-800 mb-4 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                    <span className="font-semibold">{excelError}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExcelError(null)}
-                    className="text-red-700 hover:text-red-900 font-bold ml-2 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
+              {excelError && <NotificationMessage tone="error" message={excelError} />}
 
               {/* Fast Excel Guide Tip */}
               <div className="bg-[#E0F2FE]/60 border border-[#075985]/15/80 rounded-xl p-3 mb-4 flex items-center justify-between text-xs text-[#075985]">
@@ -1409,7 +1383,7 @@ export function BookingFormPage({
                 disabled={!isStep2Valid || !guestValidation.isValid}
                 onClick={() => {
                   if (!guestValidation.isValid || !isStep2Valid) {
-                    alert(
+                    toast.warning(
                       guestValidation.warningMessage ||
                         "Vui lòng kiểm tra lại điều kiện số lượng khách tối thiểu của tour.",
                     );
@@ -1807,11 +1781,7 @@ export function BookingFormPage({
                 <ArrowLeft className="w-4 h-4" />
                 Quay lại
               </Button>
-              {submitError && (
-                <p role="alert" className="text-red-700">
-                  {submitError}
-                </p>
-              )}
+              {submitError && <NotificationMessage tone="error" message={submitError} />}
               <Button
                 disabled={
                   submitting || !isStep2Valid || !guestValidation.isValid

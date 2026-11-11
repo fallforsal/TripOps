@@ -132,57 +132,61 @@ public sealed partial class TourFlowTests
     }
     private static Task<TourDto> Create(HttpClient agency, TourConfiguration? config = null) => CreateCore(agency, config ?? Complete());
 
-    [Fact]
-    public async Task Agency_uploads_tour_images_and_primary_order_survives_draft_and_publication()
+    private static readonly byte[] TourPng=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg==");
+    private static MultipartFormDataContent TourForm<T>(T payload,params byte[][] images)
     {
-        await using var app = new App(withCloudinary: true); await app.Initialize();
-        using var agency = await app.Login("agency"); using var customer = await app.Login("customer");
-        using var anonymous = app.CreateClient();
-        static MultipartFormDataContent Image(byte[] bytes)
-        {
-            var form = new MultipartFormDataContent();
-            var image = new ByteArrayContent(bytes); image.Headers.ContentType = new("image/png");
-            form.Add(image, "image", "tour.png");
-            return form;
-        }
-        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg==");
-        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync($"{Root}/images", form)).StatusCode);
-        using (var form = Image(png)) Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsync($"{Root}/images", form)).StatusCode);
-        using (var form = Image("not an image"u8.ToArray())) Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsync($"{Root}/images", form)).StatusCode);
-        Assert.Equal(0, app.Cloud.Calls);
-
-        string[] urls = new string[2];
-        for (var i = 0; i < urls.Length; i++)
-        {
-            using var form = Image(png);
-            var response = await agency.PostAsync($"{Root}/images", form);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            urls[i] = (await response.Content.ReadFromJsonAsync<TourImageUploadResponse>())!.Url;
-        }
-        Assert.Equal(2, app.Cloud.Calls);
-        var tour = await Create(agency, Complete() with { Images = [urls[1], urls[0]] });
-        Assert.Equal(urls[1], tour.Configuration.Images![0]);
-        var saved = (await agency.GetFromJsonAsync<TourDto>($"{Root}/{tour.Id}"))!;
-        Assert.Equal([urls[1], urls[0]], saved.Configuration.Images!);
-        tour = await Command(agency, tour, "publish");
-        var publicTour = (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
-        Assert.Equal([urls[1], urls[0]], publicTour.Configuration.Images!);
+        var form=new MultipartFormDataContent();form.Add(new StringContent(JsonSerializer.Serialize(payload,new JsonSerializerOptions(JsonSerializerDefaults.Web))),"payload");
+        foreach(var bytes in images) {var file=new ByteArrayContent(bytes);file.Headers.ContentType=new("image/png");form.Add(file,"images","tour.png");}
+        return form;
     }
-
     [Fact]
-    public async Task Tour_image_upload_reports_missing_server_cloudinary_configuration()
+    public async Task Tour_images_upload_only_with_save_and_thumbnail_order_is_preserved()
     {
-        await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
-        using var form = new MultipartFormDataContent();
-        var image = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZAAAAABJRU5ErkJggg=="));
-        image.Headers.ContentType = new("image/png"); form.Add(image, "image", "tour.png");
-        var response = await agency.PostAsync($"{Root}/images", form);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        await using var app=new App(withCloudinary:true);await app.Initialize();using var agency=await app.Login("agency");using var customer=await app.Login("customer");using var anonymous=app.CreateClient();
+        var configuration=Complete() with {Images=["upload:1","upload:0"]};
+        using(var form=TourForm(configuration,TourPng,TourPng))Assert.Equal(HttpStatusCode.Unauthorized,(await anonymous.PostAsync(Root+"/with-images",form)).StatusCode);
+        using(var form=TourForm(configuration,TourPng,TourPng))Assert.Equal(HttpStatusCode.Forbidden,(await customer.PostAsync(Root+"/with-images",form)).StatusCode);
+        using(var form=TourForm(configuration,TourPng,"not an image"u8.ToArray()))Assert.Equal(HttpStatusCode.BadRequest,(await agency.PostAsync(Root+"/with-images",form)).StatusCode);
+        Assert.Equal(0,app.Cloud.Calls);
+        TourDto tour;
+        using(var form=TourForm(configuration,TourPng,TourPng))tour=await Read<TourDto>(await agency.PostAsync(Root+"/with-images",form),HttpStatusCode.Created);
+        Assert.Equal(2,app.Cloud.Calls);Assert.EndsWith("image2.png",tour.Configuration.Images![0]);Assert.EndsWith("image1.png",tour.Configuration.Images[1]);
+        var images=tour.Configuration.Images;
+        using(var form=TourForm(new UpdateTourRequest(tour.Revision,tour.Configuration with {Images=["upload:0",images[0]]},"Changed cover"),TourPng))tour=await Read<TourDto>(await agency.PutAsync($"{Root}/{tour.Id}/with-images",form));
+        Assert.EndsWith("image3.png",tour.Configuration.Images![0]);Assert.Equal(images[0],tour.Configuration.Images[1]);
+        tour=await Command(agency,tour,"publish");
+        var visible=await Read<PublicTourDto>(await anonymous.GetAsync($"/api/v1/tours/{tour.Id}"));Assert.Equal(tour.Configuration.Images,visible.Configuration.Images);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed,(await agency.PostAsync(Root+"/images",TourForm(configuration,TourPng))).StatusCode);
+    }
+    [Fact]
+    public async Task Tour_save_reports_missing_cloudinary_and_creates_no_record()
+    {
+        await using var app=new App();await app.Initialize();using var agency=await app.Login("agency");
+        using var form=TourForm(Complete() with {Images=["upload:0"]},TourPng);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,(await agency.PostAsync(Root+"/with-images",form)).StatusCode);
+        await app.Inspect(async db=>Assert.Empty(await db.Tours.ToListAsync()));
+    }
+    [Fact]
+    public async Task Private_tour_images_save_in_selected_version_and_customer_thumbnail_matches_shared_version()
+    {
+        await using var app=new App(withCloudinary:true);await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");
+        var request=await DesignRequest(customer);await Receive(agency,request.Id);var url=$"/api/v1/agency/tour-design-requests/{request.Id}";
+        TourDto first;
+        using(var form=TourForm(new SaveDesignTourInput(null,Complete("Shared v1") with {Images=["upload:0"]}),TourPng))first=await Read<TourDto>(await agency.PutAsync(url+"/tour-with-images",form));
+        var shared=await Share(agency,request.Id,first);
+        var second=await Read<TourDto>(await agency.PutAsJsonAsync(url+"/tour",new SaveDesignTourInput(shared.Revision,Complete("Private v2") with {Images=["https://example.test/private-v2.jpg"]},CreateNewVersion:true,Version:1)));
+        var list=await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"));var row=Assert.Single(list);
+        Assert.Equal(first.Configuration.Images![0],row.SharedTourThumbnail);Assert.Equal("Shared v1",row.SharedTourName);Assert.Equal(1,row.CurrentVersion);
+        Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/history")).StatusCode);
+        Assert.Equal(2,(await Read<DesignRequestService.PlanHistory[]>(await agency.GetAsync(url+"/history"))).Length);
+        var reshared=await Share(agency,request.Id,second);
+        list=await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests"));
+        Assert.Equal("https://example.test/private-v2.jpg",Assert.Single(list).SharedTourThumbnail);
     }
     private static async Task<TourDto> CreateCore(HttpClient agency, TourConfiguration config) =>
         await Read<TourDto>(await agency.PostAsJsonAsync(Root, config), HttpStatusCode.Created);
     private static async Task<TourDto> Command(HttpClient client, TourDto tour, string action, bool admin = false, string? reason = null) =>
-        await Read<TourDto>(await client.PostAsJsonAsync($"{(admin ? "/api/v1/admin/tours" : Root)}/{tour.Id}/{action}", new TourCommand(tour.Version, reason)));
+        await Read<TourDto>(await client.PostAsJsonAsync($"{(admin ? "/api/v1/admin/tours" : Root)}/{tour.Id}/{action}", new TourCommand(tour.Revision, reason)));
 
     [Fact]
     public async Task Draft_persists_full_configuration_and_uses_authenticated_owner()
@@ -201,8 +205,8 @@ public sealed partial class TourFlowTests
         await app.Inspect(async db => {
             Assert.Equal(4, await db.Services.CountAsync(s => s.Status == ServiceStatus.Approved));
             Assert.Equal(0, await db.BookingTimelines.CountAsync());
-            Assert.Equal(1, await db.TourVersions.CountAsync());
-            Assert.Equal("agency", (await db.TourVersions.SingleAsync()).CreatedBy);
+            Assert.Equal(0, await db.TourVersions.CountAsync());
+            Assert.NotNull((await db.Tours.SingleAsync()).ConfigurationData);
         });
     }
 
@@ -219,8 +223,8 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"{Root}/{tour.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(1, Complete(), "Edit"))).StatusCode);
         foreach (var action in new[] { "publish", "hide", "duplicate" })
-            Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"{Root}/{tour.Id}/{action}", new { version = 1, name = "Copy", reason = "Change" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await other.DeleteAsync($"{Root}/{tour.Id}?version=1")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"{Root}/{tour.Id}/{action}", new { revision = 1, name = "Copy", reason = "Change" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.DeleteAsync($"{Root}/{tour.Id}?revision=1")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"{Root}/{tour.Id}/versions/1")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"{Root}/{tour.Id}/versions/1/restore", new TourCommand(1, "Restore"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync($"/api/v1/admin/tours/{tour.Id}/hide", new TourCommand(1, "Moderation"))).StatusCode);
@@ -233,7 +237,7 @@ public sealed partial class TourFlowTests
         var config = Complete() with { Timelines = [new(1, "Day", Activities: [new("Manual visit")])] };
         var response = await agency.PostAsJsonAsync(Root, config);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        await app.Inspect(async db => { Assert.Equal(1, await db.Tours.CountAsync()); Assert.Equal(1, await db.TourVersions.CountAsync()); });
+        await app.Inspect(async db => { Assert.Equal(1, await db.Tours.CountAsync()); Assert.Equal(0, await db.TourVersions.CountAsync()); });
     }
 
     [Theory]
@@ -266,16 +270,16 @@ public sealed partial class TourFlowTests
         var validation = await agency.GetFromJsonAsync<TourValidationResult>($"{Root}/{tour.Id}/validation");
         Assert.False(validation!.IsValid);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(1))).StatusCode);
-        await app.Inspect(async db => Assert.Equal(1, await db.TourVersions.CountAsync()));
+        await app.Inspect(async db => Assert.Equal(0, await db.TourVersions.CountAsync()));
     }
 
     [Fact]
-    public async Task Direct_publish_hide_edit_restore_preserve_versions_and_admin_moderation()
+    public async Task Ordinary_tour_publish_hide_edit_have_no_history_and_preserve_admin_moderation()
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         using var admin = await app.Login("admin"); using var publicClient = app.CreateClient();
         var tour = await Create(agency);
-        var original = (await agency.GetFromJsonAsync<TourVersionDto>($"{Root}/{tour.Id}/versions/1"))!.SnapshotData;
+
         Assert.Equal(HttpStatusCode.NotFound, (await publicClient.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
         tour = await Command(agency, tour, "publish");
         Assert.Equal("completed", tour.Status); Assert.Equal("public", tour.Visibility);
@@ -283,27 +287,15 @@ public sealed partial class TourFlowTests
         var published = await publicClient.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"); Assert.Equal(tour.Id, published!.Id);
         var publicBody = await (await publicClient.GetAsync($"/api/v1/tours/{tour.Id}")).Content.ReadAsStringAsync();
         Assert.DoesNotContain("reviewedBy", publicBody); Assert.DoesNotContain("rejectionReason", publicBody);
-        Assert.Equal(HttpStatusCode.Conflict, (await agency.DeleteAsync($"{Root}/{tour.Id}?version={tour.Version}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.DeleteAsync($"{Root}/{tour.Id}?revision={tour.Revision}")).StatusCode);
         tour = await Command(agency, tour, "hide", reason: "Maintenance");
         Assert.Equal(HttpStatusCode.NotFound, (await publicClient.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
-        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(tour.Version, Complete("New itinerary"), "Updated itinerary")));
-        Assert.Equal("draft", tour.Status); Assert.Equal("hidden", tour.Visibility);
-        tour = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/versions/1/restore", new TourCommand(tour.Version, "Restore original")));
-        Assert.Equal(5, tour.Version); Assert.Equal("Da Lat tour", tour.Configuration.Name); Assert.Equal("draft", tour.Status);
-        Assert.Equal(original, (await agency.GetFromJsonAsync<TourVersionDto>($"{Root}/{tour.Id}/versions/1"))!.SnapshotData);
-        var versions = await agency.GetFromJsonAsync<TourPage<TourVersionDto>>($"{Root}/{tour.Id}/versions?pageSize=2");
-        Assert.Equal(5, versions!.Total); Assert.Equal(2, versions.Items.Count); Assert.Equal(5, versions.Items[0].Version);
-        await app.Inspect(async db => {
-            Assert.Equal(2, await db.TourTimelines.CountAsync(d => d.TourId == tour.Id));
-            Assert.Equal(2, await db.TourPricingTiers.CountAsync(p => p.TourId == tour.Id));
-            Assert.Equal(2, await db.TourMeals.CountAsync(m => m.TourTimeline.TourId == tour.Id));
-            Assert.Equal(2, await db.TourAccommodations.CountAsync(a => a.TourId == tour.Id));
-            var snapshot = await db.TourVersions.SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == 2);
-            using var json = JsonDocument.Parse(snapshot.SnapshotData);
-            Assert.Equal("public", json.RootElement.GetProperty("visibility").GetString());
-            snapshot.ChangeLog = "tampered";
-            await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
-        });
+        tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(tour.Revision, Complete("New itinerary"), "Updated itinerary")));
+        Assert.Equal("completed", tour.Status); Assert.Equal("hidden", tour.Visibility);
+        Assert.Equal(1, tour.Version); Assert.Equal("New itinerary", tour.Configuration.Name);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.GetAsync($"{Root}/{tour.Id}/versions")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/versions/1/restore",new TourCommand(tour.Revision,"Not supported"))).StatusCode);
+        await app.Inspect(async db => Assert.Equal(0, await db.TourVersions.CountAsync()));
     }
 
     [Fact]
@@ -340,7 +332,7 @@ public sealed partial class TourFlowTests
         Assert.Contains(meals, m => m.RestaurantName == "Nhà hàng Trúc Lâm Viên" && !m.IsDefault && m.PriceDifference == 50000);
 
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version, stored.Configuration with { DepartureLocation = "Hà Nội" }, "Edit departure")));
+            new UpdateTourRequest(tour.Revision, stored.Configuration with { DepartureLocation = "Hà Nội" }, "Edit departure")));
         Assert.Equal("Hà Nội", tour.Configuration.DepartureLocation);
         Assert.Equal(4, tour.Configuration.Timelines![0].Meals!.Length);
         tour = await Command(agency, tour, "publish");
@@ -349,7 +341,7 @@ public sealed partial class TourFlowTests
         Assert.Equal("Hà Nội", published.Configuration.DepartureLocation);
 
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version, tour.Configuration with { DepartureLocation = "   " }, "Clear departure")));
+            new UpdateTourRequest(tour.Revision, tour.Configuration with { DepartureLocation = "   " }, "Clear departure")));
         Assert.Null(tour.Configuration.DepartureLocation);
     }
 
@@ -359,7 +351,7 @@ public sealed partial class TourFlowTests
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         var tour = await Create(agency);
         await app.Inspect(async db => { (await db.Services.SingleAsync(s => s.Id == 101)).Status = ServiceStatus.Hidden; await db.SaveChangesAsync(); });
-        Assert.Equal(HttpStatusCode.OK, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision))).StatusCode);
     }
 
     [Fact]
@@ -388,13 +380,13 @@ public sealed partial class TourFlowTests
         var tour = await Create(agency);
         var copy = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/duplicate", new DuplicateTourRequest("Copied tour")), HttpStatusCode.Created);
         Assert.NotEqual(tour.Code, copy.Code); Assert.NotEqual(tour.Id, copy.Id); Assert.Equal(1, copy.Version);
-        Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{Root}/{tour.Id}?version=1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{Root}/{tour.Id}?revision=1")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await agency.GetAsync($"{Root}/{tour.Id}")).StatusCode);
-        Assert.Equal(2, (await agency.GetFromJsonAsync<TourPage<TourVersionDto>>($"{Root}/{tour.Id}/versions"))!.Total);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.GetAsync($"{Root}/{tour.Id}/versions")).StatusCode);
         await app.Inspect(async db => {
             var deleted = await db.Tours.IgnoreQueryFilters().SingleAsync(t => t.Id == tour.Id);
             Assert.Equal(TourStatus.Deleted, deleted.Status); Assert.Equal(TourVisibility.Hidden, deleted.Visibility);
-            Assert.Equal(2, await db.TourVersions.CountAsync(v => v.TourId == tour.Id));
+            Assert.Equal(0, await db.TourVersions.CountAsync(v => v.TourId == tour.Id));
             Assert.Equal(2, await db.TourTimelines.CountAsync(d => d.TourId == tour.Id));
         });
     }
@@ -410,8 +402,8 @@ public sealed partial class TourFlowTests
         var secondDb = scope2.ServiceProvider.GetRequiredService<TripOpsDbContext>();
         var first = await firstDb.Tours.SingleAsync(t => t.Id == tour.Id);
         var second = await secondDb.Tours.SingleAsync(t => t.Id == tour.Id);
-        first.Version++; first.Name = "First writer"; await firstDb.SaveChangesAsync();
-        second.Version++; second.Name = "Second writer";
+        first.Revision++; first.Name = "First writer"; await firstDb.SaveChangesAsync();
+        second.Revision++; second.Name = "Second writer";
         secondDb.TourVersions.Add(new TourVersion { TourId = tour.Id, VersionNumber = 2, SnapshotData = "{}" });
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondDb.SaveChangesAsync());
         await app.Inspect(async db => {
@@ -452,7 +444,7 @@ public sealed partial class TourFlowTests
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
         var tour = await Create(agency);
         await app.Inspect(async db => { (await db.Tours.SingleAsync()).IsRequest = true; await db.SaveChangesAsync(); });
-        Assert.Equal(HttpStatusCode.Conflict, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision))).StatusCode);
         using var anonymous = app.CreateClient();
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
     }
@@ -495,18 +487,18 @@ public sealed partial class TourFlowTests
         // 2. Validation and publish/complete reject missing provinces
         var validation = await agency.GetFromJsonAsync<TourValidationResult>($"{Root}/{draftWithoutProvinces.Id}/validation");
         Assert.False(validation!.IsValid);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/complete", new TourCommand(draftWithoutProvinces.Version))).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/publish", new TourCommand(draftWithoutProvinces.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/complete", new TourCommand(draftWithoutProvinces.Revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}/publish", new TourCommand(draftWithoutProvinces.Revision))).StatusCode);
 
         // 3. Invalid or duplicate province codes are rejected with 422
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
-            new UpdateTourRequest(draftWithoutProvinces.Version, Complete() with { ProvinceCodes = ["UNKNOWN_PROVINCE"] }, "Invalid province"))).StatusCode);
+            new UpdateTourRequest(draftWithoutProvinces.Revision, Complete() with { ProvinceCodes = ["UNKNOWN_PROVINCE"] }, "Invalid province"))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
-            new UpdateTourRequest(draftWithoutProvinces.Version, Complete() with { ProvinceCodes = ["LAM_DONG", "lam_dong"] }, "Duplicate province"))).StatusCode);
+            new UpdateTourRequest(draftWithoutProvinces.Revision, Complete() with { ProvinceCodes = ["LAM_DONG", "lam_dong"] }, "Duplicate province"))).StatusCode);
 
         // 4. Update with 2 provinces (LAM_DONG, KHANH_HOA) and free-text Destination
         var updated = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{draftWithoutProvinces.Id}",
-            new UpdateTourRequest(draftWithoutProvinces.Version, Complete("Đà Lạt - Nha Trang Liên Tuyến") with
+            new UpdateTourRequest(draftWithoutProvinces.Revision, Complete("Đà Lạt - Nha Trang Liên Tuyến") with
             {
                 Destination = "Đà Lạt - Nha Trang",
                 ProvinceCodes = ["LAM_DONG", "KHANH_HOA"]
@@ -518,7 +510,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(["LAM_DONG", "KHANH_HOA"], reloaded!.Configuration.ProvinceCodes!);
 
         // 5. Publish and search by each province code
-        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{updated.Id}/publish", new TourCommand(updated.Version)));
+        var published = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{updated.Id}/publish", new TourCommand(updated.Revision)));
         Assert.Equal("completed", published.Status);
         Assert.Equal("public", published.Visibility);
 
@@ -534,7 +526,7 @@ public sealed partial class TourFlowTests
 
         // 6. Edit province list (remove KHANH_HOA, add BINH_THUAN) and verify no orphan rows remain
         var editedProvinces = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{published.Id}",
-            new UpdateTourRequest(published.Version, published.Configuration with { ProvinceCodes = ["LAM_DONG", "BINH_THUAN"] }, "Swap Khanh Hoa for Binh Thuan")));
+            new UpdateTourRequest(published.Revision, published.Configuration with { ProvinceCodes = ["LAM_DONG", "BINH_THUAN"] }, "Swap Khanh Hoa for Binh Thuan")));
         Assert.Equal(["LAM_DONG", "BINH_THUAN"], editedProvinces.Configuration.ProvinceCodes!);
         await app.Inspect(async db =>
         {
@@ -571,7 +563,7 @@ public sealed partial class TourFlowTests
         var legacyDto = await agency.GetFromJsonAsync<TourDto>($"{Root}/{legacyId}");
         Assert.Equal("Legacy Da Lat Tour", legacyDto!.Configuration.Name);
         Assert.Empty(legacyDto.Configuration.ProvinceCodes ?? []);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{legacyId}/publish", new TourCommand(legacyDto.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{legacyId}/publish", new TourCommand(legacyDto.Revision))).StatusCode);
     }
 
     [Fact]
@@ -583,19 +575,19 @@ public sealed partial class TourFlowTests
 
         // 'other' agency publishes 2 tours in LAM_DONG and leaves 1 as draft
         var otherTour1 = await Create(other, Complete("Other Tour 1") with { ProvinceCodes = ["LAM_DONG", "KHANH_HOA"] });
-        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour1.Id}/publish", new TourCommand(otherTour1.Version)));
+        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour1.Id}/publish", new TourCommand(otherTour1.Revision)));
 
         var otherTour2 = await Create(other, Complete("Other Tour 2") with { ProvinceCodes = ["LAM_DONG"] });
-        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour2.Id}/publish", new TourCommand(otherTour2.Version)));
+        await Read<TourDto>(await other.PostAsJsonAsync($"{Root}/{otherTour2.Id}/publish", new TourCommand(otherTour2.Revision)));
 
         await Create(other, Complete("Other Draft Tour") with { ProvinceCodes = ["LAM_DONG"] });
 
         // 'agency' also publishes 2 tours in LAM_DONG
         var selfTour1 = await Create(agency, Complete("Self Tour 1") with { ProvinceCodes = ["LAM_DONG"] });
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour1.Id}/publish", new TourCommand(selfTour1.Version)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour1.Id}/publish", new TourCommand(selfTour1.Revision)));
 
         var selfTour2 = await Create(agency, Complete("Self Tour 2") with { ProvinceCodes = ["LAM_DONG", "DA_NANG"] });
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour2.Id}/publish", new TourCommand(selfTour2.Version)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{selfTour2.Id}/publish", new TourCommand(selfTour2.Revision)));
 
         // Query excluding self (default excludeSelf=true)
         var candidatesExcludingSelf = await agency.GetFromJsonAsync<CandidateAgencyDto[]>($"{Root}/candidate-agencies?provinceCode=LAM_DONG");
@@ -632,17 +624,17 @@ public sealed partial class TourFlowTests
 
         // Stale version: nothing changes in the table (whole write is one SaveChanges transaction).
         Assert.Equal(HttpStatusCode.Conflict, (await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version + 5, Complete() with { ProvinceCodes = ["DA_NANG"] }, "Stale"))).StatusCode);
+            new UpdateTourRequest(tour.Revision + 5, Complete() with { ProvinceCodes = ["DA_NANG"] }, "Stale"))).StatusCode);
         Assert.Equal(["KHANH_HOA", "LAM_DONG"], await StoredProvinceRows(app, tour.Id));
 
         // Invalid code: rejected, table unchanged.
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version, Complete() with { ProvinceCodes = ["LAM_DONG", "NOT_A_PROVINCE"] }, "Invalid"))).StatusCode);
+            new UpdateTourRequest(tour.Revision, Complete() with { ProvinceCodes = ["LAM_DONG", "NOT_A_PROVINCE"] }, "Invalid"))).StatusCode);
         Assert.Equal(["KHANH_HOA", "LAM_DONG"], await StoredProvinceRows(app, tour.Id));
 
         // Replace the set: old rows removed, new rows added.
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version, tour.Configuration with { ProvinceCodes = ["DA_NANG", "QUANG_NAM", "LAM_DONG"] }, "Replace provinces")));
+            new UpdateTourRequest(tour.Revision, tour.Configuration with { ProvinceCodes = ["DA_NANG", "QUANG_NAM", "LAM_DONG"] }, "Replace provinces")));
         Assert.Equal(["DA_NANG", "LAM_DONG", "QUANG_NAM"], await StoredProvinceRows(app, tour.Id));
         await app.Inspect(async db => Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM tour_provinces").SingleAsync()));
 
@@ -658,11 +650,16 @@ public sealed partial class TourFlowTests
         Assert.Empty((await anonymous.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/tours?provinceCode=KHANH_HOA"))!.Items);
         Assert.Equal(3, (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!.Configuration.ProvinceCodes!.Length);
 
-        // Removing every province is allowed for a draft, deletes all rows, and publishing is then rejected.
+        // Saving an open tour preserves public visibility and still requires a province.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
+            new UpdateTourRequest(tour.Revision,tour.Configuration with {ProvinceCodes=[]},"Invalid public edit"))).StatusCode);
+        Assert.Equal(3,(await StoredProvinceRows(app,tour.Id)).Length);
+        // A hidden tour can be incomplete while editing; publishing validates it again.
+        tour=await Command(agency,tour,"hide",reason:"Edit coverage");
         var cleared = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",
-            new UpdateTourRequest(tour.Version, tour.Configuration with { ProvinceCodes = [] }, "Clear")));
+            new UpdateTourRequest(tour.Revision, tour.Configuration with { ProvinceCodes = [] }, "Clear")));
         Assert.Empty(await StoredProvinceRows(app, tour.Id));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(cleared.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(cleared.Revision))).StatusCode);
     }
 
     [Fact]

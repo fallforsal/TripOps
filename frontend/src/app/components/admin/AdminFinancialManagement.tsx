@@ -1,5 +1,6 @@
+import { AdminAllianceAllocationLedger } from "./AdminAllianceAllocationLedger";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { getPlatformBankAccount, savePlatformBankAccount } from "@/app/services/settlements";
 import { Booking, SystemBankAccount } from "@/app/types";
 import {
@@ -400,6 +401,7 @@ export function AdminFinancialManagement({
         </div>
       </div>
 
+      <AdminAllianceAllocationLedger />
     </div>
   );
 }

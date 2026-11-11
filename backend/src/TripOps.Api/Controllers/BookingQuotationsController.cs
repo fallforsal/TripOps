@@ -26,11 +26,6 @@ public sealed class BookingQuotationsController(BookingQuotationService quotatio
     [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SupplierRequests(int bookingId, CancellationToken ct) =>
         Ok(await quotations.AgencyRequests(Actor, bookingId, ct));
-    [HttpPost("change-plan"), Authorize(Roles = "user")]
-    [EndpointSummary("Customer changes a custom Tour plan or service selection before deposit")]
-    [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ChangePlan(int bookingId, BookingPlanChange input, CancellationToken ct) =>
-        Ok(await quotations.ChangePlan(Actor, bookingId, input, ct));
 }
 
 [ApiController, Authorize(Roles = "provider"), Route("api/v1/provider/booking-requests"), Tags("Provider Booking Requests")]
@@ -55,5 +50,5 @@ public sealed class AgencyBookingPlanController(BookingQuotationService quotatio
     [EndpointSummary("Agency replaces a declined Provider or changes a custom Tour plan before deposit")]
     [ProducesResponseType<QuotationView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePlan(int bookingId, BookingPlanChange input, CancellationToken ct) =>
-        Ok(await quotations.ChangePlan(User.FindFirstValue(ClaimTypes.NameIdentifier)!, bookingId, input, ct, true));
+        Ok(await quotations.ChangePlan(User.FindFirstValue(ClaimTypes.NameIdentifier)!, bookingId, input, ct));
 }

@@ -174,8 +174,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             GuideInfoBanner(
               icon: Icons.lock_clock_outlined,
               warning: true,
-              message: 'Chỉ được điểm danh vào ngày khởi hành '
-                  '${vnDate(current.startDate)}. '
+              message: 'Chỉ được điểm danh vào ngày bắt đầu chặng được giao '
+                  '${vnDate(current.attendanceDate ?? current.startDate)}. '
                   'Bạn vẫn có thể xem danh sách và trạng thái đã ghi nhận.',
             ),
             space(10),

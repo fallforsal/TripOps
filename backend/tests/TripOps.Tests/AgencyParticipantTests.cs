@@ -57,7 +57,7 @@ public sealed partial class TourFlowTests
         var people = b.Participants.Select(p => new ParticipantInput(p.FullName, null, p.DateOfBirth, p.Gender, p.IdentityNumber, null))
             .Append(new ParticipantInput("Not allowed", null, null, null, null, null)).ToArray();
         var response = await customer.PostAsJsonAsync($"/api/v1/bookings/{b.Id}/quotations/change-plan", new BookingPlanChange(b.TourId!.Value, Participants: people));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(2, (await Read<BookingDto>(await customer.GetAsync($"/api/v1/bookings/{b.Id}"))).TotalGuests);
     }
 }

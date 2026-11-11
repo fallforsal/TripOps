@@ -11,4 +11,3 @@ public interface IChatEvents
     Task Updated(string[] users, int conversationId);
     Task Read(string[] users, ReadDto receipt);
 }
-

@@ -41,7 +41,7 @@ public sealed class DatabaseDesignSchemaTests
             if (line.StartsWith("indexes")) { depth++; continue; }
             if (line.StartsWith('}')) { if (--depth == 0) tableName = null; continue; }
             if (depth != 1) continue;
-            var column = Regex.Match(line, @"^(\w+)\s+(varchar|text|json|int|decimal|boolean|timestamp|date|uniqueidentifier|user_role_enum)\b");
+            var column = Regex.Match(line, @"^(\w+)\s+(varchar|text|json|int|decimal|boolean|timestamp|date|user_role_enum|uniqueidentifier)\b");
             if (!column.Success) continue;
             var name = column.Groups[1].Value;
             Assert.True(tables[tableName].Columns.Any(c => c.Name == name), $"Unmapped column: {tableName}.{name}");
@@ -51,8 +51,8 @@ public sealed class DatabaseDesignSchemaTests
             documented.Add((tableName, name));
             columnCount++;
         }
-        Assert.Equal(45, tableCount);
-        Assert.Equal(613, columnCount);
+        Assert.Equal(46, tableCount);
+        Assert.Equal(653, columnCount);
         Assert.Equal(tableCount, tables.Count);
         var missing = tables.Values.SelectMany(t => t.Columns.Select(c => (t.Name, c.Name))).Where(c => !documented.Contains(c)).ToArray();
         Assert.True(missing.Length == 0, "Undocumented columns: " + string.Join(", ", missing.Select(c => c.ToString())));

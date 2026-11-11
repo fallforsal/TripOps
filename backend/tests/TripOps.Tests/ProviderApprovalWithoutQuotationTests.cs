@@ -14,11 +14,30 @@ public sealed partial class TourFlowTests
         var draft = await CreateCore(agency, Complete() with { Timelines = [new TimelineInput(1, "Arrival",
             Meals: [new MealInput("lunch", "Restaurant", ServiceId: 103)],
             Accommodations: [new AccommodationInput("Hotel", "Da Lat", ServiceId: 102)]), new TimelineInput(2, "Departure")] });
-        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Version)));
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Version)));
+        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Revision)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Revision)));
         return await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
                 [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Provider_inbox_returns_actual_booking_meal_time_and_age_at_service_date()
+    {
+        await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");using var provider=await app.Login("provider");
+        var booking=await PublishedBookingWithProviderServices(customer,agency);
+        await app.Inspect(async db=>{
+            var row=await db.Bookings.Include(b=>b.Participants).Include(b=>b.Timelines).ThenInclude(d=>d.Meals).SingleAsync(b=>b.Id==booking.Id);
+            var participants=row.Participants.OrderBy(p=>p.ParticipantIndex).ToArray();
+            participants[0].DateOfBirth=row.StartDate.AddYears(-30);participants[1].DateOfBirth=row.StartDate.AddYears(-7);
+            row.Timelines.SelectMany(d=>d.Meals).Single().Time=row.StartDate.Date.AddHours(18).AddMinutes(45);
+            await db.SaveChangesAsync();
+        });
+        var inbox=await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        var meal=Assert.Single(inbox,r=>r.SlotKey.StartsWith("meal:"));
+        Assert.Equal(new TimeSpan(18,45,0),meal.ServiceTime);
+        Assert.Equal(new int?[]{30,7},meal.Guests.Select(guest=>guest.Age));
+        Assert.Null(Assert.Single(inbox,r=>r.SlotKey.StartsWith("hotel:")).ServiceTime);
     }
 
     [Fact]
@@ -83,21 +102,14 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Redesigned_private_plan_still_requires_updated_customer_booking_snapshot()
+    public async Task Booked_private_plan_cannot_rewrite_customer_booking()
     {
         await using var app = new App(); await app.Initialize();
         using var customer = await app.Login("customer"); using var agency = await app.Login("agency");
         var (request, plan) = await SharedDesign(customer, agency);
-        await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(plan.Id, plan.Version));
-        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
-            new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
-                [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
-        var changed = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Version,
-            plan.Configuration with { Name = "Revised private plan" }, "Revised itinerary")));
-        changed = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/complete", new TourCommand(changed.Version)));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).StatusCode);
-        await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan", new DesignRequestService.PlanAgreement(changed.Id, changed.Version));
-        await Read<QuotationView>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/quotations/change-plan", new BookingPlanChange(changed.Id)));
+        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", DesignBooking(plan)), HttpStatusCode.Created);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync($"{Root}/{plan.Id}", new UpdateTourRequest(plan.Revision,
+            plan.Configuration with { Name = "Revised private plan" }, "Revised itinerary"))).StatusCode);
         await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null)));
     }
 }

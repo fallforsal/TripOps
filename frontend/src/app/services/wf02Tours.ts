@@ -1,3 +1,5 @@
+import { toTourApiTime } from "@/app/lib/tourClockTime";
+import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import type {
   DailyItinerary,
   Tour,
@@ -10,6 +12,7 @@ import type {
 import { http } from "@/app/lib/http";
 
 type Tier = {
+  key?: string | null;
   name: string;
   minAge: number | null;
   maxAge: number | null;
@@ -17,12 +20,14 @@ type Tier = {
   displayOrder: number;
 };
 type Activity = {
+  id?: string; agencyId?: string;
   name: string;
   description: string | null;
   estimatedTime: string | null;
   orderIndex: number;
 };
 type Meal = {
+  id?: string; agencyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number | null;
   supplier?: TourSupplierSnapshot | null;
@@ -35,6 +40,7 @@ type Meal = {
   priceDifference: number;
 };
 type Accommodation = {
+  id?: string; agencyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number | null;
   supplier?: TourSupplierSnapshot | null;
@@ -57,6 +63,9 @@ type Day = {
   accommodations: Accommodation[];
 };
 export type TourConfiguration = {
+  agencyPricing?: import("@/app/types").Tour["agencyPricing"];
+  coHosts?: import("@/app/types").TourCoHost[];
+  numberOfGuests?: number | null;
   code?: string | null;
   name: string;
   description: string | null;
@@ -79,20 +88,23 @@ export type TourConfiguration = {
   provinceCodes?: string[];
 };
 export type ApiTour = {
+  revision?: number;
+  hasDraftChanges?: boolean;
+  sharedVersion?: number | null;
+  designRequestId?: number | null;
   id: number;
   agencyId: string;
   code: string | null;
   status: "draft" | "completed" | "deleted";
   visibility: "hidden" | "public";
   isRequest: boolean;
-  designRequestId?: number | null;
   isAiGenerated: boolean;
   version: number;
   configuration: TourConfiguration;
   createdAt: string;
   updatedAt: string;
 };
-type PublicTour = {
+type PublicTour = { agencyId?: string;
   id: number;
   code: string | null;
   version: number;
@@ -171,6 +183,7 @@ const hotelOption = (
   delta = 0,
   nights = 1,
 ): Accommodation => ({
+  id: hotel.id, agencyId: hotel.createdByCompanyId,
   supplierSource: hotel.supplierSource || (hotel.isCustom || !hotel.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
   agencySupplierId: hotel.agencySupplierId || null,
   supplier: hotel.supplier || (hotel.isCustom ? { address: hotel.address, area: hotel.destination, referencePrice: hotel.pricePerNight, conditions: hotel.description } : null),
@@ -213,8 +226,9 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       const activities: Activity[] = (day.locations || []).map(
         (place, orderIndex) => ({
           name: place.name.trim(),
+          id: place.id, agencyId: place.createdByCompanyId,
           description: place.address?.trim() || null,
-          estimatedTime: place.time ? `${place.time.slice(0, 5)}:00` : null,
+          estimatedTime: toTourApiTime(place.time, `Ngày ${dayNumber}, điểm ${orderIndex + 1} (${place.name || "chưa có tên"})`),
           orderIndex,
         }),
       );
@@ -223,13 +237,14 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           supplierSource: meal.supplierSource || (meal.isCustom || !meal.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
           agencySupplierId: meal.agencySupplierId || null,
           supplier: meal.supplier || (meal.isCustom ? { area: day.destinationCity || destination, referencePrice: meal.pricePerPerson, conditions: meal.description } : null),
+          id: meal.id, agencyId: meal.createdByCompanyId,
           mealType: meal.type,
           restaurantName: (meal.serviceName || meal.description || "").trim(),
           serviceId:
             meal.supplierSource !== "AGENCY_SUPPLIER" && !meal.isCustom && meal.serviceId && /^\d+$/.test(meal.serviceId)
               ? Number(meal.serviceId)
               : null,
-          time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
+          time: toTourApiTime(meal.time, `Ngày ${dayNumber}, bữa ${meal.type === "breakfast" ? "sáng" : meal.type === "lunch" ? "trưa" : "tối"}`),
           description: meal.description || null,
           isDefault: true,
           priceDifference: 0,
@@ -238,13 +253,14 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           supplierSource: option.supplierSource || (option.isCustom || !option.serviceId ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER"),
           agencySupplierId: option.agencySupplierId || null,
           supplier: option.supplier || (option.isCustom ? { address: option.address, area: day.destinationCity || destination, referencePrice: option.price, conditions: option.description } : null),
+          id: option.id, agencyId: option.createdByCompanyId || meal.createdByCompanyId,
           mealType: meal.type,
           restaurantName: option.restaurantName.trim(),
           serviceId:
             option.supplierSource !== "AGENCY_SUPPLIER" && !option.isCustom && option.serviceId && /^\d+$/.test(option.serviceId)
               ? Number(option.serviceId)
               : null,
-          time: meal.time ? meal.time.slice(0, 5) + ":00" : null,
+          time: toTourApiTime(meal.time, `Ngày ${dayNumber}, bữa ${meal.type === "breakfast" ? "sáng" : meal.type === "lunch" ? "trưa" : "tối"}`),
           description: option.description || null,
           isDefault: false,
           priceDifference: option.priceDifference,
@@ -262,6 +278,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
               hotelOption(
                 {
                   ...hotel,
+                  id: option.id, createdByCompanyId: option.createdByCompanyId || hotel.createdByCompanyId,
                   serviceId: option.serviceId,
                   supplierSource: option.supplierSource,
                   agencySupplierId: option.agencySupplierId,
@@ -290,12 +307,14 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
     });
   return {
     code: tour.tourCode?.trim() || null,
+    coHosts: tour.coHosts,
     name: tour.name?.trim() || "",
     description: tour.description || null,
     destination: destination || null,
     departureLocation: tour.departureLocation?.trim() || null,
     durationDays: days,
     durationNights: nights,
+    numberOfGuests: tour.planGuestCount ?? null,
     basePrice: tour.price ?? 0,
     minGuests: tour.minGuests ?? null,
     maxGuests: tour.maxGuests ?? null,
@@ -310,6 +329,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       : tour.images || []
     ).filter(Boolean),
     pricingTiers: (tour.priceTable || []).map((row, displayOrder) => ({
+      key: row.tierKey || null,
       name: row.ageGroupLabel.trim(),
       minAge: row.minAge ?? null,
       maxAge: row.maxAge ?? null,
@@ -339,7 +359,6 @@ export function fromConfiguration(
     createdAt?: string;
     updatedAt?: string;
     isRequest?: boolean;
-    designRequestId?: number | null;
   } = {},
 ): Tour {
   const c = configuration;
@@ -347,7 +366,9 @@ export function fromConfiguration(
     const defaultHotel = day.accommodations?.find((option) => option.isDefault);
     const hotel: TourHotel | undefined = defaultHotel
       ? {
-          id: `hotel-${day.dayNumber}`,
+          id: defaultHotel.id || `hotel-${day.dayNumber}-0`,
+          createdByCompanyId: defaultHotel.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+          createdByCompanyName: c.coHosts?.find(h => h.companyId === (defaultHotel.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
           name: defaultHotel.hotelName,
           serviceId: defaultHotel.serviceId
             ? String(defaultHotel.serviceId)
@@ -365,7 +386,8 @@ export function fromConfiguration(
           alternativeHotels: day.accommodations
             .filter((option) => !option.isDefault)
             .map((option, index) => ({
-              id: `hotel-${day.dayNumber}-${index}`,
+              id: option.id || `hotel-${day.dayNumber}-${index + 1}`,
+              createdByCompanyId: option.agencyId,
               serviceId: option.serviceId
                 ? String(option.serviceId)
                 : undefined,
@@ -385,7 +407,9 @@ export function fromConfiguration(
     const meals: TourMeal[] = (day.meals || [])
       .filter((m) => m.isDefault)
       .map((meal, index) => ({
-        id: `meal-${day.dayNumber}-${index}`,
+        id: meal.id || `meal-${day.dayNumber}-${index}`,
+        createdByCompanyId: meal.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+        createdByCompanyName: c.coHosts?.find(h => h.companyId === (meal.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
         type: meal.mealType,
         serviceId: meal.serviceId ? String(meal.serviceId) : undefined,
         supplierSource: meal.supplierSource || (meal.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
@@ -402,7 +426,8 @@ export function fromConfiguration(
             (option) => option.mealType === meal.mealType && !option.isDefault,
           )
           .map((option, alternative) => ({
-            id: `meal-${day.dayNumber}-${index}-${alternative}`,
+            id: option.id || `meal-${day.dayNumber}-${index}-${alternative}`,
+            createdByCompanyId: option.agencyId,
             serviceId: option.serviceId ? String(option.serviceId) : undefined,
             supplierSource: option.supplierSource || (option.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER"),
             agencySupplierId: option.agencySupplierId || undefined,
@@ -423,9 +448,13 @@ export function fromConfiguration(
       description: day.description || "",
       destinationCity: c.destination || undefined,
       hotel,
+      createdByCompanyId: (day as typeof day & { agencyId?: string }).agencyId,
+      createdByCompanyName: c.coHosts?.find(h => h.companyId === (day as typeof day & { agencyId?: string }).agencyId)?.companyName,
       meals,
       locations: (day.activities || []).map((activity, index) => ({
-        id: `activity-${day.dayNumber}-${index}`,
+        id: activity.id || `activity-${day.dayNumber}-${index}`,
+        createdByCompanyId: activity.agencyId || (day as typeof day & { agencyId?: string }).agencyId,
+        createdByCompanyName: c.coHosts?.find(h => h.companyId === (activity.agencyId || (day as typeof day & { agencyId?: string }).agencyId))?.companyName,
         name: activity.name,
         address: activity.description || "",
         latitude: 0,
@@ -436,6 +465,7 @@ export function fromConfiguration(
   });
   const hotels = itinerary.flatMap((day) => (day.hotel ? [day.hotel] : []));
   const priceTable: TourPriceRow[] = (c.pricingTiers || []).map((tier) => ({
+    tierKey: tier.key || undefined,
     ageGroup:
       (tier.minAge ?? 0) >= 12 && (tier.maxAge ?? 150) >= 100
         ? "adult"
@@ -463,11 +493,15 @@ export function fromConfiguration(
     image: c.images?.[0] || "",
     images: c.images || [],
     rating: 0,
+    planGuestCount: c.numberOfGuests || undefined,
     minGuests: c.minGuests || 0,
     maxGuests: c.maxGuests || 0,
     highlights: lines(c.highlights),
     hotels,
     itinerary,
+    agencyPricing: c.agencyPricing,
+    coHosts: c.coHosts && c.coHosts.length > 1 ? c.coHosts.map(h=>({...h, quoteStatus:h.quotedAt?"submitted" as const:"draft" as const,quotePerGuest:h.quoteAdult})) : [],
+    isCoHosted: Boolean(c.coHosts?.some(h => h.role === "partner" && h.status === "accepted")),
     operationPeriod: c.operationPeriod || undefined,
     departureLocation: c.departureLocation || undefined,
     departureCity: c.departureLocation || undefined,
@@ -482,23 +516,25 @@ export function fromConfiguration(
     status: options.status || "completed",
     visibility: options.visibility || "public",
     is_request: options.isRequest || false,
-    customRequestId: options.designRequestId == null ? undefined : String(options.designRequestId),
     version,
     tourType: options.isRequest ? "custom_request" : "public",
   };
 }
-export const fromApiTour = (tour: ApiTour) =>
-  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, {
+export const fromApiTour = (tour: ApiTour): Tour => ({
+  ...fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, {
     agencyId: tour.agencyId,
     status: tour.status,
     visibility: tour.visibility,
     createdAt: tour.createdAt,
     updatedAt: tour.updatedAt,
     isRequest: tour.isRequest,
-    designRequestId: tour.designRequestId,
-  });
+  }),
+  sharedVersion: tour.sharedVersion ?? undefined,
+  revision: tour.revision ?? 1, hasDraftChanges: tour.hasDraftChanges ?? false,
+  customRequestId: tour.designRequestId == null ? undefined : String(tour.designRequestId),
+});
 const fromPublicTour = (tour: PublicTour) =>
-  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration);
+  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, { agencyId: tour.agencyId });
 
 async function allPages(path: string): Promise<TourListItem[]> {
   const items: TourListItem[] = [];
@@ -531,6 +567,7 @@ export async function agencyTours(provinceCode?: string): Promise<Tour[]> {
     summaries.map(async (item) => {
       const api = await http<ApiTour>(`/agency/tours/${item.id}`);
       const result = fromApiTour(api);
+      if (!api.isRequest) return result;
       const versions = await agencyTourVersions(String(item.id));
       result.versionHistory = await Promise.all(
         versions.items
@@ -576,16 +613,6 @@ export async function moderationTours(): Promise<Tour[]> {
 }
 export const getAgencyTour = (id: string) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}`);
-export async function uploadTourImage(file: File): Promise<string> {
-  const body = new FormData();
-  body.append("image", file);
-  return (
-    await http<{ url: string }>("/agency/tours/images", {
-      method: "POST",
-      body,
-    })
-  ).url;
-}
 export async function eligibleServices(
   category: string,
 ): Promise<EligibleService[]> {
@@ -600,33 +627,23 @@ export async function eligibleServices(
 }
 export const getPublicTour = (id: string) =>
   http<PublicTour>(`/tours/${idNumber(id)}`);
-export const createAgencyTour = (data: Partial<Tour>) =>
-  http<ApiTour>("/agency/tours", {
-    method: "POST",
-    body: JSON.stringify(toConfiguration(data)),
-  });
-export const updateAgencyTour = (
-  id: string,
-  version: number,
-  data: Partial<Tour>,
-) =>
-  http<ApiTour>(`/agency/tours/${idNumber(id)}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      version,
-      configuration: toConfiguration(data),
-      changeNote: data.changeNote || "Agency updated tour",
-    }),
-  });
+export const createAgencyTour = (data: Partial<Tour>) => {
+  const body=tourSaveBody(toConfiguration(data),data);
+  return http<ApiTour>(body instanceof FormData ? "/agency/tours/with-images" : "/agency/tours",{method:"POST",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined});
+};
+export const updateAgencyTour = (id:string,revision:number,data:Partial<Tour>) => {
+  const body=tourSaveBody({revision,configuration:toConfiguration(data),changeNote:data.changeNote || "Agency updated tour"},data);
+  return http<ApiTour>(`/agency/tours/${idNumber(id)}${body instanceof FormData ? "/with-images" : ""}`,{method:"PUT",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined});
+};
 export const publishAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/publish`, {
     method: "POST",
-    body: JSON.stringify({ version }),
+    body: JSON.stringify({ revision: version }),
   });
 export const hideAgencyTour = (id: string, version: number, reason: string) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/hide`, {
     method: "POST",
-    body: JSON.stringify({ version, reason }),
+    body: JSON.stringify({ revision: version, reason }),
   });
 export const hideModeratedTour = (
   id: string,
@@ -635,10 +652,10 @@ export const hideModeratedTour = (
 ) =>
   http<ApiTour>(`/admin/tours/${idNumber(id)}/hide`, {
     method: "POST",
-    body: JSON.stringify({ version, reason }),
+    body: JSON.stringify({ revision: version, reason }),
   });
 export const archiveAgencyTour = (id: string, version: number) =>
-  http<void>(`/agency/tours/${idNumber(id)}?version=${version}`, {
+  http<void>(`/agency/tours/${idNumber(id)}?revision=${version}`, {
     method: "DELETE",
   });
 export const duplicateAgencyTour = (id: string, name: string) =>
@@ -652,16 +669,6 @@ export const agencyTourVersions = (id: string) =>
   );
 export const agencyTourVersion = (id: string, number: number) =>
   http<ApiVersion>(`/agency/tours/${idNumber(id)}/versions/${number}`);
-export const restoreAgencyTour = (
-  id: string,
-  number: number,
-  version: number,
-) =>
-  http<ApiTour>(`/agency/tours/${idNumber(id)}/versions/${number}/restore`, {
-    method: "POST",
-    body: JSON.stringify({ version, reason: `Restore version ${number}` }),
-  });
-
 export const findCandidateAgenciesByProvince = (
   provinceCodes: string | string[],
   excludeSelf = true,
@@ -678,5 +685,5 @@ export const findCandidateAgenciesByProvince = (
 export const completeAgencyTour = (id: string, version: number) =>
   http<ApiTour>(`/agency/tours/${idNumber(id)}/complete`, {
     method: "POST",
-    body: JSON.stringify({ version }),
+    body: JSON.stringify({ revision: version }),
   });

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TripOps.Data;
 using TripOps.Data.Enums;
@@ -124,7 +123,7 @@ public sealed class ServiceModerationService(TripOpsDbContext db)
             Latitude = service.Latitude, Longitude = service.Longitude, OperatingHours = service.OperatingHours,
             Image = service.ThumbnailUrl, ThumbnailUrl = service.ThumbnailUrl,
             Images = ServiceMedia.AdditionalImages(service.Images, service.ThumbnailUrl),
-            Amenities = StringList(service.Amenities), Policies = StringList(service.Policies),
+            Amenities = ServiceMedia.TextItems(service.Amenities), Policies = ServiceMedia.TextItems(service.Policies),
             Status = service.Status?.ToString().ToLowerInvariant() ?? "pending",
             IsPaused = service.IsPaused,
             RejectionReason = service.RejectionReason, HiddenReason = service.HiddenReason,
@@ -132,20 +131,4 @@ public sealed class ServiceModerationService(TripOpsDbContext db)
         };
     }
 
-    private static string[] StringList(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return [];
-        try
-        {
-            using var json = JsonDocument.Parse(value);
-            if (json.RootElement.ValueKind == JsonValueKind.Array)
-                return json.RootElement.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String)
-                    .Select(e => e.GetString()!).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-            if (json.RootElement.ValueKind == JsonValueKind.String)
-                return [json.RootElement.GetString()!];
-        }
-        catch (JsonException) { }
-        // Older records may contain a plain text policy or amenity instead of a JSON array.
-        return [value];
-    }
 }

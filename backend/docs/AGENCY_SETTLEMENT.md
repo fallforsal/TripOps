@@ -8,12 +8,17 @@
 | Ngày tự chuyển | Mốc + `Settlement:AutoPayoutDelayDays` (mặc định 2 ngày). VD hoàn thành 10/11 → tự chuyển từ 12/11 |
 | Phí sàn | `system_commission_configs` mới nhất còn hiệu lực; chưa có thì `Settlement:DefaultFeePercent` (10%). Chốt vào `booking_agencies.fee_percent` lúc hoàn thành |
 | Số tiền | Agency nhận = tiền khách đã trả − phí sàn. VD tour 10.000.000đ → phí 1.000.000đ → Agency nhận 9.000.000đ |
-| Nhiều Agency | Agency đối tác nhận `final_amount` của mình, Agency chủ trì nhận phần còn lại |
+| Nhiều Agency | Mỗi Agency nhận `final_amount` của mình sau phụ thu/giảm giá được duyệt, trừ phí sàn; tổng phân bổ phải khớp tổng booking |
 | Tài khoản nhận | Agency tự nhập (`PUT /api/v1/agency/payout-account`); ngân hàng phải có trong danh sách chi hộ (`VietnamBanks`) |
 
 ## Điều kiện
 
 **Chuyển được (cả thủ công):** tour đã hoàn thành, khách đã trả đủ, không có yêu cầu hủy/hoàn tiền đang mở.
+
+Tiền thực thu dùng chung `BookingBilling.NetPaidAmount`: trừ các khoản hoàn giảm giá
+`PRICE_REDUCTION` đã hoàn tất, giữ nguyên giao dịch thu gốc. Không chuyển phần tiền đã hoàn
+hoặc chưa phân bổ cho Agency chủ trì. Booking liên minh chỉ HDV của Agency chủ trì được
+hoàn thành toàn bộ tour và phải đến ngày cuối lịch trình; HDV đối tác không kích hoạt quyết toán toàn đoàn.
 
 **Tự động chuyển thêm cần:**
 - đã tới ngày hẹn;

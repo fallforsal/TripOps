@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState, useEffect, useMemo } from "react";
 import {
   CalendarDays,
@@ -1202,12 +1203,7 @@ export function GuideDashboard({
                       </p>
                     </div>
 
-                    {rollCallSavedNotice && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{rollCallSavedNotice}</span>
-                      </div>
-                    )}
+                    {rollCallSavedNotice && <NotificationMessage tone="success" message={rollCallSavedNotice} />}
 
                     {/* Stats bar */}
                     <div className="grid grid-cols-3 gap-2 text-center">
@@ -1381,12 +1377,7 @@ export function GuideDashboard({
                       </Button>
                     </div>
 
-                    {noteSavedNotice && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{noteSavedNotice}</span>
-                      </div>
-                    )}
+                    {noteSavedNotice && <NotificationMessage tone="success" message={noteSavedNotice} />}
 
                     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                       <Textarea

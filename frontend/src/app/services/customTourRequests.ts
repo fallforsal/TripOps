@@ -1,14 +1,20 @@
+import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
+import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import { http } from "@/app/lib/http";
-import type { CustomTourRequest, Tour, TourCompany } from "@/app/types";
+import type { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
+  archivedAt?: string; closedAt?: string; closeReason?: string; bookingId?: number; collaborationVersions?: number[]; hasCollaborations?: boolean;
+  sharedTourThumbnail?: string | null; sharedTourName?: string | null;
+  coHosts?: TourCoHost[];
+  rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
   destination: string; departureDate: string; returnDate: string | null;
   numberOfPeople: number; budgetPerPerson: number | null;
   hotelStars: string | null; additionalInfo: string | null;
-  businessName: string | null; businessEmail: string | null; businessPhone: string | null;
+  businessName: string | null;
   status: CustomTourRequest["status"]; createdAt: string;
   designedTourId: number | null; currentVersion: number | null;
   quotedPricePerPerson: number | null;
@@ -16,6 +22,10 @@ type RequestDto = {
 type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
+  archivedAt:r.archivedAt,closedAt:r.closedAt,closeReason:r.closeReason,bookingId:r.bookingId?String(r.bookingId):undefined,collaborationVersions:r.collaborationVersions,hasCollaborations:r.hasCollaborations,
+  sharedTourThumbnail:r.sharedTourThumbnail || undefined, sharedTourName:r.sharedTourName || undefined,
+  coHosts: normalizeDesignHosts(r.coHosts,r.agencyId), isCoHosted: hasDesignPartners(normalizeDesignHosts(r.coHosts,r.agencyId)),
+  rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
   targetCompanyName: r.agencyName, contactName: r.contactName,
   contactEmail: r.contactEmail, contactPhone: r.contactPhone,
@@ -23,8 +33,7 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
   returnDate: (r.returnDate || r.departureDate).slice(0, 10),
   numberOfPeople: String(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson == null ? undefined : String(r.budgetPerPerson),
   hotelStars: r.hotelStars || undefined, additionalInfo: r.additionalInfo || undefined,
-  businessName: r.businessName || undefined, businessEmail: r.businessEmail || undefined,
-  businessPhone: r.businessPhone || undefined, status: r.status, createdAt: r.createdAt,
+  businessName: r.businessName || undefined, status: r.status, createdAt: r.createdAt,
   designedTourId: r.designedTourId == null ? undefined : String(r.designedTourId),
   currentVersion: r.currentVersion || undefined,
   quotedPricePerPerson: r.quotedPricePerPerson || undefined,
@@ -46,13 +55,13 @@ export const submitDesignRequest = async (r: Omit<CustomTourRequest, "id" | "cre
     departureDate: r.departureDate, returnDate: r.returnDate,
     numberOfPeople: Number(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson ? Number(r.budgetPerPerson) : null,
     hotelStars: r.hotelStars, additionalInfo: r.additionalInfo,
-    businessName: r.businessName, businessEmail: r.businessEmail, businessPhone: r.businessPhone,
+    businessName: r.businessName,
   }) }));
 export const cancelDesignRequest = async (id: string) =>
   fromDto(await http<RequestDto>(`/tour-design-requests/${Number(id)}/cancel`, { method: "POST" }));
-export const actOnDesignRequest = async (id: string, action: "review" | "reject") =>
+export const actOnDesignRequest = async (id: string, action: "review" | "reject", reason?: string) =>
   fromDto(await http<RequestDto>(`/agency/tour-design-requests/${Number(id)}/action`, {
-    method: "POST", body: JSON.stringify({ action }),
+    method: "POST", body: JSON.stringify({ action, reason }),
   }));
 export const createDesignRequestTour = async (requestId: string, tour: Partial<Tour>) =>
   http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/tours`, {
@@ -62,16 +71,15 @@ export const customerRequestTour = async (requestId: string) =>
   fromApiTour(await http<ApiTour>(`/tour-design-requests/${Number(requestId)}/tour`));
 export const customerRequestPlans = async (requestId: string) =>
   (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map((t) => ({ ...fromApiTour(t), customRequestId: requestId }));
-export type TourPlanProposal = { id: number; requestId: number; tourId: number; baseTourVersion: number;
-  proposal: Pick<Tour, "itinerary" | "hotels"> & { quotation?: { tourVersion: number; quotationVersion?: number; pricePerPerson: number; total: number; preliminary: boolean }; requestedChanges?: Record<string, string> }; message: string; status: string;
-  agencyReply: string | null; createdAt: string; respondedAt: string | null };
-export const customerPlanProposals = (requestId: string) =>
-  http<TourPlanProposal[]>(`/tour-design-requests/${Number(requestId)}/proposals`);
-export const agencyPlanProposals = (requestId: string) =>
-  http<TourPlanProposal[]>(`/agency/tour-design-requests/${Number(requestId)}/proposals`);
-export const submitPlanProposal = (requestId: string, plan: Tour, proposal: TourPlanProposal["proposal"], message: string) =>
-  http<TourPlanProposal>(`/tour-design-requests/${Number(requestId)}/proposals`, { method: "POST",
-    body: JSON.stringify({ tourId: Number(plan.id), baseTourVersion: plan.version || 1, proposal, message }) });
-export const replyPlanProposal = (requestId: string, proposalId: number, decision: "reviewed" | "needs_changes", message: string) =>
-  http<TourPlanProposal>(`/agency/tour-design-requests/${Number(requestId)}/proposals/${proposalId}/reply`, {
-    method: "POST", body: JSON.stringify({ decision, message }) });
+export const cloneDesignTour = async (requestId: string, tourId: string) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/clone`, { method: "POST", body: JSON.stringify({ tourId: Number(tourId) }) }));
+export const shareDesignTour = async (requestId: string, revision: number, version: number) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version }) }));
+export const getDesignVersion = async (requestId: string, version: number) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/versions/${version}`));
+export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, revision?: number) => {
+  const body=tourSaveBody({revision:revision??null,createNewVersion:tour.createNewVersion===true,version:tour.version,configuration:toConfiguration(tour),complete:tour.status==="completed",reason:tour.changeNote},tour);
+  return fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/${body instanceof FormData ? "tour-with-images" : "tour"}`,{method:"PUT",body,signal:body instanceof FormData ? AbortSignal.timeout(120000) : undefined}));
+};
+
+export const designRequestLifecycle = (id:string,action:"archive"|"unarchive"|"close"|"reopen",reason?:string) => http(`/agency/tour-design-requests/${id}/lifecycle`,{method:"POST",body:JSON.stringify({action,reason})});

@@ -22,16 +22,18 @@ public sealed record TourConfiguration(
     TimelineInput[]? Timelines = null,
     [StringLength(255)] string? DepartureLocation = null,
     [StringLength(50)] string? Code = null,
-    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null);
+    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null, DesignCoHostDto[]? CoHosts = null, AgencyPricingInput[]? AgencyPricing = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
-    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0);
+    [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PricePerGuest, [Range(0, 1000)] int DisplayOrder = 0,
+    [StringLength(100)] string? Key = null);
+public sealed record AgencyPricingInput(string AgencyId, PricingTierInput[] Tiers);
 public sealed record TimelineInput([Range(1, 365)] int DayNumber, [Required, StringLength(255)] string Title,
     [StringLength(10000)] string? Description = null,
-    ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null);
+    ActivityInput[]? Activities = null, MealInput[]? Meals = null, AccommodationInput[]? Accommodations = null, string? AgencyId = null);
 public sealed record ActivityInput([Required, StringLength(255)] string Name,
-    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0);
+    [StringLength(10000)] string? Description = null, TimeSpan? EstimatedTime = null, [Range(0, 1000)] int OrderIndex = 0, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 /// <summary>Per-tour snapshot of an Agency-supplied hotel/restaurant (kept in the immutable tour version).</summary>
 public sealed record SupplierSnapshotInput([StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
     [StringLength(150)] string? ContactName = null, [StringLength(30)] string? ContactPhone = null,
@@ -40,14 +42,14 @@ public sealed record MealInput([Required, AllowedValues("breakfast", "lunch", "d
     [StringLength(10000)] string? Description = null, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     int? ServiceId = null, TimeSpan? Time = null,
-    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 public sealed record AccommodationInput([Required, StringLength(255)] string HotelName,
     [Required, StringLength(255)] string DestinationName,
     [StringLength(100)] string? RoomType = null, [Range(0, 365)] int NightsCount = 1,
     [Range(1, 5)] int StarRating = 3, bool IsDefault = true,
     [Range(typeof(decimal), "-9999999999", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal PriceDifference = 0,
     [StringLength(10000)] string? AddressNotes = null, int? ServiceId = null,
-    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null);
+    [StringLength(20)] string? SupplierSource = null, int? AgencySupplierId = null, SupplierSnapshotInput? Supplier = null, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 
 public sealed record SupplierRequest([Required, AllowedValues("HOTEL", "RESTAURANT")] string Type,
     [Required, StringLength(255)] string Name, [StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
@@ -60,18 +62,17 @@ public sealed record SupplierDto(int Id, string Type, string Name, string? Addre
     string? ContactPhone, string? ContactEmail, int? StarRating, decimal? ReferencePrice, string? Conditions, string? Notes,
     string Status, DateTime CreatedAt, DateTime UpdatedAt);
 
-public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Version,
+public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Revision,
     [Required] TourConfiguration Configuration, [Required, StringLength(2000)] string ChangeNote);
-public sealed record TourCommand([Range(1, int.MaxValue)] int Version, [StringLength(2000)] string? Reason = null);
+public sealed record TourCommand([Range(1, int.MaxValue)] int Revision, [StringLength(2000)] string? Reason = null);
 public sealed record DuplicateTourRequest([Required, StringLength(255)] string Name);
 public sealed record AiDraftRequest([Required, StringLength(255)] string Destination,
     [Range(1, 365)] int DurationDays, [StringLength(2000)] string? Style = null);
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
-    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null);
+    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null, int Revision = 1, bool HasDraftChanges = false);
 public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
-public sealed record TourImageUploadResponse(string Url);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
     string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,
     string? HiddenReason = null, string? ThumbnailUrl = null, string[]? Images = null, int? Capacity = null, bool IsPaused = false);
@@ -106,3 +107,8 @@ public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerat
     public Task<TourConfiguration> Generate(AiDraftRequest request, CancellationToken ct) =>
         throw new TourException(503, "AI itinerary generation is not configured.");
 }
+
+public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
+
+public sealed record SaveDesignTourInput(int? Revision, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null, bool CreateNewVersion = false, int? Version = null);
+public sealed record ShareDesignVersionInput(int Revision, int? Version = null);
