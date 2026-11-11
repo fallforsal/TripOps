@@ -1,8 +1,10 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
 import { useEffect, useState } from "react";
 import { Eye, Plus, RefreshCw, Send } from "lucide-react";
 import type { CustomTourRequest, Tour, Service } from "@/app/types";
-import { customerRequestPlans } from "@/app/services/customTourRequests";
+import { customerDesignRequests, customerRequestPlans } from "@/app/services/customTourRequests";
 import { Button } from "@/app/components/ui/button";
 import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
 import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
@@ -10,7 +12,22 @@ import { StatusBadge } from "@/app/components/customer/StatusBadge";
 interface Props { services?: Service[]; requests: CustomTourRequest[]; tours?: Tour[]; onCancelRequest: (id: string) => Promise<void>; onNavigateToCreate: () => void; onViewTour?: (tour: Tour) => void; onBookTour?: (tour: Tour) => void | Promise<void>; }
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
-export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, onViewTour, onBookTour, services = [] }: Props) {
+export function MyRequestsPage({ requests: initialRequests, onCancelRequest, onNavigateToCreate, onViewTour, onBookTour, services = [] }: Props) {
+  const [requests, setRequests] = useState(initialRequests);
+  useEffect(() => {
+    setRequests(initialRequests);
+    let alive = true; let pending = false;
+    const refresh = async () => {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      try { const latest = await customerDesignRequests(); if (alive) setRequests(latest); }
+      catch { /* Keep the current list during a temporary background connection failure. */ }
+      finally { pending = false; }
+    };
+    const interval = window.setInterval(() => void refresh(), 5000);
+    window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
+    return () => { alive = false; window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [initialRequests]);
   const groups=[{id:"pending",label:"Chờ tiếp nhận"},{id:"reviewing",label:"Đang thiết kế"},{id:"designed",label:"Đã chia sẻ"},{id:"closed",label:"Đã hủy / Từ chối"}];
   const [status,setStatus]=useState(()=>requests.some(r=>r.status==="designed") ? "designed" : "pending");
   const inGroup=(request:CustomTourRequest,group:string)=>group==="closed" ? ["cancelled","rejected"].includes(request.status) : group==="designed" ? ["designed","quoted","accepted"].includes(request.status) : request.status===group;
@@ -23,11 +40,25 @@ export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, 
   const selected = requests.find(r => r.id === selectedId);
   useEffect(() => {
     if (!selectedId) return;
-    let alive = true; setPlan(null); setLoading(true); setError("");
-    customerRequestPlans(selectedId).then(rows => { if (alive) setPlan(rows[0] || null); })
-      .catch(e => { if (alive) setError(e instanceof Error ? e.message : "Không tải được phương án."); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+    let alive = true; let pending = false;
+    setPlan(null); setLoading(true); setError("");
+    const refresh = async (background = false) => {
+      if (pending || (background && document.visibilityState === "hidden")) return;
+      pending = true;
+      try {
+        const rows = await customerRequestPlans(selectedId);
+        if (alive) setPlan(current => {
+          const next = rows[0] || null;
+          return current && next && current.version === next.version && current.revision === next.revision ? current : next;
+        });
+      } catch(e) { if (alive && !background) setError(e instanceof Error ? e.message : "Không tải được phương án."); }
+      finally { pending = false; if (alive && !background) setLoading(false); }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(true), 5000);
+    const onFocus = () => void refresh(true);
+    window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onFocus);
+    return () => { alive = false; window.clearInterval(interval); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
   }, [selectedId, reload, selected?.sharedVersion]);
   const book = async () => {
     if (!selected || !plan || busy) return;
@@ -43,15 +74,15 @@ export function MyRequestsPage({ requests, onCancelRequest, onNavigateToCreate, 
       {selected.additionalInfo && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{selected.additionalInfo}</p>}
       {selected.rejectionReason && <div className="mt-4 rounded-lg bg-rose-50 p-4 text-sm text-rose-800"><strong>Lý do Agency từ chối:</strong><p className="mt-1 whitespace-pre-wrap">{selected.rejectionReason}</p></div>}
     </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[#075985]">Phương án được Agency chia sẻ</h2><Button size="sm" variant="outline" disabled={loading} onClick={() => setReload(n => n + 1)}><RefreshCw className={loading ? "animate-spin" : ""}/>Tải lại phương án</Button></div>
-      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[#075985]">Phương án Agency chọn cho bạn</h2><Button size="sm" variant="outline" disabled={loading} onClick={() => setReload(n => n + 1)}><RefreshCw className={loading ? "animate-spin" : ""}/>Tải lại phương án</Button></div>
+      {error && <NotificationMessage tone="error" message={error} />}
       {loading ? <p className="text-sm text-slate-500">Đang tải phương án…</p> : plan ? <><div className="flex flex-col gap-4 sm:flex-row">{plan.image && <img src={plan.image} alt={plan.name} className="h-36 w-full rounded-xl object-cover sm:w-52"/>}<div className="flex-1"><span className="text-xs font-semibold text-[#075985]">Phiên bản {plan.version}</span><h3 className="mt-1 text-lg font-bold">{plan.name}</h3><p className="mt-2 text-sm text-slate-500">{plan.duration} · {plan.destination}</p><p className="mt-3 text-lg font-bold text-[#075985]">{money(plan.price)} <span className="text-sm font-normal">/ khách</span></p></div></div>
-        <p className="text-sm text-slate-500">Bạn muốn điều chỉnh hoặc dùng lại phiên bản trước? Gửi trao đổi bên dưới để Agency cập nhật và chia sẻ lại.</p>
-        <div className="flex flex-wrap justify-end gap-2">{onViewTour && <Button variant="outline" onClick={() => onViewTour(plan)}><Eye/>Xem chi tiết tour</Button>}{onBookTour && <Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void book()}>Đặt tour phiên bản {plan.version}</Button>}</div></> : <p className="text-sm text-slate-500">{selected.status === "rejected" ? "Agency đã từ chối yêu cầu này." : selected.status === "cancelled" ? "Yêu cầu đã được hủy." : "Agency chưa chia sẻ phương án. Bạn có thể trao đổi để bổ sung nhu cầu."}</p>}
+        <p className="text-sm text-slate-500">Phương án tự cập nhật khi Agency đổi phiên bản. Bạn có thể trao đổi bên dưới nếu muốn điều chỉnh hoặc xem lại bản trước.</p>
+        <div className="flex flex-wrap justify-end gap-2">{onViewTour && <Button variant="outline" onClick={() => onViewTour(plan)}><Eye/>Xem chi tiết tour</Button>}{onBookTour && <Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void book()}>Đặt tour phiên bản {plan.version}</Button>}</div></> : <p className="text-sm text-slate-500">{selected.status === "rejected" ? "Agency đã từ chối yêu cầu này." : selected.status === "cancelled" ? "Yêu cầu đã được hủy." : "Agency chưa chọn phương án cho bạn. Bạn có thể trao đổi để bổ sung nhu cầu."}</p>}
     </section>
     {plan && <TourAccommodationSummary tour={plan} services={services}/>}
     <DesignRequestMessages requestId={selected.id} closed={selected.status === "rejected" || selected.status === "cancelled"}/>
-    {!selected.designedTourId && (selected.status === "pending" || selected.status === "reviewing") && <div className="flex justify-end"><Button variant="outline" disabled={busy} className="text-rose-700" onClick={async () => { if (!confirm("Hủy yêu cầu thiết kế này?")) return; setBusy(true); try { await onCancelRequest(selected.id); } catch(e) { setError(e instanceof Error ? e.message : "Không thể hủy yêu cầu."); } finally { setBusy(false); } }}>Hủy yêu cầu</Button></div>}
+    {!selected.designedTourId && (selected.status === "pending" || selected.status === "reviewing") && <div className="flex justify-end"><Button variant="outline" disabled={busy} className="text-rose-700" onClick={async () => { if (!(await confirmAction("Hủy yêu cầu thiết kế này?"))) return; setBusy(true); try { await onCancelRequest(selected.id); } catch(e) { setError(e instanceof Error ? e.message : "Không thể hủy yêu cầu."); } finally { setBusy(false); } }}>Hủy yêu cầu</Button></div>}
     <CustomRequestDetailModal isOpen={viewing} onClose={() => setViewing(false)} request={selected} matchingTour={plan} userRole="customer" onViewTour={onViewTour}/>
   </div>;
   return <div className="space-y-5 pb-12"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><h1 className="text-2xl font-bold text-[#075985]">Yêu cầu thiết kế tour của tôi</h1><p className="mt-1 text-sm text-slate-500">Trao đổi với Agency và chọn phương án phù hợp cho chuyến đi.</p></div><Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" onClick={onNavigateToCreate}><Plus/>Tạo yêu cầu mới</Button></div>

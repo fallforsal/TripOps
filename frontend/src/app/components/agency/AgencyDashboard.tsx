@@ -247,6 +247,7 @@ export function AgencyDashboard({
       case "custom-requests":
         return (
           <AgencyCustomRequests
+            services={services}
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}

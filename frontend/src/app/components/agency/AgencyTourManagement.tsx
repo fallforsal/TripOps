@@ -1,5 +1,12 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { toast } from "@/app/lib/notifications";
+import { confirmAction } from "@/app/lib/notificationDialogs";
+import { validateTourForm, tourSaveErrorMessage, tourFormTabLabels, type TourFormIssue } from "@/app/lib/tourFormValidation";
+import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
+import { TourTimeInput } from "@/app/components/ui/TourTimeInput";
+import { compareTourCreation, emptyTourDays, publicTourSaveState, tourStatusOrder } from "@/app/lib/tourEditorDefaults";
 import { DeferredImageUploads } from "@/app/lib/deferredImageUploads";
-import { orderTimeline, moveTimeline } from "@/app/lib/tourTimelineOrder";
+import { orderTimeline, moveTimeline, appendTimeline } from "@/app/lib/tourTimelineOrder";
 import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
 import { agencySuppliers, createAgencySupplier, updateAgencySupplier, type AgencySupplier } from "@/app/services/wf02Tours";
 import { useState, useRef, useEffect } from "react";
@@ -156,7 +163,7 @@ export function AgencyTourManagement({
     "all" | "published" | "draft" | "hidden"
   >("all");
   const [sortBy, setSortBy] = useState<
-    "newest" | "price-asc" | "price-desc" | "rating" | "bookings"
+    "newest" | "status" | "price-asc" | "price-desc" | "rating" | "bookings"
   >("newest");
   const [selectedTourIds, setSelectedTourIds] = useState<string[]>([]);
 
@@ -228,7 +235,8 @@ export function AgencyTourManagement({
       if (sortBy === "price-desc") return b.price - a.price;
       if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
       if (sortBy === "bookings") return (b.bookings || 0) - (a.bookings || 0);
-      return 0;
+      if (sortBy === "status") return tourStatusOrder(a) - tourStatusOrder(b) || compareTourCreation(a, b);
+      return compareTourCreation(a, b);
     });
 
   // Xử lý thực thi hành động sau khi người dùng xác nhận trên AlertDialog
@@ -251,7 +259,7 @@ export function AgencyTourManagement({
     } else if (type === "publish") {
       if (!tour.provinceCodes || tour.provinceCodes.length === 0) {
         setPendingAction(null);
-        alert(
+        toast.warning(
           `Tour "${tour.name}" chưa chọn "Tỉnh/thành tour đi qua". Hệ thống sẽ mở màn hình chỉnh sửa để bạn chọn ít nhất 1 tỉnh/thành trước khi đăng bán.`,
         );
         setEditingTour(tour);
@@ -411,7 +419,8 @@ export function AgencyTourManagement({
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="text-xs bg-white border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-gray-700 font-medium focus:outline-none focus:border-[#075985]"
               >
-                <option value="newest">Mới cập nhật nhất</option>
+                <option value="newest">Mới tạo nhất</option>
+                <option value="status">Trạng thái: Mở bán → Tạm ẩn → Nháp</option>
                 <option value="price-asc">Giá: Thấp đến cao</option>
                 <option value="price-desc">Giá: Cao đến thấp</option>
                 <option value="rating">Đánh giá cao nhất</option>
@@ -519,20 +528,7 @@ export function AgencyTourManagement({
         </div>
       </div>
 
-      {copiedNotice && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span className="font-semibold">{copiedNotice}</span>
-          </div>
-          <button
-            onClick={() => setCopiedNotice(null)}
-            className="text-emerald-600 hover:text-emerald-900 p-1"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {copiedNotice && <NotificationMessage tone="success" message={copiedNotice} />}
 
       {!isApproved && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-700">
@@ -1024,7 +1020,7 @@ export function AgencyTourManagement({
         open={!!pendingAction}
         onOpenChange={(open) => !open && setPendingAction(null)}
       >
-        <AlertDialogContent className="max-w-md p-6 rounded-2xl bg-white shadow-xl border border-slate-200">
+        <AlertDialogContent tone={pendingAction?.type === "delete" ? "error" : pendingAction?.type === "publish" ? "success" : pendingAction?.type === "duplicate" ? "info" : "warning"} className="max-w-md p-6 rounded-2xl bg-white shadow-xl border border-slate-200">
           <AlertDialogHeader className="space-y-3">
             {/* Header Icon & Title */}
             <div className="flex items-center gap-3">
@@ -1238,6 +1234,7 @@ export function TourFormPage(props: TourFormPageProps) {
   const [planGuestCount, setPlanGuestCount] = useState(tour?.planGuestCount || customGuests);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [saveIssues, setSaveIssues] = useState<TourFormIssue[]>([]);
   const isCustomTour = props.isCustomTour ?? props.isCustomDesign ?? false;
   const isCustom =
     props.customerMode || isCustomTour || !!customRequest || tour?.tourType === "custom_request";
@@ -1671,55 +1668,18 @@ export function TourFormPage(props: TourFormPageProps) {
     if (tour?.hotels && tour.hotels.length > 0) {
       return JSON.parse(JSON.stringify(tour.hotels));
     }
-    if (!tour) return [];
+    if (!tour) return [{ id: "hotel-1", name: "", destination: destination || "",
+      nights: Math.max(1, numberOfNights), stars: 4, pricePerNight: 0,
+      address: "", description: "", alternativeHotels: [],
+      createdByCompanyId: company.id, createdByCompanyName: company.name }];
     const found = tour?.itinerary?.find((d) => d.hotel)?.hotel;
-    const defaultAlternatives: TourAlternativeHotel[] = [
-      {
-        id: "alt-1",
-        serviceId: "service-hotel-dl-3",
-        name: "Dalat Edensee Lake Resort & Spa",
-        stars: 5,
-        priceDifference: 400000,
-        description: "Resort ven hồ Tuyền Lâm – Không gian nghỉ dưỡng đẳng cấp",
-      },
-    ];
-
-    if (found) {
-      return [
-        {
-          id: "hotel-1",
-          serviceId: found.serviceId,
-          name: found.name,
-          destination: tour?.destination || "Đà Lạt",
-          nights: tour?.numberOfNights ?? 2,
-          stars: found.stars || 4,
-          pricePerNight: found.pricePerNight || 2800000,
-          description: found.description || "Khách sạn cao cấp view đẹp",
-          address: found.address || "02 Trần Phú, Phường 3, TP. Đà Lạt",
-          allowCustomHotelRequest: true,
-          alternativeHotels: defaultAlternatives,
-        },
-      ];
-    }
-    return [
-      {
-        id: "hotel-1",
-        serviceId: undefined,
-        name: "Khách sạn Đà Lạt Palace Heritage",
-        destination: tour?.destination || "Đà Lạt",
-        nights: tour?.numberOfNights ?? 2,
-        stars: 5,
-        pricePerNight: 2800000,
-        description:
-          "Khách sạn cổ kính trung tâm thành phố, view hồ Xuân Hương",
-        address: "02 Trần Phú, Phường 3, TP. Đà Lạt",
-        allowCustomHotelRequest: true,
-        alternativeHotels: defaultAlternatives,
-      },
-    ];
+    return found ? [{ ...found, id: "hotel-1", destination: tour.destination || "",
+      nights: tour.numberOfNights || 1, stars: found.stars || 0,
+      pricePerNight: found.pricePerNight || 0, description: found.description || "",
+      address: found.address || "", alternativeHotels: [] }] : [];
   });
   const [expandedHotelId, setExpandedHotelId] = useState<string | null>(
-    "hotel-1",
+    tour?.hotels?.[0]?.id || "hotel-1",
   );
   const [viewingServiceModal, setViewingServiceModal] =
     useState<Service | null>(null);
@@ -1870,7 +1830,7 @@ export function TourFormPage(props: TourFormPageProps) {
               (alt.agencySupplierId && alt.agencySupplierId === (serv as any).agencySupplierId),
           );
           if ((isStandardMatching && standardValid) || isAltMatching) {
-            alert(
+            toast.warning(
               `Khách sạn "${serv.name}" đã có trong danh sách lựa chọn của tour!`,
             );
             return h;
@@ -2043,12 +2003,12 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   // Xóa nhiều thẻ khách sạn đã chọn cùng lúc (Bulk Delete)
-  const handleBulkDeleteHotels = (hotelId: string) => {
+  const handleBulkDeleteHotels = async (hotelId: string) => {
     if (selectedHotelKeys.length === 0) return;
     if (
-      !window.confirm(
+      !(await confirmAction(
         `Bạn có chắc chắn muốn xóa ${selectedHotelKeys.length} khách sạn đã chọn không?`,
-      )
+      ))
     )
       return;
 
@@ -2359,7 +2319,7 @@ export function TourFormPage(props: TourFormPageProps) {
     }
   };
 
-  const handleBulkDeleteMeals = (
+  const handleBulkDeleteMeals = async (
     dIdx: number,
     mIdx: number,
     mealKey: string,
@@ -2367,9 +2327,9 @@ export function TourFormPage(props: TourFormPageProps) {
     const selected = selectedMealKeys[mealKey] || [];
     if (selected.length === 0) return;
     if (
-      !window.confirm(
+      !(await confirmAction(
         `Bạn có chắc chắn muốn xóa ${selected.length} nhà hàng / quán ăn đã chọn không?`,
-      )
+      ))
     )
       return;
 
@@ -2568,23 +2528,11 @@ export function TourFormPage(props: TourFormPageProps) {
     const updated = [...itinerary];
     const dayMeals = [...(updated[dayIdx].meals || [])];
     if (dayMeals.some((m) => m.type === mealType)) {
-      alert(
+      toast.warning(
         `Ngày ${updated[dayIdx].day} đã có bữa ${mealType === "breakfast" ? "sáng" : mealType === "lunch" ? "trưa" : "tối"}. Mỗi ngày chỉ thiết lập tối đa 1 bữa cho mỗi buổi.`,
       );
       return;
     }
-    const label =
-      mealType === "lunch"
-        ? "Ăn trưa"
-        : mealType === "dinner"
-          ? "Ăn tối"
-          : "Ăn sáng";
-    const defaultPrice =
-      mealType === "breakfast"
-        ? 60000
-        : mealType === "dinner"
-          ? 140000
-          : 120000;
     const defaultTime =
       mealType === "breakfast"
         ? "07:30"
@@ -2594,14 +2542,15 @@ export function TourFormPage(props: TourFormPageProps) {
     const newMeal: TourMeal = {
       type: mealType,
       time: defaultTime,
-      serviceName: `Nhà hàng đặc sản (${label})`,
-      description: "Thực đơn tiêu chuẩn theo chương trình tour",
-      pricePerPerson: defaultPrice,
-      allowCustomMealRequest: true,
+      serviceName: "",
+      description: "",
+      pricePerPerson: 0,
+      allowCustomMealRequest: false,
       alternativeMeals: [],
       createdByCompanyId: company.id,
       createdByCompanyName: company.name,
     };
+    preserveDayOrder(updated[dayIdx], `meal:${newMeal.id || dayMeals.length}`);
     dayMeals.push(newMeal);
     updated[dayIdx].meals = dayMeals;
     setItinerary(updated);
@@ -2694,173 +2643,9 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   // Tab 2: Lịch trình chi tiết
-  const [itinerary, setItinerary] = useState<DailyItinerary[]>(
-    tour?.itinerary && tour.itinerary.length > 0
-      ? JSON.parse(JSON.stringify(tour.itinerary))
-      : isCustom && customRequest
-        ? Array.from({ length: customDays }, (_, index) => ({
-            id: `day-${index + 1}`, day: index + 1,
-            title: "",
-            description: "", destinationCity: customDestination,
-            locations: [], meals: [],
-          }))
-      : [
-        {
-          id: `day-1`,
-          day: 1,
-          date: "2026-03-01",
-          title: "",
-          description:
-            "Hướng dẫn viên Viettravel đón đoàn tại điểm hẹn, xuất phát đi Đà Lạt. Tới nơi nhận phòng khách sạn, ăn trưa nhà hàng địa phương. Buổi chiều tham quan hồ Xuân Hương và Nhà thờ Con Gà. Tối dạo chợ đêm Đà Lạt và thưởng thức ẩm thực đặc sản.",
-          destinationCity: "Đà Lạt",
-          hotel: {
-            name: "Khách sạn Đà Lạt Palace Heritage",
-            pricePerNight: 2800000,
-            description:
-              "Khách sạn cổ kính trung tâm thành phố, view hồ Xuân Hương",
-          },
-          meals: [
-            {
-              type: "lunch",
-              time: "12:00",
-              serviceName: "Nhà hàng Hương Rừng Đà Lạt",
-              description:
-                "Đặc sản gà đồi, cơm lam, rau củ tươi organic Đà Lạt",
-              pricePerPerson: 120000,
-            },
-            {
-              type: "dinner",
-              time: "18:30",
-              serviceName: "Nhà hàng Chợ Đêm & Phố Ẩm Thực Đà Lạt",
-              description:
-                "Ẩm thực đường phố: bánh tráng nướng, sữa đậu nành",
-              pricePerPerson: 90000,
-            },
-          ],
-          locations: [
-            {
-              id: "loc-1-1",
-              name: "Hồ Xuân Hương",
-              address: "01 Trần Quốc Toản, Phường 1, Đà Lạt",
-              time: "14:00",
-            },
-            {
-              id: "loc-1-2",
-              name: "Nhà thờ Con Gà",
-              address: "Trần Phú, Phường 3, Đà Lạt",
-              time: "15:30",
-            },
-            {
-              id: "loc-1-3",
-              name: "Chợ đêm Đà Lạt",
-              address: "Nguyễn Thị Minh Khai, Phường 1, Đà Lạt",
-              time: "19:00",
-            },
-          ],
-        },
-        {
-          id: `day-2`,
-          day: 2,
-          date: "2026-03-02",
-          title: "",
-          description:
-            "Sau bữa sáng tại khách sạn, đoàn khởi hành tham quan Thung lũng tình yêu, Mê Linh Coffee Garden và Thác Datanla. Buổi chiều ghé Quảng trường Lâm Viên ngắm hoàng hôn. Tối ăn nhà hàng đặc sản địa phương.",
-          destinationCity: "Đà Lạt",
-          hotel: {
-            name: "Khách sạn Đà Lạt Palace Heritage",
-            pricePerNight: 2800000,
-            description: "Khách sạn cổ kính trung tâm thành phố",
-          },
-          meals: [
-            {
-              type: "breakfast",
-              time: "07:30",
-              serviceName: "Khách sạn Đà Lạt Palace Heritage",
-              description: "Buffet sáng tại khách sạn",
-              pricePerPerson: 0,
-            },
-            {
-              type: "lunch",
-              time: "12:00",
-              serviceName: "Nhà hàng Làng Nướng Đà Lạt",
-              description: "Đặc sản nướng Đà Lạt",
-              pricePerPerson: 130000,
-            },
-            {
-              type: "dinner",
-              time: "18:30",
-              serviceName: "Nhà hàng La Viet",
-              description: "Ẩm thực Việt Nam đặc sắc",
-              pricePerPerson: 150000,
-            },
-          ],
-          locations: [
-            {
-              id: "loc-2-1",
-              name: "Thung lũng tình yêu",
-              address: "Phường 4, Đà Lạt",
-              time: "08:30",
-            },
-            {
-              id: "loc-2-2",
-              name: "Mê Linh Coffee Garden",
-              address: "Đường Hồ Tùng Mậu, Phường 3, Đà Lạt",
-              time: "11:00",
-            },
-            {
-              id: "loc-2-3",
-              name: "Thác Datanla",
-              address: "Đèo Prenn, Phường 3, Đà Lạt",
-              time: "14:00",
-            },
-            {
-              id: "loc-2-4",
-              name: "Quảng trường Lâm Viên",
-              address: "Trần Quốc Toản, Phường 1, Đà Lạt",
-              time: "17:00",
-            },
-          ],
-        },
-        {
-          id: `day-3`,
-          day: 3,
-          date: "2026-03-03",
-          title: "",
-          description:
-            "Ăn sáng tại khách sạn, trả phòng. Tham quan Ga Đà Lạt – công trình kiến trúc Pháp cổ điển. Ghé Vườn hoa thành phố chụp ảnh lưu niệm. Ăn trưa rồi lên xe trở về TP.HCM, kết thúc tour.",
-          destinationCity: "Đà Lạt",
-          meals: [
-            {
-              type: "breakfast",
-              time: "07:30",
-              serviceName: "Khách sạn Đà Lạt Palace Heritage",
-              description: "Buffet sáng tại khách sạn",
-              pricePerPerson: 0,
-            },
-            {
-              type: "lunch",
-              time: "12:00",
-              serviceName: "Nhà hàng Trúc Lâm Viên",
-              description: "Cơm phần đặc sản Đà Lạt",
-              pricePerPerson: 100000,
-            },
-          ],
-          locations: [
-            {
-              id: "loc-3-1",
-              name: "Ga Đà Lạt",
-              address: "Quang Trung, Phường 10, Đà Lạt",
-              time: "08:00",
-            },
-            {
-              id: "loc-3-2",
-              name: "Vườn hoa thành phố",
-              address: "Đường Hồ Tùng Mậu, Phường 3, Đà Lạt",
-              time: "09:30",
-            },
-          ],
-        },
-      ],
+  const [itinerary, setItinerary] = useState<DailyItinerary[]>(() =>
+    tour?.itinerary?.length ? structuredClone(tour.itinerary)
+      : emptyTourDays(numberOfDays, destination),
   );
 
   // Tab 3: Bảng giá vé theo độ tuổi
@@ -2912,7 +2697,7 @@ export function TourFormPage(props: TourFormPageProps) {
 
   const handleAddPriceRow = () => {
     if (!isLeadCompany) {
-      alert(
+      toast.warning(
         "Chỉ đơn vị chủ trì (Lead) mới có quyền thêm phân loại giá vé cho tour liên minh!",
       );
       return;
@@ -2931,11 +2716,11 @@ export function TourFormPage(props: TourFormPageProps) {
 
   const handleRemovePriceRow = (index: number) => {
     if (!isLeadCompany) {
-      alert("Chỉ đơn vị chủ trì (Lead) mới có quyền xóa phân loại giá vé!");
+      toast.warning("Chỉ đơn vị chủ trì (Lead) mới có quyền xóa phân loại giá vé!");
       return;
     }
     if (priceTable.length <= 1) {
-      alert("Cần giữ lại ít nhất 1 khung giá vé cho tour!");
+      toast.warning("Cần giữ lại ít nhất 1 khung giá vé cho tour!");
       return;
     }
     setPriceTable(priceTable.filter((_, i) => i !== index));
@@ -2943,7 +2728,7 @@ export function TourFormPage(props: TourFormPageProps) {
 
   const handleResetDefaultPriceRows = () => {
     if (!isLeadCompany) {
-      alert(
+      toast.warning(
         "Chỉ đơn vị chủ trì (Lead) mới có quyền khôi phục mẫu phân loại chuẩn!",
       );
       return;
@@ -3088,6 +2873,18 @@ export function TourFormPage(props: TourFormPageProps) {
     return hours * 60 + mins;
   };
 
+  const dayTimelineEntries = (day: DailyItinerary) => [
+    ...(day.locations || []).map((loc, index) => ({ key: `location:${loc.id || index}`, minutes: parseTimeToMinutes(loc.time) })),
+    ...(day.meals || []).map((meal, index) => ({ key: `meal:${meal.id || index}`, minutes: parseTimeToMinutes(meal.time) })),
+  ];
+
+  const preserveDayOrder = (day: DailyItinerary, addedKey?: string) => {
+    const entries = dayTimelineEntries(day);
+    setTimelineOrders(previous => ({ ...previous, [day.id]: addedKey
+      ? appendTimeline(entries, previous[day.id], addedKey)
+      : orderTimeline(entries, previous[day.id]).map(entry => entry.key) }));
+  };
+
   const updateLocationTime = (
     dayIdx: number,
     locIdx: number,
@@ -3095,6 +2892,7 @@ export function TourFormPage(props: TourFormPageProps) {
   ) => {
     const updated = [...itinerary];
     if (updated[dayIdx]?.locations?.[locIdx]) {
+      preserveDayOrder(updated[dayIdx]);
       updated[dayIdx].locations[locIdx].time = newTime;
       setItinerary(updated);
     }
@@ -3103,6 +2901,7 @@ export function TourFormPage(props: TourFormPageProps) {
   const updateMealTime = (dayIdx: number, mealIdx: number, newTime: string) => {
     const updated = [...itinerary];
     if (updated[dayIdx]?.meals?.[mealIdx]) {
+      preserveDayOrder(updated[dayIdx]);
       updated[dayIdx].meals[mealIdx].time = newTime;
       setItinerary(updated);
     }
@@ -3134,57 +2933,9 @@ export function TourFormPage(props: TourFormPageProps) {
     const nextDayNum = itinerary.length + 1;
     const nextNights = Math.max(0, nextDayNum - 1);
     const newDay: DailyItinerary = {
-      id: `day-${Date.now()}`,
-      day: nextDayNum,
-      date: new Date(Date.now() + nextDayNum * 86400000)
-        .toISOString()
-        .split("T")[0],
-      title: "",
-      description: "Đoàn tiếp tục tham quan các điểm du lịch nổi tiếng...",
-      destinationCity: destination || "Điểm đến",
-      createdByCompanyId: company.id,
-      createdByCompanyName: company.name,
-      hotel: {
-        name:
-          itinerary[0]?.hotel?.name ||
-          hotels[0]?.name ||
-          "Khách sạn lưu trú tiêu chuẩn",
-        pricePerNight:
-          itinerary[0]?.hotel?.pricePerNight ||
-          hotels[0]?.pricePerNight ||
-          2800000,
-        description: "Khách sạn lưu trú tiêu chuẩn",
-        createdByCompanyId: company.id,
-        createdByCompanyName: company.name,
-      },
-      meals: [
-        {
-          type: "lunch",
-          serviceName: "Nhà hàng Trúc Lâm Viên",
-          description: "Bữa trưa đặc sản",
-          pricePerPerson: 140000,
-          createdByCompanyId: company.id,
-          createdByCompanyName: company.name,
-        },
-        {
-          type: "dinner",
-          serviceName: "Nhà hàng Làng Nướng Đà Lạt",
-          description: "Bữa tối tiêu chuẩn",
-          pricePerPerson: 160000,
-          createdByCompanyId: company.id,
-          createdByCompanyName: company.name,
-        },
-      ],
-      locations: [
-        {
-          id: `loc-${Date.now()}-1`,
-          name: "Điểm tham quan mới",
-          address: "",
-          time: "09:00",
-        },
-      ],
+      ...emptyTourDays(1, destination)[0], id: `day-${Date.now()}`, day: nextDayNum,
+      createdByCompanyId: company.id, createdByCompanyName: company.name,
     };
-    if (isCustom) { newDay.hotel = undefined; newDay.meals = []; newDay.locations = []; newDay.description = ""; }
     const updated = [...itinerary, newDay];
     setItinerary(updated);
     setNumberOfDays(nextDayNum);
@@ -3235,6 +2986,7 @@ export function TourFormPage(props: TourFormPageProps) {
       createdByCompanyId: company.id,
       createdByCompanyName: company.name,
     });
+    preserveDayOrder(updated[dayIdx], `location:${currentLocs[currentLocs.length - 1].id}`);
     updated[dayIdx].locations = currentLocs;
     setItinerary(updated);
   };
@@ -3250,7 +3002,7 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   const handleSubmit = async (
-    mode: "draft" | "complete_hidden" | "complete_public" = "complete_public",
+    mode: "save" | "draft" | "complete_hidden" | "complete_public" = "save",
     createNewVersion = false,
   ) => {
     if (props.customerMode) {
@@ -3260,7 +3012,8 @@ export function TourFormPage(props: TourFormPageProps) {
       finally { setSaving(false); }
       return;
     }
-    const isDraft = mode === "draft";
+    const saveState = publicTourSaveState(tour);
+    const isDraft = mode === "draft" || (mode === "save" && saveState.status === "draft");
     const prepareSupplier = <T extends TourHotel | TourAlternativeHotel | TourMeal | TourAlternativeMeal>(
       item: T, type: "HOTEL" | "RESTAURANT", referencePrice: number, area: string,
     ): T => {
@@ -3277,26 +3030,14 @@ export function TourFormPage(props: TourFormPageProps) {
           referencePrice: normalized.supplier?.referencePrice || saved.referencePrice || referencePrice,
           conditions: normalized.supplier?.conditions || saved.conditions || undefined } } as T;
     };
-    const preparedHotels = hotels.map((h) => ({
+    const preparedHotels = hotels.filter(h => !isDraft || h.name.trim() || h.serviceId || h.agencySupplierId).map((h) => ({
       ...prepareSupplier(h, "HOTEL", h.pricePerNight, h.destination || destination),
       alternativeHotels: h.alternativeHotels?.map((a) => prepareSupplier(a, "HOTEL", a.price || a.pricePerNight || 0, h.destination || destination)),
     }));
-    const preparedItinerary = itinerary.map((day) => ({ ...day, meals: day.meals?.map((m) => ({
+    const preparedItinerary = itinerary.map((day) => ({ ...day, meals: day.meals?.filter(m => !isDraft || m.serviceName?.trim() || m.serviceId || m.agencySupplierId).map((m) => ({
       ...prepareSupplier(m, "RESTAURANT", m.pricePerPerson || 0, day.destinationCity || destination),
       alternativeMeals: m.alternativeMeals?.map((a) => prepareSupplier(a, "RESTAURANT", a.price || 0, day.destinationCity || destination)),
     })) }));
-    if (!isDraft && provinceCodes.length === 0) {
-      const msg =
-        "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua trước khi hoàn tất hoặc đăng bán tour.";
-      setProvinceFieldError(msg);
-      setSaveError(msg);
-      setActiveTab("general");
-      return;
-    }
-    if (!isDraft && !name.trim()) {
-      alert("Vui lòng nhập tên tour trước khi hoàn tất.");
-      return;
-    }
     const validSource = (item: { serviceId?: string; isCustom?: boolean; supplierSource?: string;
       agencySupplierId?: number; supplier?: TourHotel["supplier"] }) => {
       if (item.supplierSource === "AGENCY_SUPPLIER" || item.isCustom || item.agencySupplierId)
@@ -3311,13 +3052,6 @@ export function TourFormPage(props: TourFormPageProps) {
       { day: d.day, name: m.serviceName || "", option: m },
       ...(m.alternativeMeals || []).map((a) => ({ day: d.day, name: a.restaurantName, option: a })),
     ])).find((entry) => !entry.name.trim() || !validSource(entry.option));
-    if (!isDraft && (invalidHotel || invalidMeal)) {
-      setSaveError(invalidHotel
-        ? `Khách sạn "${invalidHotel.name || "chưa có tên"}" chưa gắn nguồn cung hợp lệ. Mở “Nhập khách sạn ngoài sàn” để chọn bản ghi danh bạ, hoặc chọn Provider thật.`
-        : `Ngày ${invalidMeal!.day}, nhà hàng "${invalidMeal!.name || "chưa có tên"}" chưa gắn nguồn cung hợp lệ. Mở “Nhập quán ăn ngoài sàn” để chọn bản ghi danh bạ, hoặc chọn Provider thật.`);
-      setActiveTab("itinerary");
-      return;
-    }
     const finalTourCode =
       tourCode.trim() ||
       tour?.tourCode ||
@@ -3430,7 +3164,7 @@ export function TourFormPage(props: TourFormPageProps) {
         ? "quoted"
         : "pending_partner_quote",
       status: isDraft ? "draft" : "completed",
-      visibility: isCustom || isDraft || mode === "complete_hidden" ? "hidden" : "public",
+      visibility: isCustom ? "hidden" : mode === "save" ? saveState.visibility : isDraft || mode === "complete_hidden" ? "hidden" : "public",
       is_request: isCustom,
       tourType: isCustom ? "custom_request" : tour?.tourType || "public",
       customRequestId: customRequest?.id || tour?.customRequestId,
@@ -3448,6 +3182,17 @@ export function TourFormPage(props: TourFormPageProps) {
 
     };
 
+    const issues = validateTourForm(tourData, !isDraft);
+    if (!isDraft && invalidHotel) issues.push({ tab: "itinerary", message:
+      `Khách sạn “${invalidHotel.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn khách sạn trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.` });
+    if (!isDraft && invalidMeal) issues.push({ tab: "itinerary", message:
+      `Ngày ${invalidMeal.day}, nhà hàng “${invalidMeal.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn nhà hàng trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.` });
+    setProvinceFieldError(!isDraft && !provinceCodes.length ? "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua." : "");
+    setSaveIssues(issues);
+    if (issues.length) {
+      setSaveError("Vui lòng kiểm tra các thông tin bên dưới trước khi lưu tour.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
@@ -3466,11 +3211,32 @@ export function TourFormPage(props: TourFormPageProps) {
 
   return (
     <div className={props.customerMode ? "bg-slate-50 pb-6 space-y-6" : "bg-slate-50 min-h-screen pb-16 space-y-6 -m-6"}>
-      {saveError && (
-        <div role="alert" className="p-4 text-red-700 bg-red-50">
-          {saveError}
-        </div>
-      )}
+      <AlertDialog open={!!saveError} onOpenChange={open => { if (!open) { setSaveError(""); setSaveIssues([]); } }}>
+        <AlertDialogContent className="max-h-[85vh] overflow-y-auto bg-white sm:max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="h-5 w-5 shrink-0" /> Chưa thể lưu thông tin tour
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {saveIssues.length ? "Một số thông tin còn thiếu hoặc chưa hợp lệ. Chọn mục bên dưới để chuyển đến phần cần sửa." : "Vui lòng kiểm tra thông báo bên dưới và thử lại."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {saveIssues.length ? <ul className="space-y-2">
+            {saveIssues.map((issue, index) => <li key={`${issue.tab}-${index}`}>
+              <button type="button" className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-left hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-amber-600"
+                onClick={() => { setActiveTab(issue.tab); setSaveError(""); setSaveIssues([]); }}>
+                <span className="block text-xs font-semibold text-amber-900">{tourFormTabLabels[issue.tab]}</span>
+                <span className="mt-1 block text-sm text-slate-700">{issue.message}</span>
+              </button>
+            </li>)}
+          </ul> : <p role="alert" className="whitespace-pre-line rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{tourSaveErrorMessage(saveError)}</p>}
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => { if (saveIssues[0]) setActiveTab(saveIssues[0].tab); setSaveError(""); setSaveIssues([]); }}>
+              {saveIssues.length ? "Đến mục cần sửa" : "Đã hiểu"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {props.customerMode ? <div className="border-b border-[#CBD5E1] bg-white p-5">
         <h2 className="font-bold text-[#075985]">Tùy chỉnh chỗ ở, chỗ ăn và lịch trình</h2>
         <p className="text-sm text-slate-600">Thay đổi trên bản sao của bạn. Agency sẽ xem yêu cầu, thiết kế lại và báo giá.</p>
@@ -3527,53 +3293,16 @@ export function TourFormPage(props: TourFormPageProps) {
           >
             Hủy bỏ
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => handleSubmit("draft")}
-            className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs font-semibold"
-            title={isCustom ? "Cập nhật phiên bản đang mở" : "Lưu bản nháp để tiếp tục chỉnh sửa sau"}
-          >
-            {isCustom ? "Lưu" : "Lưu bản nháp"}
+          <Button type="button" disabled={saving} onClick={() => handleSubmit(isCustom ? "draft" : "save")}
+            className="bg-[#075985] hover:bg-sky-800 text-white font-semibold">
+            {saving ? "Đang lưu…" : "Lưu"}
           </Button>
-          {!isCustom && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving || !name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("complete_hidden")}
-              className="border-slate-400 text-slate-700 hover:bg-slate-100 text-xs font-semibold"
-              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
-            >
-              Lưu hoàn tất (Chưa đăng)
-            </Button>
-          )}
           {isCustom && isLeadCompany && tour && tour.id !== "0" && (
             <Button type="button" variant="outline" disabled={saving || !name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("draft", true)}
-              title="Giữ lại phiên bản hiện tại và lưu nội dung này thành phiên bản kế tiếp">
+              onClick={() => handleSubmit("draft", true)}>
               <Plus className="w-4 h-4 mr-1.5" />Lưu với phiên bản mới
             </Button>
           )}
-          {!isCustom && (<Button
-            type="button"
-            disabled={saving || !name.trim() || !destination.trim()}
-            onClick={() => handleSubmit("complete_public")}
-            className={`${isCustom
-                ? "bg-[#F97316] hover:bg-[#EA580C] text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-              } font-semibold shadow-xs text-xs`}
-          >
-            <Check className="w-4 h-4 mr-1.5" />
-            {isCustom
-              ? tour
-                ? "Hoàn tất & Lưu tour riêng"
-                : "Hoàn tất & Lưu Tour Thiết Kế"
-              : tour
-                ? "Lưu & Mở bán ngay"
-                : "Hoàn tất & Đăng bán ngay"}
-          </Button>)}
         </div>
       </div>
 
@@ -4087,13 +3816,11 @@ export function TourFormPage(props: TourFormPageProps) {
                   Giá cơ bản / người lớn (VNĐ){" "}
                   <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  type="number"
-                  step={50000}
-                  value={ownershipCollaboration ? priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? 0 : price}
+                <VietnameseMoneyInput
+                  value={String(ownershipCollaboration ? priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? 0 : price)}
                   disabled={ownershipCollaboration}
-                  onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
-                  className="mt-1 font-bold text-[#075985]"
+                  onValueChange={value => setPrice(Number(value) || 0)}
+                  className="mt-1 h-9 w-full rounded-md border border-[#CBD5E1] bg-white px-3 font-bold text-[#075985]"
                 />
                 {ownershipCollaboration && <p className="mt-1 text-xs text-slate-500">Nhập giá phần của bạn tại tab Bảng giá vé.</p>}
               </div>
@@ -4569,7 +4296,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                       type="button"
                                       onClick={async () => {
                                         if (!customHotelInputs.name.trim()) {
-                                          alert("Vui lòng nhập tên khách sạn!");
+                                          toast.warning("Vui lòng nhập tên khách sạn!");
                                           return;
                                         }
                                         let saved: AgencySupplier | undefined;
@@ -5576,17 +5303,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                       >
                                         {/* Time Input Pill */}
                                         <div className="w-[72px] flex-shrink-0">
-                                          <Input
-                                            type="text"
+                                          <TourTimeInput
                                             value={loc.time || ""}
                                             disabled={isLocLocked}
-                                            onChange={(e) =>
-                                              updateLocationTime(
-                                                dIdx,
-                                                lIdx,
-                                                e.target.value,
-                                              )
-                                            }
+                                            onValueChange={value => updateLocationTime(dIdx, lIdx, value)}
+                                            onValueCommit={value => { updateLocationTime(dIdx, lIdx, value); handleSortDayByTime(dIdx); }}
                                             placeholder="--:--"
                                             className="w-full h-8 text-xs font-bold text-center border-[#CBD5E1] rounded-xl px-1 bg-white text-gray-800 shadow-2xs focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
                                             title="Nhập giờ tham quan (VD: 08:30, 9h, 14:00)"
@@ -5775,17 +5496,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                       >
                                         {/* Time Input Pill */}
                                         <div className="w-[72px] flex-shrink-0 pt-1.5">
-                                          <Input
-                                            type="text"
+                                          <TourTimeInput
                                             value={meal.time || ""}
                                             disabled={isMealLocked}
-                                            onChange={(e) =>
-                                              updateMealTime(
-                                                dIdx,
-                                                mIdx,
-                                                e.target.value,
-                                              )
-                                            }
+                                            onValueChange={value => updateMealTime(dIdx, mIdx, value)}
+                                            onValueCommit={value => { updateMealTime(dIdx, mIdx, value); handleSortDayByTime(dIdx); }}
                                             placeholder="--:--"
                                             className="w-full h-8 text-xs font-bold text-center border-[#CBD5E1] rounded-xl px-1 bg-white text-gray-800 shadow-2xs focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
                                             title="Nhập giờ dùng bữa (VD: 07:30, 11:30, 18:30)"
@@ -5858,8 +5573,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   </span>
                                                   <p className="text-xs sm:text-sm font-semibold text-gray-900">
                                                     <span className="font-bold text-gray-900">
-                                                      {meal.serviceName ||
-                                                        "Nhà hàng theo tour"}
+                                                      {meal.serviceName || "Chưa chọn nhà hàng"}
                                                     </span>
                                                   </p>
                                                   {(meal.createdByCompanyName ||
@@ -5883,19 +5597,14 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     )}
                                                 </div>
                                                 <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
-                                                  Tiêu chuẩn:{" "}
-                                                  {meal.serviceName ||
-                                                    "Nhà hàng địa phương"}{" "}
-                                                  (0đ chênh lệch)
+                                                  {meal.serviceName ? `Tiêu chuẩn: ${meal.serviceName} (0đ chênh lệch)` : "Chọn dịch vụ cho bữa ăn bên dưới"}
                                                 </p>
                                               </div>
                                             </div>
 
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                               <span className="text-[11px] text-gray-500 bg-white px-2 py-0.5 rounded border border-[#CBD5E1] font-medium">
-                                                {altsCount > 0
-                                                  ? `${altsCount + 1} phương án ẩm thực`
-                                                  : "1 phương án tiêu chuẩn (0đ)"}
+                                                {meal.serviceName ? `${altsCount + 1} phương án ẩm thực` : "Chưa chọn dịch vụ"}
                                               </span>
                                               {/* Actions: Move Up, Move Down Bữa ăn */}
                                               <button
@@ -6306,7 +6015,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 !input ||
                                                                 !input.restaurantName.trim()
                                                               ) {
-                                                                alert(
+                                                                toast.warning(
                                                                   "Vui lòng nhập tên nhà hàng!",
                                                                 );
                                                                 return;
@@ -6965,34 +6674,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 );
                                               })()}
 
-                                              {/* Checkbox cho phép khách tự đề xuất */}
-                                              <div className="pt-2 border-t border-gray-100">
-                                                <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={
-                                                      meal.allowCustomMealRequest ??
-                                                      true
-                                                    }
-                                                    disabled={isMealLocked}
-                                                    onChange={(e) =>
-                                                      updateMealField(
-                                                        dIdx,
-                                                        mIdx,
-                                                        {
-                                                          allowCustomMealRequest:
-                                                            e.target.checked,
-                                                        },
-                                                      )
-                                                    }
-                                                    className="w-4 h-4 rounded text-emerald-600 border-gray-300 cursor-pointer"
-                                                  />
-                                                  Cho phép khách tự đề xuất nhà
-                                                  hàng khác ngoài danh sách
-                                                  (công ty sẽ báo giá sau khi
-                                                  nhận booking)
-                                                </label>
-                                              </div>
+
                                             </div>
                                           )}
                                         </div>
@@ -8874,60 +8556,12 @@ export function TourFormPage(props: TourFormPageProps) {
         )}
       </div>
 
-      {props.customerMode ? <div className="space-y-4 border-t border-[#CBD5E1] bg-white p-5">
+      {props.customerMode && <div className="space-y-4 border-t border-[#CBD5E1] bg-white p-5">
         {props.customerContent}
         <div className="flex gap-2"><Button type="button" variant="outline" disabled={saving} onClick={onBack}>Hủy</Button>
           <Button type="button" disabled={saving} onClick={() => void handleSubmit()} className="bg-[#075985] text-white">{saving ? "Đang gửi…" : props.customerSubmitLabel || "Gửi yêu cầu thay đổi cho Agency"}</Button>
         </div>
-      </div> : <>
-      {/* Sticky Bottom Action Bar */}
-      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#CBD5E1] px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        <div className="text-xs text-gray-500 flex items-center gap-2">
-          <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-          <span>
-            {tour
-              ? `Đang chỉnh sửa: ${tour.name}`
-              : "Tạo tour mới chuẩn dữ liệu. Đảm bảo đã thiết lập đủ lịch trình và bảng giá."}
-          </span>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <Button variant="outline" onClick={onBack}>
-            Hủy
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => handleSubmit("draft")}
-            className="border-amber-500 text-amber-700 hover:bg-amber-50 font-semibold"
-          >
-            {isCustom ? "Lưu" : "Lưu bản nháp"}
-          </Button>
-          {!isCustom && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving || !name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("complete_hidden")}
-              className="border-slate-400 text-slate-700 hover:bg-slate-100 font-semibold"
-              title="Đã tạo xong thông tin tour hoàn chỉnh nhưng chưa đăng mở bán liền"
-            >
-              Lưu hoàn tất (Chưa đăng)
-            </Button>
-          )}
-          {isCustom && isLeadCompany && tour && tour.id !== "0" && <Button type="button" variant="outline" disabled={saving || !name.trim() || !destination.trim()} onClick={() => handleSubmit("draft", true)}>Lưu với phiên bản mới</Button>}
-          {!isCustom && (<Button
-            disabled={saving || !name.trim() || !destination.trim()}
-            onClick={() => handleSubmit("complete_public")}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-          >
-            <Check className="w-4 h-4 mr-1.5" />
-            {isCustom ? "Hoàn tất & Lưu tour riêng" : tour ? "Lưu & Mở bán ngay" : "Hoàn tất & Đăng bán ngay"}
-          </Button>)}
-        </div>
-      </div>
-
-      </>}
+      </div>}
       {/* AI Itinerary Planner Modal */}
       {showAIPlanner && (
         <AIItineraryPlannerModal

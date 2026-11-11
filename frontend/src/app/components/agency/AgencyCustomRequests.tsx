@@ -1,12 +1,18 @@
+import { TourDetailPage } from "@/app/components/user/TourDetailPage";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
+import { selectCustomerDesignVersion } from "@/app/lib/designVersionSelection";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { DesignVersionSelector } from "./DesignVersionSelector";
 import { DesignCollaborationPanel } from "./DesignCollaborationPanel";
 import { useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-import { CheckCircle2, ChevronDown, Copy, Eye, History, Handshake, Loader2, Search, Send, Sparkles, XCircle } from "lucide-react";
+import { toast } from "@/app/lib/notifications";
+import { CheckCircle2, Copy, Eye, History, Handshake, Loader2, Search, Sparkles, XCircle, MoreHorizontal, MessageSquare, CalendarDays, Users, MapPin } from "lucide-react";
 import { http } from "@/app/lib/http";
 import { fromApiTour, type ApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
 import { cloneDesignTour, shareDesignTour, saveDesignTour, getDesignVersion } from "@/app/services/customTourRequests";
-import type { CustomTourRequest, Tour, TourCompany } from "@/app/types";
+import type { CustomTourRequest, Tour, TourCompany, Service } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import { TourFormPage } from "@/app/components/agency/AgencyTourManagement";
@@ -16,19 +22,20 @@ import { DesignVersionHistory } from "@/app/components/common/DesignVersionHisto
 import type { DesignRequestDecision } from "./DesignRequestAgencyActions";
 
 interface Props {
-  requests: CustomTourRequest[]; company: TourCompany; tours: Tour[]; allCompanies?: TourCompany[];
+  services?: Service[]; requests: CustomTourRequest[]; company: TourCompany; tours: Tour[]; allCompanies?: TourCompany[];
   onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
   onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
   onEditTour: (id: string, tour: Partial<Tour>) => void | Promise<void>;
   onViewTour?: (tour: Tour) => void;
 }
-const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Đã chia sẻ", rejected: "Đã từ chối", cancelled: "Đã hủy" };
+const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Khách đang xem", rejected: "Đã từ chối", cancelled: "Đã hủy" };
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
-export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour }: Props) {
+export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour, services = [] }: Props) {
+  const [preview, setPreview] = useState<Tour | null>(null);
   const [collaborating, setCollaborating] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [workspaceTab, setWorkspaceTab] = useState("versions");
   const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [designing, setDesigning] = useState<CustomTourRequest | null>(null);
@@ -36,26 +43,27 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   const [template, setTemplate] = useState<Tour | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Tour>>({});
   const [busy, setBusy] = useState(false); const lock = useRef(false);
+  const [updatingVersion, setUpdatingVersion] = useState<{ requestId: string; version: number } | null>(null);
   const [rejecting, setRejecting] = useState<CustomTourRequest | null>(null); const [reason, setReason] = useState("");
   const [cloning, setCloning] = useState<CustomTourRequest | null>(null); const [sourceId, setSourceId] = useState("");
   const [error, setError] = useState(""); const [revision, setRevision] = useState(0);
   const currentTour = (request: CustomTourRequest) => overrides[request.id] || tours.find(t => t.id === request.designedTourId || t.customRequestId === request.id) || null;
   const active = (request: CustomTourRequest) => request.status === "reviewing" || request.status === "designed";
   const perform = async (fn: () => Promise<void>) => {
-    if (lock.current) return; lock.current = true; setBusy(true); setError("");
-    try { await fn(); } catch (e) { const message = e instanceof Error ? e.message : "Không thể thực hiện thao tác. Vui lòng thử lại."; setError(message); toast.error(message); }
+    if (lock.current) return false; lock.current = true; setBusy(true); setError("");
+    try { await fn(); return true; } catch (e) { const message = e instanceof Error ? e.message : "Không thể thực hiện thao tác. Vui lòng thử lại."; setError(message); toast.error(message); return false; }
     finally { lock.current = false; setBusy(false); }
   };
   const decide = async (request: CustomTourRequest, decision: DesignRequestDecision) => {
     if (decision === "rejected") { setViewing(null); setReason(""); setError(""); setRejecting(request); return; }
     await perform(async () => { await onUpdateRequest(request.id, { status: decision }); toast.success("Đã tiếp nhận yêu cầu thiết kế."); });
   };
-  const start = async (request: CustomTourRequest, existing?: Tour | null) => {
+  const start = async (request: CustomTourRequest, existing?: Tour | null, version?: number) => {
     if (!active(request)) return;
     await perform(async () => {
       setTemplate(null);
       if (existing) {
-        const saved=await getDesignVersion(request.id,overrides[request.id]?.version ?? existing.sharedVersion ?? existing.version ?? 1);
+        const saved=await getDesignVersion(request.id,version ?? overrides[request.id]?.version ?? existing.version ?? 1);
         setEditing(saved);
       }
       else {
@@ -75,70 +83,130 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     const saved = await saveDesignTour(designing.id, { ...(editing || template), ...data, is_request: true }, editing?.revision);
     setOverrides(prev => ({ ...prev, [designing.id]: saved }));
     await onUpdateRequest(designing.id, {}); setDesigning(null); setEditing(null); setRevision(n => n + 1);
-    toast.success("Đã lưu tour. Chia sẻ riêng khi bạn sẵn sàng gửi cho khách.");
+    toast.success("Đã lưu tour. Chọn phiên bản khách xem để cập nhật phương án.");
   };
-  const share = async (request: CustomTourRequest, tour: Tour) => perform(async () => {
-    const selected = overrides[request.id]?.version ?? tour.sharedVersion ?? tour.version ?? 1;
-    const fresh = await getDesignVersion(request.id, selected);
-    const saved = await shareDesignTour(request.id, fresh.revision || 1, selected);
-    setOverrides(prev => ({ ...prev, [request.id]: saved })); await onUpdateRequest(request.id, {}); setRevision(n => n + 1);
-    toast.success("Đã chia sẻ phương án cho khách.");
+  const viewVersion = async (request: CustomTourRequest, version: number) => perform(async () => {
+    const selected = await getDesignVersion(request.id, version);
+    setHistoryRequestId(null);
+    setPreview(selected);
   });
+  const openWorkspace = (request: CustomTourRequest, tab = "versions") => {
+    setError(""); setWorkspaceTab(tab); setHistoryRequestId(request.id);
+  };
   const chooseVersion = async (request: CustomTourRequest, version: number) => perform(async () => {
-    const selected = await getDesignVersion(request.id,version);
-    setOverrides(prev=>({...prev,[request.id]:selected}));
+    setUpdatingVersion({ requestId: request.id, version });
+    try {
+      const saved = await selectCustomerDesignVersion(version,
+        selected => getDesignVersion(request.id, selected),
+        (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected));
+      setOverrides(previous => ({ ...previous, [request.id]: saved }));
+      setRevision(value => value + 1);
+      try { await onUpdateRequest(request.id, {}); }
+      catch { toast.warning("Đã cập nhật phiên bản cho khách. Danh sách yêu cầu chưa tải lại được, vui lòng tải lại trang khi kết nối ổn định."); }
+      toast.success(`Khách hàng hiện có thể xem và đặt tour phiên bản v${version}.`);
+    } finally { setUpdatingVersion(null); }
   });
+  const collaborationChanged = async (request: CustomTourRequest) => {
+    await onUpdateRequest(request.id, {});
+    if (request.designedTourId || currentTour(request)) {
+      const fresh = fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${request.id}/working-tour`));
+      setOverrides(previous => ({ ...previous, [request.id]: fresh }));
+    }
+    setRevision(value => value + 1);
+  };
   const rows = useMemo(() => requests.filter(r => r.targetCompanyId === company.id && (filter === "all" || r.status === filter) &&
     [r.id, r.destinations, r.contactName, r.contactEmail, r.contactPhone, r.businessName].some(v => v?.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)), [requests, filter, search]);
   const collaboration = requests.find(r => r.id === collaborating);
-  if (collaboration) return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={async () => { setOverrides({}); await onUpdateRequest(collaboration.id, {}); setRevision(n=>n+1); }}/>;
+  if (preview) return <div className="space-y-3"><div className="rounded-lg bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">Xem trước phiên bản v{preview.version} · Nội dung này chưa thay đổi phiên bản khách đang xem.</div><TourDetailPage tour={preview} services={services} currentUser={company} previewOnly onBack={() => setPreview(null)}/></div>;
+  if (collaboration) return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={() => collaborationChanged(collaboration)}/>;
   if (designing) return <TourFormPage company={company} tour={editing || template} customRequest={designing} isCustomTour={true} ownershipCollaboration
     onManageCoHosts={() => { setCollaborating(designing.id); setDesigning(null); }} onBack={() => setDesigning(null)} onSubmit={save} />;
   const viewed = requests.find(r => r.id === viewing) || null;
-  const expandedRequest = requests.find(r => r.id === expanded);
   return <div className="space-y-5">
-    <div className="rounded-2xl border border-slate-200 bg-white p-5"><h1 className="text-2xl font-bold text-[#075985]">Yêu cầu thiết kế tour từ khách hàng</h1><p className="mt-1 text-sm text-slate-500">Tiếp nhận yêu cầu, thiết kế và chia sẻ phương án riêng cho khách.</p></div>
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="relative flex-1 min-w-[240px] max-w-xl"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/><input aria-label="Tìm yêu cầu thiết kế" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm" placeholder="Tìm mã yêu cầu, khách hàng, điểm đến…" value={search} onChange={e => setSearch(e.target.value)}/></div>
-      <div className="flex flex-wrap gap-1">{["all", "pending", "reviewing", "designed", "rejected", "cancelled"].map(status => <Button key={status} size="sm" variant="ghost" className={filter === status ? "bg-[#075985] text-white hover:bg-[#0C4A6E] hover:text-white" : "text-slate-600"} onClick={() => setFilter(status)}>{status === "all" ? "Tất cả" : labels[status]} ({requests.filter(r => status === "all" || r.status === status).length})</Button>)}</div>
-    </div>
-    {error && !rejecting && !cloning && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full min-w-[1280px] text-left text-sm"><thead className="bg-sky-50 text-xs text-slate-600"><tr>{["Mã & ngày gửi", "Khách hàng", "Điểm đến & lịch trình", "Ngân sách", "Trạng thái", "Phương án tour", "Thao tác"].map(t => <th key={t} className="px-4 py-4 font-semibold">{t}</th>)}</tr></thead>
-      <tbody className="divide-y divide-slate-100">{rows.map(request => {
-        const tour = currentTour(request); const sharedVersion = request.sharedVersion;
-        return <tr key={request.id} className="align-top hover:bg-slate-50/60"><td className="px-4 py-4"><strong>#{request.id}</strong><p className="mt-1 text-xs text-slate-500">{date(request.createdAt)}</p></td>
-          <td className="px-4 py-4"><strong>{request.contactName}</strong><p className="mt-1 text-xs text-slate-500">{request.contactPhone}</p><p className="max-w-[210px] truncate text-xs text-slate-500" title={request.contactEmail}>{request.contactEmail}</p>{request.businessName && <p className="mt-1 text-xs text-[#075985]">{request.businessName}</p>}</td>
-          <td className="px-4 py-4"><strong>{request.destinations}</strong><p className="mt-1 whitespace-nowrap text-xs text-slate-500">{date(request.departureDate)} – {date(request.returnDate)}</p><p className="mt-1 text-xs">{request.numberOfPeople} khách</p></td>
-          <td className="px-4 py-4 whitespace-nowrap">{request.budgetPerPerson ? <><strong>{money(Number(request.budgetPerPerson))}</strong><span className="text-xs text-slate-500"> / khách</span><p className="mt-1 text-xs text-slate-500">Tổng: {money(Number(request.budgetPerPerson) * Number(request.numberOfPeople))}</p></> : "Thỏa thuận"}</td>
-          <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${request.status === "rejected" ? "bg-rose-50 text-rose-700" : request.status === "pending" ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-800"}`}>{labels[request.status] || request.status}</span>{request.rejectionReason && <p className="mt-2 max-w-[220px] text-xs text-rose-700">{request.rejectionReason}</p>}</td>
-          <td className="px-4 py-4 min-w-[230px]">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} value={overrides[request.id]?.version ?? sharedVersion ?? tour.version ?? 1} sharedVersion={sharedVersion} reload={revision} disabled={busy} onChange={version=>void chooseVersion(request,version)}/> : <p className="text-xs text-slate-400">Chưa tạo tour</p>}</td>
-          <td className="min-w-[280px] px-4 py-4"><div className="ml-auto flex min-w-[248px] max-w-[320px] flex-wrap justify-end gap-1.5">
-            {request.status === "pending" && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void decide(request,"reviewing")}><CheckCircle2/>Tiếp nhận</Button>}
-            {!tour && (request.status === "pending" || request.status === "reviewing") && <Button aria-label={`Từ chối yêu cầu ${request.id}`} title="Từ chối yêu cầu" size="icon" variant="outline" disabled={busy} className="h-8 w-8 text-rose-600" onClick={() => void decide(request,"rejected")}><XCircle/></Button>}
-            <Button size="sm" variant="outline" onClick={() => setViewing(request.id)}><Eye/>Xem chi tiết</Button>
-            {active(request) && <><Button size="sm" variant="outline" disabled={busy} onClick={() => setCollaborating(request.id)}><Handshake/>Đồng tổ chức</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void start(request,tour)}><Sparkles/>{tour ? "Sửa tour" : "Thiết kế"}</Button>
-              {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(""); setHistoryRequestId(request.id); }}><History/>Các phiên bản</Button>}
-              {!tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setCloning(request); setSourceId(""); setError(""); }}><Copy/>Clone tour</Button>}
-              {tour && <Button size="sm" className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy} onClick={() => void share(request,tour)}><Send/>Chia sẻ v{overrides[request.id]?.version ?? sharedVersion ?? tour.version}</Button>}
-            </>}
-            <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Trao đổi và lịch sử yêu cầu ${request.id}`} title="Trao đổi và lịch sử phiên bản" onClick={() => setExpanded(expanded === request.id ? null : request.id)}><ChevronDown/></Button>
-          </div></td></tr>;
-      })}</tbody></table>{!rows.length && <p className="p-8 text-center text-sm text-slate-500">Không tìm thấy yêu cầu phù hợp.</p>}<p className="border-t border-slate-100 p-4 text-xs text-slate-500">Hiển thị {rows.length} / {requests.length} yêu cầu</p></div>
-    {expandedRequest && <div className="space-y-4"><h2 className="font-semibold text-[#075985]">Trao đổi và lịch sử yêu cầu #{expandedRequest.id}</h2>
-      <DesignRequestMessages requestId={expandedRequest.id} agency closed={!active(expandedRequest) && expandedRequest.status !== "pending"}/>
-      <DesignVersionHistory key={`${expandedRequest.id}-${revision}`} requestId={expandedRequest.id} agency currentVersion={currentTour(expandedRequest)?.version} onSelect={version => chooseVersion(expandedRequest,version)}/></div>}
-    <CustomRequestDetailModal isOpen={Boolean(viewed)} onClose={() => setViewing(null)} request={viewed} matchingTour={viewed ? currentTour(viewed) : null} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={onViewTour}/>
-    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="bg-white sm:max-w-3xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Các phương án tour theo phiên bản</DialogTitle><DialogDescription>Chọn phiên bản để chỉnh sửa hoặc chia sẻ trực tiếp cho khách. Chọn lại phiên bản cũ không tạo thêm phiên bản.</DialogDescription></DialogHeader>
-      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-      {requests.filter(r => r.id === historyRequestId).map(request => <DesignVersionHistory key={`${request.id}-${revision}`} requestId={request.id} agency currentVersion={currentTour(request)?.version} onSelect={async version => { await chooseVersion(request,version); setHistoryRequestId(null); }}/>)}
+    <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-1">
+      <div><h1 className="text-2xl font-semibold text-slate-900">Yêu cầu thiết kế tour</h1>
+        <p className="mt-2 text-sm text-slate-500">Tiếp nhận nhu cầu, xây dựng hành trình và chọn phiên bản khách được xem.</p></div>
+      <p className="pt-2 text-sm text-slate-500"><strong className="font-semibold text-slate-800">{requests.filter(r => r.targetCompanyId === company.id).length}</strong> yêu cầu
+        <span className="mx-2 text-slate-300">/</span><span className="text-amber-800">{requests.filter(r => r.targetCompanyId === company.id && r.status === "pending").length} chờ tiếp nhận</span></p>
+    </header>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label="Danh sách yêu cầu thiết kế tour">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <div className="relative min-w-[240px] flex-1 sm:max-w-lg"><Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-slate-400"/>
+          <input aria-label="Tìm yêu cầu thiết kế" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/60 pl-9 pr-3 text-sm outline-none focus:border-sky-600 focus:bg-white focus:ring-2 focus:ring-sky-100" placeholder="Tìm khách hàng, điểm đến, mã yêu cầu…" value={search} onChange={e => setSearch(e.target.value)}/></div>
+        <p className="flex items-center gap-1.5 text-xs text-slate-500"><Eye className="h-4 w-4 text-sky-700"/>Chọn phiên bản là cập nhật ngay cho khách</p>
+      </div>
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-4" role="tablist" aria-label="Trạng thái yêu cầu">
+        {["all", "pending", "reviewing", "designed", "rejected", "cancelled"].map(status => <button type="button" role="tab" aria-selected={filter === status} aria-controls="agency-design-request-rows" key={status}
+          className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm transition-colors ${filter === status ? "border-sky-700 font-semibold text-sky-800" : "border-transparent text-slate-500 hover:text-slate-900"}`} onClick={() => setFilter(status)}>
+          {status === "all" ? "Tất cả" : labels[status]}<span className={`rounded-md px-1.5 py-0.5 text-xs ${filter === status ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500"}`}>{requests.filter(r => r.targetCompanyId === company.id && (status === "all" || r.status === status)).length}</span>
+        </button>)}
+      </div>
+      <div className="overflow-x-auto" id="agency-design-request-rows" role="tabpanel">
+        <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+          <colgroup><col className="w-[23%]"/><col className="w-[21%]"/><col className="w-[16%]"/><col className="w-[20%]"/><col className="w-[20%]"/></colgroup>
+          <thead className="border-b border-slate-100 bg-slate-50/80 text-xs text-slate-500"><tr>{["Khách hàng & yêu cầu", "Hành trình", "Ngân sách dự kiến", "Phương án tour", "Thao tác"].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead>
+          <tbody className="divide-y divide-slate-100">{rows.map(request => {
+            const tour = currentTour(request);
+            const sharedVersion = overrides[request.id]?.sharedVersion ?? request.sharedVersion;
+            const editable = active(request);
+            const selectedVersion = sharedVersion ?? tour?.version ?? 1;
+            return <tr key={request.id} className="align-top transition-colors hover:bg-slate-50/50">
+              <td className="px-4 py-5"><div className="mb-3 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-500">#{request.id}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${request.status === "rejected" ? "bg-rose-50 text-rose-700" : request.status === "pending" ? "bg-amber-50 text-amber-800" : request.status === "cancelled" ? "bg-slate-100 text-slate-500" : sharedVersion ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{labels[request.status] || request.status}</span></div>
+                <p className="truncate font-semibold text-slate-900" title={request.contactName}>{request.contactName}</p>
+                {request.businessName && <p className="mt-1 truncate text-xs text-slate-600" title={request.businessName}>{request.businessName}</p>}
+                <p className="mt-2 text-xs text-slate-500">{request.contactPhone}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={request.contactEmail}>{request.contactEmail}</p>
+                <p className="mt-2 text-xs text-slate-400">Gửi {date(request.createdAt)}</p>
+              </td>
+              <td className="px-4 py-5"><p className="flex items-start gap-1.5 font-semibold text-slate-800"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sky-700"/>{request.destinations}</p>
+                <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500"><CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0"/>{date(request.departureDate)} – {date(request.returnDate)}</p>
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5"/>{request.numberOfPeople} khách</p>
+                {request.rejectionReason && <p className="mt-3 text-xs text-rose-700">{request.rejectionReason}</p>}
+              </td>
+              <td className="px-4 py-5">{request.budgetPerPerson ? <><p className="font-semibold tabular-nums text-slate-800">{money(Number(request.budgetPerPerson))}</p><p className="mt-0.5 text-xs text-slate-400">mỗi khách</p><p className="mt-3 text-xs text-slate-500">Tổng dự kiến</p><p className="mt-1 text-xs font-medium tabular-nums text-slate-600">{money(Number(request.budgetPerPerson) * Number(request.numberOfPeople))}</p></> : <span className="text-sm text-slate-500">Thỏa thuận</span>}</td>
+              <td className="px-4 py-5">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} sharedVersion={sharedVersion} reload={revision} disabled={busy || !editable}
+                updatingVersion={updatingVersion?.requestId === request.id ? updatingVersion.version : undefined} onChange={version => void chooseVersion(request,version)}/>
+                : <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs leading-relaxed text-slate-400"><p className="font-medium text-slate-500">Chưa có phương án tour</p><p className="mt-1">{request.status === "pending" ? "Tiếp nhận yêu cầu để bắt đầu thiết kế." : editable ? "Thiết kế mới hoặc dùng một tour có sẵn." : "Yêu cầu đã đóng."}</p></div>}</td>
+              <td className="px-4 py-5"><div className="flex flex-wrap items-center gap-2">
+                {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => void viewVersion(request,selectedVersion)}><Eye className="h-3.5 w-3.5"/>Xem tour</Button>}
+                {request.status === "pending" ? <Button size="sm" disabled={busy} className="bg-sky-800 text-white hover:bg-sky-900" onClick={() => void decide(request,"reviewing")}><CheckCircle2 className="h-4 w-4"/>Tiếp nhận</Button>
+                  : editable ? <Button size="sm" variant="outline" disabled={busy} className="border-sky-200 text-sky-800 hover:bg-sky-50" onClick={() => void start(request,tour,selectedVersion)}><Sparkles className="h-3.5 w-3.5"/>{tour ? "Chỉnh sửa" : "Thiết kế"}</Button> : null}
+                {tour && <Button size="sm" variant="ghost" disabled={busy} className="text-sky-800" onClick={() => openWorkspace(request)}><History className="h-3.5 w-3.5"/>Phiên bản & đối tác</Button>}
+                <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 text-slate-500" disabled={busy} aria-label={`Thao tác yêu cầu ${request.id}`}><MoreHorizontal className="h-5 w-5"/></Button></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-52">
+                    <DropdownMenuItem onSelect={() => setViewing(request.id)}><Eye/>Xem hồ sơ yêu cầu</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => openWorkspace(request,"messages")}><MessageSquare/>Trao đổi với khách</DropdownMenuItem>
+                    {editable && <DropdownMenuItem onSelect={() => openWorkspace(request,"partners")}><Handshake/>Đồng tổ chức tour</DropdownMenuItem>}
+                    {editable && !tour && <DropdownMenuItem onSelect={() => { setCloning(request); setSourceId(""); setError(""); }}><Copy/>Dùng tour có sẵn</DropdownMenuItem>}
+                    {!tour && (request.status === "pending" || request.status === "reviewing") && <><DropdownMenuSeparator/><DropdownMenuItem className="text-rose-700 focus:text-rose-800" onSelect={() => void decide(request,"rejected")}><XCircle/>Từ chối yêu cầu</DropdownMenuItem></>}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {!rows.length && <div className="px-5 py-16 text-center"><Search className="mx-auto h-7 w-7 text-slate-300"/><p className="mt-3 font-medium text-slate-600">Không tìm thấy yêu cầu</p><p className="mt-1 text-sm text-slate-400">Thử từ khóa khác hoặc đổi bộ lọc trạng thái.</p></div>}
+      </div>
+      <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">Hiển thị {rows.length} yêu cầu · Mới nhất trước</p>
+    </section>
+    <CustomRequestDetailModal isOpen={Boolean(viewed)} onClose={() => setViewing(null)} request={viewed} matchingTour={viewed ? currentTour(viewed) : null} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={setPreview}/>
+    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="flex max-h-[88vh] flex-col overflow-hidden bg-white sm:max-w-5xl"><DialogHeader><DialogTitle>Phương án tour · Yêu cầu #{historyRequestId}</DialogTitle><DialogDescription>Xem và sửa từng phiên bản, chọn bản khách được xem hoặc quản lý Agency đồng tổ chức.</DialogDescription></DialogHeader>
+      {requests.filter(r => r.id === historyRequestId).map(request => <Tabs key={request.id} value={workspaceTab} onValueChange={setWorkspaceTab} className="min-h-0">
+        <TabsList className="w-full justify-start rounded-lg bg-slate-100 p-1"><TabsTrigger value="versions"><History/>Các phiên bản</TabsTrigger><TabsTrigger value="partners"><Handshake/>Đối tác liên minh</TabsTrigger><TabsTrigger value="messages"><MessageSquare/>Trao đổi với khách</TabsTrigger></TabsList>
+        <div className="min-h-0 overflow-y-auto pr-1 pt-3">
+          <TabsContent value="versions"><DesignVersionHistory key={`${request.id}-${revision}`} requestId={request.id} agency currentVersion={currentTour(request)?.version} sharedVersion={overrides[request.id]?.sharedVersion ?? request.sharedVersion} disabled={busy} readOnly={!active(request)} onView={async version => { await viewVersion(request,version); }} onEdit={async version => { setHistoryRequestId(null); await start(request,currentTour(request),version); }} onSelect={async version => { await chooseVersion(request,version); }}/></TabsContent>
+          <TabsContent value="partners"><DesignCollaborationPanel embedded request={request} company={company} onClose={() => setHistoryRequestId(null)} onChanged={() => collaborationChanged(request)}/></TabsContent>
+          <TabsContent value="messages"><DesignRequestMessages requestId={request.id} agency closed={!active(request) && request.status!=="pending"}/></TabsContent>
+        </div>
+      </Tabs>)}
     </DialogContent></Dialog>
-    <Dialog open={Boolean(rejecting)} onOpenChange={open => { if (!busy && !open) setRejecting(null); }}><DialogContent className="bg-white sm:max-w-lg"><DialogHeader><DialogTitle>Từ chối yêu cầu thiết kế #{rejecting?.id}</DialogTitle><DialogDescription>Cho khách biết vì sao Agency chưa thể tổ chức chuyến đi này.</DialogDescription></DialogHeader>
-      <label className="space-y-2 text-sm">Lý do từ chối <span className="text-rose-600">*</span><textarea aria-label="Lý do từ chối" maxLength={2000} rows={4} className="mt-2 w-full rounded-lg border p-3" value={reason} onChange={e => setReason(e.target.value)}/></label>{error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-      <div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setRejecting(null)}>Hủy</Button><Button disabled={busy || !reason.trim()} onClick={() => void perform(async () => { if (!rejecting) return; await onUpdateRequest(rejecting.id, { status: "rejected", rejectionReason: reason.trim() }); setRejecting(null); toast.success("Đã từ chối và gửi lý do cho khách."); })}>{busy && <Loader2 className="animate-spin"/>}Xác nhận từ chối</Button></div>
-    </DialogContent></Dialog>
+    <AlertDialog open={Boolean(rejecting)} onOpenChange={open => { if (!busy && !open) setRejecting(null); }}><AlertDialogContent tone="error" className="bg-white sm:max-w-lg"><AlertDialogHeader><AlertDialogTitle>Từ chối yêu cầu thiết kế #{rejecting?.id}</AlertDialogTitle><AlertDialogDescription>Cho khách biết vì sao Agency chưa thể tổ chức chuyến đi này.</AlertDialogDescription></AlertDialogHeader>
+      <label className="space-y-2 text-sm">Lý do từ chối <span className="text-rose-600">*</span><textarea aria-label="Lý do từ chối" maxLength={2000} rows={4} className="mt-2 w-full rounded-lg border p-3" value={reason} onChange={e => setReason(e.target.value)}/></label>{error && <NotificationMessage tone="error" message={error} />}
+      <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel" variant="outline" disabled={busy} onClick={() => setRejecting(null)}>Hủy</Button></AlertDialogCancel><Button data-slot="alert-dialog-action" disabled={busy || !reason.trim()} onClick={() => void perform(async () => { if (!rejecting) return; await onUpdateRequest(rejecting.id, { status: "rejected", rejectionReason: reason.trim() }); setRejecting(null); toast.success("Đã từ chối và gửi lý do cho khách."); })}>{busy && <Loader2 className="animate-spin"/>}Xác nhận từ chối</Button></div>
+    </AlertDialogContent></AlertDialog>
     <Dialog open={Boolean(cloning)} onOpenChange={open => { if (!busy && !open) setCloning(null); }}><DialogContent className="bg-white sm:max-w-xl"><DialogHeader><DialogTitle>Clone tour có sẵn</DialogTitle><DialogDescription>Tạo bản sao riêng cho yêu cầu này. Tour nguồn giữ nguyên.</DialogDescription></DialogHeader>
-      <label className="text-sm">Tour mẫu<select aria-label="Tour mẫu để clone" value={sourceId} onChange={e => setSourceId(e.target.value)} className="mt-2 w-full rounded-lg border p-3"><option value="">Chọn tour của Agency</option>{tours.filter(t => !t.is_request && t.status !== "deleted").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>{error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+      <label className="text-sm">Tour mẫu<select aria-label="Tour mẫu để clone" value={sourceId} onChange={e => setSourceId(e.target.value)} className="mt-2 w-full rounded-lg border p-3"><option value="">Chọn tour của Agency</option>{tours.filter(t => !t.is_request && t.status !== "deleted").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>{error && <NotificationMessage tone="error" message={error} />}
       <Button disabled={busy || !sourceId} onClick={() => void perform(async () => { if (!cloning) return; const saved = await cloneDesignTour(cloning.id, sourceId); setOverrides(prev => ({ ...prev, [cloning.id]: saved })); await onUpdateRequest(cloning.id, {}); setEditing(saved); setTemplate(null); setDesigning(cloning); setCloning(null); toast.success("Đã clone thành tour riêng. Bạn có thể chỉnh sửa ngay."); })}>Clone và chỉnh sửa</Button>
     </DialogContent></Dialog>
   </div>;

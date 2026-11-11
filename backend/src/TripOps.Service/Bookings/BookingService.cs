@@ -291,6 +291,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         else if (request.Decision == "reject")
         {
             booking.Status = BookingStatus.Rejected;
+            booking.CancelReason = request.Reason?.Trim();
             if (!string.IsNullOrWhiteSpace(request.Reason))
                 booking.SpecialRequests = $"{booking.SpecialRequests} [Lý do từ chối: {request.Reason}]".Trim();
             CloseOpenRequests(booking);

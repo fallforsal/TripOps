@@ -3,7 +3,7 @@ import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
   cancelDesignRequest, actOnDesignRequest, saveDesignTour, customerRequestPlans } from "@/app/services/customTourRequests";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
 import { ServiceCatalogueProvider } from "@/app/contexts/ServiceCatalogue";
@@ -1320,9 +1320,9 @@ function Application() {
       });
       if (tourData.is_request && tourData.status === "completed")
         await completeAgencyTour(tourId, updated.revision || 1);
-      else if (tourData.visibility === "public")
+      else if (tourData.visibility === "public" && updated.visibility !== "public")
         await publishAgencyTour(tourId, updated.revision || 1);
-      else if (tourData.status === "completed")
+      else if (tourData.status === "completed" && updated.status !== "completed")
         await completeAgencyTour(tourId, updated.revision || 1);
     }
     await refreshTours();
@@ -1792,7 +1792,6 @@ function Application() {
               }
             }}
             onBookNow={handleOpenBookingForm}
-            onCustomize={(tour) => handleNavigate("custom-tour", undefined, tour)}
             onOpenRequest={() => handleNavigate("my-requests")}
             onShowLogin={() => setShowLogin(true)}
           />

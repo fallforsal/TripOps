@@ -1,6 +1,9 @@
+import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import { useEffect, useState } from "react";
 import { Handshake, Plus, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import type { CustomTourRequest, Tour, TourCoHost, TourCompany } from "@/app/types";
 import { http } from "@/app/lib/http";
 import { requestAgencies } from "@/app/services/customTourRequests";
@@ -8,9 +11,9 @@ import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02T
 import { Button } from "@/app/components/ui/button";
 import { TourFormPage } from "./AgencyTourManagement";
 
-type Props = { request: CustomTourRequest; company: TourCompany; onChanged: () => void | Promise<void>; onClose: () => void };
+type Props = { request: CustomTourRequest; company: TourCompany; onChanged: () => void | Promise<void>; onClose: () => void; embedded?: boolean };
 const money = (n?: number) => n == null ? "Chưa báo giá" : `${n.toLocaleString("vi-VN")}đ`;
-export function DesignCollaborationPanel({ request, company, onChanged, onClose }: Props) {
+export function DesignCollaborationPanel({ request, company, onChanged, onClose, embedded = false }: Props) {
   const [hosts, setHosts] = useState<TourCoHost[]>(request.coHosts || []);
   const [agencies, setAgencies] = useState<TourCompany[]>([]);
   const [editing, setEditing] = useState<Tour | null>(null);
@@ -20,6 +23,7 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose 
   const [working,setWorking] = useState<Tour | null>(null);
   const [reason, setReason] = useState(""); const [rejecting, setRejecting] = useState(false);
   const lead = request.targetCompanyId === company.id;
+  const mutable = request.status === "reviewing" || request.status === "designed";
   const me = hosts.find(h => h.companyId === company.id);
   const root = `/agency/tour-design-requests/${request.id}`;
   const load = async () => {
@@ -36,22 +40,32 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose 
     const config=toConfiguration({...editing,...data});
     const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({revision:editing.revision || 1,
       timelines:config.timelines,pricingTiers:config.pricingTiers})}));
-    setEditing(null);await load();await onChanged();toast.success(`Đã lưu nháp chặng trong v${saved.version}. Agency chủ trì sẽ kiểm tra và chia sẻ.`);
+    setEditing(null);await load();await onChanged();toast.success(`Đã lưu nháp chặng trong v${saved.version}. Agency chủ trì sẽ kiểm tra và chọn phiên bản cho khách xem.`);
   }}/>;
-  return <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-xl font-semibold text-[#075985]"><Handshake/>Đồng tổ chức tour · Yêu cầu #{request.id}</h2><p className="mt-2 text-sm text-slate-500">{request.destinations} · Chủ trì: {request.targetCompanyName}. Mỗi Agency quản lý nội dung và bảng giá của mình. Thông tin ngày trong lịch trình được cùng chỉnh sửa; Customer xem giá tổng khi chia sẻ.</p></div><Button variant="outline" onClick={onClose}>Quay lại</Button></div>
-    {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+  return <div className={embedded ? "space-y-5 bg-white p-1" : "space-y-5 rounded-2xl border border-slate-200 bg-white p-5"}>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-xl font-semibold text-[#075985]"><Handshake/>Đồng tổ chức tour · Yêu cầu #{request.id}</h2><p className="mt-2 text-sm text-slate-500">{request.destinations} · Chủ trì: {request.targetCompanyName}. Mỗi Agency quản lý nội dung và bảng giá của mình. Thông tin ngày trong lịch trình được cùng chỉnh sửa; Khách hàng xem giá tổng của phiên bản được chọn.</p></div>{!embedded && <Button variant="outline" onClick={onClose}>Quay lại</Button>}</div>
+    {error && <NotificationMessage tone="error" message={error} />}
+    {!mutable && <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Yêu cầu đã đóng. Bạn có thể xem lại thông tin liên minh.</p>}
     {!lead && me?.status === "pending" && <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4"><h3 className="font-semibold">Lời mời tham gia chặng {me.assignedSegments}</h3><p>Ngân sách dự kiến: {money(me.estimatedBudgetPerGuest)} / khách</p><p className="whitespace-pre-wrap text-sm">{me.notes}</p>
       <div className="flex gap-2"><Button disabled={busy} onClick={()=>void action(async()=>{await http(`${root}/co-hosts/decision`,{method:"POST",body:JSON.stringify({action:"accept"})});setHosts(await http<TourCoHost[]>(`${root}/co-hosts`));toast.success("Đã nhận lời mời đồng tổ chức.");})}>Chấp nhận tham gia</Button><Button variant="outline" disabled={busy} onClick={()=>setRejecting(!rejecting)}>Từ chối</Button></div>
       {rejecting && <div className="space-y-2"><textarea aria-label="Lý do từ chối hợp tác" className="w-full rounded-lg border bg-white p-3" maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Lý do chưa thể tham gia…"/><Button disabled={busy || !reason.trim()} onClick={()=>void action(async()=>{await http(`${root}/co-hosts/decision`,{method:"POST",body:JSON.stringify({action:"reject",reason:reason.trim()})});toast.success("Đã từ chối và gửi lý do cho Agency chủ trì.");onClose();})}>Xác nhận từ chối</Button></div>}
     </div>}
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Công ty","Thông tin hợp tác","Trạng thái","Bảng giá riêng / khách","Thao tác"].map(h=><th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{hosts.map(host=><tr key={host.companyId}><td className="p-3 font-semibold">{host.companyName}<p className="text-xs font-normal text-slate-500">{host.role==="lead"?"Agency chủ trì":"Đối tác"}</p></td><td className="p-3">{host.assignedSegments || "Điều phối chung"}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs ${host.status==="accepted"?"bg-emerald-50 text-emerald-700":host.status==="rejected"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-800"}`}>{host.status==="accepted"?"Đã tham gia":host.status==="rejected"?"Đã từ chối":"Chờ phản hồi"}</span>{host.rejectionReason && <p className="mt-2 max-w-xs text-xs text-rose-600">{host.rejectionReason}</p>}</td><td className="p-3">{working?.agencyPricing?.find(p=>p.agencyId===host.companyId)?.tiers.map((t,i)=><p key={i}>{t.name}: {money(t.pricePerGuest)}</p>) || "Chưa nhập bảng giá"}</td><td className="p-3">{lead && host.role!=="lead" && <Button variant="outline" size="sm" disabled={busy} onClick={()=>{if(confirm(`Thu hồi hợp tác với ${host.companyName}? Các nội dung đã tạo và giá của đối tác cần được xử lý trước; bản đã chia sẻ giữ nguyên.`))void action(async()=>{await http(`${root}/co-hosts/${host.companyId}`,{method:"DELETE"});await load();toast.success("Đã thu hồi hợp tác.");});}}>Thu hồi</Button>}</td></tr>)}</tbody></table></div>
+    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Công ty","Thông tin hợp tác","Trạng thái","Bảng giá riêng / khách","Thao tác"].map(h=><th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{hosts.map(host=><tr key={host.companyId}><td className="p-3 font-semibold">{host.companyName}<p className="text-xs font-normal text-slate-500">{host.role==="lead"?"Agency chủ trì":"Đối tác"}</p></td><td className="p-3">{host.assignedSegments || "Điều phối chung"}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs ${host.status==="accepted"?"bg-emerald-50 text-emerald-700":host.status==="rejected"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-800"}`}>{host.status==="accepted"?"Đã tham gia":host.status==="rejected"?"Đã từ chối":"Chờ phản hồi"}</span>{host.rejectionReason && <p className="mt-2 max-w-xs text-xs text-rose-600">{host.rejectionReason}</p>}</td><td className="p-3">{working?.agencyPricing?.find(p=>p.agencyId===host.companyId)?.tiers.map((t,i)=><p key={i}>{t.name}: {money(t.pricePerGuest)}</p>) || "Chưa nhập bảng giá"}</td><td className="p-3">{lead && mutable && host.role!=="lead" && <Button variant="outline" size="sm" className="text-rose-700" disabled={busy} onClick={async ()=>{
+        const accepted=host.status==="accepted";
+        const message=accepted
+          ? `Gỡ ${host.companyName} khỏi tour liên minh? Lộ trình, khách sạn, nhà hàng và bảng giá của họ trong bản đang soạn sẽ được xóa. Các phiên bản cũ vẫn lưu để xem lại. Nếu bản khách đang xem có đối tác này, bạn cần kiểm tra và chọn lại phiên bản phù hợp. Booking đã phát sinh không được thay đổi.`
+          : `Thu hồi lời mời với ${host.companyName}? Đối tác sẽ không còn quyền truy cập yêu cầu này.`;
+        if(await confirmAction(message,{title:accepted?"Gỡ Agency khỏi liên minh":"Thu hồi lời mời",confirmLabel:accepted?"Gỡ đối tác":"Thu hồi",tone:"error"})) void action(async()=>{
+          await http(`${root}/co-hosts/${host.companyId}?removeContent=${accepted}`,{method:"DELETE"});
+          await load();toast.success(accepted?"Đã gỡ đối tác và nội dung trong bản đang soạn.":"Đã thu hồi lời mời.");
+        });
+      }}>{host.status==="accepted"?"Gỡ khỏi tour":"Thu hồi lời mời"}</Button>}</td></tr>)}</tbody></table></div>
     {!lead && me?.status==="accepted" && <Button disabled={busy || !request.designedTourId} onClick={()=>void action(async()=>{const tour=fromApiTour(await http<ApiTour>(`${root}/working-tour`));setEditing({...tour,coHosts:hosts,isCoHosted:true});})}>Thiết kế nội dung & bảng giá riêng</Button>}
     {!lead && me?.status==="accepted" && !request.designedTourId && <p className="text-sm text-slate-500">Agency chủ trì cần lưu tour đầu tiên trước khi bạn thiết kế chặng.</p>}
-    {lead && <form className="space-y-4 border-t pt-5" onSubmit={e=>{e.preventDefault();void action(async()=>{setHosts(await http<TourCoHost[]>(`${root}/co-hosts`,{method:"POST",body:JSON.stringify({agencyId:partner,segment,budget:budget?Number(budget):null,notes})}));setPartner("");setSegment("");toast.success("Đã gửi lời mời đồng tổ chức.");});}}>
+    {lead && mutable && <form className="space-y-4 border-t pt-5" onSubmit={e=>{e.preventDefault();void action(async()=>{setHosts(await http<TourCoHost[]>(`${root}/co-hosts`,{method:"POST",body:JSON.stringify({agencyId:partner,segment,budget:budget?Number(budget):null,notes})}));setPartner("");setSegment("");setBudget("");setNotes("");await load();toast.success("Đã gửi lời mời đồng tổ chức.");});}}>
       <h3 className="flex items-center gap-2 font-semibold"><Plus className="h-4 w-4"/>Mời Agency đối tác</h3><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm">Đối tác<select required aria-label="Agency đối tác" className="w-full rounded-lg border p-2.5" value={partner} onChange={e=>setPartner(e.target.value)}><option value="">Chọn Agency đã được duyệt</option>{agencies.filter(a=>a.id!==company.id && !hosts.some(h=>h.companyId===a.id && h.status!=="rejected")).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label className="space-y-1 text-sm">Tên chặng (tùy chọn)<input maxLength={255} className="w-full rounded-lg border p-2.5" value={segment} onChange={e=>setSegment(e.target.value)} placeholder="Ví dụ: Chặng Đà Lạt"/></label></div>
 
-      <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm">Ngân sách chặng / khách (tùy chọn)<input type="number" min={0} max={9999999999} className="w-full rounded-lg border p-2.5" value={budget} onChange={e=>setBudget(e.target.value)}/></label><label className="space-y-1 text-sm">Lời nhắn<textarea maxLength={2000} className="w-full rounded-lg border p-2.5" value={notes} onChange={e=>setNotes(e.target.value)}/></label></div><Button disabled={busy || !partner}>Gửi lời mời</Button>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm">Ngân sách chặng / khách (tùy chọn)<VietnameseMoneyInput className="w-full rounded-lg border p-2.5" maxLength={17} value={budget} onValueChange={setBudget} placeholder="Ví dụ: 1.000.000"/></label><label className="space-y-1 text-sm">Lời nhắn<textarea maxLength={2000} className="w-full rounded-lg border p-2.5" value={notes} onChange={e=>setNotes(e.target.value)}/></label></div><Button disabled={busy || !partner}>Gửi lời mời</Button>
     </form>}
     <Button variant="ghost" size="sm" disabled={busy} onClick={()=>void action(load)}><RefreshCw className="h-4 w-4"/>Tải lại liên minh</Button>
   </div>;

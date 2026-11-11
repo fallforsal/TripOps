@@ -12,7 +12,7 @@ type RequestDto = {
   destination: string; departureDate: string; returnDate: string | null;
   numberOfPeople: number; budgetPerPerson: number | null;
   hotelStars: string | null; additionalInfo: string | null;
-  businessName: string | null; businessEmail: string | null; businessPhone: string | null;
+  businessName: string | null;
   status: CustomTourRequest["status"]; createdAt: string;
   designedTourId: number | null; currentVersion: number | null;
   quotedPricePerPerson: number | null;
@@ -30,8 +30,7 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
   returnDate: (r.returnDate || r.departureDate).slice(0, 10),
   numberOfPeople: String(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson == null ? undefined : String(r.budgetPerPerson),
   hotelStars: r.hotelStars || undefined, additionalInfo: r.additionalInfo || undefined,
-  businessName: r.businessName || undefined, businessEmail: r.businessEmail || undefined,
-  businessPhone: r.businessPhone || undefined, status: r.status, createdAt: r.createdAt,
+  businessName: r.businessName || undefined, status: r.status, createdAt: r.createdAt,
   designedTourId: r.designedTourId == null ? undefined : String(r.designedTourId),
   currentVersion: r.currentVersion || undefined,
   quotedPricePerPerson: r.quotedPricePerPerson || undefined,
@@ -53,7 +52,7 @@ export const submitDesignRequest = async (r: Omit<CustomTourRequest, "id" | "cre
     departureDate: r.departureDate, returnDate: r.returnDate,
     numberOfPeople: Number(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson ? Number(r.budgetPerPerson) : null,
     hotelStars: r.hotelStars, additionalInfo: r.additionalInfo,
-    businessName: r.businessName, businessEmail: r.businessEmail, businessPhone: r.businessPhone,
+    businessName: r.businessName,
   }) }));
 export const cancelDesignRequest = async (id: string) =>
   fromDto(await http<RequestDto>(`/tour-design-requests/${Number(id)}/cancel`, { method: "POST" }));

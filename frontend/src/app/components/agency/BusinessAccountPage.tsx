@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -389,7 +390,7 @@ export function BusinessAccountPage({
           <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
             Hồ sơ chuyển sang trạng thái chờ duyệt và quyền bán tour, nhận đặt chỗ có thể bị tạm dừng cho đến khi quản trị viên duyệt xong.
           </div>
-          {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
+          {error && <NotificationMessage tone="error" message={error} />}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" disabled={saving} onClick={() => setConfirming(false)} className="rounded-xl">Quay lại</Button>
             <Button type="button" disabled={saving} onClick={() => void save(true)} className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white">

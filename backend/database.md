@@ -283,8 +283,6 @@ Table tour_design_requests {
   user_id varchar(36) // FK trỏ tới users.id (người dùng gửi form, có thể null nếu cho phép khách vãng lai)
   agency_id varchar(36) [note: 'Agency nhận yêu cầu và thiết kế tour riêng']
   business_name varchar(255)
-  business_email varchar(191)
-  business_phone varchar(30)
   // 2. ĐẠI DIỆN ĐẶT TOUR
   contact_name varchar(150) [not null] // Người liên hệ, đại diện đặt tour (*)
   contact_email varchar(191) [not null] // Email cá nhân người đại diện (*)

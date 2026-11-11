@@ -1,5 +1,6 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import {
   AlertCircle,
   Ban,
@@ -485,7 +486,7 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                 </div>
               )}
 
-              {actionError && <p role="alert" className="text-xs text-rose-700">{actionError}</p>}
+              {actionError && <NotificationMessage tone="error" message={actionError} />}
 
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button type="button" variant="outline" disabled={submitting} onClick={() => setTarget(null)} className="rounded-xl text-xs">

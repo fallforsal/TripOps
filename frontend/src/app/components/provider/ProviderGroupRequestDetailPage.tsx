@@ -423,6 +423,7 @@ export function ProviderGroupRequestDetailPage({
           </div>
         </div>
 
+        {!isCancelled && <>
         {/* Card 3: Quotation & Response Status */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
           <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -494,6 +495,7 @@ export function ProviderGroupRequestDetailPage({
             </div>
           )}
         </div>
+        </>}
       </div>
 
       {/* ========================================================================= */}

@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { AdminAllianceAllocationLedger } from "./AdminAllianceAllocationLedger";
 import { useState } from "react";
 import { Booking, SystemBankAccount } from "@/app/types";
@@ -187,22 +188,7 @@ export function AdminFinancialManagement({
       </div>
 
       {/* SUCCESS TOAST ALERT */}
-      {bankSavedToast && (
-        <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <span>
-              <strong>Cập nhật thành công!</strong> Thông tin STK Hệ thống đã được lưu. Tất cả khách hàng khi thanh toán tour sẽ thấy STK mới này.
-            </span>
-          </div>
-          <button
-            onClick={() => setBankSavedToast(false)}
-            className="text-white hover:text-emerald-100 text-xs underline ml-4"
-          >
-            Đóng
-          </button>
-        </div>
-      )}
+      {bankSavedToast && <NotificationMessage tone="success" message="Đã lưu thông tin tài khoản ngân hàng." />}
 
       {/* TOP SECTION: SYSTEM BANK ACCOUNT CONFIGURATION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -14,16 +14,14 @@ public sealed record CreateDesignRequestInput(
     [StringLength(50)] string? HotelStars = null,
     [StringLength(10000)] string? AdditionalInfo = null,
     [StringLength(255)] string? BusinessName = null,
-    [EmailAddress, StringLength(191)] string? BusinessEmail = null,
-    [StringLength(30)] string? BusinessPhone = null, int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
+    int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
 
 public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email,string? LogoUrl = null);
 
 public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId, string AgencyName,
     string ContactName, string ContactEmail, string ContactPhone, string Destination,
     DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
-    string? HotelStars, string? AdditionalInfo, string? BusinessName, string? BusinessEmail,
-    string? BusinessPhone, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
+    string? HotelStars, string? AdditionalInfo, string? BusinessName, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
     decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null, string? SharedTourThumbnail = null, string? SharedTourName = null);
 
 public sealed record DesignCoHostDto(string CompanyId, string CompanyName, string Role, string Status,

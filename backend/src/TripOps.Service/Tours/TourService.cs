@@ -445,9 +445,10 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             request = request with { Configuration = config };
         }
         else request = request with { Configuration = SingleAgencyConfiguration(request.Configuration,actor) };
-        await Validate(request.Configuration, false, ct, actor, tour.DesignRequestId);
+        await Validate(request.Configuration, tour.IsRequest != true && tour.Visibility == TourVisibility.Public, ct, actor, tour.DesignRequestId);
         if(!string.IsNullOrWhiteSpace(request.Configuration.Code) && await repository.CodeExists(request.Configuration.Code.Trim().ToUpperInvariant(),id,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
-        Apply(tour, request.Configuration); ResetApproval(tour);
+        Apply(tour, request.Configuration);
+        if (tour.IsRequest == true) ResetApproval(tour);
         return await Save(tour, actor, request.ChangeNote, ct);
     }
     public async Task<TourDto> Get(string actor, int id, bool admin, CancellationToken ct)

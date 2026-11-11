@@ -948,8 +948,6 @@ export interface CustomTourRequest {
   userId?: string;
   // Business / contact info
   businessName?: string;
-  businessEmail?: string;
-  businessPhone?: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string;

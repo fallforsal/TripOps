@@ -14,3 +14,7 @@ export function moveTimeline(entries: TimelineEntry[], from: number, to: number)
   if(from<0 || from>=keys.length || to<0 || to>=keys.length)return keys;
   const [moved]=keys.splice(from,1);keys.splice(to,0,moved);return keys;
 }
+
+export function appendTimeline(entries: TimelineEntry[], manual: string[] | undefined, key: string): string[] {
+  return [...orderTimeline(entries, manual).map(entry => entry.key).filter(existing => existing !== key), key];
+}

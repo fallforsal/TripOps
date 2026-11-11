@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { useMemo, useState } from "react";
 import { Booking, User } from "@/app/types";
 import {
@@ -468,9 +469,9 @@ export function AgencyBookingManagement({
       </div>
 
       {/* Reject modal */}
-      <Dialog open={!!rejectTarget} onOpenChange={() => setRejectTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Từ chối đặt tour</DialogTitle></DialogHeader>
+      <AlertDialog open={!!rejectTarget} onOpenChange={() => setRejectTarget(null)}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-sm">
+          <AlertDialogHeader><AlertDialogTitle>Từ chối đặt tour</AlertDialogTitle></AlertDialogHeader>
           <Textarea
             placeholder="Lý do từ chối (sẽ thông báo đến khách hàng)..."
             value={rejectReason}
@@ -478,8 +479,8 @@ export function AgencyBookingManagement({
             rows={3}
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>Hủy</Button>
-            <Button
+            <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel" variant="outline" onClick={() => setRejectTarget(null)}>Hủy</Button></AlertDialogCancel>
+            <Button data-slot="alert-dialog-action"
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
                 if (rejectTarget) {
@@ -492,8 +493,8 @@ export function AgencyBookingManagement({
               Xác nhận từ chối
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Assign guide modal */}
       <Dialog open={!!assignTarget} onOpenChange={() => setAssignTarget(null)}>

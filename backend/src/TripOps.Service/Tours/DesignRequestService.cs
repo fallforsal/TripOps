@@ -61,7 +61,6 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             EndDate = input.ReturnDate.Date, NumberOfGuests = input.NumberOfPeople,
             BudgetPerPerson = input.BudgetPerPerson, HotelRatingRequirement = input.HotelStars,
             SpecialRequirements = input.AdditionalInfo, BusinessName = input.BusinessName,
-            BusinessEmail = input.BusinessEmail, BusinessPhone = input.BusinessPhone,
             Status = CustomRequestStatus.Pending
         };
         if (input.SourceTourId.HasValue)
@@ -111,7 +110,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             // Customer membership is exposed only by the immutable shared tour snapshot.
             mapped = mapped with { CoHosts = agencyView ? hosts : null };
             if (agencyView && request.AgencyId != actor && !hosts.Any(h => h.CompanyId == actor && h.Status == "accepted"))
-                mapped = mapped with { ContactEmail="", ContactPhone="", ContactName="Khách đoàn", BusinessEmail=null, BusinessPhone=null, AdditionalInfo=null,
+                mapped = mapped with { ContactEmail="", ContactPhone="", ContactName="Khách đoàn", AdditionalInfo=null,
                     CoHosts=hosts.Where(h=>h.Role=="lead" || h.CompanyId==actor).ToArray() };
             result.Add(mapped);
         }
@@ -167,8 +166,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             agency?.BusinessProfile?.BusinessName ?? agency?.Name ?? "Agency",
             r.ContactName, r.ContactEmail, r.ContactPhone, r.Destination,
             r.StartDate, r.EndDate, r.NumberOfGuests ?? 0, r.BudgetPerPerson,
-            r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, r.BusinessEmail,
-            r.BusinessPhone, status, r.CreatedAt ?? DateTime.UnixEpoch,
+            r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, status, r.CreatedAt ?? DateTime.UnixEpoch,
             tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion);
     }
 }

@@ -1,3 +1,4 @@
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import React, { useState } from "react";
 import { CustomTourRequest, Tour } from "@/app/types";
 import {
@@ -33,7 +34,7 @@ import {
   AlertCircle,
   Briefcase,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { DesignRequestAgencyActions, type DesignRequestDecision } from "@/app/components/agency/DesignRequestAgencyActions";
 
 export interface CustomRequestDetailModalProps {
@@ -235,22 +236,6 @@ export function CustomRequestDetailModal({
                 <span className="text-slate-400 block font-medium">Tên doanh nghiệp / Đoàn thể:</span>
                 <span className="text-sm font-bold text-slate-900 block mt-0.5">
                   {request.businessName || "Khách hàng cá nhân / Nhóm gia đình"}
-                </span>
-              </div>
-
-              {/* Email công ty */}
-              <div>
-                <span className="text-slate-400 block font-medium">Email cơ quan / đoàn:</span>
-                <span className="text-slate-800 font-medium block mt-0.5">
-                  {request.businessEmail || "—"}
-                </span>
-              </div>
-
-              {/* SĐT cơ quan */}
-              <div>
-                <span className="text-slate-400 block font-medium">Điện thoại cơ quan:</span>
-                <span className="text-slate-800 font-medium block mt-0.5">
-                  {request.businessPhone || "—"}
                 </span>
               </div>
 
@@ -517,8 +502,8 @@ export function CustomRequestDetailModal({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      if (confirm("Bạn có chắc chắn muốn hủy yêu cầu thiết kế này?")) {
+                    onClick={async () => {
+                      if (await confirmAction("Bạn có chắc chắn muốn hủy yêu cầu thiết kế này?")) {
                         onClose();
                         onCancelRequest(request.id);
                       }

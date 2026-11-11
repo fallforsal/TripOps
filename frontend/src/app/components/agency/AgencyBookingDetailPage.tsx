@@ -1,3 +1,8 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { toast } from "@/app/lib/notifications";
+import { confirmAction } from "@/app/lib/notificationDialogs";
+import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { PartnerBookingRevenue } from "./PartnerBookingRevenue";
 import { BookingStagePassengers } from "./BookingStagePassengers";
 import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
@@ -704,7 +709,7 @@ export function AgencyBookingDetailPage({
     const myAttractions = allItineraryAttractions.filter((a) => a.isMyAgencyAttraction);
 
     if (myAttractions.length === 0) {
-      alert("Công ty của bạn hiện không phụ trách điểm đến nào trong tour này để phân công.");
+      toast.info("Công ty của bạn hiện không phụ trách điểm đến nào trong tour này để phân công.");
       return;
     }
 
@@ -713,7 +718,7 @@ export function AgencyBookingDetailPage({
     if (assignPresetMode === "single") {
       const targetGuide = myAgencyGuides.find((g) => g.guideId === selectedSingleGuideId) || myAgencyGuides[0];
       if (!targetGuide) {
-        alert("Vui lòng chọn 1 Hướng dẫn viên!");
+        toast.warning("Vui lòng chọn 1 Hướng dẫn viên!");
         return;
       }
 
@@ -743,7 +748,7 @@ export function AgencyBookingDetailPage({
       });
     } else if (assignPresetMode === "co_guides") {
       if (selectedMultiGuideIds.length === 0) {
-        alert("Vui lòng chọn ít nhất 1 Hướng dẫn viên!");
+        toast.warning("Vui lòng chọn ít nhất 1 Hướng dẫn viên!");
         return;
       }
 
@@ -809,10 +814,10 @@ export function AgencyBookingDetailPage({
     }
 
     const updatedCheckins = [...partnerCheckins, ...newMyCheckins];
-    try { await onUpdateAttractionCheckins?.(booking.id, updatedCheckins); } catch(e){alert(e instanceof Error?e.message:"Không lưu được phân công.");return;}
+    try { await onUpdateAttractionCheckins?.(booking.id, updatedCheckins); } catch(e){toast.error(e instanceof Error?e.message:"Không lưu được phân công.");return;}
     setAttractionCheckins(updatedCheckins);
     setAssignAttractionsModalOpen(false);
-    alert(`🎉 Đã lưu phân công Hướng dẫn viên cho các điểm đến do công ty phụ trách (${newMyCheckins.length} lượt check-in)!`);
+    toast.success(`🎉 Đã lưu phân công Hướng dẫn viên cho các điểm đến do công ty phụ trách (${newMyCheckins.length} lượt check-in)!`);
   };
 
   // Passenger list state - default: full tour for all passengers
@@ -1008,11 +1013,11 @@ export function AgencyBookingDetailPage({
   const handleConfirmAddGuide = async () => {
     const targetGuide = guides.find((g) => g.id === selectedGuideToAdd);
     if (!targetGuide) {
-      alert("Vui lòng chọn hướng dẫn viên để phân công!");
+      toast.warning("Vui lòng chọn hướng dẫn viên để phân công!");
       return;
     }
     if (assignedGuides.some((ag) => ag.guideId === targetGuide.id)) {
-      alert(`Hướng dẫn viên ${targetGuide.name} đã được phân công trong danh sách đoàn!`);
+      toast.info(`Hướng dẫn viên ${targetGuide.name} đã được phân công trong danh sách đoàn!`);
       return;
     }
 
@@ -1031,22 +1036,22 @@ export function AgencyBookingDetailPage({
 
     const updated = [...assignedGuides, newAg];
     setAssignedGuides(updated);
-    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){alert(e instanceof Error?e.message:"Không lưu được HDV.");return;}
+    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){toast.error(e instanceof Error?e.message:"Không lưu được HDV.");return;}
 
     setAssignModalOpen(false);
     setSelectedGuideNotes("");
-    alert(`✓ Đã phân công hướng dẫn viên ${targetGuide.name} vào đoàn thành công!`);
+    toast.success(`✓ Đã phân công hướng dẫn viên ${targetGuide.name} vào đoàn thành công!`);
   };
 
   const handleConfirmReplaceGuide = async () => {
     if (!guideToReplace || !newReplacementGuideId) return;
     const replacement = guides.find((g) => g.id === newReplacementGuideId);
     if (!replacement) {
-      alert("Vui lòng chọn hướng dẫn viên thay thế!");
+      toast.warning("Vui lòng chọn hướng dẫn viên thay thế!");
       return;
     }
     if (assignedGuides.some((ag) => ag.guideId === replacement.id && ag.id !== guideToReplace.id)) {
-      alert(`Hướng dẫn viên ${replacement.name} đã có trong danh sách phân công!`);
+      toast.warning(`Hướng dẫn viên ${replacement.name} đã có trong danh sách phân công!`);
       return;
     }
 
@@ -1063,10 +1068,10 @@ export function AgencyBookingDetailPage({
     });
 
     setAssignedGuides(updated);
-    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){alert(e instanceof Error?e.message:"Không lưu được HDV.");return;}
+    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){toast.error(e instanceof Error?e.message:"Không lưu được HDV.");return;}
     setReplaceModalOpen(false);
     setGuideToReplace(null);
-    alert(`✓ Đã thay thế HDV ${guideToReplace.guideName} bằng ${replacement.name} thành công!`);
+    toast.success(`✓ Đã thay thế HDV ${guideToReplace.guideName} bằng ${replacement.name} thành công!`);
   };
 
   const handleRemoveAssignedGuide = async (guideAssignmentId: string) => {
@@ -1077,15 +1082,15 @@ export function AgencyBookingDetailPage({
       (!target.companyId && isCurrentCompanyLead);
 
     if (!isMyGuide) {
-      alert(`Bạn không có quyền xoá HDV ${target.guideName} vì nhân sự này do ${target.companyName} trực tiếp quản lý và phân công!`);
+      toast.warning(`Bạn không có quyền xoá HDV ${target.guideName} vì nhân sự này do ${target.companyName} trực tiếp quản lý và phân công!`);
       return;
     }
 
-    if (!window.confirm(`Xác nhận rút hướng dẫn viên ${target.guideName} khỏi đoàn này?`)) return;
+    if (!(await confirmAction(`Xác nhận rút hướng dẫn viên ${target.guideName} khỏi đoàn này?`))) return;
 
     const updated = assignedGuides.filter((ag) => ag.id !== guideAssignmentId);
     setAssignedGuides(updated);
-    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){alert(e instanceof Error?e.message:"Không lưu được HDV.");return;}
+    try {await onUpdateAssignedGuides?.(booking.id, updated);}catch(e){toast.error(e instanceof Error?e.message:"Không lưu được HDV.");return;}
   };
 
   // Partner Agency confirms their stage quote
@@ -1098,7 +1103,7 @@ export function AgencyBookingDetailPage({
     );
     setAgenciesList(updatedAgencies);
     onUpdateBookingAgencies?.(booking.id, updatedAgencies);
-    alert(`✓ Đã xác nhận chốt biểu phí chặng của ${target?.agencyName || "công ty"} thành công!`);
+    toast.success(`✓ Đã xác nhận chốt biểu phí chặng của ${target?.agencyName || "công ty"} thành công!`);
   };
 
   // Passenger Deactivation handlers (Stage B reduction)
@@ -1111,7 +1116,7 @@ export function AgencyBookingDetailPage({
   const handleConfirmDeactivate = () => {
     if (!passengerToDeactivate) return;
     if (!deactivateReason.trim()) {
-      alert("Vui lòng nhập lý do rút hành khách khỏi chặng!");
+      toast.warning("Vui lòng nhập lý do rút hành khách khỏi chặng!");
       return;
     }
     const p = passengerToDeactivate;
@@ -1163,15 +1168,15 @@ export function AgencyBookingDetailPage({
     setDeactivateModalOpen(false);
     setPassengerToDeactivate(null);
     setDeactivateReason("");
-    alert(`✓ Đã rút hành khách "${p.fullName}" khỏi chặng ${targetAgency.agencyName}!\n✓ Đã trừ -${formatVND(deductAmount)} vào doanh thu chặng và cập nhật tổng tiền đơn hàng.`);
+    toast.success(`✓ Đã rút hành khách "${p.fullName}" khỏi chặng ${targetAgency.agencyName}!\n✓ Đã trừ -${formatVND(deductAmount)} vào doanh thu chặng và cập nhật tổng tiền đơn hàng.`);
   };
 
-  const handleReactivatePassenger = (p: BookingPassenger) => {
+  const handleReactivatePassenger = async (p: BookingPassenger) => {
     const targetAgencyId = p.agencyId || agenciesList[0].agencyId;
     const targetAgency = agenciesList.find((a) => a.agencyId === targetAgencyId) || agenciesList[0];
     const restoreAmount = p.price || 0;
 
-    if (!confirm(`Khôi phục hành khách "${p.fullName}" trở lại chặng ${targetAgency.agencyName}?\nTổng tiền sẽ được cộng lại (+${formatVND(restoreAmount)}).`)) return;
+    if (!(await confirmAction(`Khôi phục hành khách "${p.fullName}" trở lại chặng ${targetAgency.agencyName}?\nTổng tiền sẽ được cộng lại (+${formatVND(restoreAmount)}).`))) return;
 
     const updatedPassengers = passengersList.map((item) =>
       item.id === p.id
@@ -1235,7 +1240,7 @@ export function AgencyBookingDetailPage({
   // Lần điều chỉnh gần đây nhất
   const latestPriceAdjustment = sortedPriceAdjustments[0] || null;
 
-  const handleDeletePassenger = (passengerId: string) => {
+  const handleDeletePassenger = async (passengerId: string) => {
     const pToDelete = passengersList.find((p) => p.id === passengerId);
     if (!pToDelete) return;
 
@@ -1244,7 +1249,7 @@ export function AgencyBookingDetailPage({
       ? `Bạn có chắc chắn muốn xóa hành khách "${pToDelete.fullName}" khỏi đoàn?\n\nBạn có muốn đồng thời trừ tiền vé (-${formatVND(passengerPrice)}) khỏi tổng tiền tour không?`
       : `Bạn có chắc chắn muốn xóa hành khách "${pToDelete.fullName}" khỏi danh sách đoàn?`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!(await confirmAction(confirmMessage))) return;
 
     const willDeduct = Boolean(passengerPrice > 0 && onUpdateBookingPrice);
     const updatedList = passengersList.filter((p) => p.id !== passengerId);
@@ -1267,9 +1272,9 @@ export function AgencyBookingDetailPage({
         reason,
         createdAt: new Date().toISOString(),
       });
-      alert(`✓ Đã xóa hành khách "${pToDelete.fullName}" và trừ tiền vé (-${formatVND(passengerPrice)}) khỏi tổng giá tour.`);
+      toast.success(`✓ Đã xóa hành khách "${pToDelete.fullName}" và trừ tiền vé (-${formatVND(passengerPrice)}) khỏi tổng giá tour.`);
     } else {
-      alert(`✓ Đã xóa hành khách "${pToDelete.fullName}" khỏi danh sách đoàn.`);
+      toast.success(`✓ Đã xóa hành khách "${pToDelete.fullName}" khỏi danh sách đoàn.`);
     }
   };
 
@@ -1358,6 +1363,8 @@ export function AgencyBookingDetailPage({
     setPassengerCustomPrice(String(sum));
   },[selectedPassengerAgencies,passengerDob,passengerModalMode,agenciesList,isCoHostedTour,booking.tourStartDate,booking.bookingDate]);
 
+  const isRejectedBooking = booking.status === "rejected";
+  const isClosedBooking = isRejectedBooking || booking.status === "cancelled";
   const st = statusMap[booking.status] ?? { label: booking.status, color: "bg-gray-100 text-gray-700" };
   const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
     label: "Chưa xác định", color: "bg-gray-100 text-gray-700 border-gray-200",
@@ -1387,9 +1394,9 @@ export function AgencyBookingDetailPage({
               <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                 {st.label}
               </span>
-              <span className={`text-xs px-3 py-1 rounded-full font-bold border ${pst.color}`}>
+              {!isClosedBooking && <span className={`text-xs px-3 py-1 rounded-full font-bold border ${pst.color}`}>
                 {pst.label}
-              </span>
+              </span>}
               {booking.hasLocationCustomization && (
                 <span className="text-xs px-3 py-1 rounded-full font-bold bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
@@ -1403,7 +1410,7 @@ export function AgencyBookingDetailPage({
           </div>
 
           {/* Quick Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {!isClosedBooking && <div className="flex items-center gap-2 flex-wrap">
             {booking.status === "pending" && (
               <>
                 {isCurrentCompanyLead ? (
@@ -1468,9 +1475,14 @@ export function AgencyBookingDetailPage({
               <FileText className="w-4 h-4 text-[#075985]" />
               Xem Hợp đồng
             </Button>}
-          </div>
+          </div>}
         </div>
       </div>
+
+      {isClosedBooking && <div role="status" className="rounded-2xl border border-rose-300 bg-rose-50 p-5 text-rose-900">
+        <h2 className="font-bold">{isRejectedBooking ? "Đã từ chối tiếp nhận booking" : "Booking đã được hủy"}</h2>
+        <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : bookingCancellationReason(booking.bookingNotes, booking.cancellationReason)}</p>
+      </div>}
 
       <BookingStagePassengers booking={booking} rows={passengersList} isHost={isCurrentCompanyLead} viewerAgencyId={companyId} canAmend={canAmend}
         onAdd={handleOpenAddPassenger} onEdit={handleOpenEditPassenger} onChanged={dto=>{
@@ -1529,7 +1541,7 @@ export function AgencyBookingDetailPage({
           {/* ======================================================== */}
           {/* CO-HOSTING ALLIANCE BREAKDOWN CARD */}
           {/* ======================================================== */}
-          {(booking.isCoHosted || booking.tour?.isCoHosted) && (
+          {!isClosedBooking && (booking.isCoHosted || booking.tour?.isCoHosted) && (
             <div className="bg-gradient-to-br from-amber-50/70 via-purple-50/50 to-blue-50/50 rounded-2xl border-2 border-amber-300 p-6 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -3006,7 +3018,7 @@ export function AgencyBookingDetailPage({
                   </span>
                 </div>
               )}
-              {booking.bookingNotes && (
+              {booking.bookingNotes && !isClosedBooking && (
                 <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-amber-900 mt-2">
                   <span className="font-bold block mb-1">Ghi chú từ khách hàng:</span>
                   <p className="leading-relaxed">{booking.bookingNotes}</p>
@@ -3015,6 +3027,7 @@ export function AgencyBookingDetailPage({
             </div>
           </div>
 
+          {!isClosedBooking && <>
           {isCurrentCompanyLead ? (<>
           {/* FINANCE & PAYMENT STATUS CARD */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -3236,16 +3249,17 @@ export function AgencyBookingDetailPage({
             )}
           </div>
           </>) : (<PartnerBookingRevenue booking={booking} agencyId={companyId}/>)}
+          </>}
 
         </div>
       </div>
 
       {/* MODAL: TỪ CHỐI BOOKING */}
-      <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Từ chối Đặt tour</DialogTitle>
-          </DialogHeader>
+      <AlertDialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Từ chối Đặt tour</AlertDialogTitle>
+          </AlertDialogHeader>
           <div className="space-y-3 pt-2">
             <Label className="text-xs">Lý do từ chối gửi đến khách hàng <span className="text-red-500">*</span></Label>
             <Textarea
@@ -3255,8 +3269,8 @@ export function AgencyBookingDetailPage({
               rows={3}
             />
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setRejectModalOpen(false)}>Hủy</Button>
-              <Button
+              <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel" variant="outline" onClick={() => setRejectModalOpen(false)}>Hủy</Button></AlertDialogCancel>
+              <Button data-slot="alert-dialog-action"
                 className="bg-red-600 hover:bg-red-700 text-white"
                 onClick={() => {
                   onRejectBooking(booking.id, rejectReason);
@@ -3267,15 +3281,15 @@ export function AgencyBookingDetailPage({
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* MODAL: AGENCY HỦY ĐƠN ĐÃ DUYỆT */}
-      <Dialog open={agencyCancelOpen} onOpenChange={setAgencyCancelOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Hủy đơn đặt tour</DialogTitle>
-          </DialogHeader>
+      <AlertDialog open={agencyCancelOpen} onOpenChange={setAgencyCancelOpen}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hủy đơn đặt tour</AlertDialogTitle>
+          </AlertDialogHeader>
           <div className="space-y-3 pt-2 text-xs">
             {!agencyCancelQuote && !agencyCancelError && <p className="text-gray-500">Đang tính hệ quả hủy...</p>}
             {agencyCancelQuote && (
@@ -3307,10 +3321,10 @@ export function AgencyBookingDetailPage({
             />
             {agencyCancelError && <p className="text-[11px] text-red-600">{agencyCancelError}</p>}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAgencyCancelOpen(false)}>
+              <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel" variant="outline" onClick={() => setAgencyCancelOpen(false)}>
                 Đóng
-              </Button>
-              <Button
+              </Button></AlertDialogCancel>
+              <Button data-slot="alert-dialog-action"
                 className="bg-red-600 hover:bg-red-700 text-white"
                 disabled={!agencyCancelQuote || agencyCancelling}
                 onClick={submitAgencyCancel}
@@ -3319,8 +3333,8 @@ export function AgencyBookingDetailPage({
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* MODAL: GIAO THÊM HƯỚNG DẪN VIÊN */}
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
@@ -3686,7 +3700,7 @@ export function AgencyBookingDetailPage({
               <label className="space-y-1.5 font-semibold">Lý do bổ sung / Thỏa thuận *<Input maxLength={240} value={customAdjustmentReason} onChange={e => setCustomAdjustmentReason(e.target.value)} /></label>
               <p className="text-[11px] leading-relaxed text-amber-900 sm:col-span-2">{hasBeenApproved ? "Giá tour đã chốt giữ nguyên. Tiền vé bổ sung được tạo thành phụ thu riêng; booking và lịch thanh toán tour không cần duyệt lại." : "Tiền vé bổ sung được cộng vào tổng giá tour trước lần duyệt đầu tiên."} Vé 0đ sẽ không tạo khoản thu.</p>
             </div>}
-            {passengerError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-rose-700">{passengerError}</p>}
+            {passengerError && <NotificationMessage tone="error" message={passengerError} />}
           </div>
           <div className="flex justify-end gap-2 border-t px-5 py-3"><Button size="sm" variant="outline" disabled={passengerSaving} onClick={() => setPassengerModalOpen(false)}>Hủy</Button>
             <Button size="sm" disabled={passengerSaving || !passengerName.trim() || !passengerDob || (passengerModalMode === "add" && customAdjustmentReason.trim().length < 3)} onClick={handleSavePassengerModal}>{passengerSaving ? "Đang lưu…" : passengerModalMode === "add" ? "Thêm vào đoàn" : "Lưu hồ sơ"}</Button></div>
@@ -4255,7 +4269,7 @@ export function AgencyBookingDetailPage({
               </div>
             </div>
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-900">Giá dịch vụ chỉ để tham khảo. Thay đổi được ghi nhật ký và gửi thông báo cho khách; booking đã duyệt giữ nguyên trạng thái và lịch thanh toán.</p>
-            {amendmentError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-rose-700">{amendmentError}</p>}
+            {amendmentError && <NotificationMessage tone="error" message={amendmentError} />}
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-white px-5 py-3">
             <Button variant="outline" size="sm" disabled={amendmentSaving} onClick={() => setServiceEditModalOpen(false)}>Hủy bỏ</Button>

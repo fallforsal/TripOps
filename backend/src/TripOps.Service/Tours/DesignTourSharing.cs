@@ -96,6 +96,9 @@ public sealed partial class TourService
             ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
         // Existing data may have a working copy from the old draft model. Saving reconciles it first.
         var configuration = target == tour.Version ? Configuration(tour) : JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!.Configuration;
+        var removedPartners=await db.TourDesignRequestAgencies.Where(a=>a.TourDesignRequestId==requestId && !a.IsHost && a.Status!="accepted").Select(a=>a.AgencyId).ToListAsync(ct);
+        Require(!removedPartners.Any(partner => HasCoHostContent(configuration,partner) || (configuration.CoHosts??[]).Any(h=>h.CompanyId==partner)),
+            "Phiên bản còn nội dung của Agency chưa tham gia hoặc đã rời liên minh. Hãy chỉnh sửa và lưu phiên bản trước khi hiển thị cho khách.");
         await Validate(configuration, true, ct, actor, requestId);
         if (tour.HasDraftChanges && target == tour.Version) {
             version.SnapshotData=JsonSerializer.Serialize(new TourSnapshot(1,target,true,tour.IsAiGenerated==true,"completed","hidden",configuration),Json);

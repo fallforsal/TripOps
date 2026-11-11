@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useState } from "react";
 import { RefreshCw, Send } from "lucide-react";
 import { http } from "@/app/lib/http";
@@ -21,6 +22,6 @@ export function DesignRequestMessages({ requestId, agency = false, closed = fals
     </div>
     {!closed && <><textarea aria-label="Nội dung trao đổi về yêu cầu thiết kế" maxLength={2000} rows={3} className="w-full rounded-lg border border-slate-200 p-3" value={message} onChange={e => setMessage(e.target.value)} placeholder="Ví dụ: Tôi muốn dùng lại khách sạn và lịch trình ở phiên bản 2…"/>
       <div className="flex justify-end"><Button className="bg-[#075985] text-white hover:bg-[#0C4A6E]" disabled={busy || !message.trim()} onClick={async () => { setBusy(true); setError(""); try { await http(url, { method: "POST", body: JSON.stringify({ message: message.trim() }) }); setMessage(""); setRows(await http<Message[]>(url)); } catch(e) { setError(e instanceof Error ? e.message : "Không gửi được trao đổi."); } finally { setBusy(false); } }}><Send/>{busy ? "Đang gửi…" : "Gửi trao đổi"}</Button></div></>}
-    {closed && <p className="text-xs text-slate-500">Yêu cầu đã đóng. Bạn vẫn có thể xem lại các trao đổi.</p>}{error && <p role="alert" className="text-rose-700">{error}</p>}
+    {closed && <p className="text-xs text-slate-500">Yêu cầu đã đóng. Bạn vẫn có thể xem lại các trao đổi.</p>}{error && <NotificationMessage tone="error" message={error} />}
   </section>;
 }

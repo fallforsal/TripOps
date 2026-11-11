@@ -1,4 +1,5 @@
-import { Toaster } from "sonner";
+import { Toaster } from "./app/components/ui/sonner";
+import { NotificationDialogs } from "./app/components/ui/NotificationDialogs";
 import { AuthProvider } from "./app/contexts/AuthContext";
 
 import { createRoot } from "react-dom/client";
@@ -8,6 +9,7 @@ import "./styles/index.css";
 createRoot(document.getElementById("root")!).render(
   <AuthProvider>
     <App />
-    <Toaster richColors position="top-right" />
+    <Toaster />
+    <NotificationDialogs />
   </AuthProvider>,
 );

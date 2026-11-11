@@ -120,8 +120,6 @@ public int Revision { get; set; }
 public string? CustomerId { get; set; }
 public string? AgencyId { get; set; }
 public string? BusinessName { get; set; }
-public string? BusinessEmail { get; set; }
-public string? BusinessPhone { get; set; }
 public string ContactName { get; set; } = string.Empty;
 public string ContactEmail { get; set; } = string.Empty;
 public string ContactPhone { get; set; } = string.Empty;

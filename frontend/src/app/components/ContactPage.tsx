@@ -1,3 +1,4 @@
+import { toast } from "@/app/lib/notifications";
 import { useState } from "react";
 import { MapPin, Phone, Mail, Clock, Send, Compass } from "lucide-react";
 
@@ -16,7 +17,7 @@ export function ContactPage({ onShowLogin }: ContactPageProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Yêu cầu của bạn đã được tiếp nhận. Chuyên gia tư vấn của TripOps sẽ kết nối với bạn trong vòng 24 giờ.");
+    toast.success("Yêu cầu của bạn đã được tiếp nhận. Chuyên gia tư vấn của TripOps sẽ kết nối với bạn trong vòng 24 giờ.");
     setFormData({
       name: "",
       email: "",

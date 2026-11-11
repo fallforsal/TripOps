@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
@@ -37,7 +38,7 @@ export function BookingSurchargeDialog({ open, onOpenChange, bookingId, expected
         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={240} placeholder="VD: Phụ thu nâng cấp phòng theo yêu cầu của khách" className="w-full rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal" />
       </label>
       <p className="text-xs text-slate-500">Khách có thể thanh toán phụ thu độc lập. Đợt 2 của giá tour vẫn chờ hoàn tất tiền cọc.</p>
-      {error && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-xs text-rose-700">{error}</p>}
+      {error && <NotificationMessage tone="error" message={error} />}
       <div className="flex justify-end gap-2 border-t pt-3">
         <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Hủy bỏ</Button>
         <Button disabled={saving || !beneficiary || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0 || reason.trim().length < 3} onClick={save}>{saving ? "Đang lưu…" : "Tạo phụ thu"}</Button>

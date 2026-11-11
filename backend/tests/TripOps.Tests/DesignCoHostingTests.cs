@@ -123,6 +123,7 @@ public sealed partial class TourFlowTests
             Assert.Contains(await db.TourPricingTiers.Where(t=>t.TourId==final.Id).ToListAsync(),p=>p.AgencyId=="other" && p.PricePerGuest==600000);
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/other")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/other?removeContent=true")).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(final.Revision,[day1,day2],ownPrices))).StatusCode);
     }
 }

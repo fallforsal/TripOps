@@ -69,26 +69,52 @@ public sealed partial class TourService
         db.WorkflowNotifications.Add(new WorkflowNotification {UserId=lead,RequestId=id,Message=$"Đối tác đã {(row.Status=="accepted"?"chấp nhận":"từ chối")} lời mời đồng tổ chức yêu cầu #{id}."});
         await db.SaveChangesAsync(ct); await RefreshCollaboration(request,actor,ct); await tx.CommitAsync(ct);
     }
-    public async Task RemoveCoHost(string actor,int id,string partner,CancellationToken ct)
+    public async Task RemoveCoHost(string actor,int id,string partner,CancellationToken ct,bool removeContent = false)
     {
         await using var tx=await db.Database.BeginTransactionAsync(ct); await LockDesignRequest(actor,id,ct);
         var request=await CollaborativeRequest(actor,id,ct,true); await MutableCollaboration(request,ct);
         var row=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==partner,ct) ?? throw new TourException(404,"Không tìm thấy đối tác.");
         Require(!row.IsHost && partner!=request.AgencyId,"Không thể thu hồi Agency chủ trì.");
         var tourId=await db.Tours.Where(t=>t.DesignRequestId==id).Select(t=>(int?)t.Id).SingleOrDefaultAsync(ct);
+        Require(row.Status!="cancelled","Đối tác đã được gỡ khỏi liên minh.");
         if(tourId.HasValue) {
-            var config=Configuration(await Owned(actor,tourId.Value,ct));
+            var tour=await Owned(actor,tourId.Value,ct);
+            var config=Configuration(tour);
             var hasContent=(config.Timelines??[]).Any(d=>(d.Activities??[]).Any(a=>a.AgencyId==partner) ||
                 (d.Meals??[]).Any(m=>m.AgencyId==partner) || (d.Accommodations??[]).Any(h=>h.AgencyId==partner));
             var hasPrice=(config.AgencyPricing??[]).Any(p=>p.AgencyId==partner && p.Tiers.Any(t=>t.PricePerGuest>0));
-            Require(!hasContent && !hasPrice,"Đối tác cần gỡ nội dung và bảng giá riêng trước khi kết thúc hợp tác.");
+            Require(removeContent || !hasContent && !hasPrice,"Đối tác cần gỡ nội dung và bảng giá riêng trước khi kết thúc hợp tác.");
+            if(removeContent) {
+                Apply(tour,WithoutCoHost(config,partner));
+                if(tour.SharedVersion.HasValue) {
+                    var shared=await db.TourVersions.SingleAsync(v=>v.TourId==tour.Id && v.VersionNumber==tour.SharedVersion,ct);
+                    var snapshot=JsonSerializer.Deserialize<TourSnapshot>(shared.SnapshotData,Json)!.Configuration;
+                    if((snapshot.CoHosts??[]).Any(h=>h.CompanyId==partner) || HasCoHostContent(snapshot,partner)) tour.SharedVersion=null;
+                }
+            }
         }
-        row.Status="cancelled"; await db.SaveChangesAsync(ct); await RefreshCollaboration(request,actor,ct); await tx.CommitAsync(ct);
+        row.Status="cancelled"; row.RespondedAt=DateTime.UtcNow;
+        db.WorkflowNotifications.Add(new WorkflowNotification {UserId=partner,RequestId=id,Message=$"Agency chủ trì đã thu hồi lời mời hoặc kết thúc hợp tác yêu cầu #{id}."});
+        await db.SaveChangesAsync(ct); await RefreshCollaboration(request,actor,ct); await tx.CommitAsync(ct);
     }
+    private static bool HasCoHostContent(TourConfiguration c,string partner) =>
+        (c.Timelines??[]).Any(d=>(d.Activities??[]).Any(a=>a.AgencyId==partner) ||
+            (d.Meals??[]).Any(m=>m.AgencyId==partner) || (d.Accommodations??[]).Any(h=>h.AgencyId==partner));
+    private static TourConfiguration WithoutCoHost(TourConfiguration c,string partner) => c with {
+        CoHosts=c.CoHosts?.Where(h=>h.CompanyId!=partner).ToArray(),
+        AgencyPricing=c.AgencyPricing?.Where(p=>p.AgencyId!=partner).ToArray(),
+        Timelines=c.Timelines?.Select(d=>d with {
+            Activities=d.Activities?.Where(a=>a.AgencyId!=partner).ToArray(),
+            Meals=d.Meals?.Where(m=>m.AgencyId!=partner).ToArray(),
+            Accommodations=d.Accommodations?.Where(h=>h.AgencyId!=partner).ToArray()
+        }).ToArray()
+    };
     private async Task<TourConfiguration> CollaborationConfiguration(TourDesignRequest request,TourConfiguration config,CancellationToken ct)
     {
         var hosts=await CoHosts(request.Id,ct);
         var members=hosts.Where(h=>h.Status=="accepted").ToArray();
+        var removed=await db.TourDesignRequestAgencies.Where(a=>a.TourDesignRequestId==request.Id && !a.IsHost && a.Status!="accepted").Select(a=>a.AgencyId).ToListAsync(ct);
+        foreach(var partner in removed) config=WithoutCoHost(config,partner);
         var existingPricing=config.AgencyPricing;
         if(existingPricing==null) {
             // Quotes from the previous schema were moved to the existing Agency-owned tiers.

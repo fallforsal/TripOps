@@ -1,9 +1,16 @@
+// Keep the four most recently entered digits when a user types or pastes too many.
+export function tourClockDraft(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.length > 4 ? digits.slice(-4) : value;
+}
+
 // API time-of-day fields use .NET TimeSpan's HH:mm:ss representation.
 export function toTourApiTime(value: string | null | undefined, context: string): string | null {
   const text=value?.trim();
   if(!text)return null;
   const input=text.replace(/\s*([:hH])\s*/g,"$1");
   const match=input.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/)
+    ?? input.match(/^(\d{1,2})(\d{2})$/)
     ?? input.match(/^(\d{1,2})[hH](\d{1,2})?$/)
     ?? input.match(/^(\d{1,2})$/);
   if(match) {

@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { useState, useMemo } from "react";
 import { Service } from "@/app/types";
 import { Badge } from "@/app/components/ui/badge";
@@ -30,7 +31,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ProviderServiceDetailPage } from "@/app/components/provider/ProviderServiceDetailPage";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { ProviderProfileLink } from "./ProviderProfileLink";
 import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
 import { RejectServiceModal } from "./RejectServiceModal";
@@ -619,14 +620,14 @@ export function ServicePostApproval({
       </Dialog>
 
       {/* Delete Confirmation Modal */}
-      <Dialog open={!!deletingService} onOpenChange={() => setDeletingService(null)}>
-        <DialogContent className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
+      <AlertDialog open={!!deletingService} onOpenChange={() => setDeletingService(null)}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-rose-600" />
               Xóa bài đăng dịch vụ
-            </DialogTitle>
-          </DialogHeader>
+            </AlertDialogTitle>
+          </AlertDialogHeader>
 
           {deletingService && (
             <div className="space-y-4 pt-2">
@@ -635,16 +636,16 @@ export function ServicePostApproval({
                 <strong className="text-gray-900 font-bold">"{deletingService.name}"</strong>? Hành động này sẽ gỡ bỏ hoàn toàn dịch vụ khỏi hệ thống và không thể hoàn tác.
               </p>
 
-              <DialogFooter className="gap-2 pt-2 border-t border-gray-100">
-                <Button
+              <AlertDialogFooter className="gap-2 pt-2 border-t border-gray-100">
+                <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                   variant="outline"
                   size="sm"
                   onClick={() => setDeletingService(null)}
                   className="rounded-xl text-xs font-semibold"
                 >
                   Hủy bỏ
-                </Button>
-                <Button
+                </Button></AlertDialogCancel>
+                <Button data-slot="alert-dialog-action"
                   size="sm"
                   onClick={handleConfirmDelete}
                   disabled={busyId === deletingService.id}
@@ -652,11 +653,11 @@ export function ServicePostApproval({
                 >
                   {busyId === deletingService.id ? "Đang xóa..." : "Xác nhận xóa vĩnh viễn"}
                 </Button>
-              </DialogFooter>
+              </AlertDialogFooter>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

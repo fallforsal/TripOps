@@ -3082,20 +3082,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("decimal(12, 2)")
                         .HasColumnName("budget_per_person");
 
-                    b.Property<string>("BusinessEmail")
-                        .HasMaxLength(191)
-                        .HasColumnType("nvarchar(191)")
-                        .HasColumnName("business_email");
-
                     b.Property<string>("BusinessName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("business_name");
-
-                    b.Property<string>("BusinessPhone")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasColumnName("business_phone");
 
                     b.Property<string>("ContactEmail")
                         .IsRequired()

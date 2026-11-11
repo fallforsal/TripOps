@@ -1,7 +1,8 @@
+import { bookingRefusalReason } from "@/app/lib/bookingRefusal";
 import { ErrorBoundary } from "@/app/components/common/ErrorBoundary";
 import { http } from "@/app/lib/http";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { Service, User, ProviderGroupReservationRequest } from "@/app/types";
 import { ProviderLayout } from "./ProviderLayout";
 import { ServicePostManagement } from "./ServicePostManagement";
@@ -101,7 +102,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
     quotedTotalPrice: r.quotedCost ?? undefined,
     providerNote: status === "confirmed" ? r.note || undefined : undefined,
     rejectionReason: status === "rejected" ? r.note || undefined : undefined,
-    cancellationReason: status === "cancelled" ? r.cancelReason || "Booking đã bị hủy" : undefined,
+    cancellationReason: status === "cancelled" ? bookingRefusalReason(r.specialRequests || undefined, r.cancelReason || undefined) : undefined,
     cancelledAt: r.cancelledAt || undefined,
     cancelledByName: status === "cancelled" ? "Booking đã hủy" : undefined,
     createdAt: r.createdAt || new Date().toISOString(),
