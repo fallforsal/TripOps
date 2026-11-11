@@ -70,6 +70,13 @@ if (builder.Configuration.GetValue<bool>("SeedDemo"))
     await DemoSeed.Run(app.Services, builder.Configuration.GetValue<bool>("ClearDemoData"));
     return;
 }
+if (builder.Configuration.GetValue<bool>("SeedGuideGpsDemo"))
+{
+    if (!app.Environment.IsDevelopment())
+        throw new InvalidOperationException("Guide GPS demo seed is only available in Development.");
+    await GuideCheckinDemoSeed.Run(app.Services);
+    return;
+}
 if (builder.Configuration.GetValue<bool>("CreateAdmin"))
 {
     await AdminBootstrap.Run(app.Services, builder.Configuration);
