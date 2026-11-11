@@ -21,4 +21,4 @@ jobs:
       - name: Restore backend tests
         run: dotnet restore backend/tests/TripOps.Tests/TripOps.Tests.csproj
       - name: Execute check-in integration tests
-        run: dotnet test backend/tests/TripOps.Tests/TripOps.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~Snapshot_selection_passenger_preferences_and_guide_operations_persist
+        run: dotnet test backend/tests/TripOps.Tests/TripOps.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~Snapshot_selection_passenger_preferences_and_guide_operations_persist|FullyQualifiedName~GuideGpsDemoSeed_IsRepeatable_AndTourIsReadyToday'
