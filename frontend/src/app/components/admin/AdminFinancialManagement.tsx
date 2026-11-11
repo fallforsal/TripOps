@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { getPlatformBankAccount, savePlatformBankAccount } from "@/app/services/settlements";
 import { Booking, SystemBankAccount } from "@/app/types";
 import {
   Landmark,
   CreditCard,
-  CheckCircle2,
   DollarSign,
   ArrowRight,
-  ShieldCheck,
   Building2,
   RefreshCw,
   Search,
@@ -58,6 +58,12 @@ function formatVND(n: number) {
   return (n || 0).toLocaleString("vi-VN") + "đ";
 }
 
+/** "Failed to fetch" = trình duyệt không gọi được API (backend chưa chạy / đang khởi động lại). */
+function apiErrorText(err: unknown, fallback: string) {
+  if (err instanceof TypeError) return "Không kết nối được máy chủ API. Kiểm tra backend đã chạy chưa rồi thử lại.";
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export function AdminFinancialManagement({
   systemBank,
   onUpdateSystemBank,
@@ -73,7 +79,6 @@ export function AdminFinancialManagement({
     systemBank.defaultCommissionRate ?? 0,
   );
   const [notes, setNotes] = useState(systemBank.notes || "");
-  const [bankSavedToast, setBankSavedToast] = useState(false);
 
   // Settlement modal state
   const [selectedBookingForSettlement, setSelectedBookingForSettlement] =
@@ -88,18 +93,56 @@ export function AdminFinancialManagement({
     "all",
   );
 
-  const handleSaveBankInfo = (e: React.FormEvent) => {
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankError, setBankError] = useState("");
+
+  // Đọc cấu hình đã lưu ở backend (STK sàn + phí sàn đang áp dụng).
+  useEffect(() => {
+    let alive = true;
+    getPlatformBankAccount()
+      .then((saved) => {
+        if (!alive) return;
+        if (saved.configured) {
+          setBankName(saved.bankName ?? "");
+          setAccountNumber(saved.accountNumber ?? "");
+          setAccountHolder(saved.accountHolder ?? "");
+          setBranch(saved.branch ?? "");
+          setNotes(saved.notes ?? "");
+        }
+        setDefaultCommissionRate(saved.commissionPercent);
+      })
+      .catch((err) => alive && setBankError(apiErrorText(err, "Không tải được cấu hình.")));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleSaveBankInfo = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSystemBank({
-      bankName,
-      accountNumber,
-      accountHolder: accountHolder.toUpperCase(),
-      branch,
-      defaultCommissionRate: Number(defaultCommissionRate),
-      notes,
-    });
-    setBankSavedToast(true);
-    setTimeout(() => setBankSavedToast(false), 3500);
+    setSavingBank(true);
+    setBankError("");
+    try {
+      const saved = await savePlatformBankAccount({
+        bankName,
+        accountNumber,
+        accountHolder,
+        branch,
+        notes,
+        commissionPercent: Number(defaultCommissionRate),
+      });
+      setAccountNumber(saved.accountNumber ?? accountNumber);
+      setAccountHolder(saved.accountHolder ?? accountHolder);
+      setDefaultCommissionRate(saved.commissionPercent);
+      toast.success("Đã lưu tài khoản ngân hàng sàn và phí sàn.", {
+        description: "Phí sàn mới áp dụng cho các tour hoàn thành từ bây giờ.",
+      });
+    } catch (err) {
+      const text = apiErrorText(err, "Không lưu được cấu hình.");
+      setBankError(text);
+      toast.error(text);
+    } finally {
+      setSavingBank(false);
+    }
   };
 
   // Helper to compute paid amount from customer for a booking
@@ -178,30 +221,8 @@ export function AdminFinancialManagement({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-semibold">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            Hệ thống Quản lý Dòng tiền Escrow An toàn
-          </div>
         </div>
       </div>
-
-      {/* SUCCESS TOAST ALERT */}
-      {bankSavedToast && (
-        <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <span>
-              <strong>Cập nhật thành công!</strong> Thông tin STK Hệ thống đã được lưu. Tất cả khách hàng khi thanh toán tour sẽ thấy STK mới này.
-            </span>
-          </div>
-          <button
-            onClick={() => setBankSavedToast(false)}
-            className="text-white hover:text-emerald-100 text-xs underline ml-4"
-          >
-            Đóng
-          </button>
-        </div>
-      )}
 
       {/* TOP SECTION: SYSTEM BANK ACCOUNT CONFIGURATION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -214,7 +235,6 @@ export function AdminFinancialManagement({
                 Cấu hình Tài khoản Ngân hàng Sàn (Hệ thống)
               </h2>
             </div>
-            <span className="text-xs text-gray-400">Dùng chung cho toàn hệ thống</span>
           </div>
 
           <form onSubmit={handleSaveBankInfo} className="space-y-4">
@@ -279,10 +299,7 @@ export function AdminFinancialManagement({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-gray-700 flex items-center justify-between">
-                  <span>Phí hoa hồng sàn mặc định (%)</span>
-                  <span className="text-[11px] text-[#075985] font-bold">Khấu trừ khi kết thúc tour</span>
-                </Label>
+                <Label className="text-xs font-semibold text-gray-700">Phí sàn (%)</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -294,6 +311,7 @@ export function AdminFinancialManagement({
                   />
                   <span className="absolute right-3 top-2.5 text-xs text-gray-400 font-bold">%</span>
                 </div>
+                <p className="text-[11px] text-gray-500">Áp dụng cho tour hoàn thành sau khi lưu.</p>
               </div>
 
               <div className="space-y-1 sm:col-span-2">
@@ -310,13 +328,15 @@ export function AdminFinancialManagement({
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2">
+              {bankError && <p role="alert" className="text-xs text-rose-600 mr-auto">{bankError}</p>}
               <Button
                 type="submit"
-                className="bg-[#075985] hover:bg-[#F97316] text-white font-bold text-xs h-9 gap-1.5 shadow-sm"
+                disabled={savingBank}
+                className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold text-xs h-9 gap-1.5 shadow-sm"
               >
                 <Check className="w-4 h-4" />
-                Lưu cấu hình tài khoản Hệ thống
+                {savingBank ? "Đang lưu..." : "Lưu"}
               </Button>
             </div>
           </form>
@@ -373,498 +393,13 @@ export function AdminFinancialManagement({
                 <strong>Công ty tổ chức tour:</strong> Khách đi tour theo đúng lộ trình đã cam kết.
               </li>
               <li>
-                <strong>Kết thúc tour:</strong> Admin kiểm tra và bấm quyết toán chuyển tiền lại cho Công ty lữ hành (miễn phí sàn 0%).
+                <strong>Kết thúc tour:</strong> sau 2 ngày hệ thống tự quyết toán cho Công ty lữ hành (trừ phí sàn 10%); có khiếu nại thì Admin xử lý và chuyển thủ công.
               </li>
             </ol>
           </div>
         </div>
       </div>
 
-      {/* KPI STATS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-1">
-          <span className="text-xs text-gray-500 font-medium">Tiền đang tạm giữ tại Sàn</span>
-          <p className="text-2xl font-extrabold text-[#075985]">{formatVND(totalHeldInEscrow)}</p>
-          <p className="text-[11px] text-gray-400">Các tour chưa quyết toán</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-1">
-          <span className="text-xs text-gray-500 font-medium">Tour hoàn thành chờ quyết toán</span>
-          <div className="flex items-center gap-2">
-            <p className="text-2xl font-extrabold text-amber-600">
-              {completedToursPendingSettlement}
-            </p>
-            {completedToursPendingSettlement > 0 && (
-              <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full animate-pulse">
-                Cần xử lý
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-gray-400">Đã đi tour xong, sẵn sàng chuyển tiền</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-1">
-          <span className="text-xs text-gray-500 font-medium">Tổng đã chuyển cho Cty lữ hành</span>
-          <p className="text-2xl font-extrabold text-emerald-700">{formatVND(totalSettledAmount)}</p>
-          <p className="text-[11px] text-emerald-600 font-medium">Đã thanh toán đầy đủ</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-1">
-          <span className="text-xs text-gray-500 font-medium">Hoa hồng sàn đã thu</span>
-          <p className="text-2xl font-extrabold text-[#EA580C]">
-            {formatVND(totalPlatformFeesCollected)}
-          </p>
-          <p className="text-[11px] text-[#F97316] font-medium">Doanh thu sàn thực tế</p>
-        </div>
-      </div>
-
-      {/* SETTLEMENT TABLE: BOOKINGS WITH MONEY IN ESCROW */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden space-y-4 p-5">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-emerald-600" />
-              Danh sách Booking Tạm giữ Tiền &amp; Quyết toán cho Công ty Du lịch
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Sau khi kết thúc tour, Admin thực hiện kiểm tra và xác nhận chuyển trả tiền cho Công ty lữ hành (áp dụng chính sách miễn phí sàn hiện tại).
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* Search */}
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm mã booking, cty, khách..."
-                className="pl-9 text-xs h-9"
-              />
-            </div>
-
-            {/* Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white h-9"
-            >
-              <option value="all">Tất cả ({filteredBookings.length})</option>
-              <option value="pending">Chờ quyết toán</option>
-              <option value="settled">Đã quyết toán</option>
-            </select>
-          </div>
-        </div>
-
-        {filteredBookings.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 space-y-2">
-            <Landmark className="w-10 h-10 mx-auto text-gray-300" />
-            <p className="text-sm font-medium">Không tìm thấy giao dịch nào phù hợp.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-600">
-              <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[11px] border-b border-gray-200">
-                <tr>
-                  <th className="py-3 px-4">Booking / Tour</th>
-                  <th className="py-3 px-4">Khách hàng</th>
-                  <th className="py-3 px-4">Công ty lữ hành</th>
-                  <th className="py-3 px-4 text-right">Tổng giá trị</th>
-                  <th className="py-3 px-4 text-right">Đã nộp vào TK Sàn</th>
-                  <th className="py-3 px-4 text-center">Trạng thái Tour</th>
-                  <th className="py-3 px-4 text-center">Trạng thái Quyết toán</th>
-                  <th className="py-3 px-4 text-right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredBookings.map((b) => {
-                  const paid = getPaidAmount(b);
-                  const isSettled = b.settlementStatus === "settled";
-                  const isTourCompleted = b.status === "completed";
-                  const feeRate = b.platformFeeRate ?? defaultCommissionRate;
-                  const estimatedFee = Math.round((paid * feeRate) / 100);
-                  const estimatedSettled = paid - estimatedFee;
-
-                  return (
-                    <tr key={b.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-[#075985] block">#{b.id}</span>
-                        <span className="font-semibold text-gray-900 block max-w-xs truncate">
-                          {b.tour.name}
-                        </span>
-                        <span className="text-[11px] text-gray-400">Khởi hành: {b.tourStartDate}</span>
-                      </td>
-
-                      <td className="py-3 px-4">
-                        <p className="font-bold text-gray-900">{b.userName}</p>
-                        <p className="text-[11px] text-gray-400">{b.contactPhone || b.userEmail}</p>
-                      </td>
-
-                      <td className="py-3 px-4">
-                        {b.isCoHosted || b.tour?.isCoHosted ? (
-                          <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 bg-[#F97316]/15 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#F97316]/30">
-                              <Handshake className="w-3 h-3 text-[#F97316]" />
-                              Tour Liên Minh (2 Cty)
-                            </span>
-                            <div className="space-y-0.5 text-[11px]">
-                              <p className="font-bold text-gray-900 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#075985] flex-shrink-0"></span>
-                                <span className="truncate">
-                                  {b.coHosts?.find((c) => c.role === "lead")?.companyName || b.companyName} ({b.coHosts?.find((c) => c.role === "lead")?.revenueSharePercentage ?? 40}%)
-                                </span>
-                              </p>
-                              <p className="font-bold text-purple-900 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#F97316] flex-shrink-0"></span>
-                                <span className="truncate">
-                                  {b.coHosts?.find((c) => c.role === "partner")?.companyName || "Đối tác"} ({b.coHosts?.find((c) => c.role === "partner")?.revenueSharePercentage ?? 60}%)
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="font-bold text-gray-800 flex items-center gap-1">
-                            <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                            {b.companyName || b.tour.companyName || "Viettravel"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-4 text-right font-medium text-gray-700">
-                        {formatVND(b.totalPrice)}
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-extrabold text-[#075985] text-sm block">
-                          {formatVND(paid)}
-                        </span>
-                        <span className="text-[10px] text-emerald-600 font-medium">Trong TK Sàn</span>
-                      </td>
-
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            b.status === "completed"
-                              ? "bg-[#E0F2FE] text-blue-800"
-                              : b.status === "confirmed"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {b.status === "completed"
-                            ? "Đã hoàn thành tour"
-                            : b.status === "confirmed"
-                            ? "Đang chuẩn bị/Dẫn tour"
-                            : "Chờ duyệt"}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 text-center">
-                        {isSettled ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Đã quyết toán
-                            </span>
-                            <p className="text-[10px] text-gray-400">
-                              Đã chuyển: {formatVND(b.settledAmount ?? 0)}
-                            </p>
-                          </div>
-                        ) : isTourCompleted ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            Sẵn sàng quyết toán
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
-                            <ShieldCheck className="w-3 h-3 text-[#075985]" />
-                            Đang tạm giữ Escrow
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        {isSettled ? (
-                          <span className="text-xs text-gray-400 font-medium">Hoàn tất</span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled={!isTourCompleted}
-                            onClick={() => {
-                              setSelectedBookingForSettlement(b);
-                              setSettlementTransactionCode(`UNC-${Date.now().toString().slice(-6)}`);
-                            }}
-                            className={`text-xs h-8 gap-1.5 font-bold shadow-xs ${
-                              isTourCompleted
-                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
-                            }`}
-                            title={
-                              isTourCompleted
-                                ? "Bấm để quyết toán và chuyển tiền cho công ty du lịch"
-                                : "Tour chưa hoàn thành. Tiền được tạm giữ để bảo vệ khách hàng."
-                            }
-                          >
-                            <DollarSign className="w-3.5 h-3.5" />
-                            Quyết toán cho Cty
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* MODAL: QUYẾT TOÁN & CHUYỂN TIỀN CHO CÔNG TY DU LỊCH */}
-      <Dialog
-        open={Boolean(selectedBookingForSettlement)}
-        onOpenChange={(open) => !open && setSelectedBookingForSettlement(null)}
-      >
-        <DialogContent className="max-w-lg">
-          {selectedBookingForSettlement && (() => {
-            const b = selectedBookingForSettlement;
-            const paid = getPaidAmount(b);
-            const feeRate = defaultCommissionRate;
-            const platformFee = Math.round((paid * feeRate) / 100);
-            const finalSettledAmount = paid - platformFee;
-
-            const isCoHosted = Boolean(b.isCoHosted || b.tour?.isCoHosted);
-            const hasBookingAgencies = Boolean(b.bookingAgencies && b.bookingAgencies.length > 0);
-            const coHosts = b.coHosts || b.tour?.coHosts || [];
-
-            const agencyShares = hasBookingAgencies
-              ? b.bookingAgencies!.map((a) => {
-                  const fee = a.platformFee !== undefined ? a.platformFee : Math.round((a.finalAmount * feeRate) / 100);
-                  const net = a.netPayout !== undefined ? a.netPayout : a.finalAmount - fee;
-                  return {
-                    id: a.id,
-                    agencyId: a.agencyId,
-                    agencyName: a.agencyName,
-                    isHost: a.isHost,
-                    finalAmount: a.finalAmount,
-                    platformFee: fee,
-                    netPayout: net,
-                    settlementStatus: a.settlementStatus === "paid" ? "settled" : a.settlementStatus || "ready",
-                    bankReferenceCode: a.bankReferenceCode,
-                  };
-                })
-              : coHosts.map((host) => {
-                  let amount = 0;
-                  if (host.fixedPayoutAmount) {
-                    amount = host.fixedPayoutAmount;
-                  } else if (host.quotePerGuest) {
-                    amount = host.quotePerGuest * b.numberOfGuests;
-                  } else if (host.revenueSharePercentage) {
-                    amount = Math.round((finalSettledAmount * host.revenueSharePercentage) / 100);
-                  } else {
-                    amount = Math.round(finalSettledAmount / (coHosts.length || 1));
-                  }
-                  const fee = Math.round((amount * feeRate) / 100);
-                  return {
-                    id: host.id,
-                    agencyId: host.companyId,
-                    agencyName: host.companyName,
-                    isHost: host.role === "lead",
-                    finalAmount: amount,
-                    platformFee: fee,
-                    netPayout: amount - fee,
-                    settlementStatus: host.settlementStatus || "ready",
-                    bankReferenceCode: undefined,
-                  };
-                });
-
-            return (
-              <div className="space-y-4 text-xs">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-base text-gray-900">
-                    <Landmark className="w-5 h-5 text-emerald-600" />
-                    {isCoHosted
-                      ? `Quyết toán Tiền Tour Liên Minh Đối Tác (${agencyShares.length} Đơn Vị Phối Hợp)`
-                      : "Quyết toán Tiền Tour cho Công ty Du lịch"}
-                  </DialogTitle>
-                </DialogHeader>
-
-                {/* Tour & Partner info */}
-                <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-1.5">
-                  <p className="font-bold text-gray-900 text-sm">
-                    {b.tour.name}
-                  </p>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Mã Booking: <strong>#{b.id}</strong></span>
-                    <span>Khách: <strong>{b.userName}</strong></span>
-                  </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>
-                      Công ty thụ hưởng:{" "}
-                      <strong className="text-[#075985]">
-                        {isCoHosted && agencyShares.length > 0
-                          ? agencyShares.map((c) => c.agencyName).join(" + ")
-                          : b.companyName || b.tour.companyName}
-                      </strong>
-                    </span>
-                    <span>Số khách: <strong>{b.numberOfGuests}</strong></span>
-                  </div>
-                </div>
-
-                {/* Calculation breakdown */}
-                <div className="bg-[#F0F9FF]/60 rounded-xl p-4 border border-[#CBD5E1] space-y-2.5">
-                  <h4 className="font-bold text-blue-900 text-xs uppercase tracking-wide">
-                    Bảng Kê Chi Tiết Dòng Tiền Escrow Sàn:
-                  </h4>
-                  <div className="space-y-1.5 text-gray-700">
-                    <div className="flex justify-between items-center">
-                      <span>1. Tổng tiền khách đã thanh toán vào TK Hệ thống:</span>
-                      <span className="font-bold text-gray-900 text-sm">{formatVND(paid)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-rose-700">
-                      <span>2. Khấu trừ Phí hoa hồng sàn ({feeRate}%):</span>
-                      <span className="font-bold">{feeRate === 0 ? "0đ (Miễn phí sàn)" : `- ${formatVND(platformFee)}`}</span>
-                    </div>
-                    <div className="border-t border-[#CBD5E1] pt-2 flex justify-between items-center text-sm">
-                      <span className="font-bold text-gray-900">
-                        3. Tổng tiền chuyển cho các đơn vị tổ chức:
-                      </span>
-                      <span className="text-base font-extrabold text-emerald-700">
-                        {formatVND(finalSettledAmount)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CO-HOSTED SPLIT BREAKDOWN */}
-                {isCoHosted && agencyShares.length > 0 && (
-                  <div className="bg-[#F0F9FF]/80 rounded-xl p-3.5 border border-[#F97316]/30 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5 uppercase">
-                        <Handshake className="w-4 h-4 text-[#F97316]" />
-                        Phân Chia Quyết Toán Cho {agencyShares.length} Công Ty Liên Minh:
-                      </span>
-                      <span className="text-[10px] font-bold bg-purple-200 text-purple-900 px-2 py-0.5 rounded">
-                        Độc lập theo từng chặng
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      {agencyShares.map((agency) => {
-                        const isAgencySettled = agency.settlementStatus === "settled";
-                        return (
-                          <div key={agency.id} className="bg-white p-3 rounded-lg border border-purple-100 shadow-2xs space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-gray-900 text-xs truncate max-w-[150px]">
-                                {agency.agencyName}
-                              </span>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${agency.isHost ? "bg-[#E0F2FE] text-blue-800" : "bg-[#F97316]/15 text-purple-800"}`}>
-                                {agency.isHost ? "🏢 Chủ trì (Lead)" : "🤝 Đối tác (Partner)"}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1 text-[11px] bg-gray-50 p-2 rounded-lg border border-gray-100">
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Doanh thu chặng:</span>
-                                <span className="font-semibold text-gray-800">{formatVND(agency.finalAmount)}</span>
-                              </div>
-                              <div className="flex justify-between text-rose-600">
-                                <span>Phí sàn ({feeRate}%):</span>
-                                <span>- {formatVND(agency.platformFee)}</span>
-                              </div>
-                              <div className="flex justify-between font-bold pt-1 border-t border-gray-200 text-emerald-700">
-                                <span>Thực nhận giải ngân:</span>
-                                <span>{formatVND(agency.netPayout)}</span>
-                              </div>
-                            </div>
-
-                            <div className="pt-1">
-                              {isAgencySettled ? (
-                                <span className="inline-flex items-center justify-center w-full gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Đã quyết toán ({agency.bankReferenceCode || settlementTransactionCode})
-                                </span>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  disabled={!settlementTransactionCode}
-                                  onClick={() => {
-                                    onSettleBooking(
-                                      b.id,
-                                      agency.netPayout,
-                                      agency.platformFee,
-                                      agency.agencyId,
-                                      settlementTransactionCode
-                                    );
-                                    setSettlementTransactionCode(`UNC-${Date.now().toString().slice(-6)}`);
-                                  }}
-                                  className="w-full bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] h-7 font-bold gap-1 shadow-2xs"
-                                >
-                                  <DollarSign className="w-3 h-3" />
-                                  Giải ngân riêng chặng này ({formatVND(agency.netPayout)})
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Transaction details inputs */}
-                <div className="space-y-3 pt-1">
-                  <div>
-                    <Label className="text-xs font-semibold text-gray-700">
-                      Mã giao dịch / Mã Ủy nhiệm chi (UNC) <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      value={settlementTransactionCode}
-                      onChange={(e) => setSettlementTransactionCode(e.target.value)}
-                      placeholder="VD: UNC-982144"
-                      className="mt-1 text-xs font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold text-gray-700">
-                      Ghi chú quyết toán (Tùy chọn)
-                    </Label>
-                    <Input
-                      value={settlementNote}
-                      onChange={(e) => setSettlementNote(e.target.value)}
-                      placeholder="VD: Đã chuyển khoản qua Vietcombank số lệnh #..."
-                      className="mt-1 text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSelectedBookingForSettlement(null)}
-                  >
-                    Hủy bỏ
-                  </Button>
-                  <Button
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
-                    disabled={!settlementTransactionCode}
-                    onClick={() => {
-                      onSettleBooking(b.id, finalSettledAmount, platformFee, undefined, settlementTransactionCode);
-                      setSelectedBookingForSettlement(null);
-                      setSettlementNote("");
-                    }}
-                  >
-                    <Check className="w-4 h-4" />
-                    {isCoHosted && agencyShares.length > 0
-                      ? `Xác nhận chuyển toàn bộ ${formatVND(finalSettledAmount)} cho tất cả đơn vị`
-                      : `Xác nhận đã chuyển ${formatVND(finalSettledAmount)} cho Cty`}
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -39,6 +39,10 @@ public static class DependencyInjection
         services.AddSingleton(sp => Notifications.SmtpOptions.From(sp.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton<Notifications.EmailSender>();
         services.AddScoped<Bookings.BookingService>();
+        // Quyết toán cho Agency. Tác vụ chạy ngầm chỉ chuyển tiền khi Settlement:AutoPayoutEnabled = true.
+        services.AddSingleton(sp => Settlements.SettlementOptions.From(sp.GetRequiredService<IConfiguration>()));
+        services.AddScoped<Settlements.AgencySettlementService>();
+        services.AddHostedService<Settlements.SettlementWorker>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();

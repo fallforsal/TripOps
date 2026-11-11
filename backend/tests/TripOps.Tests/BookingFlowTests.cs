@@ -35,6 +35,8 @@ public sealed partial class BookingFlowTests
                 ["PayOsPayout:ClientId"] = "",
                 ["PayOsPayout:ApiKey"] = "",
                 ["PayOsPayout:ChecksumKey"] = "",
+                // Tác vụ tự chuyển tiền quyết toán không chạy trong test (test gọi lượt quét qua API).
+                ["Settlement:AutoPayoutEnabled"] = "false",
             }));
             builder.ConfigureServices(services =>
             {

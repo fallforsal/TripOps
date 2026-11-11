@@ -237,6 +237,28 @@ public decimal? NetPayout { get; set; } = 0m;
 public SettlementStatus? SettlementStatus { get; set; } = TripOps.Data.Enums.SettlementStatus.Unpaid;
 public DateTime? PayoutTransferredAt { get; set; }
 public string? BankReferenceCode { get; set; }
+/// <summary>Thời điểm hướng dẫn viên bấm hoàn thành tour (UTC). Mốc tính ngày chuyển tiền tự động.</summary>
+public DateTime? TourCompletedAt { get; set; }
+/// <summary>Từ thời điểm này hệ thống được tự chuyển tiền (UTC). NULL = chỉ Admin chuyển tay.</summary>
+public DateTime? AutoPayoutAt { get; set; }
+/// <summary>Tỷ lệ phí sàn (%) áp dụng cho khoản quyết toán này, chốt lúc tour hoàn thành.</summary>
+public decimal? FeePercent { get; set; }
+/// <summary>Cách đã/đang chuyển: PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay).</summary>
+public string? PayoutMethod { get; set; }
+/// <summary>Mã lệnh chi phía TripOps (SETTLE-{id}-{lần}), cũng là khóa chống tạo lệnh trùng gửi payOS.</summary>
+public string? PayoutReference { get; set; }
+/// <summary>Mã lệnh chi phía payOS.</summary>
+public string? PayoutGatewayId { get; set; }
+/// <summary>Số lần đã tạo lệnh chi hộ.</summary>
+public int PayoutAttempts { get; set; }
+/// <summary>Ghi chú gần nhất: lỗi chi hộ, lý do tạm giữ, ghi chú của Admin.</summary>
+public string? PayoutNote { get; set; }
+/// <summary>Tài khoản nhận tại thời điểm chuyển (bản chụp, không đổi theo hồ sơ Agency).</summary>
+public string? PayoutBankName { get; set; }
+public string? PayoutAccountNumber { get; set; }
+public string? PayoutAccountHolder { get; set; }
+/// <summary>Admin thực hiện (NULL khi hệ thống tự chuyển).</summary>
+public string? SettledBy { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual Booking Booking { get; set; } = null!;
