@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TripOps.Service.Payments;
+using TripOps.Service.Settlements;
 using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
@@ -141,7 +143,7 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Complete(int id, [FromServices] TripOps.Service.Settlements.AgencySettlementService settlements, CancellationToken ct) =>
+    public async Task<IActionResult> Complete(int id, [FromServices] AgencySettlementService settlements, CancellationToken ct) =>
         Ok(await bookings.Complete(Actor, id, settlements, ct));
 
     [HttpGet("{id:int}/cancellation-quote")]

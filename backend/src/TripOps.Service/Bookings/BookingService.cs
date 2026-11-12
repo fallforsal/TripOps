@@ -11,7 +11,8 @@ namespace TripOps.Service.Bookings;
 
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
-    TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService)
+    TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService,
+    CloudinaryStorage photoStorage)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingQuotationService quotationsForPayment => quotations;
@@ -491,14 +492,18 @@ public sealed partial class BookingService(BookingRepository repository, Account
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
                 i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
             b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
-                t.Attractions.Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,a.AgencyId)).ToList(),
+                GuideLocationCheckinRules.OrderedStops([t]).Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,a.AgencyId,
+                    a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.PhotoUrl))
+                        .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray())).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
                     SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
                 SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
-                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow));
+                a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow),
+            CanCheckInLocations: GuideLocationCheckinRules.CanCheckIn(b, UtcNow),
+            NextLocationCheckInId: GuideLocationCheckinRules.NextUncheckedStopId(b.Timelines));
 
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;

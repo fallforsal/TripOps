@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import { AccountHolderInput } from "@/app/components/common/AccountHolderInput";
+import { finalHolderName, toAccountNumber } from "@/app/lib/bankAccountText";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import {
@@ -126,7 +128,7 @@ export function AdminFinancialManagement({
       const saved = await savePlatformBankAccount({
         bankName,
         accountNumber,
-        accountHolder,
+        accountHolder: finalHolderName(accountHolder),
         branch,
         notes,
         commissionPercent: Number(defaultCommissionRate),
@@ -267,7 +269,7 @@ export function AdminFinancialManagement({
                 </Label>
                 <Input
                   value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value.replace(/\s+/g, ""))}
+                  onChange={(e) => setAccountNumber(toAccountNumber(e.target.value))}
                   placeholder="Ví dụ: 9888666888"
                   required
                   className="font-mono font-bold text-[#075985] text-xs"
@@ -278,12 +280,12 @@ export function AdminFinancialManagement({
                 <Label className="text-xs font-semibold text-gray-700">
                   Tên chủ tài khoản <span className="text-red-500">*</span>
                 </Label>
-                <Input
+                <AccountHolderInput
                   value={accountHolder}
-                  onChange={(e) => setAccountHolder(e.target.value.toUpperCase())}
+                  onChange={setAccountHolder}
                   placeholder="CONG TY CP CONG NGHE DU LICH..."
                   required
-                  className="font-bold uppercase text-xs"
+                  className="font-bold text-xs"
                 />
               </div>
 

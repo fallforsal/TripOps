@@ -89,9 +89,11 @@ public sealed record BookingDto(
     IReadOnlyList<BookingPriceAdjustmentDto>? PriceAdjustments = null,
     decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
     IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null,
-    bool CanRecordAttendance = false, DateTime? AttendanceDate = null);
+    bool CanRecordAttendance = false, DateTime? AttendanceDate = null,
+    bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
-public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note);
+public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
+    IReadOnlyList<string>? PhotoUrls = null);
 
 public sealed record BookingAgencyDto(int Id,string AgencyId,string AgencyName,bool IsHost,decimal OriginalAmount,decimal FinalAmount,decimal NetPayout,
     string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0,
@@ -221,7 +223,8 @@ public sealed record PaymentSyncResultDto(string Outcome, string Message, Bookin
 public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus,
-    string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null);
+    string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null,
+    IReadOnlyList<string>? PhotoUrls = null);
 public sealed record BookingSupplierDto(string? Address, string? ContactPhone);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null);
 public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);

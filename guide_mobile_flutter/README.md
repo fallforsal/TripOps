@@ -192,3 +192,90 @@ are independent of the departure-day attendance restriction.
 From this point on, development changes to the Guide Flutter app are committed
 to the persistent `hiep` branch, based on `develop`. Pull `hiep` to run
 new changes before merging them to `develop`.
+
+## Check-in địa điểm theo scope mới (nhánh `hiep`)
+
+Đã đối chiếu nhánh `develop` mới nhất và giữ nghiệp vụ tour liên minh/Agency theo code team.
+
+- HDV chỉ check-in khi **ngày Việt Nam đã tới hoặc qua ngày khởi hành**, booking còn hoạt động.
+- **Check-in đúng thứ tự** theo ngày lịch trình, giờ thăm quan (nếu có), rồi ID điểm để ổn định khi dữ liệu legacy không có thứ tự tường minh.
+- Điểm trước chưa CheckedIn thì điểm sau bị khóa. Không hỗ trợ bỏ qua; điểm đã check-in không thể check-in lại.
+- Không dùng GPS, kinh/vĩ độ, bán kính hay quyền Location. Không phải chạy migration geofence.
+- Backend là nơi kiểm tra thật, Flutter chỉ biểu diễn trạng thái và gửi `{status:"CheckedIn",note?}`.
+- Không làm thay đổi việc điểm danh hành khách, nghiệp vụ Booking Alliance và phân quyền check-in chặng của Agency.
+
+### Seed tour khởi hành hôm nay
+
+Seed kiểm thử được giữ lại, nhưng **đã bỏ toàn bộ dữ liệu GPS**. Để seed ngày hiện hành theo Việt Nam, ở môi trường Development:
+
+```powershell
+git switch hiep
+git pull --ff-only origin hiep
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:SeedGuideGpsDemo = "true"
+dotnet run --project backend/src/TripOps.Api
+Remove-Item Env:SeedGuideGpsDemo
+Remove-Item Env:ASPNETCORE_ENVIRONMENT
+```
+
+Tên cờ `SeedGuideGpsDemo` được giữ để tương thích lệnh cũ, **không sử dụng GPS**.
+
+- HDV demo: `guide-gps-demo@tripops.test`
+- Mật khẩu chỉ khi tài khoản mới tạo: `DemoGps#2026!`
+- Booking: `GPS-TEST-YYYYMMDD` (giữ mã cũ để chạy lại không nhân bản)
+- Tour có 3 điểm **A → B → C**, 4 hành khách; không yêu cầu Emulator Location.
+
+Script chỉ seed và thoát; khởi động lại backend bình thường sau đó. Chạy lại trong cùng ngày không reset check-in, nên muốn thử lại từ đầu hãy dùng database test mới.
+
+Nếu đã chạy migration GPS ở nhánh `hiep` cũ, các cột thừa không ảnh hưởng check-in; cần quản lý/rollback lịch sử migration theo kế hoạch DB riêng, **không tự xóa cột trên database đang dùng chung**.
+
+
+## Ảnh minh chứng khi check-in địa điểm
+
+Sau khi tới ngày khởi hành và đến lượt điểm dừng, HDV có thể xác nhận
+check-in **không cần ảnh** hoặc đính kèm **1–5 ảnh JPEG/PNG/WebP**.
+
+| Giới hạn | Giá trị |
+|---|---|
+| Số ảnh | 1–5 nếu có chọn |
+| Mỗi ảnh | Tối đa 5 MiB |
+| Tổng dung lượng | Tối đa 20 MiB |
+| Upload multipart | Request tối đa 22 MiB (kể cả multipart overhead) |
+
+App có lựa chọn camera/thư viện, xem trước và xóa ảnh. Ảnh được resize
+tối đa 1800 px và nén chất lượng 78 khi định dạng hỗ trợ. Cả app và backend
+đều kiểm tra dung lượng. Không cần quyền vị trí GPS.
+
+API JSON cũ vẫn hoạt động:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in`
+với `{"status":"CheckedIn","note":"..."}`.
+
+API mới để gửi ảnh:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in-with-images`
+(`multipart/form-data`) với `Status=CheckedIn`, `Note` tùy chọn,
+và nhiều phần `Images` (mỗi phần là một file).
+
+Server dùng chung điều kiện ngày khởi hành, thứ tự điểm đến và
+quyền HDV được phân công. Không được upload ảnh cho điểm
+không hợp lệ, đã check-in hoặc chưa đến lượt.
+
+Backend lưu danh sách URL ảnh dưới dạng JSON trong cột
+`booking_attraction_checkins.photo_proof_url` vốn có sẵn, không cần
+migration mới. Dữ liệu `photoUrls` trong `snapshotDays[].locations[]`
+giúp hiển thị lại các ảnh đã nộp.
+
+Development `Storage:UseLocal=true` lưu ảnh dưới
+`App_Data/uploads/guide-checkins/<guideId>/`, API
+`GET /api/v1/files/guide-checkins/{owner}/{name}` yêu cầu đăng nhập
+với vai trò HDV đã gửi hoặc Agency quản lý chặng. Production sử dụng
+Cloudinary authenticated image upload/signed delivery URL.
+Không sử dụng ảnh check-in làm thumbnail công khai của tour.
+
+Nếu mạng lỗi trong khi gửi, giao diện không xác nhận thành công;
+HDV cần kiểm tra trạng thái bằng nút làm mới trước khi gửi lại.
+Đối với lỗi upload từng phần lên storage, có thể còn file chưa được
+gắn vào booking (cần lifecycle cleanup định kỳ khi đưa vào production).
+
+**Lần đầu cài image_picker:** chạy `flutter pub get` và build lại ứng dụng.
+Trên iOS phải thêm `NSCameraUsageDescription` và
+`NSPhotoLibraryUsageDescription` vào Info.plist theo hướng dẫn package.

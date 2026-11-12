@@ -26,6 +26,10 @@ Table users {
   status varchar(30) [not null, default: 'active', note: 'active, inactive, banned']
   created_at timestamp [not null, default: `now()` ]
   updated_at timestamp [not null, default: `now()` ]
+  bank_name varchar(150) [note: 'Ngân hàng nhận tiền hoàn của khách (lưu trong hồ sơ)']
+  bank_account_number varchar(50) [note: 'Số tài khoản nhận tiền hoàn, chỉ gồm chữ số']
+  bank_account_holder varchar(150) [note: 'Tên chủ tài khoản, IN HOA không dấu']
+  bank_account_updated_at timestamp [note: 'Lần cập nhật tài khoản gần nhất']
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.

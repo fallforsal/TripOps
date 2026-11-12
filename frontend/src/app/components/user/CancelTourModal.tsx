@@ -22,7 +22,10 @@ import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Booking, RefundReasonType } from "@/app/types";
 import { getCancellationQuote, type CancellationQuoteDto } from "@/app/services/wf05Bookings";
-import { VIETNAM_BANKS } from "@/app/data/vietnamBanks";
+import { BankCombobox } from "@/app/components/common/BankCombobox";
+import { AccountHolderInput } from "@/app/components/common/AccountHolderInput";
+import { finalHolderName, toAccountNumber, toHolderName } from "@/app/lib/bankAccountText";
+import { loadSavedBankAccount } from "@/app/services/profileBankAccount";
 
 interface CancelTourModalProps {
   bookingId: string;
@@ -54,7 +57,6 @@ interface CancelTourModalProps {
 }
 
 // Ngân hàng chi hộ tự động được (khớp mã BIN ở máy chủ); "Khác" thì Admin chuyển khoản tay.
-const COMMON_BANKS = [...VIETNAM_BANKS.map((b) => b.name), "Khác"];
 
 const REASON_OPTIONS: { value: RefundReasonType; label: string; desc: string }[] = [
   {
@@ -122,12 +124,28 @@ export function CancelTourModal({
   // State cho yêu cầu hoàn tiền (Paid)
   const [refundReasonType, setRefundReasonType] = useState<RefundReasonType>("CUSTOMER_REQUEST");
   const [reasonDetail, setReasonDetail] = useState("");
-  const [bankName, setBankName] = useState("Vietcombank");
-  const [customBankName, setCustomBankName] = useState("");
+  const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountHolder, setAccountHolder] = useState(
-    booking?.contactName?.toUpperCase() || booking?.userName?.toUpperCase() || ""
+    toHolderName(booking?.contactName || booking?.userName || "")
   );
+  const [usingSavedAccount, setUsingSavedAccount] = useState(false);
+
+  // Tự điền tài khoản đã lưu trong hồ sơ (nhập ở hồ sơ hoặc lần hoàn tiền trước).
+  useEffect(() => {
+    if (!hasPaidMoney) return;
+    let active = true;
+    loadSavedBankAccount().then((saved) => {
+      if (!active || !saved) return;
+      setBankName(saved.bankName ?? "");
+      setAccountNumber(saved.accountNumber ?? "");
+      setAccountHolder(saved.accountHolder ?? "");
+      setUsingSavedAccount(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [hasPaidMoney]);
   const [paidErrors, setPaidErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -185,11 +203,11 @@ export function CancelTourModal({
     if (needsBankAccount && !/^\d{6,30}$/.test(accountNumber.replace(/\s/g, ""))) {
       errors.accountNumber = "Số tài khoản chỉ gồm 6–30 chữ số.";
     }
-    if (needsBankAccount && !accountHolder.trim()) {
+    if (needsBankAccount && !finalHolderName(accountHolder)) {
       errors.accountHolder = "Vui lòng nhập tên chủ tài khoản thụ hưởng.";
     }
-    if (needsBankAccount && bankName === "Khác" && !customBankName.trim()) {
-      errors.bankName = "Vui lòng nhập tên ngân hàng thụ hưởng.";
+    if (needsBankAccount && !bankName) {
+      errors.bankName = "Vui lòng chọn ngân hàng thụ hưởng.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -199,7 +217,7 @@ export function CancelTourModal({
 
     setIsSubmitting(true);
 
-    const finalBankName = bankName === "Khác" ? customBankName.trim() : bankName;
+    const finalBankName = bankName;
     const originalPaid = actualPaidAmount;
 
     if (onSubmitRefundRequest) {
@@ -221,7 +239,7 @@ export function CancelTourModal({
         refundPercentage,
         refundBankName: finalBankName,
         refundAccountNumber: accountNumber.replace(/\s/g, ""),
-        refundAccountHolder: accountHolder.trim().toUpperCase(),
+        refundAccountHolder: finalHolderName(accountHolder),
       });
       if (ok === false) setIsSubmitting(false);
     } else if (onConfirm) {
@@ -537,25 +555,16 @@ export function CancelTourModal({
                     <Label className="text-xs font-bold text-slate-800">
                       Ngân hàng thụ hưởng <span className="text-rose-600">*</span>
                     </Label>
-                    <select
+                    <BankCombobox
+                      id="refund-bank"
                       value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full text-xs h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                    >
-                      {COMMON_BANKS.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-
-                    {bankName === "Khác" && (
-                      <Input
-                        value={customBankName}
-                        onChange={(e) => setCustomBankName(e.target.value)}
-                        placeholder="Nhập tên ngân hàng của bạn..."
-                        className="text-xs mt-1.5"
-                      />
+                      onChange={(name) => {
+                        setBankName(name);
+                        if (paidErrors.bankName) setPaidErrors({ ...paidErrors, bankName: "" });
+                      }}
+                    />
+                    {paidErrors.bankName && (
+                      <p className="text-[11px] text-rose-600 font-semibold">{paidErrors.bankName}</p>
                     )}
                   </div>
 
@@ -566,7 +575,7 @@ export function CancelTourModal({
                     <Input
                       value={accountNumber}
                       onChange={(e) => {
-                        setAccountNumber(e.target.value.replace(/[^0-9A-Za-z]/g, ""));
+                        setAccountNumber(toAccountNumber(e.target.value));
                         if (paidErrors.accountNumber) {
                           setPaidErrors({ ...paidErrors, accountNumber: "" });
                         }
@@ -585,16 +594,16 @@ export function CancelTourModal({
                     <Label className="text-xs font-bold text-slate-800">
                       Tên chủ tài khoản (Viết in hoa không dấu) <span className="text-rose-600">*</span>
                     </Label>
-                    <Input
+                    <AccountHolderInput
                       value={accountHolder}
-                      onChange={(e) => {
-                        setAccountHolder(e.target.value.toUpperCase());
+                      onChange={(value) => {
+                        setAccountHolder(value);
                         if (paidErrors.accountHolder) {
                           setPaidErrors({ ...paidErrors, accountHolder: "" });
                         }
                       }}
                       placeholder="VD: PHAM HAI DANG"
-                      className={`text-xs h-10 font-bold uppercase ${
+                      className={`text-xs h-10 font-bold ${
                         paidErrors.accountHolder ? "border-rose-500 focus:ring-rose-500" : ""
                       }`}
                     />
@@ -606,7 +615,9 @@ export function CancelTourModal({
 
                 <p className="text-[11px] text-slate-500 italic">
                   ℹ️ {needsBankAccount
-                    ? "Ban Quản trị TripOps chuyển khoản hoàn về tài khoản trên trong vòng 7 ngày làm việc kể từ khi duyệt."
+                    ? `Ban Quản trị TripOps chuyển khoản hoàn về tài khoản trên trong vòng 7 ngày làm việc kể từ khi duyệt. ${
+                        usingSavedAccount ? "Đã điền sẵn từ hồ sơ của bạn; " : ""
+                      }Tài khoản này sẽ được lưu vào hồ sơ để dùng cho lần sau.`
                     : "Theo chính sách, yêu cầu này không có khoản hoàn nên không bắt buộc nhập tài khoản."}
                 </p>
               </div>

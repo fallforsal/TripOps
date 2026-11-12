@@ -17,4 +17,9 @@ public virtual BusinessProfile? BusinessProfile { get; set; }
 public virtual GuideProfile? GuideProfile { get; set; }
 public string? BanReason { get; set; }
 public DateTime? BannedAt { get; set; }
+// Tài khoản ngân hàng nhận tiền hoàn của khách (lưu trong hồ sơ, tự điền khi yêu cầu hoàn tiền).
+public string? BankName { get; set; }
+public string? BankAccountNumber { get; set; }
+public string? BankAccountHolder { get; set; }
+public DateTime? BankAccountUpdatedAt { get; set; }
 }

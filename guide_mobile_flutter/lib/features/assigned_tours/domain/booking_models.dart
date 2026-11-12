@@ -62,16 +62,18 @@ class Passenger {
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time});
+  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const []});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
+  final List<String> photoUrls;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
+    photoUrls: (j['photoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
   );
 }
 
@@ -108,6 +110,8 @@ class BookingDetail {
     this.customerName, this.contactPhone, this.agencyName,
     this.canRecordAttendance = false,
     this.attendanceDate,
+    this.canCheckInLocations = false,
+    this.nextLocationCheckInId,
   });
   final int id;
   final String code;
@@ -125,6 +129,9 @@ class BookingDetail {
   /// Backend-enforced departure/stage date in Vietnam.
   final bool canRecordAttendance;
   final DateTime? attendanceDate;
+  /// Backend-enforced departure date and itinerary state.
+  final bool canCheckInLocations;
+  final int? nextLocationCheckInId;
 
   factory BookingDetail.fromJson(Map<String, dynamic> j) => BookingDetail(
     id: (j['id'] as num).toInt(),
@@ -139,6 +146,8 @@ class BookingDetail {
     agencyName: j['agencyName']?.toString(),
     canRecordAttendance: j['canRecordAttendance'] == true,
     attendanceDate: j['attendanceDate'] == null ? null : parseCalendarDate(j['attendanceDate']),
+    canCheckInLocations: j['canCheckInLocations'] == true,
+    nextLocationCheckInId: (j['nextLocationCheckInId'] as num?)?.toInt(),
     passengers: (j['participants'] as List<dynamic>? ?? [])
         .map((e) => Passenger.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     days: (j['snapshotDays'] as List<dynamic>? ?? [])

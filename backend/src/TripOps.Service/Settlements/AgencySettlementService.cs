@@ -663,13 +663,7 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
     }
 
     /// <summary>Tên chủ tài khoản theo cách ngân hàng hiển thị: in hoa, bỏ dấu.</summary>
-    private static string HolderName(string value)
-    {
-        var text = value.Trim().Normalize(System.Text.NormalizationForm.FormD);
-        var chars = text.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-            .Select(c => c is 'đ' or 'Đ' ? 'D' : c).ToArray();
-        return string.Join(' ', new string(chars).ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
-    }
+    private static string HolderName(string value) => Common.BankAccountText.Holder(value);
 
     private static string Mask(string account) => account.Length <= 4 ? account : new string('*', account.Length - 4) + account[^4..];
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

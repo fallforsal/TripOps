@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Data;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,13 +8,28 @@ using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Service.Bookings;
+using TripOps.Service.Payments;
+using TripOps.Service.Accounts;
 
 namespace TripOps.Api.Controllers;
 
 public sealed record PassengerEdit(int Id, [Required, StringLength(150)] string FullName, DateTime? DateOfBirth,
     string? Gender, string? IdentityNumber, string? Note, string? RoommateNote, string? RestaurantNote, [Phone, StringLength(30)] string? PhoneNumber = null);
 public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
-public sealed record LocationCheckin([AllowedValues("CheckedIn", "Skipped", "Pending")] string Status, string? Note);
+// The Guide confirms arrival. Skipping cannot advance the itinerary.
+public sealed record LocationCheckin(
+    [Required, AllowedValues("CheckedIn")] string Status,
+    [StringLength(500)] string? Note);
+
+/// <summary>One to five check-in photos, uploaded in the same action.</summary>
+public sealed class GuideCheckinImagesForm
+{
+    [Required, AllowedValues("CheckedIn")]
+    public string Status { get; set; } = "CheckedIn";
+    [StringLength(500)]
+    public string? Note { get; set; }
+    public List<IFormFile> Images { get; set; } = [];
+}
 
 [ApiController, Authorize, Route("api/v1/bookings/{id:int}")]
 [Tags("Booking Management")]
@@ -63,26 +79,97 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
 }
 
 [ApiController, Authorize(Roles = "guide"), Route("api/v1/guide/bookings/{id:int}"), Tags("Guide Operations")]
-public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings) : ControllerBase
+public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings, CloudinaryStorage media) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private async Task<Booking> Assigned(int id, CancellationToken ct) => await db.Bookings.Include(b => b.Tour).Include(b => b.AssignedGuides).SingleOrDefaultAsync(b => b.Id == id && b.AssignedGuides.Any(g => g.GuideId == Actor), ct) ?? throw new BookingException(403, "Guide is not assigned to this booking.");
     [HttpPost("start")]
     [EndpointSummary("Start an assigned tour on or after its departure date")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > DateTime.UtcNow.Date) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
+    public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow)) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
     [HttpPost("locations/{locationId:int}/check-in")]
-    [EndpointSummary("Record a guide check-in against a booking itinerary location")]
+    [EndpointSummary("Confirm next stop, with optional note and no photos")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct)
+    public Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct) =>
+        CheckinInternal(id, locationId, request, null, ct);
+
+    [HttpPost("locations/{locationId:int}/check-in-with-images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(22 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
+    [EndpointSummary("Check in next stop with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public Task<IActionResult> CheckinWithImages(
+        int id, int locationId, [FromForm] GuideCheckinImagesForm request, CancellationToken ct) =>
+        CheckinInternal(id, locationId, new LocationCheckin(request.Status, request.Note), request.Images, ct);
+
+    private async Task<IActionResult> CheckinInternal(
+        int id, int locationId, LocationCheckin request, IReadOnlyList<IFormFile>? images, CancellationToken ct)
     {
-        var b = await Assigned(id, ct);
-        if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress)) throw new BookingException(409, "Booking is not active.");
-        var location = await db.BookingTimelineAttractions.SingleOrDefaultAsync(l => l.Id == locationId && l.BookingTimeline.BookingId == id, ct) ?? throw new BookingException(404, "Booking location not found.");
-        if((location.AgencyId??b.Tour!.AgencyId)!=b.AssignedGuides.Single(g=>g.GuideId==Actor).AgencyId)throw new BookingException(403,"HDV chỉ check-in điểm thuộc chặng công ty mình.");
-        var check = await db.BookingAttractionCheckins.SingleOrDefaultAsync(c => c.BookingTimelineAttractionId == locationId && c.GuideId == Actor, ct);
-        if (check is null) { check = new BookingAttractionCheckin { BookingTimelineAttractionId = locationId, GuideId = Actor, AgencyId = b.AssignedGuides.Single(g => g.GuideId == Actor).AgencyId }; db.BookingAttractionCheckins.Add(check); }
-        check.AttendanceStatus = Enum.Parse<AttractionCheckinStatus>(request.Status, true); check.CheckinTime = DateTime.UtcNow; check.Note = request.Note; location.GuideId = Actor; location.AttendanceStatus = request.Status;
-        await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct));
+        if (images is not null)
+            GuideCheckinPhotoRules.ValidateFiles(images.Select(f => (f.Length, f.ContentType)).ToArray());
+
+        // Preserve the original sequential/date/Agency validation for JSON and multipart.
+        // Serializable transaction prevents two parallel check-ins from racing forward.
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var booking = await Assigned(id, ct);
+        if (request.Status != "CheckedIn")
+            throw new BookingException(422, "Chỉ được xác nhận đã đến địa điểm.");
+
+        // Read the complete itinerary rather than only the requested stop.
+        // A guide from another Agency may not check in another Agency's stage.
+        var days = await db.BookingTimelines.Include(d => d.Attractions)
+            .Where(d => d.BookingId == id).ToListAsync(ct);
+        var ordered = GuideLocationCheckinRules.OrderedStops(days);
+        var location = ordered.SingleOrDefault(a => a.Id == locationId)
+            ?? throw new BookingException(404, "Booking location not found.");
+        var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
+        if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
+            throw new BookingException(403, "HDV chỉ check-in điểm thuộc chặng công ty mình.");
+        // Check ownership before lifecycle rules, including before departure.
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+            throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
+        if (location.AttendanceStatus == "CheckedIn")
+            throw new BookingException(409, "Điểm đến này đã check-in.");
+
+        var nextId = GuideLocationCheckinRules.NextUncheckedStopId(days);
+        if (nextId != locationId)
+            throw new BookingException(409, "Phải check-in lần lượt: điểm trước đó chưa hoàn thành.");
+
+        // No GPS, coordinates, location permission, or device-location payload.
+        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
+            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
+        if (checkin is null)
+        {
+            checkin = new BookingAttractionCheckin
+            {
+                BookingTimelineAttractionId = locationId,
+                GuideId = Actor,
+                AgencyId = agencyId
+            };
+            db.BookingAttractionCheckins.Add(checkin);
+        }
+        if (images is not null)
+        {
+            var photoUrls = new List<string>(images.Count);
+            foreach (var file in images)
+            {
+                await using var stream = new MemoryStream();
+                await file.CopyToAsync(stream, ct);
+                var bytes = stream.ToArray();
+                if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
+                    throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
+                photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
+            }
+            checkin.PhotoUrl = GuideCheckinPhotoRules.Encode(photoUrls);
+        }
+        checkin.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
+        checkin.CheckinTime = DateTime.UtcNow;
+        checkin.Note = request.Note;
+        location.GuideId = Actor;
+        location.AttendanceStatus = "CheckedIn";
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
     }
 }

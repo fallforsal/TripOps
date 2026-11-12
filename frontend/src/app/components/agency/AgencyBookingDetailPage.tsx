@@ -231,7 +231,7 @@ export function AgencyBookingDetailPage({
   const [completingBooking, setCompletingBooking] = useState(false);
   const completionLock = useRef(false);
   const handleCompleteBooking = async () => {
-    if (completionLock.current) return;
+    if (completionLock.current || !isCurrentCompanyLead || booking.status !== "in_progress") return;
     completionLock.current = true;
     setCompletingBooking(true);
     try {
@@ -1439,7 +1439,8 @@ export function AgencyBookingDetailPage({
           {/* Quick Action Buttons */}
           {!isClosedBooking && <div className="flex items-center gap-2 flex-wrap">
             {isCurrentCompanyLead && booking.status === "in_progress" && (
-              <Button onClick={() => void handleCompleteBooking()} disabled={completingBooking}
+              <Button type="button" data-testid="agency-complete-tour"
+                onClick={() => void handleCompleteBooking()} disabled={completingBooking}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-sm font-semibold"
                 title="Agency chủ trì xác nhận hoàn thành chuyến đi và bắt đầu mốc chờ quyết toán">
                 <CheckCheck className="w-4 h-4" />
