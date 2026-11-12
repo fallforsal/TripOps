@@ -41,7 +41,7 @@ public static class BookingAlliance
     public static PricingTierInput? Tier(TourConfiguration? c,string agency,int age) =>
         (c?.AgencyPricing?.SingleOrDefault(p=>p.AgencyId==agency)?.Tiers??c?.PricingTiers??[]).FirstOrDefault(t=>age>=(t.MinAge??0) && (!t.MaxAge.HasValue || age<=t.MaxAge));
     public static BookingParticipant Copy(BookingParticipant p,string agency,decimal price,bool primary) => new() {
-        CreationKey=p.CreationKey,AgencyId=agency,ParticipantIndex=p.ParticipantIndex,IsPrimary=primary,FullName=p.FullName,DateOfBirth=p.DateOfBirth,Gender=p.Gender,
+        CreationKey=p.CreationKey,AgencyId=agency,ParticipantIndex=p.ParticipantIndex,IsPrimary=primary,FullName=p.FullName,PhoneNumber=p.PhoneNumber,DateOfBirth=p.DateOfBirth,Gender=p.Gender,
         IdentityNumber=p.IdentityNumber,Note=p.Note,TierName=p.TierName,Price=price,Status=p.Status,RoommateNote=p.RoommateNote,RestaurantNote=p.RestaurantNote
     };
     public static void SetPrimary(Booking b) {

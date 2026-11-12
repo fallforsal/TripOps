@@ -1062,6 +1062,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("participant_index");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("phone_number");
+
                     b.Property<decimal>("Price")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(12, 2)")
@@ -3863,6 +3868,25 @@ namespace TripOps.Data.Migrations
 
                     b.Property<string>("BanReason")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BankAccountHolder")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("bank_account_holder");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<DateTime?>("BankAccountUpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("bank_account_updated_at");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("bank_name");
 
                     b.Property<DateTime?>("BannedAt")
                         .HasColumnType("datetime2");

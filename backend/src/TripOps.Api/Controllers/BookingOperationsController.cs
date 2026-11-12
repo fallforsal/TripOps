@@ -14,7 +14,7 @@ using TripOps.Service.Accounts;
 namespace TripOps.Api.Controllers;
 
 public sealed record PassengerEdit(int Id, [Required, StringLength(150)] string FullName, DateTime? DateOfBirth,
-    string? Gender, string? IdentityNumber, string? Note, string? RoommateNote, string? RestaurantNote);
+    string? Gender, string? IdentityNumber, string? Note, string? RoommateNote, string? RestaurantNote, [Phone, StringLength(30)] string? PhoneNumber = null);
 public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
 // The Guide confirms arrival. Skipping cannot advance the itinerary.
 public sealed record LocationCheckin(
@@ -50,7 +50,7 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
             var p = b.Participants.SingleOrDefault(p => p.Id == input.Id) ?? throw new BookingException(422, "Passenger does not belong to booking.");
             if (input.DateOfBirth?.Date != p.DateOfBirth?.Date) throw new BookingException(422, "Đổi ngày sinh cần Agency kiểm tra lại phân khúc giá.");
             foreach(var copy in b.Participants.Where(row=>row.ParticipantIndex==p.ParticipantIndex)) {
-                copy.FullName = input.FullName.Trim(); copy.Gender = input.Gender; copy.IdentityNumber = input.IdentityNumber; copy.Note = input.Note; copy.RoommateNote = input.RoommateNote; copy.RestaurantNote = input.RestaurantNote;
+                copy.PhoneNumber = string.IsNullOrWhiteSpace(input.PhoneNumber) ? null : input.PhoneNumber.Trim(); copy.FullName = input.FullName.Trim(); copy.Gender = input.Gender; copy.IdentityNumber = input.IdentityNumber; copy.Note = input.Note; copy.RoommateNote = input.RoommateNote; copy.RestaurantNote = input.RestaurantNote;
             }
         }
         await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct));

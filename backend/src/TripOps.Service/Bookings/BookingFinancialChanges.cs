@@ -132,6 +132,7 @@ public sealed partial class BookingService
         if(r.Status is not (RefundStatus.Pending or RefundStatus.Reviewing))throw new BookingException(409,"Khoản hoàn đang xử lý hoặc đã hoàn tất.");
         var account=Account(input.BankName,input.AccountNumber,input.AccountHolder,true)!;
         r.RefundBankName=account.Bank;r.RefundAccountNumber=account.Number;r.RefundAccountHolder=account.Holder;
+        await RememberRefundAccount(customer,account,ct);
         await Repo.SaveChangesAsync(ct);await tx.CommitAsync(ct);
     }
 }

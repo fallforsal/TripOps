@@ -123,7 +123,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 Price = Money(price),
                 RoommateNote = p.RoommateNote, RestaurantNote = p.RestaurantNote,
                 FullName = p.FullName.Trim(),
-                Note = ParticipantNote(p.Note, p.PhoneNumber),
+                PhoneNumber = string.IsNullOrWhiteSpace(p.PhoneNumber) ? null : p.PhoneNumber.Trim(),
+                Note = p.Note?.Trim(),
                 DateOfBirth = p.DateOfBirth,
                 Gender = p.Gender?.Trim(),
                 IdentityNumber = p.IdentityNumber?.Trim(),
@@ -507,17 +508,13 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
 
-    private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, Phone(p.Note),
+    private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, p.PhoneNumber,
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),
         p.Status ?? "ACTIVE", p.AssignedGuide?.Name, p.Price, p.TierName, p.AgencyId, p.ParticipantIndex, p.IsPrimary, p.Note, p.RoommateNote, p.RestaurantNote, p.CheckedBy, p.CheckedAt, p.AssignedGuideId);
     private static int TotalGuests(Booking booking) => BookingAlliance.GuestCount(booking);
     private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
-    private static string? ParticipantNote(string? note, string? phone) => string.IsNullOrWhiteSpace(phone)
-        ? note?.Trim() : string.Join("\n", new[] { note?.Trim(), $"Điện thoại: {phone.Trim()}" }.Where(s => !string.IsNullOrWhiteSpace(s)));
-    private static string? Phone(string? note) => string.IsNullOrWhiteSpace(note) ? null
-        : System.Text.RegularExpressions.Regex.Match(note, @"(?:^|\n)Điện thoại: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
     private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)
         ? description.Trim() : $"{description.Trim()}\nMức độ: {severity.Trim()}";
     private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null

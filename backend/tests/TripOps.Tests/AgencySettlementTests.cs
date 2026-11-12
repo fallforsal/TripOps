@@ -276,4 +276,26 @@ public sealed partial class BookingFlowTests
         Assert.Equal(9200000m, row.NetPayout);
         Assert.Equal(HttpStatusCode.Forbidden, (await (await app.Client("agency1@example.test")).GetAsync("/api/v1/admin/platform-bank-account")).StatusCode);
     }
+    [Fact]
+    public async Task Legacy_present_attendance_value_does_not_break_the_agency_booking_list()
+    {
+        using var app = new App(); await app.Initialize();
+        using var customer = await app.Client("customer1@example.test");
+        using var agency = await app.Client("agency1@example.test");
+        var booking = await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", Sample()));
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            // Dữ liệu cũ trong DB thật có giá trị "Present" (không nằm trong enum AttendanceStatus).
+            await db.Database.ExecuteSqlRawAsync("UPDATE booking_participants SET attendance_status = 'Present' WHERE booking_id = {0}", booking.Id);
+        }
+        var list = await agency.GetAsync("/api/v1/agency/bookings");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var participant = await db.BookingParticipants.FirstAsync(p => p.BookingId == booking.Id);
+            Assert.Equal(AttendanceStatus.CheckedIn, participant.AttendanceStatus);
+        }
+    }
 }

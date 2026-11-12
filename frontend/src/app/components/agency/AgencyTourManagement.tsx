@@ -2772,27 +2772,29 @@ export function TourFormPage(props: TourFormPageProps) {
   ]);
 
   // Tab 4: Quy định & Chính sách
+  // Đây chỉ là bộ gợi ý cơ bản khi tạo tour mới. Mỗi Agency/tour tự thêm, sửa, xóa tùy ý; tour đã có nội dung thì giữ nguyên.
   const [inclusions, setInclusions] = useState<string[]>(
     tour?.inclusions && tour.inclusions.length > 0
       ? tour.inclusions
       : [
-        "Xe du lịch máy lạnh đưa đón và tham quan suốt tuyến theo chương trình.",
-        "Khách sạn tiêu chuẩn (2–3 khách/phòng tiện nghi).",
-        "Các bữa ăn chính và ăn sáng buffet theo chương trình.",
-        "Vé vào cổng các điểm tham quan có trong lịch trình.",
-        "Hướng dẫn viên chuyên nghiệp nhiệt tình phục vụ đoàn suốt tuyến.",
-        "Bảo hiểm du lịch tối đa 50.000.000đ/người.",
-        "Nước suối đóng chai (1 chai/người/ngày).",
+        "Xe du lịch máy lạnh đưa đón và tham quan theo chương trình.",
+        "Khách sạn theo tiêu chuẩn trong chương trình (2 khách/phòng; khách lẻ có thể ghép 3 khách/phòng).",
+        "Các bữa ăn theo chương trình.",
+        "Vé tham quan một lần tại các điểm có trong lịch trình.",
+        "Hướng dẫn viên tiếng Việt đi theo đoàn suốt tuyến.",
+        "Bảo hiểm du lịch theo quy định.",
+        "Nước suối 0,5 lít/khách/ngày.",
       ],
   );
   const [exclusions, setExclusions] = useState<string[]>(
     tour?.exclusions && tour.exclusions.length > 0
       ? tour.exclusions
       : [
-        "Chi phí cá nhân: giặt ủi, điện thoại, thức uống minibar ngoài chương trình.",
-        "Phụ thu phòng đơn (nếu khách đi 1 mình có nhu cầu ở riêng).",
-        "Tiền bồi dưỡng (tip) cho tài xế và hướng dẫn viên (tùy tâm).",
-        "Thuế VAT (xuất hóa đơn theo yêu cầu).",
+        "Chi phí cá nhân ngoài chương trình: giặt ủi, điện thoại, mua sắm, minibar…",
+        "Đồ uống trong các bữa ăn.",
+        "Phụ thu phòng đơn (nếu quý khách muốn ở riêng).",
+        "Các dịch vụ, điểm tham quan tự chọn không có trong lịch trình.",
+        "Thuế VAT (nếu quý khách cần xuất hóa đơn).",
       ],
   );
   const [regulations, setRegulations] = useState<string[]>(
@@ -2800,9 +2802,12 @@ export function TourFormPage(props: TourFormPageProps) {
       ? tour.regulations
       : [
         "Quý khách vui lòng có mặt tại điểm hẹn trước giờ khởi hành 15–30 phút.",
-        "Mang theo giấy tờ tùy thân hợp lệ (CMND/CCCD/Hộ chiếu bản gốc).",
-        "Trẻ em phải có người lớn đi kèm và mang theo giấy khai sinh.",
-        "Lịch trình có thể thay đổi thứ tự điểm đến theo tình hình thực tế nhưng vẫn đảm bảo đủ điểm.",
+        "Mang theo CCCD hoặc hộ chiếu bản gốc còn hiệu lực; trẻ em dưới 14 tuổi mang giấy khai sinh (bản chính hoặc bản sao chứng thực).",
+        "Trẻ em phải đi cùng cha mẹ hoặc người giám hộ.",
+        "Người cao tuổi, phụ nữ mang thai hoặc quý khách có bệnh lý vui lòng báo trước khi đặt tour.",
+        "Thứ tự điểm tham quan có thể thay đổi do thời tiết, giao thông nhưng vẫn đảm bảo đủ các điểm trong chương trình.",
+        "Dịch vụ không sử dụng trong chương trình không được hoàn lại.",
+        "Thanh toán, đổi/hủy tour và hoàn tiền thực hiện theo hợp đồng và chính sách hiển thị khi đặt tour.",
       ],
   );
   const [companyNote, setCompanyNote] = useState(

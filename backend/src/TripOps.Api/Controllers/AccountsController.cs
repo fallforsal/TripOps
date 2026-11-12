@@ -34,6 +34,24 @@ public sealed class AccountsController(AccountService accounts) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout() { await HttpContext.SignOutAsync(); return NoContent(); }
 }
+[ApiController, Authorize, Route("api/v1/me/bank-account")]
+[Tags("Authentication")]
+public sealed class MyBankAccountController(AccountService accounts) : ControllerBase
+{
+    private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    [HttpGet]
+    [EndpointSummary("Get the refund bank account saved in the current user's profile")]
+    [ProducesResponseType<BankAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get(CancellationToken ct) => Ok(await accounts.GetBankAccount(Actor, ct));
+    [HttpPut]
+    [EndpointSummary("Save the refund bank account in the current user's profile (holder name becomes UPPERCASE without accents)")]
+    [ProducesResponseType<BankAccountDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Put(BankAccountInput input, CancellationToken ct) => Ok(await accounts.SetBankAccount(Actor, input, ct));
+    [HttpDelete]
+    [EndpointSummary("Remove the saved refund bank account")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Delete(CancellationToken ct) { await accounts.ClearBankAccount(Actor, ct); return NoContent(); }
+}
 [ApiController, Authorize, Route("api/v1/me/business-profile")]
 [Tags("Partner Management")]
 public sealed class BusinessProfilesController(AccountService accounts) : ControllerBase

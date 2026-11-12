@@ -88,6 +88,7 @@ public string AgencyId { get; set; } = string.Empty;
 public int ParticipantIndex { get; set; }
 public bool IsPrimary { get; set; } = true;
 public string FullName { get; set; } = string.Empty;
+public string? PhoneNumber { get; set; }
 public DateTime? DateOfBirth { get; set; }
 public string? Gender { get; set; }
 public string? IdentityNumber { get; set; }
