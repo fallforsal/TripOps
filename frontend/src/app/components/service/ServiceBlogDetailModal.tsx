@@ -1,3 +1,6 @@
+import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
+import { useAuth } from "@/app/contexts/AuthContext";
 import React, { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -48,8 +51,14 @@ export function ServiceBlogDetailModal({
   hidePrice = false,
   embedded = false,
 }: ServiceBlogDetailModalProps) {
+  const { user } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"blog" | "map" | "policies">("blog");
+
+  React.useEffect(() => {
+    setActiveImageIndex(0);
+    setActiveTab("blog");
+  }, [service?.id, isOpen]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -64,9 +73,7 @@ export function ServiceBlogDetailModal({
 
   if (!isOpen || !service) return null;
 
-  const images = service.images && service.images.length > 0
-    ? service.images
-    : [service.image];
+  const images = serviceGallery(service);
 
   const isHotel = service.category === "hotel";
   const lat = service.latitude || 11.9404;
@@ -186,7 +193,7 @@ export function ServiceBlogDetailModal({
                 </h2>
                 <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
                   <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <span>{service.street ? `${service.street}, ${service.ward || ""}, ${service.province || service.location}` : service.location}</span>
+                  <span>{serviceAddress(service)}</span>
                 </div>
               </div>
 
@@ -242,6 +249,7 @@ export function ServiceBlogDetailModal({
                   <p className="text-sm font-bold text-gray-900">{service.providerName || "Tổ hợp Dịch vụ Du lịch Heritage"}</p>
                 </div>
               </div>
+              {user?.role === "agency" && <ChatWithButton userId={service.providerId} context={{kind:"service", id:Number(service.id), title:service.name, thumbnailUrl:service.thumbnailUrl}}>Tin nhắn</ChatWithButton>}
               <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-100/70 px-3 py-1.5 rounded-lg border border-amber-200">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <span>Hợp đồng đối tác B2B &amp; Đảm bảo chất lượng</span>
@@ -322,7 +330,7 @@ export function ServiceBlogDetailModal({
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-1.5">
                       <p className="text-gray-500 text-xs">Giờ mở cửa phục vụ:</p>
-                      <p className="font-bold text-gray-900">{service.openingHours || "09:00 - 22:00 hàng ngày"}</p>
+                      <p className="font-bold text-gray-900">{service.operatingHours || service.openingHours || "Đang cập nhật"}</p>
                     </div>
                   </>
                 )}
@@ -340,7 +348,7 @@ export function ServiceBlogDetailModal({
                     Địa chỉ chính xác đã được gắn toạ độ GPS:
                   </p>
                   <p className="text-sm font-semibold text-gray-900 mt-0.5">
-                    {service.street ? `${service.street}, ${service.ward || ""}, ${service.province || service.location}` : service.location}
+                    {serviceAddress(service)}
                   </p>
                   <p className="text-xs text-gray-500 font-mono mt-0.5">
                     Toạ độ GPS: {lat.toFixed(6)}, {lng.toFixed(6)}
@@ -406,7 +414,7 @@ export function ServiceBlogDetailModal({
                   Quy định &amp; Chính sách phục vụ
                 </h4>
                 <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-2 text-xs sm:text-sm text-gray-800">
-                  {service.policies && Array.isArray(service.policies) ? (
+                  {service.policies && Array.isArray(service.policies) && service.policies.length > 0 ? (
                     service.policies.map((p, idx) => (
                       <div key={idx} className="flex items-start gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
@@ -415,9 +423,7 @@ export function ServiceBlogDetailModal({
                     ))
                   ) : (
                     <>
-                      <p>• Phục vụ đoàn tour lữ hành và khách lẻ theo tiêu chuẩn đối tác nền tảng.</p>
-                      <p>• Miễn phí huỷ đặt trước 48 giờ đối với phòng và 24 giờ đối với bàn tiệc.</p>
-                      <p>• Xuất hoá đơn VAT điện tử đầy đủ theo thông tin của công ty du lịch.</p>
+                      <p>{typeof service.policies === "string" && service.policies.trim() ? service.policies : "Chưa có chính sách được cập nhật. Vui lòng liên hệ nhà cung cấp."}</p>
                     </>
                   )}
                 </div>

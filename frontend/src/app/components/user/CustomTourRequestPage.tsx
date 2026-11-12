@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
 import { useEffect, useState } from "react";
 import { CustomTourRequest, TourCompany, User } from "@/app/types";
@@ -62,8 +63,6 @@ export function CustomTourRequestPage({
 }: CustomTourRequestPageProps) {
   const [form, setForm] = useState({
     businessName: "",
-    businessEmail: "",
-    businessPhone: "",
     contactName: currentUser?.name ?? "",
     contactEmail: currentUser?.email ?? "",
     contactPhone: currentUser?.phone ?? "",
@@ -169,8 +168,6 @@ export function CustomTourRequestPage({
       await onSubmit({
         initialChanges, sourceTourId: sourceTour?.id, userId: currentUser.id,
         businessName: form.businessName.trim() || undefined,
-        businessEmail: form.businessEmail.trim() || undefined,
-        businessPhone: form.businessPhone.trim() || undefined,
         contactName: form.contactName.trim(),
         contactEmail: form.contactEmail.trim(),
         contactPhone: form.contactPhone.trim(),
@@ -265,11 +262,7 @@ export function CustomTourRequestPage({
         backText="Quay lại"
       />
 
-      {errorMsg && (
-        <div className="mb-6 p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-[6px] text-xs text-[#B91C1C]">
-          {errorMsg}
-        </div>
-      )}
+      {errorMsg && <NotificationMessage tone="error" message={errorMsg} />}
 
       {sourceTour && <section className="rounded border border-sky-200 bg-sky-50 p-4 space-y-3">
         <h3 className="font-bold text-sky-900">Tùy chỉnh từ Tour: {sourceTour.name}</h3>
@@ -325,7 +318,7 @@ export function CustomTourRequestPage({
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#0F172A]">
                 Tên doanh nghiệp / Đoàn thể:
@@ -339,31 +332,7 @@ export function CustomTourRequestPage({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#0F172A]">
-                Email công ty / đoàn:
-              </label>
-              <input
-                type="email"
-                value={form.businessEmail}
-                onChange={set("businessEmail")}
-                placeholder="contact@company.vn"
-                className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#0F172A]">
-                Điện thoại cơ quan:
-              </label>
-              <input
-                type="text"
-                value={form.businessPhone}
-                onChange={set("businessPhone")}
-                placeholder="VD: (028) 7300 8888"
-                className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-[#F1F5F9]">

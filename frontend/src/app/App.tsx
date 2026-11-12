@@ -1,10 +1,9 @@
-import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
-  cancelDesignRequest, actOnDesignRequest, createDesignRequestTour, customerRequestPlans } from "@/app/services/customTourRequests";
-import { toast } from "sonner";
+  cancelDesignRequest, actOnDesignRequest, saveDesignTour, customerRequestPlans } from "@/app/services/customTourRequests";
+import { toast } from "@/app/lib/notifications";
 import { fetchServicePosts, createServicePost, updateServicePost, deleteServicePost,
   approveServicePost, rejectServicePost, toggleServicePost, setServiceAvailability } from "@/app/services/servicePosts";
 import { ServiceCatalogueProvider } from "@/app/contexts/ServiceCatalogue";
@@ -24,7 +23,6 @@ import {
   moderationTours,
   publicTours,
   publishAgencyTour,
-  restoreAgencyTour,
   updateAgencyTour,
 } from "@/app/services/wf02Tours";
 import {
@@ -129,7 +127,6 @@ import {
   GuideSchedule,
   RoomBooking,
   TourCompany,
-  PaymentRequest,
   ProviderGroupReservationRequest,
   CustomTourRequest,
   CustomHotelChange,
@@ -618,6 +615,7 @@ function Application() {
               latest.code,
               latest.version,
               latest.configuration,
+              { agencyId: latest.agencyId, agency: latest.agency },
             ),
           ),
         )
@@ -655,6 +653,8 @@ function Application() {
       throw new Error("Mã tour không hợp lệ.");
     const dto = await createBooking({
       tourId,
+      tourVersion: bookingTour?.version,
+      tourRevision: bookingTour?.revision,
       startDate: `${data.tourStartDate}T00:00:00`,
       contactName: data.contactName,
       contactPhone: data.contactPhone,
@@ -679,7 +679,7 @@ function Application() {
       })),
       participants: data.passengers.map((p) => ({
         fullName: p.fullName,
-        phoneNumber: p.phone || undefined,
+        phoneNumber: p.phone?.trim() || undefined,
         note: p.notes,
         roommateNote: p.roommateNote || p.roomingPreference,
         restaurantNote: p.dietaryNote,
@@ -993,8 +993,13 @@ function Application() {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
   };
 
-  const handleUpdateAttractionCheckins = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
+  const handleUpdateAttractionCheckins = async (bookingId:string,checkins:BookingAttractionCheckin[]) => {
+    const groups=new Map<string,string[]>();
+    for(const row of checkins.filter(c=>c.agencyId===currentUser?.id))groups.set(row.bookingTimelineAttractionId,[...(groups.get(row.bookingTimelineAttractionId)||[]),row.guideId]);
+    const current=bookings.find(b=>b.id===bookingId);
+    const locations=(current?.tour.itinerary||[]).flatMap(d=>d.locations.filter(l=>(l.createdByCompanyId||current?.companyId)===currentUser?.id).map(l=>({locationId:Number(l.id),guideIds:groups.get(l.id)||[]})));
+    const dto=await http<BookingDto>(`/agency/bookings/${bookingId}/guide-routing`,{method:"PUT",body:JSON.stringify({locations})});
+    setBookings(previous=>previous.map(b=>b.id===bookingId?fromApiBooking(dto,tours,currentUser):b));
   };
 
   const handleUpdateIncidents = (..._args: any[]) => {
@@ -1031,12 +1036,12 @@ function Application() {
     const current = bookings.find((b) => b.id === bookingId);
     if (!current) throw new Error("Không tìm thấy booking");
     for (const g of current.assignedGuides || [])
-      if (!updatedGuides.some((x) => x.guideId === g.guideId))
+      if (g.companyId===currentUser?.id && !updatedGuides.some((x) => x.guideId === g.guideId))
         await http(
           "/bookings/" + bookingId + "/guide-assignments/" + g.guideId,
           { method: "DELETE" },
         );
-    for (const g of updatedGuides)
+    for (const g of updatedGuides.filter(g=>g.companyId===currentUser?.id))
       await assignGuide(
         Number(bookingId),
         g.guideId,
@@ -1157,11 +1162,6 @@ function Application() {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
   };
 
-  // Company admin - payment requests
-  const handleCreatePaymentRequest = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
   // Admin updates system bank account
   const handleUpdateSystemBank = (..._args: any[]) => {
     toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
@@ -1258,7 +1258,7 @@ function Application() {
 
   const handleUpdateCustomTourRequest = async (id: string, update: Partial<CustomTourRequest>) => {
     if (update.status === "reviewing" || update.status === "rejected")
-      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject");
+      await actOnDesignRequest(id, update.status === "reviewing" ? "review" : "reject", update.rejectionReason);
     await refreshCustomRequests();
   };
 
@@ -1266,21 +1266,23 @@ function Application() {
   const handleCompanyCreateTour = async (
     tourData: Omit<Tour, "id"> & { id?: string },
   ) => {
-    const created = tourData.is_request
-      ? await createDesignRequestTour(tourData.customRequestId || "", tourData)
-      : await createAgencyTour(tourData);
+    if (tourData.is_request) {
+      const saved = await saveDesignTour(tourData.customRequestId || "", tourData);
+      await refreshTours();
+      setTourNotice("Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách.");
+      return saved;
+    }
+    const created = await createAgencyTour(tourData);
     const result =
-      tourData.is_request && tourData.status === "completed"
-        ? await completeAgencyTour(String(created.id), created.version)
-        : tourData.visibility === "public"
-        ? await publishAgencyTour(String(created.id), created.version)
+      tourData.visibility === "public"
+        ? await publishAgencyTour(String(created.id), created.revision || 1)
         : tourData.status === "completed"
-          ? await completeAgencyTour(String(created.id), created.version)
+          ? await completeAgencyTour(String(created.id), created.revision || 1)
           : created;
     await refreshTours();
     setTourNotice(
       tourData.is_request && tourData.status === "completed"
-        ? "Tour thiết kế đã được gửi cho khách hàng."
+        ? "Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách."
         : result.visibility === "public"
         ? "Tour đã được đăng bán."
         : "Bản nháp đã được lưu.",
@@ -1294,29 +1296,35 @@ function Application() {
   ) => {
     const current = tours.find((t) => t.id === tourId);
     if (!current) throw new Error("Không tìm thấy tour.");
+    if (current.is_request && current.customRequestId) {
+      await saveDesignTour(current.customRequestId, { ...current, ...tourData }, current.revision || 1);
+      await refreshTours();
+      setTourNotice("Tour thiết kế đã được lưu. Bấm Chia sẻ để gửi phương án cho khách.");
+      return;
+    }
     const visibilityOnly = Object.keys(tourData).every((key) =>
       ["status", "visibility"].includes(key),
     );
     if (visibilityOnly) {
       if (tourData.visibility === "public")
-        await publishAgencyTour(tourId, current.version || 1);
+        await publishAgencyTour(tourId, current.revision || 1);
       else if (tourData.visibility === "hidden")
         await hideAgencyTour(
           tourId,
-          current.version || 1,
+          current.revision || 1,
           "Agency tạm ẩn tour.",
         );
     } else {
-      const updated = await updateAgencyTour(tourId, current.version || 1, {
+      const updated = await updateAgencyTour(tourId, current.revision || 1, {
         ...current,
         ...tourData,
       });
       if (tourData.is_request && tourData.status === "completed")
-        await completeAgencyTour(tourId, updated.version);
-      else if (tourData.visibility === "public")
-        await publishAgencyTour(tourId, updated.version);
-      else if (tourData.status === "completed")
-        await completeAgencyTour(tourId, updated.version);
+        await completeAgencyTour(tourId, updated.revision || 1);
+      else if (tourData.visibility === "public" && updated.visibility !== "public")
+        await publishAgencyTour(tourId, updated.revision || 1);
+      else if (tourData.status === "completed" && updated.status !== "completed")
+        await completeAgencyTour(tourId, updated.revision || 1);
     }
     await refreshTours();
     setTourNotice("Tour đã được cập nhật.");
@@ -1330,11 +1338,11 @@ function Application() {
         ? (
             await hideAgencyTour(
               tourId,
-              current.version || 1,
+              current.revision || 1,
               "Agency lưu trữ tour.",
             )
-          ).version
-        : current.version || 1;
+          ).revision || 1
+        : current.revision || 1;
     await archiveAgencyTour(tourId, version);
     await refreshTours();
     setTourNotice("Tour đã được lưu trữ.");
@@ -1357,7 +1365,7 @@ function Application() {
     try {
       await hideModeratedTour(
         id,
-        tour.version || 1,
+        tour.revision || 1,
         reason || "Admin tạm ẩn tour",
       );
       await refreshTours();
@@ -1480,6 +1488,7 @@ function Application() {
         body: JSON.stringify({
           participants: passengers.map((p) => ({
             id: Number(p.id),
+            phoneNumber: p.phone?.trim() || null,
             fullName: p.fullName,
             dateOfBirth: p.dateOfBirth || null,
             gender: p.gender === "female" ? "Nữ" : "Nam",
@@ -1495,17 +1504,6 @@ function Application() {
     setBookings((prev) => prev.map((b) => (b.id === bookingId ? booking : b)));
     if (selectedUserBooking?.id === bookingId) setSelectedUserBooking(booking);
     toast.success("Đã lưu hồ sơ hành khách");
-  };
-
-  const handleRestoreTourVersion = async (
-    tourId: string,
-    versionNumber: number,
-  ) => {
-    const currentTour = tours.find((t) => t.id === tourId);
-    if (!currentTour) throw new Error("Không tìm thấy tour.");
-    await restoreAgencyTour(tourId, versionNumber, currentTour.version || 1);
-    await refreshTours();
-    setTourNotice(`Đã khôi phục v${versionNumber} thành bản nháp mới.`);
   };
 
   // Auth restoring loading screen
@@ -1581,7 +1579,6 @@ function Application() {
         );
         return (
           <ErrorBoundary fallbackTitle="Không thể tải giao diện Quản lý Agency">
-            <WorkflowNotifications />
             <AgencyDashboard
               providerGroupRequests={providerGroupRequests}
               currentUser={currentUser}
@@ -1602,7 +1599,7 @@ function Application() {
               onRejectBooking={handleRejectBooking}
               onAssignGuide={handleAssignGuide}
               onUpdateAssignedGuides={handleUpdateAssignedGuides}
-              onCreatePaymentRequest={handleCreatePaymentRequest}
+
               onMarkDepositPaid={handleMarkDepositPaid}
               onMarkFullyPaid={handleMarkFullyPaid}
               onUpdateBookingPrice={handleUpdateBookingPrice}
@@ -1614,7 +1611,6 @@ function Application() {
               onCancelBooking={handleAgencyCancelBooking}
               onReviewContract={handleReviewContract}
               onUpdateCustomRequest={handleUpdateCustomTourRequest}
-              onRestoreTourVersion={handleRestoreTourVersion}
               onViewTour={handleViewTour}
               onLogout={handleLogout}
             />
@@ -1625,7 +1621,6 @@ function Application() {
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <WorkflowNotifications />
         {currentUser.role !== "admin" && currentUser.role !== "provider" && (
           <UnifiedHeader
             currentUser={currentUser}
@@ -1748,7 +1743,6 @@ function Application() {
             : "flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6"
         }
       >
-        {currentUser && <WorkflowNotifications />}
         {currentPage === "custom-tour" ? (
           <CustomTourRequestPage
             sourceTour={sourceDesignTour}
@@ -1790,6 +1784,7 @@ function Application() {
         ) : currentPage === "tour-detail" && selectedTour ? (
           <TourDetailPage
             tour={selectedTour}
+            previewOnly={selectedTour.designReadOnly}
             services={services}
             currentUser={currentUser}
             onBack={() => {
@@ -1800,7 +1795,6 @@ function Application() {
               }
             }}
             onBookNow={handleOpenBookingForm}
-            onCustomize={(tour) => handleNavigate("custom-tour", undefined, tour)}
             onOpenRequest={() => handleNavigate("my-requests")}
             onShowLogin={() => setShowLogin(true)}
           />
@@ -1856,10 +1850,6 @@ function Application() {
         ) : currentPage === "user-booking-detail" && selectedUserBooking ? (
           <ErrorBoundary fallbackTitle="Không thể tải chi tiết đơn đặt tour">
             <UserBookingDetailPage
-              plans={selectedUserBooking.tour?.customRequestId
-                ? tours.filter((t) => t.customRequestId === selectedUserBooking.tour.customRequestId)
-                : tours.filter((t) => t.id === selectedUserBooking.tourId)}
-              onPlanChanged={() => setBookingReload((v) => v + 1)}
               booking={
                 bookings.find((b) => b.id === selectedUserBooking.id) ||
                 selectedUserBooking
@@ -1896,6 +1886,8 @@ function Application() {
           </ErrorBoundary>
         ) : currentPage === "my-requests" ? (
           <MyRequestsPage
+            onViewBooking={id=>{window.location.hash=`#/my-bookings/${encodeURIComponent(id)}`;}}
+            services={services}
             requests={customTourRequests.filter(
               (r) => !currentUser || r.userId === currentUser.id,
             )}
@@ -1906,7 +1898,6 @@ function Application() {
             onBookTour={async (t) => {
               const existing = userBookings.find((b) => b.tour?.customRequestId === t.customRequestId && b.status !== "cancelled" && b.status !== "rejected");
               if (existing) {
-                await http(`/bookings/${existing.id}/quotations/change-plan`, { method: "POST", body: JSON.stringify({ tourId: Number(t.id) }) });
                 await handleViewUserBookingDetail(existing);
               } else handleOpenBookingForm(t);
             }}

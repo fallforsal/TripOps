@@ -8,77 +8,9 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage)
+public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage,
+    TripOps.Service.Chat.IChatEvents chatEvents)
 {
-    public sealed record PlanProposalInput(int TourId, int BaseTourVersion, JsonElement Proposal, string Message);
-    public sealed record PlanProposalReply(string Decision, string Message);
-    public sealed record PlanProposalDto(int Id, int RequestId, int TourId, int BaseTourVersion,
-        JsonElement Proposal, string Message, string Status, string? AgencyReply, DateTime CreatedAt, DateTime? RespondedAt);
-    private static PlanProposalDto ProposalDto(TourPlanProposal p) => new(p.Id, p.RequestId, p.TourId,
-        p.BaseTourVersion, JsonSerializer.Deserialize<JsonElement>(p.ProposalJson), p.Message,
-        p.Status, p.AgencyReply, p.CreatedAt, p.RespondedAt);
-    public async Task<IReadOnlyList<PlanProposalDto>> Proposals(string actor, int requestId, bool agencyView, CancellationToken ct)
-    {
-        var request = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == requestId &&
-            (agencyView ? r.AgencyId == actor : r.CustomerId == actor), ct)
-            ?? throw new TourException(404, "Không tìm thấy yêu cầu thiết kế.");
-        return (await db.TourPlanProposals.AsNoTracking().Where(p => p.RequestId == request.Id)
-            .OrderByDescending(p => p.CreatedAt).ToListAsync(ct)).Select(ProposalDto).ToArray();
-    }
-    public async Task<PlanProposalDto> SubmitProposal(string actor, int requestId, PlanProposalInput input, CancellationToken ct)
-    {
-        await Customer(actor, ct);
-        var request = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == requestId && r.CustomerId == actor, ct)
-            ?? throw new TourException(404, "Không tìm thấy yêu cầu thiết kế.");
-        Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId && b.Status != BookingStatus.Pending && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct), "Booking đã được duyệt; không thể sửa Plan.");
-        Require(request.Status is not (CustomRequestStatus.Cancelled or CustomRequestStatus.Rejected),
-            "Yêu cầu đã đóng.");
-        Require(!await db.Bookings.AnyAsync(b => b.DesignRequestId == requestId &&
-            b.CustomerId == actor && b.PaymentStatus != PaymentStatus.Unpaid, ct),
-            "Yêu cầu đã có booking thanh toán; không thể gửi bản tùy biến mới.");
-        var tour = await db.Tours.AsNoTracking().SingleOrDefaultAsync(t => t.Id == input.TourId &&
-            t.DesignRequestId == requestId && t.Status == TourStatus.Completed && t.IsSharedToCustomer == true, ct)
-            ?? throw new TourException(422, "Tour plan chưa được chia sẻ cho bạn.");
-        Require(tour.Version == input.BaseTourVersion, "Tour plan đã có phiên bản mới; vui lòng tải lại trước khi sửa.");
-        Require(!string.IsNullOrWhiteSpace(input.Message) && input.Message.Length <= 2000, "Hãy ghi rõ yêu cầu gửi Agency.");
-        Require(input.Proposal.ValueKind == JsonValueKind.Object && input.Proposal.GetRawText().Length <= 100000,
-            "Bản tùy biến không hợp lệ hoặc quá lớn.");
-        var submitted = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(input.Proposal.GetRawText())!;
-        var baseVersion = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == input.BaseTourVersion, ct);
-        var snapshot = JsonSerializer.Deserialize<TourSnapshot>(baseVersion.SnapshotData, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        var guests = baseVersion.NumberOfGuests ?? request.NumberOfGuests ?? 0;
-        var quotation = await db.BookingQuotations.AsNoTracking().Where(q => q.TourId == tour.Id && q.TourVersion == input.BaseTourVersion && q.SentAt.HasValue)
-            .OrderByDescending(q => q.Version).Select(q => new { q.Id, q.Version, q.SaleTotal }).FirstOrDefaultAsync(ct);
-        submitted["planSnapshot"] = JsonSerializer.SerializeToElement(CustomerConfiguration(snapshot.Configuration), new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        submitted["quotation"] = JsonSerializer.SerializeToElement(new { tourId = tour.Id, tourVersion = input.BaseTourVersion,
-            quotationId = quotation?.Id, quotationVersion = quotation?.Version, numberOfGuests = guests,
-            pricePerPerson = guests > 0 && quotation != null ? quotation.SaleTotal / guests : snapshot.Configuration.BasePrice,
-            total = quotation?.SaleTotal ?? snapshot.Configuration.BasePrice * guests, preliminary = quotation == null });
-        var proposal = new TourPlanProposal { RequestId = requestId, TourId = tour.Id,
-            CustomerId = actor, AgencyId = request.AgencyId!, BaseTourVersion = tour.Version ?? 1,
-            ProposalJson = JsonSerializer.Serialize(submitted), Message = input.Message!.Trim() };
-        request.AgreedTourId = null; request.AgreedTourVersion = null; request.AgreedAt = null; request.Revision++;
-        db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.AgencyId!, RequestId = requestId, Message = "Khách gửi yêu cầu chỉnh sửa Tour plan." });
-        db.TourPlanProposals.Add(proposal);
-        request.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return ProposalDto(proposal);
-    }
-    public async Task<PlanProposalDto> ReplyProposal(string actor, int requestId, int proposalId,
-        PlanProposalReply input, CancellationToken ct)
-    {
-        await tours.Agency(actor, ct);
-        var proposal = await db.TourPlanProposals.SingleOrDefaultAsync(p => p.Id == proposalId &&
-            p.RequestId == requestId && p.AgencyId == actor, ct)
-            ?? throw new TourException(404, "Không tìm thấy bản tùy biến.");
-        Require(input.Decision is "reviewed" or "needs_changes", "Phản hồi không hợp lệ.");
-        Require(!string.IsNullOrWhiteSpace(input.Message) && input.Message.Length <= 2000, "Cần ghi phản hồi cho khách.");
-        db.WorkflowNotifications.Add(new WorkflowNotification { UserId = proposal.CustomerId, RequestId = requestId, Message = "Agency đã phản hồi yêu cầu chỉnh sửa." });
-        proposal.Status = input.Decision == "reviewed" ? "Reviewed" : "NeedsChanges";
-        proposal.AgencyReply = input.Message!.Trim(); proposal.RespondedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return ProposalDto(proposal);
-    }
     private static void Require(bool ok, string message) { if (!ok) throw new TourException(422, message); }
     private async Task Customer(string actor, CancellationToken ct)
     {
@@ -130,9 +62,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             EndDate = input.ReturnDate.Date, NumberOfGuests = input.NumberOfPeople,
             BudgetPerPerson = input.BudgetPerPerson, HotelRatingRequirement = input.HotelStars,
             SpecialRequirements = input.AdditionalInfo, BusinessName = input.BusinessName,
-            BusinessEmail = input.BusinessEmail, BusinessPhone = input.BusinessPhone,
-            Status = CustomRequestStatus.Pending,
-            RequestAgencies = [new TourDesignRequestAgency { AgencyId = agency.Id, IsHost = true, Status = "PENDING" }]
+            Status = CustomRequestStatus.Pending
         };
         if (input.SourceTourId.HasValue)
         {
@@ -148,6 +78,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             request.InitialChangesJson = input.InitialChanges.Value.GetRawText();
         }
         db.TourDesignRequests.Add(request);
+        db.TourDesignRequestAgencies.Add(new TourDesignRequestAgency {TourDesignRequest=request,AgencyId=agency.Id,IsHost=true,Status="pending"});
         await db.SaveChangesAsync(ct);
         db.WorkflowNotifications.Add(new WorkflowNotification { UserId = agency.Id, RequestId = request.Id, Message = "Có yêu cầu thiết kế Tour mới." });
         await db.SaveChangesAsync(ct);
@@ -158,7 +89,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
     {
         if (agencyView) await tours.Agency(actor, ct); else await Customer(actor, ct);
         var requests = await db.TourDesignRequests.AsNoTracking()
-            .Where(r => agencyView ? r.AgencyId == actor : r.CustomerId == actor)
+            .Where(r => agencyView ? r.AgencyId == actor || db.TourDesignRequestAgencies.Any(a => a.TourDesignRequestId == r.Id && a.AgencyId == actor && !a.IsHost && (a.Status == "pending" || a.Status == "accepted")) : r.CustomerId == actor)
             .OrderByDescending(r => r.CreatedAt).Take(200).ToListAsync(ct);
         var agencyIds = requests.Select(r => r.AgencyId).Where(id => id != null).Distinct().ToArray();
         var agencies = await db.Users.AsNoTracking().Include(u => u.BusinessProfile)
@@ -166,17 +97,37 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         var ids = requests.Select(r => r.Id).ToArray();
         var designedTours = await db.Tours.AsNoTracking().Where(t => t.DesignRequestId.HasValue && ids.Contains(t.DesignRequestId.Value) &&
             t.Status != TourStatus.Deleted).ToListAsync(ct);
-        return requests.Select(r => Map(r, agencies.GetValueOrDefault(r.AgencyId ?? ""),
-            designedTours.Where(t => t.DesignRequestId == r.Id)
-                .OrderByDescending(t => t.Status == TourStatus.Completed && t.IsSharedToCustomer == true)
-                .ThenByDescending(t => t.CreatedAt).FirstOrDefault())).ToArray();
+        var sharedPlans=await db.TourVersions.AsNoTracking().Where(v=>v.Tour.DesignRequestId.HasValue && ids.Contains(v.Tour.DesignRequestId.Value) && v.VersionNumber==v.Tour.SharedVersion)
+            .ToDictionaryAsync(v=>v.TourId,v=>v.SnapshotData,ct);
+        var result = new List<DesignRequestDto>();
+        foreach (var request in requests) {
+            var mapped = Map(request, agencies.GetValueOrDefault(request.AgencyId ?? ""), designedTours.FirstOrDefault(t => t.DesignRequestId == request.Id));
+            if(mapped.DesignedTourId is int planId && sharedPlans.TryGetValue(planId,out var snapshotJson)) {
+                var shared=System.Text.Json.JsonSerializer.Deserialize<TourSnapshot>(snapshotJson,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+                mapped=mapped with {SharedTourThumbnail=shared.Configuration.Images?.FirstOrDefault(),SharedTourName=shared.Configuration.Name};
+            }
+            var booking=await db.Bookings.AsNoTracking().Where(b=>b.DesignRequestId==request.Id && b.Status!=BookingStatus.Cancelled && b.Status!=BookingStatus.Rejected).OrderByDescending(b=>b.Id).Select(b=>(int?)b.Id).FirstOrDefaultAsync(ct);
+            var membership=agencyView?await db.TourDesignRequestAgencies.AsNoTracking().SingleOrDefaultAsync(a=>a.TourDesignRequestId==request.Id && a.AgencyId==actor,ct):null;
+            var versions=agencyView?await db.TourVersionAgencies.AsNoTracking().Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && (request.AgencyId==actor || a.AgencyId==actor && (a.Status=="accepted" || a.Status=="pending"))).Select(a=>a.TourVersion.VersionNumber).Distinct().OrderByDescending(n=>n).ToArrayAsync(ct):null;
+            if(agencyView && request.AgencyId!=actor && mapped.DesignedTourId.HasValue && versions!.Length==0)continue;
+            var selectedVersion=agencyView && request.AgencyId!=actor ? versions!.Cast<int?>().FirstOrDefault() : mapped.CurrentVersion;
+            var hosts=await tours.CoHosts(request.Id,ct,selectedVersion);
+            var status=booking.HasValue?"booked":request.Status==CustomRequestStatus.Booked?"closed":mapped.Status;
+            mapped=mapped with {Status=status,BookingId=booking,ArchivedAt=membership?.ArchivedAt,ClosedAt=request.ClosedAt,
+                CloseReason=request.CloseReason??(request.Status==CustomRequestStatus.Booked && !booking.HasValue?"Booking đã hủy hoặc bị từ chối. Agency có thể mở lại yêu cầu.":null),
+                CoHosts=agencyView?hosts:null,CurrentVersion=agencyView?selectedVersion:mapped.SharedVersion,CollaborationVersions=versions,HasCollaborations=await db.TourVersionAgencies.AnyAsync(a=>a.TourVersion.Tour.DesignRequestId==request.Id && !a.IsHost && a.Status!="excluded",ct)};
+            if(agencyView && request.AgencyId!=actor && !hosts.Any(h=>h.CompanyId==actor && h.Status=="accepted"))
+                mapped=mapped with {ContactEmail="",ContactPhone="",ContactName="Khách đoàn",AdditionalInfo=null,CoHosts=hosts.Where(h=>h.Role=="lead" || h.CompanyId==actor).ToArray()};
+            result.Add(mapped);
+        }
+        return result;
     }
     public async Task<DesignRequestDto> Cancel(string actor, int id, CancellationToken ct)
     {
         await Customer(actor, ct);
         var request = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == id && r.CustomerId == actor, ct)
             ?? throw new TourException(404, "Yêu cầu không tồn tại.");
-        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.Contacted, "Yêu cầu không thể hủy lúc này.");
+        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.InProgress, "Yêu cầu không thể hủy lúc này.");
         Require(!await db.Tours.AnyAsync(t => t.DesignRequestId == id && t.Status != TourStatus.Deleted, ct),
             "Agency đã bắt đầu thiết kế tour; hãy liên hệ agency.");
         request.Status = CustomRequestStatus.Cancelled; request.UpdatedAt = DateTime.UtcNow;
@@ -187,38 +138,49 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
     public async Task<DesignRequestDto> Act(string actor, int id, DesignRequestAction action, CancellationToken ct)
     {
         await tours.Agency(actor, ct);
+        await using var transaction=await db.Database.BeginTransactionAsync(ct);
         var request = await db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == id && r.AgencyId == actor, ct)
             ?? throw new TourException(404, "Yêu cầu không tồn tại.");
-        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.Contacted, "Yêu cầu không thể thay đổi trạng thái.");
+        Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.InProgress, "Yêu cầu không thể thay đổi trạng thái.");
         Require(action.Action is "review" or "reject", "Thao tác không hợp lệ.");
         if (action.Action == "reject")
             Require(!await db.Tours.AnyAsync(t => t.DesignRequestId == id && t.Status != TourStatus.Deleted, ct),
                 "Yêu cầu đã có tour thiết kế.");
-        request.Status = action.Action == "review" ? CustomRequestStatus.Contacted : CustomRequestStatus.Rejected;
+        Require(action.Action != "reject" || !string.IsNullOrWhiteSpace(action.Reason), "Vui lòng nhập lý do từ chối.");
+        request.Status = action.Action == "review" ? CustomRequestStatus.InProgress : CustomRequestStatus.Rejected;
+        request.RejectionReason = action.Action == "reject" ? action.Reason!.Trim() : null;
+        request.RespondedAt = DateTime.UtcNow;
+        // A request has one lead: stale host rows never become partner invitations.
+        await db.TourDesignRequestAgencies.Where(a=>a.TourDesignRequestId==id && a.IsHost && a.AgencyId!=actor && a.Status!="cancelled")
+            .ExecuteUpdateAsync(set=>set.SetProperty(a=>a.Status,"cancelled").SetProperty(a=>a.RespondedAt,DateTime.UtcNow),ct);
+        var host=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==actor,ct);
+        if(host==null){host=new TourDesignRequestAgency{TourDesignRequestId=id,AgencyId=actor,IsHost=true};db.TourDesignRequestAgencies.Add(host);}
+        if(host!=null){host.IsHost=true;host.Status=action.Action=="review"?"accepted":"rejected";host.RespondedAt=DateTime.UtcNow;}
+        db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = id,
+            Message = action.Action == "reject" ? "Agency đã từ chối yêu cầu thiết kế: " + request.RejectionReason![..Math.Min(900, request.RejectionReason!.Length)] : "Agency đã tiếp nhận yêu cầu thiết kế tour." });
         request.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         var agency = await db.Users.Include(u => u.BusinessProfile).SingleAsync(u => u.Id == actor, ct);
+        await transaction.CommitAsync(ct);
         return Map(request, agency, null);
     }
     private static DesignRequestDto Map(TourDesignRequest r, User? agency, Tour? tour)
     {
         var status = r.Status switch {
+            CustomRequestStatus.Closed => "closed",
+            CustomRequestStatus.Booked => "booked",
             CustomRequestStatus.Cancelled => "cancelled",
             CustomRequestStatus.Rejected => "rejected",
-            CustomRequestStatus.Accepted => "accepted",
-            CustomRequestStatus.Quoted => "quoted",
-            _ when tour?.Status == TourStatus.Completed && tour.IsSharedToCustomer == true => "designed",
-            CustomRequestStatus.Contacted => "reviewing",
+            _ when tour?.SharedVersion.HasValue == true => "designed",
+            CustomRequestStatus.InProgress => "reviewing",
             _ => "pending"
         };
-        var visibleTour = tour?.Status == TourStatus.Completed && tour.IsSharedToCustomer == true;
+        var visibleTour = tour?.SharedVersion.HasValue == true;
         return new DesignRequestDto(r.Id, r.CustomerId ?? "", r.AgencyId ?? "",
             agency?.BusinessProfile?.BusinessName ?? agency?.Name ?? "Agency",
             r.ContactName, r.ContactEmail, r.ContactPhone, r.Destination,
             r.StartDate, r.EndDate, r.NumberOfGuests ?? 0, r.BudgetPerPerson,
-            r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, r.BusinessEmail,
-            r.BusinessPhone, status, r.CreatedAt ?? DateTime.UnixEpoch,
-            visibleTour ? tour!.Id : null, visibleTour ? tour!.Version : null,
-            visibleTour ? tour!.BasePrice : null);
+            r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, status, r.CreatedAt ?? DateTime.UnixEpoch,
+            tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion);
     }
 }

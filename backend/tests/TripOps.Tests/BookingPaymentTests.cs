@@ -251,7 +251,6 @@ public sealed partial class BookingFlowTests
         Assert.Equal("Paid", full.Status);
         Assert.Equal("Paid", full.PaymentStatus);
         Assert.All(full.PaymentSchedule!, item => Assert.Equal("Paid", item.Status));
-        // Đã thanh toán đủ: không còn khoản nào để thu (409 – xung đột trạng thái).
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit",
             new BookingDepositRequest(1500000, "AGAIN", null))).StatusCode);
     }

@@ -6,6 +6,8 @@ public int? AcceptedQuotationId { get; set; }
 public string BookingCode { get; set; } = string.Empty;
 public string? CustomerId { get; set; }
 public int? TourId { get; set; }
+public int TourVersion { get; set; } = 1;
+public string? TourConfigurationData { get; set; }
 public int? DesignRequestId { get; set; }
 public DateTime StartDate { get; set; }
 public string ContactName { get; set; } = string.Empty;
@@ -86,6 +88,7 @@ public string AgencyId { get; set; } = string.Empty;
 public int ParticipantIndex { get; set; }
 public bool IsPrimary { get; set; } = true;
 public string FullName { get; set; } = string.Empty;
+public string? PhoneNumber { get; set; }
 public DateTime? DateOfBirth { get; set; }
 public string? Gender { get; set; }
 public string? IdentityNumber { get; set; }
@@ -145,6 +148,7 @@ public virtual ICollection<BookingAttractionCheckin> Checkins { get; set; } = ne
 }
 
 public class BookingTimelineMeal : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int? ServiceId { get; set; }
 public int BookingTimelineId { get; set; }
 public DateTime? DateService { get; set; }
@@ -163,6 +167,7 @@ public virtual BookingTimeline BookingTimeline { get; set; } = null!;
 }
 
 public class BookingAccommodation : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int BookingId { get; set; }
 public int? ServiceId { get; set; }
 public string Destination { get; set; } = string.Empty;

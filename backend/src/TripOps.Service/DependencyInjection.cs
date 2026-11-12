@@ -13,6 +13,7 @@ public static class DependencyInjection
     {
         services.AddTripOpsData(configuration);
         services.AddMemoryCache();
+        services.AddScoped<Chat.ChatService>();
         services.AddSingleton<Locations.VietnamAdministrativeService>();
         services.AddHttpClient(Locations.VietnamAdministrativeService.ClientName, client => {
             client.BaseAddress = new Uri("https://provinces.open-api.vn/api/v2/");

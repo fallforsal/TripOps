@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
 import {
   User as UserIcon,
@@ -87,12 +88,7 @@ export function UserProfile() {
         subtitle="Quản lý hồ sơ khách hàng, thông tin doanh nghiệp và bảo mật tài khoản"
       />
 
-      {saveSuccess && (
-        <div className="p-3.5 bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] text-xs text-[#15803D] flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>Cập nhật thông tin cá nhân thành công!</span>
-        </div>
-      )}
+      {saveSuccess && <NotificationMessage tone="success" message="Cập nhật thông tin cá nhân thành công!" />}
 
       {/* Main Profile Info Card */}
       <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-6">
@@ -226,18 +222,7 @@ export function UserProfile() {
           </h3>
         </div>
 
-        {pwMessage && (
-          <div
-            className={`p-3 rounded-[6px] text-xs flex items-center gap-2 ${
-              pwMessage.type === "success"
-                ? "bg-[#F0FDF4] border border-[#BBF7D0] text-[#15803D]"
-                : "bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C]"
-            }`}
-          >
-            {pwMessage.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-            <span>{pwMessage.text}</span>
-          </div>
-        )}
+        {pwMessage && <NotificationMessage tone={pwMessage.type} message={pwMessage.text} />}
 
         <form onSubmit={handlePasswordSubmit} className="space-y-3 max-w-md text-xs">
           <div className="space-y-1.5">

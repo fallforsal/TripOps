@@ -62,11 +62,11 @@ public enum TourVisibility
 public enum CustomRequestStatus
 {
     Pending,
-    Contacted,
-    Quoted,
-    Accepted,
+    InProgress,
     Cancelled,
-    Rejected
+    Rejected,
+    Booked,
+    Closed
 }
 
 public enum BookingStatus

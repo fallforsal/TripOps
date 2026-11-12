@@ -150,15 +150,16 @@ The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / th
 **Verification:** `flutter analyze`, `flutter test`, and Android debug build run on GitHub Actions. Check final CI status before merging. Use an Android emulator to evaluate accessibility, small-screen wrapping, keyboard input, and operational flows against a working TripOps backend.
 
 
-## Attendance: departure day only
+## Attendance: departure or assigned stage day
 
 The backend now enforces that **passenger attendance can be changed only when the
-booking's `startDate` equals today's **Vietnam-local calendar date (UTC+7)**,
+booking's `startDate` (single Agency), or the Agency's first assigned stage day
+(alliance booking), equals today's **Vietnam-local calendar date (UTC+7)**,
 using the existing backend `PaymentRules.VietnamDate` helper. Earlier or later requests return
 HTTP 409 and do not change attendance, `checkedBy` or `checkedAt`.
 
 `GET /api/v1/guide/bookings/{id}` now includes the backward-compatible
-`canRecordAttendance` boolean. The app uses this server-authoritative value
+`canRecordAttendance` boolean and optional `attendanceDate`. The app uses this server-authoritative value
 to disable "Có mặt", "Vắng mặt" and "Đặt lại: Chưa rõ" outside departure day
 and shows an explanation with the scheduled date. HDVs can still view prior
 attendance statuses. Older backend versions omit this field, so the app

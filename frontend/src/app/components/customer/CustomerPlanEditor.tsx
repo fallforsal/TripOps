@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Tour, TourCompany } from "@/app/types";
 import { TourFormPage } from "@/app/components/agency/AgencyTourManagement";
-import { submitPlanProposal } from "@/app/services/customTourRequests";
 
 type ProposalDraft = { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
 
@@ -17,7 +16,7 @@ export function CustomerPlanEditor({ requestId, plan, onDone, onCancel, onSaveDr
     if (!message.trim()) throw new Error("Hãy ghi rõ Agency cần xem hoặc thay đổi điều gì.");
     const draft = { itinerary: structuredClone(edited.itinerary || []), hotels: structuredClone(edited.hotels || []) };
     if (onSaveDraft) onSaveDraft({ ...draft, message: message.trim() });
-    else await submitPlanProposal(requestId, plan, { ...draft, requestedChanges }, message.trim());
+    else throw new Error("Vui lòng trao đổi trực tiếp với Agency trong yêu cầu thiết kế.");
     onDone();
   };
   return <TourFormPage customerMode company={company}

@@ -165,9 +165,19 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
     }
 
     /// <summary>Các khoản quyết toán của chính Agency (để Agency theo dõi tiền về).</summary>
-    public async Task<IReadOnlyList<SettlementDto>> AgencySettlements(string agencyId, CancellationToken ct) =>
-        await Build(await Rows().Where(a => a.AgencyId == agencyId &&
+    public async Task<IReadOnlyList<SettlementDto>> AgencySettlements(string agencyId, CancellationToken ct)
+    {
+        var rows = await Build(await Rows().Where(a => a.AgencyId == agencyId &&
             (a.SettlementStatus != SettlementStatus.Unpaid || a.Booking.Status == BookingStatus.Completed)).ToListAsync(ct), ct);
+        static string Mask(string message) => message.StartsWith("Khách chưa thanh toán đủ", StringComparison.Ordinal)
+            ? "Booking chưa hoàn tất thanh toán để quyết toán chặng." : message;
+        return rows.Select(s => s.IsHost ? s : s with {
+            BookingTotal = s.GrossAmount,
+            CustomerPaid = s.PayoutBlockers.Any(p => p.StartsWith("Khách chưa thanh toán đủ", StringComparison.Ordinal)) ? 0 : s.GrossAmount,
+            PayoutBlockers = s.PayoutBlockers.Select(Mask).ToArray(),
+            AutoBlockers = s.AutoBlockers.Select(Mask).ToArray()
+        }).ToArray();
+    }
 
     // ------------------------------------------------------------ Admin: danh sách
 
@@ -472,17 +482,12 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
     {
         var booking = row.Booking;
         var now = UtcNow;
-        var received = booking.PaymentTransactions.Where(t => t.Status == PaymentTransactionStatus.Success).Sum(t => t.Amount);
-        var refunded = booking.PaymentTransactions.Where(t => t.Status == PaymentTransactionStatus.Refunded).Sum(t => t.Amount);
-        var paid = Math.Max(0, received - refunded);
-
-        // Một Agency: nhận toàn bộ số khách đã trả. Nhiều Agency: Agency đối tác nhận phần final_amount của mình,
-        // Agency chủ trì nhận phần còn lại.
-        decimal gross;
-        if (booking.BookingAgencies.Count <= 1) gross = paid;
-        else if (row.IsHost == true)
-            gross = Math.Max(0, paid - booking.BookingAgencies.Where(a => a.Id != row.Id).Sum(a => a.FinalAmount));
-        else gross = Math.Min(row.FinalAmount, paid);
+        // Giảm giá đã hoàn được lưu ở refund_requests, không sửa giao dịch thu gốc.
+        var paid = Math.Max(0, BookingBilling.NetPaidAmount(booking));
+        // FinalAmount đã bao gồm phụ thu/giảm giá được duyệt cho đúng Agency.
+        // Không dồn phần tiền dư (hoặc tiền chưa hoàn) sang Agency chủ trì.
+        var alliance = booking.BookingAgencies.Count > 1;
+        var gross = Math.Min(alliance ? Math.Max(0, row.FinalAmount) : booking.TotalAmount, paid);
 
         var percent = row.FeePercent ?? options.DefaultFeePercent;
         var fee = Money(gross * percent / 100m);
@@ -502,6 +507,8 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
         if (paid < booking.TotalAmount)
             payoutBlockers.Add($"Khách chưa thanh toán đủ (đã trả {Vnd(paid)} / {Vnd(booking.TotalAmount)}).");
         if (openRefund) payoutBlockers.Add("Booking đang có yêu cầu hủy/hoàn tiền chưa xử lý xong.");
+        if (alliance && booking.BookingAgencies.Sum(a => a.FinalAmount) != booking.TotalAmount)
+            payoutBlockers.Add("Tổng phân bổ cho các Agency chưa khớp tổng giá booking. Cần đối soát trước khi quyết toán.");
         if (net <= 0) payoutBlockers.Add("Số tiền Agency nhận bằng 0.");
 
         var autoBlockers = new List<string>(payoutBlockers);

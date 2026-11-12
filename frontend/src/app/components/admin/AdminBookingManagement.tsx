@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { Booking, User } from "@/app/types";
 import {
   Check,
@@ -645,18 +646,18 @@ export function AdminBookingManagement({
       )}
 
       {/* Reject Booking Dialog */}
-      <Dialog
+      <AlertDialog
         open={rejectingBooking !== null}
         onOpenChange={() => setRejectingBooking(null)}
       >
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Từ chối Booking</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent tone="error" className="sm:max-w-[425px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Từ chối Booking</AlertDialogTitle>
+            <AlertDialogDescription>
               Bạn có chắc chắn muốn từ chối booking này? Bạn có
               thể cung cấp lý do từ chối.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="mt-4">
             <Label htmlFor="rejectReason">Lý do từ chối:</Label>
             <Textarea
@@ -668,13 +669,13 @@ export function AdminBookingManagement({
             />
           </div>
           <div className="mt-6 flex justify-end gap-2">
-            <Button
+            <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
               onClick={() => setRejectingBooking(null)}
               variant="outline"
             >
               Hủy bỏ
-            </Button>
-            <Button
+            </Button></AlertDialogCancel>
+            <Button data-slot="alert-dialog-action"
               onClick={() => {
                 if (rejectingBooking) {
                   onRejectBooking(
@@ -689,8 +690,8 @@ export function AdminBookingManagement({
               Từ chối
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

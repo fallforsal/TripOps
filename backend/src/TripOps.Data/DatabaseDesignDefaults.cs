@@ -23,7 +23,6 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<Service>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Tour>().Property(e => e.IsRequest).HasDefaultValue(false);
         modelBuilder.Entity<Tour>().Property(e => e.Version).HasDefaultValue(1);
-        modelBuilder.Entity<Tour>().Property(e => e.IsSharedToCustomer).HasDefaultValue(false);
         modelBuilder.Entity<Tour>().Property(e => e.IsAiGenerated).HasDefaultValue(false);
         modelBuilder.Entity<Tour>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Tour>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
@@ -45,9 +44,6 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<TourProvince>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<AgencySupplier>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<AgencySupplier>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
-        modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.IsHost).HasDefaultValue(false);
-        modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.Status).HasDefaultValue("PENDING");
-        modelBuilder.Entity<TourDesignRequestAgency>().Property(e => e.AssignedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Booking>().Property(e => e.PaymentStatus).HasDefaultValue(PaymentStatus.Unpaid);
         modelBuilder.Entity<Booking>().Property(e => e.HasCustomization).HasDefaultValue(false);
         modelBuilder.Entity<Booking>().Property(e => e.Status).HasDefaultValue(BookingStatus.Pending);

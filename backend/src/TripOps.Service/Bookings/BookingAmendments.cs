@@ -14,7 +14,7 @@ public sealed record BookingPriceChange(
 public sealed record BookingSurchargeInput(
     [Range(typeof(decimal), "1", "9999999999")] decimal Amount,
     [Required, StringLength(240, MinimumLength = 3)] string Reason,
-    decimal ExpectedTotal, Guid RequestId);
+    decimal ExpectedTotal, Guid RequestId, string? BeneficiaryAgencyId = null);
 public sealed record BookingServiceChange(
     [Required, AllowedValues("hotel", "meal")] string Kind,
     [Range(1, int.MaxValue)] int ItemId,
@@ -22,14 +22,15 @@ public sealed record BookingServiceChange(
     decimal ExpectedTotal, decimal PriceDifference = 0,
     int? ServiceId = null, int? AgencySupplierId = null,
     [StringLength(255)] string? Name = null,
-    SupplierSnapshotInput? Supplier = null, [Range(1, 5)] int? Stars = null);
+    SupplierSnapshotInput? Supplier = null, [Range(1, 5)] int? Stars = null,
+    [Range(typeof(decimal),"-9999999999","9999999999")] decimal ProposedAmount=0,Guid? FinancialRequestId=null);
 public sealed record BookingLocationChange(
     [Range(1, int.MaxValue)] int ItemId,
     [Required, StringLength(255)] string Name,
     [Required, StringLength(2000, MinimumLength = 3)] string Reason,
     decimal ExpectedTotal, decimal PriceDifference = 0);
 public sealed record BookingPriceAdjustmentDto(int Id, string AdjustedBy, decimal PreviousTotalPrice,
-    decimal AdjustmentAmount, decimal NewTotalPrice, string Reason, DateTime? CreatedAt);
+    decimal AdjustmentAmount, decimal NewTotalPrice, string Reason, DateTime? CreatedAt,string? BeneficiaryAgencyId=null);
 
 public sealed partial class BookingQuotationService
 {
@@ -41,15 +42,16 @@ public sealed partial class BookingQuotationService
             .ToDictionary(l => l.SlotKey, l => l.Supplier!);
     }
 
-    private async Task<Booking> Amendable(string actor, int id, decimal expectedTotal, CancellationToken ct)
+    private async Task<Booking> Amendable(string actor, int id, decimal expectedTotal, CancellationToken ct,bool hostOnly=true)
     {
         var b = await Repository.Find(id, ct) ?? throw new BookingException(404, "Không tìm thấy booking.");
-        if (b.Tour?.AgencyId != actor) throw new BookingException(403, "Bạn không có quyền thay đổi booking này.");
+        if (!BookingAlliance.IsMember(b,actor) || (hostOnly && b.Tour?.AgencyId!=actor)) throw new BookingException(403, "Bạn không có quyền thay đổi booking này.");
         Require(b.Status is BookingStatus.Pending or BookingStatus.Confirmed or BookingStatus.Deposited or BookingStatus.Paid,
             "Booking đã hủy, kết thúc hoặc đang thực hiện không thể thay đổi.");
-        Require(!b.RefundRequests.Any(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved),
+        Require(!b.RefundRequests.Any(r => r.Reason!=BookingBilling.PriceReductionReason && r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved),
             "Booking đang có yêu cầu hủy, không thể thay đổi.");
-        if (b.TotalAmount != expectedTotal) throw new BookingException(409, "Giá booking đã thay đổi. Vui lòng tải lại trang.");
+        var visibleTotal=b.Tour!.AgencyId==actor?b.TotalAmount:b.BookingAgencies.Single(a=>a.AgencyId==actor).FinalAmount;
+        if (visibleTotal != expectedTotal) throw new BookingException(409, "Giá booking đã thay đổi. Vui lòng tải lại trang.");
         return b;
     }
 
@@ -63,17 +65,18 @@ public sealed partial class BookingQuotationService
     public async Task ChangeLocation(string actor, int id, BookingLocationChange input, CancellationToken ct)
     {
         await using var tx = await Repository.BeginPaymentChange(id, ct);
-        var b = await Amendable(actor, id, input.ExpectedTotal, ct);
+        var b = await Amendable(actor, id, input.ExpectedTotal, ct,false);
         var location = b.Timelines.SelectMany(d => d.Attractions).SingleOrDefault(a => a.Id == input.ItemId)
             ?? throw new BookingException(422, "Điểm tham quan không thuộc booking.");
-        Require(string.IsNullOrWhiteSpace(location.AgencyId) || location.AgencyId == actor,
-            "Bạn không quản lý điểm tham quan này.");
+        if ((string.IsNullOrWhiteSpace(location.AgencyId)?b.Tour!.AgencyId:location.AgencyId) != actor)
+            throw new BookingException(403,"Chỉ Agency tạo địa điểm này được thay đổi.");
         Require(location.AttendanceStatus is not ("CheckedIn" or "Skipped") &&
             !await Db.BookingAttractionCheckins.AnyAsync(c => c.BookingTimelineAttractionId == location.Id &&
                 (c.AttendanceStatus == AttractionCheckinStatus.CheckedIn || c.AttendanceStatus == AttractionCheckinStatus.Skipped), ct),
             "Điểm đã được check-in hoặc bỏ qua không thể đổi.");
         Require(!string.IsNullOrWhiteSpace(input.Name) && input.Name.Trim().Length <= 255, "Cần nhập tên điểm tham quan hợp lệ.");
         Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length is >= 3 and <= 2000, "Cần nhập lý do thay đổi.");
+        Require(b.Tour?.AgencyId==actor || input.PriceDifference==0,"Agency đối tác không được thay đổi giá booking.");
         Require(input.PriceDifference == Money(input.PriceDifference), "Chênh lệch giá phải là số nguyên VNĐ.");
         Require(!BookingBilling.HasBeenApproved(b) || input.PriceDifference == 0,
             "Giá tour đã khóa sau khi duyệt. Nếu phát sinh chi phí, hãy tạo phụ thu riêng.");
@@ -104,7 +107,11 @@ public sealed partial class BookingQuotationService
         b.TotalAmount = total;
         // Keep the host Agency's accounting amount in sync; participant ticket prices remain unchanged.
         var host = await Db.BookingAgencies.SingleOrDefaultAsync(a => a.BookingId == b.Id && a.AgencyId == actor, ct);
-        if (host != null) { host.FinalAmount = total; host.NetPayout = total; }
+        if (host != null) {
+            var others=await Db.BookingAgencies.Where(a=>a.BookingId==b.Id && a.AgencyId!=actor).SumAsync(a=>(decimal?)a.FinalAmount,ct)??0;
+            Require(total>=others,"Giá mới không được thấp hơn số tiền đã phân bổ cho Agency đối tác.");
+            host.FinalAmount=total-others;host.NetPayout=host.FinalAmount;
+        }
     }
 
     public async Task ChangePrice(string actor, int id, BookingPriceChange input, CancellationToken ct)
@@ -130,8 +137,9 @@ public sealed partial class BookingQuotationService
         // A retry with the same request key returns the recorded charge, without charging twice.
         var prior = await Db.PaymentRequests.AsNoTracking().SingleOrDefaultAsync(p => p.BookingId == id && p.Stage == stage, ct);
         if (prior != null) {
-            await Owned(actor, id, true, ct);
-            Require(prior.Amount == input.Amount && prior.Description == "Phụ thu: " + input.Reason.Trim(), "Mã yêu cầu phụ thu đã được sử dụng.");
+            var owner=await Owned(actor, id, true, ct);
+            if(owner.Tour!.AgencyId!=actor)throw new BookingException(403,"Chỉ Agency chủ trì được tạo phụ thu.");
+            Require(prior.Amount == input.Amount && prior.Description == "Phụ thu: " + input.Reason.Trim() && prior.BeneficiaryAgencyId==(input.BeneficiaryAgencyId??actor), "Mã yêu cầu phụ thu đã được sử dụng.");
             await tx.CommitAsync(ct); return;
         }
         var b = await Amendable(actor, id, input.ExpectedTotal, ct);
@@ -146,14 +154,21 @@ public sealed partial class BookingQuotationService
         Require(input.Amount > 0 && input.Amount == Money(input.Amount) && input.Amount + b.TotalAmount <= 9999999999m,
             "Phụ thu phải là số nguyên dương hợp lệ.");
         Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length is >= 3 and <= 240, "Cần nhập lý do phụ thu (3–240 ký tự).");
+        var beneficiary=input.BeneficiaryAgencyId??(b.BookingAgencies.Count<=1?actor:null);
+        Require(beneficiary!=null && b.BookingAgencies.Any(a=>a.AgencyId==beneficiary),"Hãy chọn Agency trong booking nhận khoản phụ thu.");
+        var allocation=b.BookingAgencies.Single(a=>a.AgencyId==beneficiary);
+        Require(allocation.SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền của Agency đã được quyết toán; không thể thêm phụ thu.");
         var now = DateTime.UtcNow;
         var lastBaseDeadline = b.PaymentRequests.Where(p => !BookingBilling.IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled)
             .Select(p => p.DueAt ?? now).DefaultIfEmpty(now).Max();
         var due = lastBaseDeadline > now.AddHours(24) ? lastBaseDeadline : now.AddHours(24);
         b.PaymentRequests.Add(new PaymentRequest { Stage = stage, Description = "Phụ thu: " + input.Reason.Trim(),
-            Amount = input.Amount, Status = PaymentRequestStatus.Pending, DueAt = due,
+            BeneficiaryAgencyId=beneficiary, Amount = input.Amount, Status = PaymentRequestStatus.Pending, DueAt = due,
             DueDate = TripOps.Service.Payments.PaymentRules.VietnamDate(due), CreatedBy = actor, CreatedAt = now });
-        await ApplyPrice(b, actor, b.TotalAmount + input.Amount, "[Phụ thu] " + input.Reason.Trim(), ct);
+        var before=b.TotalAmount;b.OriginalTotalPrice??=before;b.TotalAmount+=input.Amount;
+        allocation.FinalAmount+=input.Amount;allocation.NetPayout=allocation.FinalAmount-(allocation.PlatformFee??0);
+        Db.BookingPriceAdjustments.Add(new BookingPriceAdjustment {BookingId=b.Id,AgencyId=beneficiary,AdjustedBy=actor,
+            PreviousTotalPrice=before,NewTotalPrice=b.TotalAmount,Amount=input.Amount,Reason="[Phụ thu] "+input.Reason.Trim()});
         var paid = b.PaymentTransactions.Where(t => t.Status == PaymentTransactionStatus.Success).Sum(t => t.Amount);
         b.PaymentStatus = paid > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
         MarkAmended(b);
@@ -164,13 +179,16 @@ public sealed partial class BookingQuotationService
     public async Task ChangeService(string actor, int id, BookingServiceChange input, CancellationToken ct)
     {
         await using var tx = await Repository.BeginPaymentChange(id, ct);
-        var b = await Amendable(actor, id, input.ExpectedTotal, ct);
+        var b = await Amendable(actor, id, input.ExpectedTotal, ct,false);
+        Require(b.Tour?.AgencyId==actor || input.PriceDifference==0,"Agency đối tác không được thay đổi giá booking.");
+        Require(input.PriceDifference==0||input.ProposedAmount==0,"Chỉ điều chỉnh trực tiếp hoặc gửi đề nghị, không đồng thời cả hai.");
         Require(!BookingBilling.HasBeenApproved(b) || input.PriceDifference == 0,
             "Giá tour đã khóa sau khi duyệt. Đổi dịch vụ không thay đổi giá; hãy tạo phụ thu riêng nếu phát sinh.");
         Require(input.Kind is "hotel" or "meal", "Loại dịch vụ không hợp lệ.");
         var hotel = input.Kind == "hotel" ? b.Accommodations.SingleOrDefault(h => h.Id == input.ItemId) : null;
         var meal = input.Kind == "meal" ? b.Timelines.SelectMany(d => d.Meals).SingleOrDefault(m => m.Id == input.ItemId) : null;
         Require(hotel != null || meal != null, "Dịch vụ không thuộc booking.");
+        Require((hotel?.AgencyId??meal?.AgencyId??b.Tour!.AgencyId)==actor,"Bạn chỉ được đổi dịch vụ thuộc chặng của công ty mình.");
         Require(!(input.ServiceId.HasValue && input.AgencySupplierId.HasValue), "Chỉ chọn một nguồn dịch vụ.");
         var name = input.Name?.Trim(); var snapshot = input.Supplier; var stars = input.Stars;
         TripOps.Data.Entities.Service? service = null;
@@ -206,7 +224,7 @@ public sealed partial class BookingQuotationService
         foreach (var r in await Db.BookingSupplierRequests.Where(r => r.BookingId == id && r.SlotKey == slot && r.Status != "Superseded").ToListAsync(ct))
             r.Status = "Superseded";
         var unit = service?.PriceUnit ?? (hotel != null ? "person_night" : "meal");
-        var guests = Math.Max(1, b.Participants.Count(p => p.Status != "INACTIVE"));
+        var guests = Math.Max(1, BookingAlliance.GuestCount(b,hotel?.AgencyId??meal?.AgencyId??actor));
         decimal quantity = hotel != null ? Math.Max(1, hotel.NightsCount ?? 1) : guests;
         if (hotel != null && (unit == "person_night" || unit == "person")) quantity *= guests;
         if (unit is "trip" or "item") quantity = 1;
@@ -218,11 +236,11 @@ public sealed partial class BookingQuotationService
                 ServiceDateTo = hotel != null ? hotel.DateTo : meal!.Time ?? meal.DateService,
                 Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity), ReplyDeadline = DateTime.UtcNow.AddHours(48) });
             Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = service.ProviderId, BookingId = id,
-                Message = "Agency thay đổi dịch vụ booking, cần xác nhận lại giá và khả năng cung cấp." });
+                Message = $"Yêu cầu dịch vụ mới cho booking {b.BookingCode}: {name}. Agency đã thay {oldName}; vui lòng xác nhận giá và khả năng cung cấp." });
         }
         var reason = $"Đổi {oldName} → {name}. {input.Reason}";
         Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length >= 3, "Cần nhập lý do thay đổi.");
-        await ApplyPrice(b, actor, b.TotalAmount + input.PriceDifference, reason[..Math.Min(reason.Length, 2000)], ct);
+        if(input.PriceDifference!=0)await ApplyPrice(b, actor, b.TotalAmount + input.PriceDifference, reason[..Math.Min(reason.Length, 2000)], ct);
         MarkAmended(b);
         var latest = await Db.BookingQuotations.Where(q => q.BookingId == id).OrderByDescending(q => q.Version).FirstAsync(ct);
         var lines = Lines(latest); lines.RemoveAll(l => l.SlotKey == slot);
@@ -234,6 +252,17 @@ public sealed partial class BookingQuotationService
             TotalCost = lines.Sum(l => l.Total), LinesJson = JsonSerializer.Serialize(lines, Json),
             NumberOfGuests = guests, PlanSnapshotJson = PlanSnapshot(b), Reason = reason });
         Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = b.CustomerId!, BookingId = id, Message = reason });
+        if(input.ProposedAmount!=0) {
+            Require(input.FinancialRequestId.HasValue&&input.FinancialRequestId!=Guid.Empty,"Thiếu mã đề nghị điều chỉnh.");
+            Require(input.ProposedAmount==Money(input.ProposedAmount),"Đề nghị điều chỉnh phải là số nguyên VNĐ.");
+            Require(!await Db.BookingFinancialChanges.AnyAsync(x=>x.BookingId==id&&x.RequestKey==input.FinancialRequestId,ct),"Đề nghị đã được gửi; hãy tải lại trang.");
+            var owner=hotel?.AgencyId??meal!.AgencyId??actor;
+            Require(b.BookingAgencies.Single(a=>a.AgencyId==owner).SettlementStatus is not (SettlementStatus.Paid or SettlementStatus.Processing),"Phần tiền đã được quyết toán.");
+            Db.BookingFinancialChanges.Add(new BookingFinancialChange{BookingId=id,AgencyId=owner,RequestedBy=actor,
+                RequestKey=input.FinancialRequestId!.Value,Amount=input.ProposedAmount,Reason=reason[..Math.Min(240,reason.Length)]});
+            Db.WorkflowNotifications.Add(new WorkflowNotification{UserId=b.Tour!.AgencyId,BookingId=id,
+                Message=$"Có đề nghị điều chỉnh {input.ProposedAmount:N0}đ do đổi {name}. Chủ trì cần phê duyệt trước khi thu/giảm tiền khách."});
+        }
         await Db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
 }

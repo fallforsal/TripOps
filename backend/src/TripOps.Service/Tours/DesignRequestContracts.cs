@@ -14,16 +14,27 @@ public sealed record CreateDesignRequestInput(
     [StringLength(50)] string? HotelStars = null,
     [StringLength(10000)] string? AdditionalInfo = null,
     [StringLength(255)] string? BusinessName = null,
-    [EmailAddress, StringLength(191)] string? BusinessEmail = null,
-    [StringLength(30)] string? BusinessPhone = null, int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
+    int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
 
 public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email,string? LogoUrl = null);
 
 public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId, string AgencyName,
     string ContactName, string ContactEmail, string ContactPhone, string Destination,
     DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
-    string? HotelStars, string? AdditionalInfo, string? BusinessName, string? BusinessEmail,
-    string? BusinessPhone, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
-    decimal? QuotedPricePerPerson);
+    string? HotelStars, string? AdditionalInfo, string? BusinessName, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
+    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null, string? SharedTourThumbnail = null, string? SharedTourName = null, DateTime? ArchivedAt = null, DateTime? ClosedAt = null, string? CloseReason = null, int? BookingId = null, int[]? CollaborationVersions = null, bool HasCollaborations = false);
 
-public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action);
+public sealed record DesignCoHostDto(string CompanyId, string CompanyName, string Role, string Status,
+    int[] AssignedDays, string? AssignedSegments = null, decimal? EstimatedBudgetPerGuest = null,
+    decimal? QuoteAdult = null, decimal? QuoteChild = null, decimal? QuoteInfant = null,
+    string? QuoteNote = null, DateTime? QuotedAt = null, string? Notes = null,
+    string? RejectionReason = null, DateTime? InvitedAt = null, DateTime? RespondedAt = null,
+    string? CompanyPhone = null, string? CompanyEmail = null, int? Version = null);
+public sealed record InviteDesignCoHost([Required] string AgencyId, [StringLength(255)] string? Segment = null,
+    [Range(typeof(decimal), "0", "9999999999")] decimal? Budget = null, [StringLength(2000)] string? Notes = null, int? Version = null);
+public sealed record DesignCoHostDecision([Required, AllowedValues("accept", "reject")] string Action, [StringLength(2000)] string? Reason = null, int? Version = null);
+public sealed record DesignSegmentInput(int Revision, [Required] TimelineInput[] Timelines, [Required] PricingTierInput[] PricingTiers, int? Version = null);
+
+public sealed record DesignRequestAction([Required, AllowedValues("review", "reject")] string Action, [StringLength(2000)] string? Reason = null);
+
+public sealed record DesignLifecycleInput([Required, AllowedValues("archive", "unarchive", "close", "reopen")] string Action, [StringLength(2000)] string? Reason = null);

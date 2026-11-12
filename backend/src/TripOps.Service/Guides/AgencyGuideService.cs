@@ -190,7 +190,7 @@ public sealed class AgencyGuideService(TripOpsDbContext db, CloudinaryStorage im
             var role = (a.Role ?? "").ToLowerInvariant() switch { "support" or "support_guide" => "support_guide", "stage" or "stage_guide" => "stage_guide", "logistics" => "logistics", _ => "lead_guide" };
             return new GuideAssignmentDto(a.Id.ToString(), b.Id.ToString(), b.BookingCode, b.TourId?.ToString() ?? "", b.Tour?.Code ?? "", b.Tour?.Name ?? "Tour đã lưu trữ",
                 b.Tour?.Destination ?? "", b.StartDate.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"),
-                b.Participants.Count(p => p.IsPrimary && p.Status != "INACTIVE"), b.ContactName, b.ContactPhone, role, status, a.Notes);
+                TripOps.Service.Bookings.BookingAlliance.GuestCount(b,agencyId), b.ContactName, b.ContactPhone, role, status, a.Notes);
         }).OrderByDescending(a => a.StartDate).ToList());
     }
 }

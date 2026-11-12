@@ -135,19 +135,20 @@ public sealed partial class TourFlowTests
         var tour = await Read<TourDto>(await agency.PostAsync(Root, Body(Example(Root, "minimalDraft"))), HttpStatusCode.Created);
         Assert.Equal(1, tour.Version);
         tour = await Read<TourDto>(await agency.PutAsync($"{Root}/{tour.Id}", Body(Example("/api/v1/agency/tours/{id}", "configureThreeDayTour", "put"))));
-        Assert.Equal(2, tour.Version);
+        Assert.Equal(2, tour.Revision); Assert.Equal(1,tour.Version);
         Assert.Equal("08:30:00", tour.Configuration.Timelines![0].Activities![0].EstimatedTime!.Value.ToString("c"));
         Assert.Equal(2, tour.Configuration.Timelines.SelectMany(d => d.Accommodations ?? []).Where(h => h.IsDefault).Sum(h => h.NightsCount));
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
-        tour = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Version)));
-        Assert.Equal(3, tour.Version); Assert.Equal("public", tour.Visibility);
+        tour = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/publish", new TourCommand(tour.Revision)));
+        Assert.Equal(3, tour.Revision); Assert.Equal(1,tour.Version); Assert.Equal("public", tour.Visibility);
         var published = (await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!;
         Assert.Equal(3, published.Configuration.DurationDays); Assert.Equal(2, published.Configuration.DurationNights);
-        var beforeEdit = (await agency.GetFromJsonAsync<TourVersionDto>($"{Root}/{tour.Id}/versions/3"))!.SnapshotData;
+
         tour = await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}", new UpdateTourRequest(3, published.Configuration with { Message = "Rà soát chương trình" }, "Cập nhật sau công bố")));
-        Assert.Equal(4, tour.Version); Assert.Equal("draft", tour.Status);
-        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
-        Assert.Equal(beforeEdit, (await agency.GetFromJsonAsync<TourVersionDto>($"{Root}/{tour.Id}/versions/3"))!.SnapshotData);
+        Assert.Equal(4, tour.Revision); Assert.Equal(1,tour.Version); Assert.Equal("completed", tour.Status); Assert.Equal("public",tour.Visibility);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync($"/api/v1/tours/{tour.Id}")).StatusCode);
+        Assert.Equal("Rà soát chương trình",(await anonymous.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"))!.Configuration.Message);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.GetAsync($"{Root}/{tour.Id}/versions")).StatusCode);
         await app.Inspect(async db => {
             // Two rows are mutually exclusive options for one two-night stay, not four booked nights.
             Assert.Equal(2, await db.TourAccommodations.CountAsync());

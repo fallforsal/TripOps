@@ -27,7 +27,6 @@ interface TourVersionHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   tour: Tour | null;
-  onRestoreVersion: (tourId: string, versionNumber: number) => void;
 }
 
 function formatVND(n: number) {
@@ -49,7 +48,6 @@ export function TourVersionHistoryModal({
   isOpen,
   onClose,
   tour,
-  onRestoreVersion,
 }: TourVersionHistoryModalProps) {
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
 
@@ -68,7 +66,7 @@ export function TourVersionHistoryModal({
           <div className="flex items-center gap-2 text-[#075985] mb-1">
             <History className="w-5 h-5" />
             <span className="text-xs font-bold uppercase tracking-wider">
-              Lịch sử phiên bản &amp; Sao lưu (Version Control)
+              Các phiên bản tour
             </span>
           </div>
           <DialogTitle className="text-lg font-bold text-gray-900">
@@ -90,9 +88,9 @@ export function TourVersionHistoryModal({
           <div className="bg-[#F0F9FF]/70 border border-[#CBD5E1] rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
             <Info className="w-4 h-4 text-[#075985] flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">Cơ chế bảo toàn &amp; Khôi phục (Backup &amp; Rollback):</p>
+              <p className="font-semibold">Các phương án đã lưu:</p>
               <p className="text-blue-800 text-[11px] mt-0.5">
-                Mỗi khi công ty cập nhật thiết kế tour theo trao đổi riêng với khách hàng, hệ thống tự động lưu trữ một bản sao snapshot hoàn chỉnh. Bạn có thể khôi phục lại bất kỳ phiên bản nào trước đó mà không lo mất mát dữ liệu.
+                Lưu cập nhật phiên bản đang mở. Lưu với phiên bản mới tạo thêm phương án. Chọn và chia sẻ trực tiếp bất kỳ phiên bản nào trong trang yêu cầu thiết kế.
               </p>
             </div>
           </div>
@@ -222,23 +220,7 @@ export function TourVersionHistoryModal({
                             )}
                           </Button>
 
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Bạn có chắc chắn muốn khôi phục lại nội dung của Phiên bản v${v.version} không? Hệ thống sẽ tạo phiên bản mới tiếp theo mang toàn bộ cấu hình của v${v.version}.`
-                                )
-                              ) {
-                                onRestoreVersion(tour.id, v.version);
-                                onClose();
-                              }
-                            }}
-                            className="bg-[#075985] hover:bg-[#F97316] text-white text-xs h-7 px-2.5 gap-1 font-semibold"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            Khôi phục bản này
-                          </Button>
+
                         </div>
                       </div>
 
@@ -278,7 +260,7 @@ export function TourVersionHistoryModal({
                               {snap.itinerary?.map((d) => (
                                 <div key={d.id} className="p-2 border border-gray-100 rounded-lg bg-gray-50/50">
                                   <p className="font-semibold text-gray-800">
-                                    Ngày {d.day}: {d.title}
+                                    {d.title || "Chưa nhập tiêu đề"}
                                   </p>
                                   {d.hotel?.name && (
                                     <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">

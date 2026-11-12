@@ -1,3 +1,4 @@
+import { toast } from "@/app/lib/notifications";
 import { useState, useMemo } from "react";
 import {
   BedDouble,
@@ -103,16 +104,7 @@ export function ProviderGroupBookingRequests({
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [rejectionError, setRejectionError] = useState<string>("");
 
-  // Toast feedback
-  const [toastMessage, setToastMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 4000);
-  };
+  const showToast = (text: string, type: "success" | "error" = "success") => toast[type](text);
 
   // Helper check for request types
   const isHotelReq = (r: ProviderGroupReservationRequest) =>
@@ -263,7 +255,7 @@ export function ProviderGroupBookingRequests({
     onRejectRequest(rejectingRequest.id, rejectionReason.trim());
     showToast(
       `Đã từ chối yêu cầu của đoàn ${rejectingRequest.agencyName}.`,
-      "error"
+      "success"
     );
     setRejectingRequest(null);
   };
@@ -282,7 +274,7 @@ export function ProviderGroupBookingRequests({
           }}
           onRejectRequest={(id, reason) => {
             onRejectRequest(id, reason);
-            showToast("Đã từ chối yêu cầu dịch vụ.", "error");
+            showToast("Đã từ chối yêu cầu dịch vụ.", "success");
           }}
         />
       );
@@ -291,21 +283,6 @@ export function ProviderGroupBookingRequests({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl text-white text-xs font-bold animate-in fade-in slide-in-from-bottom-2 ${
-            toastMessage.type === "success" ? "bg-emerald-600" : "bg-rose-600"
-          }`}
-        >
-          {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : (
-            <XCircle className="w-4 h-4" />
-          )}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
 
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -651,7 +628,7 @@ export function ProviderGroupBookingRequests({
                   )}
 
                   {/* Quoted Price Banner if available */}
-                  {req.quotedTotalPrice && (
+                  {!isCancelled && !!req.quotedTotalPrice && (
                     <div className="text-xs p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 flex items-center justify-between">
                       <span className="font-semibold text-emerald-800">
                         {isRest ? "Báo giá bữa ăn toàn đoàn:" : "Báo giá lưu trú toàn đoàn:"}

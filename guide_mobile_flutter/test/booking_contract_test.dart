@@ -78,6 +78,20 @@ void main() {
       'totalGuests': 1,
     });
     expect(detail.canRecordAttendance, isFalse);
+    expect(detail.attendanceDate, isNull);
+  });
+
+  test('assigned stage attendance date is independent of the tour departure date', () {
+    final detail = BookingDetail.fromJson({
+      'id': 18,
+      'bookingCode': 'BK-18',
+      'startDate': '2026-11-10T00:00:00',
+      'endDate': '2026-11-14T00:00:00',
+      'canRecordAttendance': true,
+      'attendanceDate': '2026-11-12T00:00:00',
+    });
+    expect(detail.canRecordAttendance, isTrue);
+    expect(detail.attendanceDate, DateTime(2026, 11, 12));
   });
 
 }
