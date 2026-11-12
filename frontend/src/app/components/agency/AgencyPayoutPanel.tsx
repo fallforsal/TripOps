@@ -23,6 +23,9 @@ import {
 export function AgencyPayoutPanel() {
   const [account, setAccount] = useState<AgencyPayoutAccountDto | null>(null);
   const [items, setItems] = useState<SettlementDto[]>([]);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const settlementTabs = [{ id: "all", label: "Tất cả" }, ...Object.entries(SETTLEMENT_STATUS_LABEL).map(([id, label]) => ({ id, label }))];
+  const filteredItems = items.filter(item => statusFilter === "all" || item.status === statusFilter);
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [holder, setHolder] = useState("");
@@ -125,8 +128,13 @@ export function AgencyPayoutPanel() {
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
           <Banknote className="w-5 h-5 text-emerald-600" /> Tiền quyết toán các tour
         </h2>
-        {items.length === 0 ? (
-          <p className="text-xs text-slate-500">Chưa có tour nào hoàn thành.</p>
+        <div role="tablist" aria-label="Trạng thái tiền quyết toán" className="flex flex-wrap gap-1">
+          {settlementTabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={statusFilter === tab.id} onClick={() => setStatusFilter(tab.id)} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${statusFilter === tab.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+            {tab.label} <span className="ml-1 opacity-80">({items.filter(item => tab.id === "all" || item.status === tab.id).length})</span>
+          </button>)}
+        </div>
+        {filteredItems.length === 0 ? (
+          <p className="text-xs text-slate-500">{statusFilter === "all" ? "Chưa có tour nào hoàn thành." : "Chưa có khoản quyết toán trong trạng thái này."}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
@@ -140,7 +148,7 @@ export function AgencyPayoutPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((s) => (
+                {filteredItems.map((s) => (
                   <tr key={s.id} className="align-top">
                     <td className="py-2.5 px-3">
                       <p className="font-semibold text-slate-900">{s.bookingCode}</p>

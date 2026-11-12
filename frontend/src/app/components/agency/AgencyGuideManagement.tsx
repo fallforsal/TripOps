@@ -616,7 +616,7 @@ export function AgencyGuideManagement({
           {/* Lọc theo Trạng thái công việc */}
           <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs">
             {[
-              { id: "all", label: "Mọi TT công việc" },
+              { id: "all", label: "Tất cả" },
               { id: "available", label: "Sẵn sàng" },
               { id: "on_tour", label: "Đang dẫn đoàn" },
               { id: "unavailable", label: "Ngừng / Chưa khả dụng" },

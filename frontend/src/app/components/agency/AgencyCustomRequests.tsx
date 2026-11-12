@@ -107,7 +107,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     }
     setRevision(value => value + 1);
   };
-  const matchesTab = (r:CustomTourRequest,tab:string) => tab==="archived" ? !!r.archivedAt : !r.archivedAt && (tab==="all" ? ["pending","reviewing","designed"].includes(r.status) : tab==="closed" ? ["closed","rejected","cancelled"].includes(r.status) : r.status===tab);
+  const matchesTab = (r:CustomTourRequest,tab:string) => tab==="all" || (tab==="archived" ? !!r.archivedAt : !r.archivedAt && (tab==="closed" ? ["closed","rejected","cancelled"].includes(r.status) : r.status===tab));
   const lifecycle = async (request:CustomTourRequest, action:"archive"|"unarchive"|"close"|"reopen") => {
     let reason:string|undefined;
     if(action==="close") {const input=await requestText("Khách hàng sẽ thấy lý do này và không thể booking mới cho đến khi Agency mở lại.","",{title:"Đóng yêu cầu thiết kế",confirmLabel:"Đóng yêu cầu",tone:"warning"});if(input==null)return;reason=input.trim();if(!reason){toast.warning("Hãy nhập lý do đóng yêu cầu.");return;}}
@@ -141,7 +141,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-4" role="tablist" aria-label="Trạng thái yêu cầu">
         {["all", "pending", "reviewing", "designed", "booked", "closed", "archived"].map(status => <button type="button" role="tab" aria-selected={filter === status} aria-controls="agency-design-request-rows" key={status}
           className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm transition-colors ${filter === status ? "border-sky-700 font-semibold text-sky-800" : "border-transparent text-slate-500 hover:text-slate-900"}`} onClick={() => setFilter(status)}>
-          {status === "all" ? "Đang xử lý" : labels[status]}<span className={`rounded-md px-1.5 py-0.5 text-xs ${filter === status ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500"}`}>{requests.filter(r => r.targetCompanyId === company.id && matchesTab(r,status)).length}</span>
+          {status === "all" ? "Tất cả" : labels[status]}<span className={`rounded-md px-1.5 py-0.5 text-xs ${filter === status ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500"}`}>{requests.filter(r => r.targetCompanyId === company.id && matchesTab(r,status)).length}</span>
         </button>)}
       </div>
       <div className="overflow-x-auto" id="agency-design-request-rows" role="tabpanel">
