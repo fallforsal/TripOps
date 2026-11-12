@@ -17,7 +17,7 @@ class _DialogHarnessState extends State<_DialogHarness> {
       context: context,
       builder: (context) => const CheckinPhotoDialog(stopName: 'Điểm A'),
     );
-    if (mounted) setState(() => result = submission);
+    if (mounted && submission != null) setState(() => result = submission);
   }
 
   @override
