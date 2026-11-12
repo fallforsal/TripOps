@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { BookingFinancialChangesPanel } from "@/app/components/agency/BookingFinancialChangesPanel";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
@@ -305,6 +306,7 @@ export function UserBookingDetailPage({
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                   Chi tiết đơn đặt tour #{booking.id}
                 </h1>
+                <ChatWithButton userId={booking.companyId || booking.tour.companyId} context={{kind:"booking",id:Number(booking.id),title:`Booking #${booking.id}`,thumbnailUrl:booking.tour.image}}>Chat với Agency</ChatWithButton>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                   {st.label}
                 </span>

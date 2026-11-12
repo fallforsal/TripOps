@@ -52,6 +52,8 @@ public sealed class ChatFlowTests
             foreach (var (id, role) in ActiveAccounts)
             {
                 var user = new User { Id = id, Name = id, Email = $"{id}@chat.test", Role = role };
+                if (role is UserRole.TravelAgency or UserRole.Provider) user.BusinessProfile = new BusinessProfile { UserId = id, BusinessName = id == "agency" ? "TripOps Travel" : "TripOps Hospitality", Status = BusinessProfileStatus.Approved };
+                if (role == UserRole.TourGuide) user.AgencyId = "agency";
                 user.PasswordHash = new PasswordHasher<User>().HashPassword(user, "ChatPass123!");
                 db.Users.Add(user);
             }
@@ -95,41 +97,92 @@ public sealed class ChatFlowTests
         return (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
     }
     [Fact]
-    public async Task Every_active_role_can_discover_and_message_every_other_active_account()
+    public async Task Contextual_contacts_follow_business_roles_and_replying_reuses_the_same_conversation()
     {
-        await using var app = new App();
-        await app.Seed();
-        var clients = new List<HttpClient>();
-        try
-        {
-            foreach (var (id, _) in ActiveAccounts)
-            {
-                var (client, _) = await app.Login(id);
-                clients.Add(client);
-                var contacts = await client.GetFromJsonAsync<List<ChatContact>>("/api/v1/chat/contacts");
-                Assert.Equal(ActiveAccounts.Select(account => account.Id).Where(other => other != id).Order(),
-                    contacts!.Select(contact => contact.Id).Order());
-            }
+        await using var app = new App(); await app.Seed();
+        var (customer, _) = await app.Login("customer"); var (agency, _) = await app.Login("agency");
+        var (provider, _) = await app.Login("provider"); var (admin, _) = await app.Login("admin");
+        using (customer) using (agency) using (provider) using (admin) {
+            Assert.Equal(HttpStatusCode.NotFound, (await customer.GetAsync("/api/v1/chat/contacts")).StatusCode);
+            foreach (var target in new[] {"outsider", "user", "provider", "guide"})
+                Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync("/api/v1/chat/conversations", new {userId=target})).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync("/api/v1/chat/conversations", new {userId="outsider"})).StatusCode);
+            var id = await Create(customer, "agency"); Assert.Equal(id, await Create(agency, "customer"));
+            Assert.Empty((await customer.GetFromJsonAsync<List<ConversationDto>>("/api/v1/chat/conversations"))!);
+            Assert.Empty((await agency.GetFromJsonAsync<List<ConversationDto>>("/api/v1/chat/conversations"))!);
+            (await customer.PostAsJsonAsync($"/api/v1/chat/conversations/{id}/messages", new {content="Xin chào",clientMessageId=Guid.NewGuid()})).EnsureSuccessStatusCode();
+            var conversation = Assert.Single((await customer.GetFromJsonAsync<List<ConversationDto>>("/api/v1/chat/conversations"))!);
+            Assert.Equal("TripOps Travel", conversation.Contact.BusinessName);
+            Assert.Equal("TravelAgency", conversation.Contact.Role);
+            var b2b = await Create(agency, "provider"); Assert.Equal(b2b, await Create(provider, "agency"));
 
-            for (var sender = 0; sender < clients.Count; sender++)
-            {
-                for (var recipient = sender + 1; recipient < clients.Count; recipient++)
-                {
-                    var id = await Create(clients[sender], ActiveAccounts[recipient].Id);
-                    Assert.Equal(id, await Create(clients[recipient], ActiveAccounts[sender].Id));
-                    var path = $"/api/v1/chat/conversations/{id}/messages";
-                    (await clients[sender].PostAsJsonAsync(path, new { content = "Hello", clientMessageId = Guid.NewGuid() })).EnsureSuccessStatusCode();
-                    var history = await clients[recipient].GetFromJsonAsync<MessagePage>(path);
-                    Assert.Equal(ActiveAccounts[sender].Id, Assert.Single(history!.Items).SenderId);
-                }
-            }
-        }
-        finally
-        {
-            foreach (var client in clients) client.Dispose();
         }
     }
 
+    [Fact]
+    public async Task Context_cards_use_server_data_and_prevent_private_tour_or_booking_disclosure()
+    {
+        await using var app = new App(); await app.Seed();
+        int tourId, privateId, requestId, bookingId, otherBookingId, serviceId;
+        using (var scope = app.Services.CreateScope()) {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var request = new TourDesignRequest { CustomerId="customer", AgencyId="agency", Destination="Đà Lạt" };
+            db.TourDesignRequests.Add(request); await db.SaveChangesAsync(); requestId=request.Id;
+            var tour = new Tour { AgencyId="agency", Code="CHAT-PUBLIC", Name="Tour công khai", Status=TourStatus.Completed,
+                Visibility=TourVisibility.Public, ThumbnailUrls="[\"https://example.test/cover.jpg\"]" };
+            var design = new Tour { AgencyId="agency", Code="CHAT-PRIVATE", Name="Bản v2 chưa chia sẻ", IsRequest=true,
+                DesignRequestId=requestId, Version=2 };
+            var service = new TripOps.Data.Entities.Service { ProviderId="provider", Name="Khách sạn", Province="Lâm Đồng", ThumbnailUrl="https://example.test/service.jpg" };
+            db.AddRange(tour,design,service); await db.SaveChangesAsync(); tourId=tour.Id; privateId=design.Id; serviceId=service.Id;
+            db.TourVersions.AddRange(new TourVersion { TourId=privateId, VersionNumber=1, SnapshotData="{\"configuration\":{\"name\":\"Bản v1 đang chia sẻ\",\"images\":[\"https://example.test/v1.jpg\"]}}" },
+                new TourVersion { TourId=privateId, VersionNumber=2, SnapshotData="{\"configuration\":{\"name\":\"Bí mật v2\",\"images\":[]}}" });
+            await db.SaveChangesAsync(); design.SharedVersion=1;
+            var booking = new Booking { CustomerId="customer", TourId=tourId, BookingCode="BK-CHAT" };
+            var other = new Booking { CustomerId="outsider", TourId=tourId, BookingCode="BK-OTHER" };
+            db.AddRange(booking,other); await db.SaveChangesAsync(); bookingId=booking.Id; otherBookingId=other.Id;
+            db.BookingSupplierRequests.Add(new BookingSupplierRequest { BookingId=bookingId, ServiceId=serviceId, ProviderId="provider", ServiceName="Khách sạn", SlotKey="hotel:1" });
+            await db.SaveChangesAsync();
+        }
+        var (customer,_)=await app.Login("customer"); var (agency,_a)=await app.Login("agency"); var (provider,_p)=await app.Login("provider");
+        using(customer) using(agency) using(provider) {
+            var id=await Create(customer,"agency"); var path=$"/api/v1/chat/conversations/{id}/messages";
+            var key=Guid.NewGuid(); var payload=new {content="",clientMessageId=key,context=new {kind="tour",id=tourId,title="Forged title",price=999999}};
+            var response=await customer.PostAsJsonAsync(path,payload); response.EnsureSuccessStatusCode();
+            var dto=(await response.Content.ReadFromJsonAsync<MessageDto>())!;
+            Assert.Equal("Tour công khai", dto.Context!.Title); Assert.Equal("https://example.test/cover.jpg",dto.Context.ThumbnailUrl);
+            Assert.DoesNotContain("price", (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
+            var repeat=await customer.PostAsJsonAsync(path,payload);repeat.EnsureSuccessStatusCode();Assert.Equal(dto.Id,(await repeat.Content.ReadFromJsonAsync<MessageDto>())!.Id);
+            Assert.Equal(HttpStatusCode.Conflict,(await customer.PostAsJsonAsync(path,new {content="",clientMessageId=key,context=new {kind="booking",id=bookingId}})).StatusCode);
+            foreach(var card in new[] {new ChatContextInput("booking",bookingId),new ChatContextInput("design-request",requestId),new ChatContextInput("tour",privateId,1)}) {
+                var sent=await agency.PostAsJsonAsync(path,new {content="",clientMessageId=Guid.NewGuid(),context=card});sent.EnsureSuccessStatusCode();
+                var saved=(await sent.Content.ReadFromJsonAsync<MessageDto>())!;Assert.Equal(card.Kind,saved.Context!.Kind);
+                if(card.Kind=="tour") Assert.Equal("Bản v1 đang chia sẻ",saved.Context.Title);
+            }
+            foreach(var card in new[] {new ChatContextInput("booking",otherBookingId),new ChatContextInput("tour",privateId,2),new ChatContextInput("service",serviceId)})
+                Assert.Equal(HttpStatusCode.Forbidden,(await agency.PostAsJsonAsync(path,new {content="x",clientMessageId=Guid.NewGuid(),context=card})).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest,(await customer.PostAsJsonAsync(path,new {content="",clientMessageId=Guid.NewGuid(),context=new {kind="unknown",id=tourId}})).StatusCode);
+            var b2b=await Create(provider,"agency");
+            var b2bSend=await agency.PostAsJsonAsync($"/api/v1/chat/conversations/{b2b}/messages",new {content="Trao đổi dịch vụ",clientMessageId=Guid.NewGuid(),context=new {kind="service",id=serviceId}});
+            b2bSend.EnsureSuccessStatusCode(); Assert.Equal("Khách sạn",(await b2bSend.Content.ReadFromJsonAsync<MessageDto>())!.Context!.Title);
+            var history=(await customer.GetFromJsonAsync<MessagePage>(path))!;Assert.Equal(4,history.Items.Count);Assert.All(history.Items,m=>Assert.NotNull(m.Context));
+            var previewUrl=path+$"/{dto.Id}/tour";
+            var publicPreview=await customer.GetAsync(previewUrl);publicPreview.EnsureSuccessStatusCode();
+            Assert.Equal("Tour công khai",(await publicPreview.Content.ReadFromJsonAsync<TripOps.Service.Tours.TourDto>())!.Configuration.Name);
+            var (outsider,_o)=await app.Login("outsider");using(outsider) Assert.Equal(HttpStatusCode.NotFound,(await outsider.GetAsync(previewUrl)).StatusCode);
+            var privateMessage=history.Items.Single(m=>m.Context!.Id==privateId && m.Context.Kind=="tour");
+            var privateUrl=path+$"/{privateMessage.Id}/tour";
+            var privatePreview=await customer.GetAsync(privateUrl);privatePreview.EnsureSuccessStatusCode();
+            Assert.Equal("Bản v1 đang chia sẻ",(await privatePreview.Content.ReadFromJsonAsync<TripOps.Service.Tours.TourDto>())!.Configuration.Name);
+            using(var scope=app.Services.CreateScope()) {
+                var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+                (await db.Tours.SingleAsync(t=>t.Id==privateId)).SharedVersion=2;
+                (await db.Tours.SingleAsync(t=>t.Id==tourId)).Visibility=TourVisibility.Hidden;
+                await db.SaveChangesAsync();
+            }
+            Assert.Equal(HttpStatusCode.Forbidden,(await customer.GetAsync(privateUrl)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync(previewUrl)).StatusCode);
+        }
+    }
     [Fact]
     public async Task Authorization_contacts_validation_idempotency_history_and_read_receipts() {
         await using var app=new App();await app.Seed();using var anonymous=app.CreateClient();
@@ -196,8 +249,9 @@ public sealed class ChatFlowTests
     public async Task Concurrent_creation_returns_one_conversation_and_rejects_reversed_duplicate() {
         await using var app=new App();await app.Seed();var (agency,_)=await app.Login("agency");var (provider,_p)=await app.Login("provider");
         using(agency) using(provider) {
-            var results=await Task.WhenAll(Enumerable.Range(0,8).Select(i=>Create(i%2==0 ? agency:provider,i%2==0 ? "provider":"agency")));
+            var results=await Task.WhenAll(Enumerable.Range(0,8).Select(i=>Create(agency,"provider")));
             Assert.Single(results.Distinct());
+            Assert.Equal(results[0], await Create(provider, "agency"));
             using var scope=app.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             var c=await db.ChatConversations.SingleAsync();
             db.ChatConversations.Add(new ChatConversation {UserOneId=c.UserTwoId,UserTwoId=c.UserOneId});

@@ -463,8 +463,13 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(Configuration(tour)), tour.AgencyId);
+        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(Configuration(tour)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct));
     }
+    private Task<TourAgencyContact?> AgencyContact(string agencyId, CancellationToken ct) => db.Users.AsNoTracking()
+        .Where(u => u.Id == agencyId).Select(u => new TourAgencyContact(u.Id,
+            u.BusinessProfile != null ? u.BusinessProfile.BusinessName ?? u.Name : u.Name,
+            u.BusinessProfile != null ? u.BusinessProfile.LogoUrl ?? u.Avatar : u.Avatar,
+            u.Phone, u.Email)).SingleOrDefaultAsync(ct);
     private static string[]? ParseProvinceFilter(string? provinceCode)
     {
         if (string.IsNullOrWhiteSpace(provinceCode)) return null;

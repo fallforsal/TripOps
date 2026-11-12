@@ -32,7 +32,8 @@ public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, str
     DateTime? RespondedAt, string? ProviderId, string? ProviderName, string? ProviderPhone, string? FullAddress,
     DateTime CreatedAt, string BookingCode, string TourName,
     string AgencyName, string? AgencyPhone, string? AgencyEmail, string? MealType, string? SpecialRequests,
-    string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests, TimeSpan? ServiceTime = null);
+    string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests, TimeSpan? ServiceTime = null,
+    string? AgencyId = null, string? AgencyLogo = null);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note,
     decimal? AvailableQuantity = null, DateTime? HoldUntil = null);
 public sealed record BookingPlanChange(int TourId, HotelChoiceInput[]? HotelChoices = null,
@@ -401,23 +402,31 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 int.TryParse(r.SlotKey.AsSpan(5), out var id) ? id : 0).Where(id => id > 0).Distinct().ToArray();
         var mealTypes = await db.BookingTimelineMeals.AsNoTracking().Where(m => mealIds.Contains(m.Id))
             .ToDictionaryAsync(m => $"meal:{m.Id}", m => m.MealType, ct);
+        var agencyIds = rows.Select(r => BookingAlliance.OwnerOfSlot(r.Booking, r.SlotKey)).Distinct().ToArray();
+        var agencies = await db.Users.AsNoTracking().Where(u => agencyIds.Contains(u.Id)).Select(u => new {
+            u.Id, Name = u.BusinessProfile != null ? u.BusinessProfile.BusinessName ?? u.Name : u.Name,
+            u.Phone, u.Email, Logo = u.BusinessProfile != null ? u.BusinessProfile.LogoUrl ?? u.Avatar : u.Avatar
+        }).ToDictionaryAsync(u => u.Id, ct);
         return rows.Select(r =>
         {
             var v = views[r.Id];
             var b = r.Booking;
+            var agencyId = BookingAlliance.OwnerOfSlot(b, r.SlotKey);
+            var agency = agencies.GetValueOrDefault(agencyId);
             var closed = b.Status is BookingStatus.Cancelled or BookingStatus.Rejected;
             return new ProviderInboxView(v.Id, v.BookingId, v.ServiceId, v.SlotKey, v.ServiceName,
                 v.ServiceDateFrom, v.ServiceDateTo, v.Quantity, v.Unit, v.EstimatedCost, v.QuotedCost,
                 closed ? "Cancelled" : v.Status, v.Note, v.RespondedAt, v.ProviderId, v.ProviderName,
                 v.ProviderPhone, v.FullAddress, r.CreatedAt, b.BookingCode,
-                b.Tour?.Name ?? "Tour", b.Tour?.Agency?.Name ?? "Công ty lữ hành", b.Tour?.Agency?.Phone,
-                b.Tour?.Agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
+                b.Tour?.Name ?? "Tour", agency?.Name ?? "Công ty lữ hành", agency?.Phone,
+                agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
                 closed ? b.CancelReason : r.Status == "Superseded" ? "Agency đã thay dịch vụ cho lịch phục vụ này. Yêu cầu cũ không còn hiệu lực." : null,
                 closed ? b.CancelledAt : null,
                 b.Participants.Where(p => p.Status != "INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(b,r.SlotKey)).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
                         p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null))
-                    .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay);
+                    .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay,
+                AgencyId: agencyId, AgencyLogo: agency?.Logo);
         }).ToArray();
     }
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)

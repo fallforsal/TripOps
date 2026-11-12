@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
@@ -1388,6 +1389,7 @@ export function AgencyBookingDetailPage({
               <h1 className="text-2xl font-bold text-gray-900">
                 Chi tiết Booking #{booking.id}
               </h1>
+                <ChatWithButton userId={booking.userId} context={{kind:"booking",id:Number(booking.id),title:`Booking #${booking.id}`,thumbnailUrl:booking.tour.image}}>Chat với khách</ChatWithButton>
               <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                 {st.label}
               </span>

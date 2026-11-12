@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { confirmAction, requestText } from "@/app/lib/notificationDialogs";
 import { TourDetailPage } from "@/app/components/user/TourDetailPage";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
@@ -177,6 +178,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
                 updatingVersion={updatingVersion?.requestId === request.id ? updatingVersion.version : undefined} onChange={version => void chooseVersion(request,version)}/>
                 : <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs leading-relaxed text-slate-400"><p className="font-medium text-slate-500">Chưa có phương án tour</p><p className="mt-1">{request.status === "pending" ? "Tiếp nhận yêu cầu để bắt đầu thiết kế." : editable ? "Thiết kế mới hoặc dùng một tour có sẵn." : "Yêu cầu đã đóng."}</p></div>}</td>
               <td className="px-4 py-5"><div className="flex flex-wrap items-center gap-2">
+                <ChatWithButton userId={request.userId} context={{kind:"design-request",id:Number(request.id),title:`Yêu cầu thiết kế #${request.id}`,subtitle:request.destinations}}>Chat với khách</ChatWithButton>
                 {tour && <Button size="sm" variant="outline" disabled={busy} onClick={() => void viewVersion(request,selectedVersion)}><Eye className="h-3.5 w-3.5"/>Xem tour</Button>}
                 {request.status === "pending" ? <Button size="sm" disabled={busy} className="bg-sky-800 text-white hover:bg-sky-900" onClick={() => void decide(request,"reviewing")}><CheckCircle2 className="h-4 w-4"/>Tiếp nhận</Button>
                   : editable ? <Button size="sm" variant="outline" disabled={busy} className="border-sky-200 text-sky-800 hover:bg-sky-50" onClick={() => void start(request,tour,selectedVersion)}><Sparkles className="h-3.5 w-3.5"/>{tour ? "Chỉnh sửa" : "Thiết kế"}</Button> : null}

@@ -71,8 +71,9 @@ public sealed record AiDraftRequest([Required, StringLength(255)] string Destina
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
-    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null, int Revision = 1, bool HasDraftChanges = false);
-public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null);
+    DateTime CreatedAt, DateTime UpdatedAt, int? DesignRequestId = null, int? SharedVersion = null, int Revision = 1, bool HasDraftChanges = false, TourAgencyContact? Agency = null);
+public sealed record TourAgencyContact(string Id, string Name, string? LogoUrl, string? Phone, string? Email);
+public sealed record PublicTourDto(int Id, string? Code, int Version, TourConfiguration Configuration, string? AgencyId = null, TourAgencyContact? Agency = null);
 public sealed record TourServiceReference(int Id, string ProviderId, string Category, string Name, decimal Price,
     string? SubCategory = null, string? FullAddress = null, string? OperatingHours = null,
     string? HiddenReason = null, string? ThumbnailUrl = null, string[]? Images = null, int? Capacity = null, bool IsPaused = false);

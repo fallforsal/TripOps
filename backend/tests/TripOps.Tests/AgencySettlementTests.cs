@@ -26,6 +26,7 @@ public sealed partial class BookingFlowTests
             ["PayOsPayout:BaseUrl"] = "https://payout.test",
             // Test tự gọi lượt quét bằng API "run"; không để tác vụ chạy ngầm chạy song song.
             ["Settlement:AutoPayoutEnabled"] = "false",
+            ["Settlement:AutoPayoutDelayDays"] = "2",
             ["Settlement:BankAccountCooldownHours"] = "0",
         }));
         builder.ConfigureServices(services =>

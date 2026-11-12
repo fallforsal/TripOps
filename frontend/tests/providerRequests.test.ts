@@ -7,7 +7,7 @@ const row: ProviderInboxRow = {
   serviceDateFrom: "2026-11-29T00:00:00", serviceDateTo: "2026-11-30T00:00:00",
   quantity: 20, unit: "person_night", estimatedCost: 1000000, quotedCost: null,
   status: "Pending", note: null, createdAt: "2026-11-11T15:11:00", respondedAt: null,
-  bookingCode: "BK1", tourName: "Da Lat", agencyName: "Agency 2", agencyPhone: null,
+  bookingCode: "BK1", tourName: "Da Lat", agencyId: "agency-2", agencyName: "Agency 2", agencyPhone: null,
   agencyEmail: null, mealType: null, specialRequests: null, cancelReason: null, cancelledAt: null,
   guests: Array.from({ length: 20 }, (_, i) => ({ fullName: `Guest ${i}`, gender: null, tierName: null, roommateNote: null, restaurantNote: null })),
 };
@@ -18,6 +18,7 @@ test("hotel stay uses check-in/out dates, independently of guest-night billing q
   assert.equal(request.numberOfGuests, 20);
   assert.equal(request.id, "4");
   assert.equal(request.status, "pending");
+  assert.equal(request.agencyId, "agency-2");
   assert.equal(hotelStayNights({ ...row, serviceDateTo: "2026-12-02T12:00:00", quantity: 60 }), 3);
   assert.equal(hotelStayNights({ ...row, serviceDateFrom: "2026-12-31", serviceDateTo: "2027-01-02" }), 2);
 });

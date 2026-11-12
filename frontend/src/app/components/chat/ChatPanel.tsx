@@ -1,27 +1,39 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Alert, Badge, Button, Drawer, Input, Select, Spin } from 'antd';
-import { ArrowDown, ArrowLeft, Check, CheckCheck, MessageCircle, PencilLine, Search, Send, X } from 'lucide-react';
+import { Alert, Badge, Button, Input, Spin } from 'antd';
+import { ArrowDown, ArrowLeft, Check, CheckCheck, MessageCircle, Minus, Search, Send, X } from 'lucide-react';
 import { HubConnectionState } from '@microsoft/signalr';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
-import { chatApi, type ChatContact, type ChatMessage, type ReadReceipt } from '../../services/chat';
+import { chatApi, type ChatMessage, type ReadReceipt, type ChatBusinessContext } from '../../services/chat';
 import { mergeMessages, chatTime } from '../../lib/chatMessages';
+import { chatContactName, chatRoleLabel, chatContextLabel, chatContextIdentity, chatContactMatches } from '../../lib/chatPresentation';
 import './chat.css';
+import { ChatTourPreview } from './ChatTourPreview';
 const merge = mergeMessages;
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, image }: { name: string; image?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [image]);
   const initials = name.trim().split(/\s+/).slice(-2).map(word => Array.from(word)[0]).join('');
-  return <span className="chat-avatar" aria-hidden="true">{initials.toLocaleUpperCase('vi') || '?'}</span>;
+  return <span className="chat-avatar" aria-hidden="true">{image && !failed ? <img src={image} alt="" onError={() => setFailed(true)} /> : initials.toLocaleUpperCase('vi') || '?'}</span>;
 }
-export function ChatPanel() {
+function BusinessCard({ context, onRemove, onOpen }: { context: ChatBusinessContext; onRemove?: () => void; onOpen?: () => void }) {
+  const details = <>
+    {context.thumbnailUrl && <img src={context.thumbnailUrl} alt="" onError={e => { e.currentTarget.style.display = 'none'; }} />}
+    <div><small>{chatContextLabel(context.kind)}{context.version ? ` · v${context.version}` : ''}</small><strong>{context.title}</strong>{context.subtitle && <span>{context.subtitle}</span>}{onOpen && <small className="chat-card-action">Xem chi tiết tour ↗</small>}</div>
+  </>;
+  return <article className="chat-business-card">
+    {onOpen ? <button type="button" className="chat-card-open" onClick={onOpen} aria-label={`Xem thông tin tour ${context.title}`}>{details}</button> : details}
+    {onRemove && <button type="button" aria-label="Bỏ thông tin đính kèm" onClick={onRemove}><X size={15}/></button>}
+  </article>;
+}
+export function ChatPanel({ active: isActive = true }: { active?: boolean } = {}) {
   const { user } = useAuth();
   const chat = useChat();
   const viewId = useId();
-  useEffect(() => chat.registerView(viewId), [chat.registerView, viewId]);
+  useEffect(() => { if (isActive) return chat.registerView(viewId); }, [chat.registerView, viewId, isActive]);
   const [query, setQuery] = useState('');
-  const [showContacts, setShowContacts] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  const [selected, setSelected] = useState<number | null>(chat.composeRequest?.id ?? null);
+  const previousUser = useRef(user?.id);
   const [rows, setRows] = useState<ChatMessage[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
@@ -29,16 +41,19 @@ export function ChatPanel() {
   const [content, setContent] = useState(''), [error, setError] = useState('');
   const [atBottom, setAtBottom] = useState(true), [visible, setVisible] = useState(document.visibilityState === 'visible' && document.hasFocus());
   const historyVersion = useRef(0);
-  const scroll = useRef<HTMLDivElement>(null), bottom = useRef(true), pending = useRef<{id:number; content:string; key:string} | null>(null);
-  const current = chat.conversations.find(c => c.id === selected);
-  useEffect(() => { let active = true; chatApi.contacts().then(c => {if(active) setContacts(c);}).catch(e => {if(active) setError(e.message);}); return () => {active=false;}; }, [chat.sync, retry]);
+  const scroll = useRef<HTMLDivElement>(null), bottom = useRef(true), pending = useRef<{id:number; content:string; key:string; contextKey:string} | null>(null);
+  const currentContact = chat.conversations.find(c => c.id === selected)?.contact ?? (chat.composeRequest?.id === selected ? chat.composeRequest.contact : undefined);
+  const draftContext = chat.composeRequest?.id === selected ? chat.composeRequest.context : undefined;
+  useEffect(() => {
+    if (chat.composeRequest) { setSelected(chat.composeRequest.id); }
+  }, [chat.composeRequest?.nonce]);
   useEffect(() => {
     const update = () => setVisible(document.visibilityState === 'visible' && document.hasFocus());
     document.addEventListener('visibilitychange',update); window.addEventListener('focus',update); window.addEventListener('blur',update);
     return () => {document.removeEventListener('visibilitychange',update); window.removeEventListener('focus',update); window.removeEventListener('blur',update);};
   }, []);
   useEffect(() => {setContent('');pending.current=null;},[selected]);
-  useEffect(() => {setSelected(null);},[user?.id]);
+  useEffect(() => { if (previousUser.current !== user?.id) { setSelected(null); previousUser.current = user?.id; } }, [user?.id]);
   useEffect(() => {
     let active = true;
     ++historyVersion.current;
@@ -70,27 +85,12 @@ export function ChatPanel() {
   const last = rows.at(-1)?.id;
   const unreadVisible = rows.some(m => m.senderId !== user?.id && !m.readAt);
   useEffect(() => {
-    if (!selected || !last || !visible || !atBottom || !unreadVisible || loading || chat.activeView !== viewId) return;
+    if (!isActive || !selected || !last || !visible || !atBottom || !unreadVisible || loading || chat.activeView !== viewId) return;
     let active = true;
     chatApi.read(selected,last).then(receipt => { if(active) setRows(old => old.map(m => m.senderId !== user?.id && m.id <= receipt.throughMessageId ? {...m,readAt:receipt.readAt} : m)); void chat.refresh(); })
       .catch(e => {if(active) setError(e.message);});
     return () => {active=false;};
-  }, [selected,last,visible,atBottom,unreadVisible,loading,chat.activeView,viewId]);
-  async function create(id: string) {
-    setCreating(true);
-    setError('');
-    try {
-      const conversation = await chatApi.create(id);
-      await chat.refresh();
-      setSelected(conversation.id);
-      setShowContacts(false);
-      setQuery('');
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setCreating(false);
-    }
-  }
+  }, [selected,last,visible,atBottom,unreadVisible,loading,chat.activeView,viewId,isActive]);
   async function older() {
     if(!selected || !cursor || loading) return;
     setLoading(true);const height=scroll.current?.scrollHeight ?? 0, top=scroll.current?.scrollTop ?? 0; const id=selected, version=historyVersion.current;
@@ -98,18 +98,18 @@ export function ChatPanel() {
     catch(e) {if(version === historyVersion.current) setError((e as Error).message);} finally {if(version === historyVersion.current) setLoading(false);}
   }
   async function send() {
-    if(!selected || !content.trim() || sending) return;
-    const text=content.trim();
-    const attempt=pending.current?.id===selected && pending.current.content===text ? pending.current : {id:selected,content:text,key:crypto.randomUUID()};
+    if(!selected || (!content.trim() && !draftContext) || sending) return;
+    const text=content.trim(); const contextKey=chatContextIdentity(draftContext);
+    const attempt=pending.current?.id===selected && pending.current.content===text && pending.current.contextKey===contextKey ? pending.current : {id:selected,content:text,key:crypto.randomUUID(),contextKey};
     pending.current=attempt; setSending(true);setError('');
-    try {const message=await chatApi.send(attempt.id,text,attempt.key);setRows(old => merge(old,[message]));setContent('');pending.current=null;bottom.current=true;setAtBottom(true);await chat.refresh();}
+    try {const message=await chatApi.send(attempt.id,text,attempt.key,draftContext);setRows(old => merge(old,[message]));setContent('');chat.dismissContext();pending.current=null;bottom.current=true;setAtBottom(true);await chat.refresh();}
     catch(e) {setError(`${(e as Error).message} Bấm Gửi để thử lại với cùng mã tin nhắn.`);} finally {setSending(false);}
   }
   if (!user) return null;
 
   const search = query.trim().toLocaleLowerCase('vi');
   const conversations = chat.conversations.filter(conversation =>
-    conversation.contact.name.toLocaleLowerCase('vi').includes(search));
+    conversation.lastMessage && chatContactMatches(conversation.contact, search));
   const problem = error || chat.error;
   const retryButton = (
     <Button size="small" onClick={() => { void chat.refresh(); setRetry(value => value + 1); }}>
@@ -123,14 +123,7 @@ export function ChatPanel() {
         <div className="chat-sidebar-top">
           <div className="chat-sidebar-heading">
             <h2>Tin nhắn</h2>
-            <Button
-              className="chat-compose-button"
-              icon={showContacts ? <X size={16} /> : <PencilLine size={16} />}
-              aria-label={showContacts ? 'Đóng chọn liên hệ' : 'Tin nhắn mới'}
-              aria-expanded={showContacts}
-              title="Tin nhắn mới"
-              onClick={() => setShowContacts(open => !open)}
-            />
+
           </div>
           <span className="chat-connection" role="status" data-connected={chat.status === 'Đã kết nối'}>
             <span aria-hidden="true" />
@@ -139,26 +132,12 @@ export function ChatPanel() {
           <Input
             className="chat-search"
             prefix={<Search size={16} />}
-            placeholder="Tìm theo tên"
+            placeholder="Tìm cuộc trò chuyện…"
             aria-label="Tìm hội thoại theo tên"
             allowClear
             value={query}
             onChange={event => setQuery(event.target.value)}
           />
-          {showContacts && (
-            <Select<string>
-              className="chat-contact-picker"
-              aria-label="Chọn người nhận"
-              placeholder="Chọn người nhận"
-              showSearch
-              optionFilterProp="label"
-              disabled={creating || sending}
-              loading={creating}
-              options={contacts.map(contact => ({ value: contact.id, label: contact.name }))}
-              onChange={id => { if (id) void create(id); }}
-              notFoundContent="Không tìm thấy người nhận"
-            />
-          )}
           {problem && selected === null && <Alert type="error" showIcon message={problem} action={retryButton} />}
         </div>
         <div className="chat-conversations">
@@ -168,13 +147,13 @@ export function ChatPanel() {
               className="chat-conversation"
               aria-current={conversation.id === selected ? 'true' : undefined}
               key={conversation.id}
-              disabled={sending || creating}
+              disabled={sending}
               onClick={() => setSelected(conversation.id)}
             >
-              <Avatar name={conversation.contact.name} />
+              <Avatar name={chatContactName(conversation.contact)} image={conversation.contact.avatar} />
               <span className="chat-conversation-detail">
-                <strong>{conversation.contact.name}</strong>
-                <span>{conversation.lastMessage?.content || 'Chưa có tin nhắn'}</span>
+                <strong>{chatContactName(conversation.contact)}</strong><small className="chat-contact-role">{chatRoleLabel(conversation.contact.role)}</small>
+                <span>{conversation.lastMessage?.content || conversation.lastMessage?.context?.title || 'Chưa có tin nhắn'}</span>
                 {conversation.lastMessage && <small>{chatTime(conversation.lastMessage.createdAt)}</small>}
               </span>
               {conversation.unreadCount > 0 && <Badge count={conversation.unreadCount} color="#087c73" />}
@@ -183,9 +162,7 @@ export function ChatPanel() {
           {!conversations.length && (
             <div className="chat-list-empty">
               {search ? 'Không tìm thấy hội thoại.' : 'Chưa có cuộc trò chuyện.'}
-              {!search && !showContacts && (
-                <button type="button" onClick={() => setShowContacts(true)}>Chọn người nhận</button>
-              )}
+              {!search && <p>Mở tour hoặc bài dịch vụ và bấm Tin nhắn để bắt đầu.</p>}
             </div>
           )}
         </div>
@@ -196,7 +173,7 @@ export function ChatPanel() {
           <div className="chat-empty">
             <span className="chat-empty-icon"><MessageCircle size={34} strokeWidth={1.5} /></span>
             <h3>Chọn một cuộc trò chuyện</h3>
-            <p>Chọn hội thoại bên trái hoặc gửi tin nhắn mới.</p>
+            <p>Chọn hội thoại bên trái để tiếp tục trao đổi.</p>
           </div>
         ) : (
           <>
@@ -209,8 +186,8 @@ export function ChatPanel() {
                 disabled={sending}
                 onClick={() => setSelected(null)}
               />
-              <Avatar name={current?.contact.name || '?'} />
-              <h3>{current?.contact.name || 'Cuộc trò chuyện'}</h3>
+              <Avatar name={currentContact ? chatContactName(currentContact) : '?'} image={currentContact?.avatar}/>
+              <div><h3>{currentContact ? chatContactName(currentContact) : 'Cuộc trò chuyện'}</h3><small>{chatRoleLabel(currentContact?.role)}</small></div>
             </div>
             {problem && <Alert className="chat-thread-alert" type="error" showIcon message={problem} action={retryButton} />}
             <div className="chat-thread-body">
@@ -231,7 +208,7 @@ export function ChatPanel() {
                   const mine = message.senderId === user.id;
                   return (
                     <div key={message.id} className={`chat-message ${mine ? 'mine' : ''}`}>
-                      <div className="chat-bubble">{message.content}</div>
+                      <div className="chat-bubble">{message.context && <BusinessCard context={message.context} onOpen={message.context.kind === 'tour' ? () => { chat.setTourPreview({conversationId:message.conversationId,messageId:message.id}); chat.setPanelOpen(false); } : undefined}/>} {message.content && <span>{message.content}</span>}</div>
                       <small className="chat-message-meta">
                         {chatTime(message.createdAt)}
                         {mine && (
@@ -259,6 +236,7 @@ export function ChatPanel() {
                 </Button>
               )}
             </div>
+            {draftContext && <div className="chat-context-draft"><BusinessCard context={draftContext} onRemove={chat.dismissContext}/><small>Thông tin này sẽ được gửi cùng tin nhắn.</small></div>}
             <form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
               <Input.TextArea
                 aria-label="Nội dung tin nhắn"
@@ -275,7 +253,7 @@ export function ChatPanel() {
                   }
                 }}
               />
-              <Button type="primary" htmlType="submit" icon={<Send size={16} />} loading={sending} disabled={!content.trim()}>Gửi</Button>
+              <Button type="primary" htmlType="submit" icon={<Send size={16} />} loading={sending} disabled={!content.trim() && !draftContext}>Gửi</Button>
             </form>
           </>
         )}
@@ -304,18 +282,15 @@ export function ChatWidget() {
   if (!user) return null;
   return (
     <>
-      <div className="chat-launcher"><ChatButton /></div>
-      <Drawer
-        className="chat-drawer"
-        title="Hộp thư"
-        open={chat.panelOpen}
-        onClose={() => chat.setPanelOpen(false)}
-        width="min(880px, 100vw)"
-        styles={{ body: { padding: 0, overflow: 'hidden' } }}
-        destroyOnHidden
-      >
-        {chat.panelOpen && <ChatPanel />}
-      </Drawer>
+      {!chat.panelOpen && <div className="chat-launcher"><ChatButton /></div>}
+      <section hidden={!chat.panelOpen} className="chat-floating-window" role="region" aria-label="Cửa sổ tin nhắn">
+        <header className="chat-floating-header"><div><MessageCircle size={18}/><strong>Tin nhắn</strong></div><div>
+          <button type="button" onClick={() => chat.setPanelOpen(false)} aria-label="Thu gọn tin nhắn" title="Thu gọn"><Minus size={19}/></button>
+          <button type="button" onClick={() => chat.setPanelOpen(false)} aria-label="Đóng tin nhắn" title="Đóng"><X size={18}/></button>
+        </div></header>
+        <ChatPanel active={chat.panelOpen} />
+      </section>
+      {chat.tourPreview && <ChatTourPreview reference={chat.tourPreview} onClose={() => { chat.setTourPreview(null); chat.setPanelOpen(true); }} />}
     </>
   );
 }

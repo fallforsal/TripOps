@@ -851,7 +851,8 @@ Table complaints {
       sender_id varchar(36) [not null, note: 'FK tới users.id - Người gửi']
 
       content text [not null, note: 'Nội dung tin nhắn']
-      content_type varchar(20) [not null, default: 'text', note: 'text, image, file']
+      content_type varchar(20) [not null, default: 'text', note: 'text, context, image, file']
+      context_data nvarchar(max) [note: 'Server-validated tour/service/booking/design-request card JSON']
 
       // Trạng thái đã xem tin nhắn (Dành cho chat 1-1)
       is_read boolean [default: false, note: 'true khi đối phương đã mở xem tin nhắn']

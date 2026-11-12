@@ -2,11 +2,16 @@ import { ConfigProvider } from 'antd';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from '@microsoft/signalr';
 import { useAuth } from './AuthContext';
-import { chatApi, type Conversation } from '../services/chat';
+import { chatApi, type Conversation, type ChatBusinessContext, type ChatContact } from '../services/chat';
 interface State {
   panelOpen: boolean; setPanelOpen: (open: boolean) => void; conversations: Conversation[]; error: string; status: string; sync: number;
   connection: HubConnection | null;
   refresh: () => Promise<void>; activeView: string | undefined; registerView: (id: string) => () => void;
+  composeRequest: { id: number; contact: ChatContact; context?: ChatBusinessContext; nonce: number } | null;
+  tourPreview: {conversationId: number; messageId: number} | null;
+  setTourPreview: (reference: {conversationId: number; messageId: number} | null) => void;
+  openChat: (userId: string, context?: ChatBusinessContext) => Promise<void>;
+  dismissContext: () => void;
 }
 const ChatContext = createContext<State | null>(null);
 export function ChatProvider({children}: {children: ReactNode}) {
@@ -18,13 +23,30 @@ export function ChatProvider({children}: {children: ReactNode}) {
   const [sync, setSync] = useState(0);
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const [views, setViews] = useState<string[]>([]);
+  const [composeRequest, setComposeRequest] = useState<State['composeRequest']>(null);
+  const [tourPreview, setTourPreview] = useState<State['tourPreview']>(null);
+  const dismissContext = useCallback(() => setComposeRequest(old => old ? { ...old, context: undefined } : old), []);
+  const actorRef = useRef(user?.id);
+  const composeSequence = useRef(0);
+  actorRef.current = user?.id;
+  const openChat = useCallback(async (userId: string, context?: ChatBusinessContext) => {
+    const actor = actorRef.current;
+    if (!actor) throw new Error('Vui lòng đăng nhập để nhắn tin.');
+    if (!userId || userId === actor) throw new Error('Hãy chọn người nhận khác.');
+    const result = await chatApi.create(userId);
+    if (actorRef.current !== actor) return;
+    await refreshRef.current();
+    if (actorRef.current !== actor) return;
+    setComposeRequest({ id: result.id, contact: result.contact, context, nonce: ++composeSequence.current });
+    setPanelOpen(true);
+  }, []);
   const registerView = useCallback((id: string) => {
     setViews(old => [...old.filter(v => v !== id), id]);
     return () => setViews(old => old.filter(v => v !== id));
   }, []);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
-    setPanelOpen(false); setConversations([]); setError('');
+    setPanelOpen(false); setConversations([]); setError(''); setComposeRequest(null); setTourPreview(null);
     if (!user) return;
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined, sequence = 0;
     const hub = new HubConnectionBuilder()
@@ -50,6 +72,6 @@ export function ChatProvider({children}: {children: ReactNode}) {
     setConnection(hub); void refresh(); void start();
     return () => { disposed = true; clearTimeout(timer); refreshRef.current = async () => {}; hub.off('ConversationUpdated'); void hub.stop(); setConnection(null); };
   }, [user?.id]);
-  return <ConfigProvider theme={{token:{colorPrimary:'#087c73',borderRadius:8,fontFamily:'inherit'}}}><ChatContext.Provider value={{panelOpen,setPanelOpen,conversations,error,status,sync,connection,activeView:views.at(-1),registerView,refresh: () => refreshRef.current()}}>{children}</ChatContext.Provider></ConfigProvider>;
+  return <ConfigProvider theme={{token:{colorPrimary:'#075985',borderRadius:8,fontFamily:'inherit'}}}><ChatContext.Provider value={{panelOpen,setPanelOpen,conversations,error,status,sync,connection,activeView:views.at(-1),registerView,composeRequest,openChat,dismissContext,tourPreview,setTourPreview,refresh: () => refreshRef.current()}}>{children}</ChatContext.Provider></ConfigProvider>;
 }
 export function useChat() { const value = useContext(ChatContext); if (!value) throw new Error('ChatProvider required'); return value; }

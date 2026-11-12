@@ -135,7 +135,8 @@ public sealed partial class TourService
         var snapshot = JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData, Json)!;
         return new TourDto(tour.Id, tour.AgencyId, tour.Code, "completed", "hidden", true, tour.IsAiGenerated == true,
             version.VersionNumber, DesignRequestService.CustomerConfiguration(snapshot.Configuration), tour.CreatedAt ?? DateTime.UnixEpoch,
-            version.SharedAt ?? version.CreatedAt ?? DateTime.UnixEpoch, requestId, tour.SharedVersion, tour.Revision);
+            version.SharedAt ?? version.CreatedAt ?? DateTime.UnixEpoch, requestId, tour.SharedVersion, tour.Revision,
+            Agency: await AgencyContact(tour.AgencyId, ct));
     }
     public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct)
     {

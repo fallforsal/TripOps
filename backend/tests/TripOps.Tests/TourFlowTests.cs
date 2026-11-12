@@ -285,6 +285,9 @@ public sealed partial class TourFlowTests
         Assert.Equal("completed", tour.Status); Assert.Equal("public", tour.Visibility);
         var queue = await admin.GetFromJsonAsync<TourPage<TourListItem>>("/api/v1/admin/tours"); Assert.Equal(1, queue!.Total);
         var published = await publicClient.GetFromJsonAsync<PublicTourDto>($"/api/v1/tours/{tour.Id}"); Assert.Equal(tour.Id, published!.Id);
+        Assert.Equal("agency", published.Agency!.Id);
+        Assert.Equal("agency", published.Agency.Name);
+        Assert.Equal("agency@example.test", published.Agency.Email);
         var publicBody = await (await publicClient.GetAsync($"/api/v1/tours/{tour.Id}")).Content.ReadAsStringAsync();
         Assert.DoesNotContain("reviewedBy", publicBody); Assert.DoesNotContain("rejectionReason", publicBody);
         Assert.Equal(HttpStatusCode.Conflict, (await agency.DeleteAsync($"{Root}/{tour.Id}?revision={tour.Revision}")).StatusCode);

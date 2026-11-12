@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { ServiceOptionCard } from "@/app/components/service/ServiceOptionCard";
 import { serviceThumbnail } from "@/app/lib/servicePresentation";
@@ -55,7 +56,7 @@ import {
   DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
-import { mockUsers, mockTourCompanies } from "@/app/data/mockData";
+import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { getProvinceName } from "@/app/data/vietnamProvinces";
 import { mealAddress } from "@/app/lib/tourServiceAddress";
@@ -2639,39 +2640,37 @@ export function TourDetailPage({
               )}
 
               {tour.companyName && (() => {
-                const matchedCompany = mockTourCompanies.find(
-                  (c) => c.id === tour.companyId || c.name.toLowerCase() === tour.companyName?.toLowerCase()
-                );
-                const companyPhone = tour.companyPhone || matchedCompany?.phone || "1900 1234";
-                const companyEmail = tour.companyEmail || matchedCompany?.email || "info@viettravel.com.vn";
+                const companyPhone = tour.companyPhone;
+                const companyEmail = tour.companyEmail;
 
                 return (
                   <div className="border-t border-gray-100 pt-4 space-y-2.5">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Liên hệ công ty</p>
 
                     <div className="flex items-center gap-2 text-sm text-gray-800">
-                      <Building2 className="w-4 h-4 text-[#075985] flex-shrink-0" />
+                      {tour.companyLogo ? <img src={tour.companyLogo} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <Building2 className="w-5 h-5 text-[#075985] flex-shrink-0" />}
                       <span className="font-semibold">{tour.companyName}</span>
                     </div>
 
                     <div className="space-y-1 text-xs text-gray-600 pl-0.5">
-                      <div className="flex items-center gap-2">
+                      {companyPhone && <div className="flex items-center gap-2">
                         <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>SĐT: <strong className="text-gray-900 font-medium">{companyPhone}</strong></span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                      </div>}
+                      {companyEmail && <div className="flex items-center gap-2">
                         <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <span>Email: <strong className="text-gray-900 font-medium">{companyEmail}</strong></span>
-                      </div>
+                      </div>}
                     </div>
 
-                    <a
+                    {companyPhone && <a
                       href={`tel:${companyPhone.replace(/\s+/g, "")}`}
                       className="w-full flex items-center justify-center gap-2 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Phone className="w-4 h-4 text-emerald-600" />
-                      Gọi tư vấn miễn phí
-                    </a>
+                      Gọi tư vấn
+                    </a>}
+                    <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{kind:"tour",id:Number(tour.id),version:tour.is_request?tour.version:undefined,title:tour.name,thumbnailUrl:tour.image}} className="w-full">Tin nhắn</ChatWithButton>
                   </div>
                 );
               })()}
