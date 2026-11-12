@@ -1,5 +1,5 @@
 .tripops-chat {
-  --chat-accent: #087c73;
+  --chat-accent: #075985;
   --chat-muted: #526477;
   --chat-line: #dce7ea;
   display: grid;
@@ -15,15 +15,6 @@
   box-shadow: 0 12px 32px #1234490c;
 }
 
-.chat-drawer .tripops-chat {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
 .chat-sidebar, .chat-thread {
   display: flex;
   flex-direction: column;
@@ -35,13 +26,23 @@
 .chat-sidebar-top { padding: 20px 18px 12px; }
 .chat-sidebar-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .chat-sidebar-heading h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.035em; }
-.chat-compose-button.ant-btn { background: #e9f7f4; color: #07685f; border-color: transparent; }
 .chat-connection { display: flex; gap: 7px; align-items: center; margin: 7px 0 16px; font-size: 12px; color: var(--chat-muted); }
 .chat-connection > span { width: 7px; height: 7px; border-radius: 50%; background: #bd761b; }
 .chat-connection[data-connected="true"] > span { background: var(--chat-accent); }
 .chat-search.ant-input-affix-wrapper { min-height: 40px; background: #f5f8fa; border-color: var(--chat-line); }
 .chat-search .ant-input-prefix { color: var(--chat-muted); margin-right: 8px; }
-.chat-contact-picker { width: 100%; margin-top: 10px; }
+.chat-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.chat-contact-role, .chat-thread-header small { font-size: 11px; color: var(--chat-muted); }
+.chat-business-card { display: flex; gap: 10px; align-items: flex-start; max-width: 360px; padding: 11px; border: 1px solid #bfdbed; border-radius: 9px; background: white; color: #142b3b; margin-bottom: 6px; }
+.chat-business-card > img { width: 58px; height: 52px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.chat-business-card > div { display: grid; min-width: 0; gap: 4px; }
+.chat-business-card strong { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-business-card small { color: #075985; font-size: 11px; }
+.chat-business-card span { font-size: 11px; color: var(--chat-muted); overflow-wrap: anywhere; }
+.chat-business-card > button { margin-left: auto; padding: 4px; border: 0; background: transparent; cursor: pointer; color: var(--chat-muted); }
+.chat-context-draft { padding: 10px 16px; background: #f0f9ff; border-top: 1px solid var(--chat-line); }
+.chat-context-draft .chat-business-card { max-width: none; }
+.chat-context-draft > small { font-size: 11px; color: var(--chat-muted); }
 .chat-sidebar-top .ant-alert { margin-top: 12px; }
 
 .chat-conversations { overflow-y: auto; padding: 0 10px 12px; overscroll-behavior: contain; }
@@ -142,3 +143,44 @@
   .chat-composer { padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
   .chat-launcher { bottom: 16px; right: 16px; }
 }
+
+/* Compact inbox stays beside the page, without an overlay. */
+.chat-floating-window[hidden] { display: none; }
+.chat-floating-window { position: fixed; right: 20px; bottom: 0; width: min(720px, calc(100vw - 32px)); height: min(580px, calc(100dvh - 100px)); z-index: 1100; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dce7ea; border-bottom: 0; border-radius: 12px 12px 0 0; background: white; box-shadow: 0 6px 36px #142b3b30; }
+.chat-floating-header { display: flex; flex: 0 0 46px; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-bottom: 1px solid #dce7ea; color: #075985; }
+.chat-floating-header > div { display: flex; align-items: center; gap: 8px; }
+.chat-floating-header strong { font-size: 15px; }
+.chat-floating-header button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #526477; cursor: pointer; }
+.chat-floating-header button:hover { background: #f0f9ff; color: #075985; }
+.chat-floating-header button:focus-visible { outline: 2px solid #075985; }
+.chat-floating-window .tripops-chat { flex: 1; min-height: 0; width: 100%; height: auto; margin: 0; border: 0; border-radius: 0; box-shadow: none; grid-template-columns: 230px minmax(0, 1fr); }
+.chat-floating-window .chat-sidebar-top { padding: 12px 12px 10px; }
+.chat-floating-window .chat-sidebar-heading h2 { font-size: 15px; letter-spacing: 0; }
+.chat-floating-window .chat-search.ant-input-affix-wrapper { min-height: 34px; }
+.chat-floating-window .chat-connection { margin: 5px 0 10px; font-size: 11px; }
+.chat-floating-window .chat-conversation-detail strong { font-size: 13px; }
+.chat-floating-window .chat-conversation-detail > span { font-size: 12px; }
+.chat-floating-window .chat-thread-header { padding: 10px 12px; }
+.chat-floating-window .chat-thread-header h3 { font-size: 14px; }
+.chat-floating-window .chat-history { padding: 14px 12px; }
+.chat-floating-window .chat-bubble { max-width: 94%; font-size: 13px; }
+.chat-floating-window .chat-composer { padding: 10px; }
+.chat-floating-window .chat-context-draft { padding: 8px 10px; max-height: 146px; overflow-y: auto; }
+.chat-floating-window .chat-empty { padding: 18px; }
+.chat-floating-window .chat-empty h3 { font-size: 16px; }
+.chat-floating-window .chat-empty p { font-size: 13px; }
+.chat-list-empty p { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
+.chat-launcher .ant-btn { height: 42px; padding: 0 18px; border-radius: 10px 10px 0 0; box-shadow: 0 2px 16px #142b3b20; }
+@media (max-width: 640px) {
+  .chat-floating-window { right: 8px; bottom: 0; width: calc(100vw - 16px); height: min(620px, calc(100dvh - 72px)); }
+  .chat-floating-window .tripops-chat { grid-template-columns: minmax(0, 1fr); }
+  .chat-launcher { right: 12px; bottom: 0; }
+}
+
+.chat-business-card > button.chat-card-open { display: flex; gap: 10px; align-items: flex-start; width: 100%; margin: 0; padding: 0; border-radius: 5px; color: inherit; text-align: left; }
+.chat-card-open > img { width: 58px; height: 52px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.chat-card-open > div { display: grid; min-width: 0; gap: 4px; }
+.chat-card-open:hover strong { color: #075985; text-decoration: underline; }
+.chat-card-open:focus-visible { outline: 2px solid #075985; outline-offset: 5px; }
+.chat-card-open .chat-card-action { margin-top: 3px; font-weight: 600; color: #075985; }
+.chat-tour-preview .chat-floating-window { display: none; }

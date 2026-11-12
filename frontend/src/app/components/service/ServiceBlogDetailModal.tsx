@@ -1,4 +1,6 @@
 import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
+import { useAuth } from "@/app/contexts/AuthContext";
 import React, { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -49,6 +51,7 @@ export function ServiceBlogDetailModal({
   hidePrice = false,
   embedded = false,
 }: ServiceBlogDetailModalProps) {
+  const { user } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"blog" | "map" | "policies">("blog");
 
@@ -246,6 +249,7 @@ export function ServiceBlogDetailModal({
                   <p className="text-sm font-bold text-gray-900">{service.providerName || "Tổ hợp Dịch vụ Du lịch Heritage"}</p>
                 </div>
               </div>
+              {user?.role === "agency" && <ChatWithButton userId={service.providerId} context={{kind:"service", id:Number(service.id), title:service.name, thumbnailUrl:service.thumbnailUrl}}>Tin nhắn</ChatWithButton>}
               <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-100/70 px-3 py-1.5 rounded-lg border border-amber-200">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <span>Hợp đồng đối tác B2B &amp; Đảm bảo chất lượng</span>

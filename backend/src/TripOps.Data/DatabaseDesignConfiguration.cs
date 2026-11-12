@@ -609,6 +609,7 @@ internal static class DatabaseDesignConfiguration
         });
         modelBuilder.Entity<ChatMessage>(entity =>
         {
+            entity.Property(e => e.ContextData).HasColumnName("context_data").HasColumnType("nvarchar(max)");
             entity.ToTable("chat_messages");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.DesignRequestId).HasColumnName("design_request_id");

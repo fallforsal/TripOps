@@ -16,7 +16,7 @@ export type ProviderInboxRow = {
   serviceDateFrom: string | null; serviceDateTo: string | null; quantity: number; unit: string;
   estimatedCost: number; quotedCost: number | null; status: string; note: string | null;
   createdAt: string; respondedAt: string | null; bookingCode: string; tourName: string;
-  agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
+  agencyId: string; agencyLogo?: string | null; agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
   specialRequests: string | null; cancelReason: string | null; cancelledAt: string | null;
   serviceTime?: string | null;
   guests: Array<{ age?: number | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
@@ -43,7 +43,8 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
     serviceId: String(r.serviceId),
     serviceName: r.serviceName,
     providerId,
-    agencyId: "",
+    agencyId: r.agencyId || "",
+    agencyLogo: r.agencyLogo || undefined,
     agencyName: r.agencyName || "Công ty lữ hành",
     agencyContactName: r.agencyName || "Công ty lữ hành",
     agencyPhone: r.agencyPhone || "",

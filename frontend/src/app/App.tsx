@@ -615,6 +615,7 @@ function Application() {
               latest.code,
               latest.version,
               latest.configuration,
+              { agencyId: latest.agencyId, agency: latest.agency },
             ),
           ),
         )

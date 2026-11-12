@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { confirmAction } from "@/app/lib/notificationDialogs";
 import { TourAccommodationSummary } from "@/app/components/common/TourAccommodationSummary";
@@ -68,7 +69,7 @@ export function MyRequestsPage({ requests: initialRequests, onCancelRequest, onN
     finally { setBusy(false); }
   };
   if (selected) return <div className="mx-auto max-w-5xl space-y-5 pb-12">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><Button variant="ghost" onClick={() => setSelectedId(null)}>Quay lại danh sách</Button><h1 className="mt-2 text-xl font-bold text-[#075985]">Yêu cầu thiết kế #{selected.id}</h1><p className="mt-1 text-sm text-slate-500">Agency: {selected.targetCompanyName}</p></div><StatusBadge type="custom_request" status={selected.status}/></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5"><div><Button variant="ghost" onClick={() => setSelectedId(null)}>Quay lại danh sách</Button><h1 className="mt-2 text-xl font-bold text-[#075985]">Yêu cầu thiết kế #{selected.id}</h1><p className="mt-1 text-sm text-slate-500">Agency: {selected.targetCompanyName}</p></div><div className="flex flex-wrap items-center gap-2"><ChatWithButton userId={selected.targetCompanyId} context={{kind:"design-request",id:Number(selected.id),title:`Yêu cầu thiết kế #${selected.id}`,subtitle:selected.destinations}}>Chat với Agency</ChatWithButton><StatusBadge type="custom_request" status={selected.status}/></div></div>
     <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold">{selected.destinations}</h2><Button size="sm" variant="outline" onClick={() => setViewing(true)}>Xem hồ sơ yêu cầu</Button></div>
       <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm text-slate-600"><span>{date(selected.departureDate)} – {date(selected.returnDate)}</span><span>{selected.numberOfPeople} khách</span><span>Ngân sách: {selected.budgetPerPerson ? money(Number(selected.budgetPerPerson)) + " / khách" : "Thỏa thuận"}</span></div>
       {selected.additionalInfo && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{selected.additionalInfo}</p>}
@@ -99,7 +100,7 @@ export function MyRequestsPage({ requests: initialRequests, onCancelRequest, onN
           <p className="mt-3 text-sm text-slate-600">{request.numberOfPeople} khách · {date(request.departureDate)} – {date(request.returnDate)}</p>
           {request.closeReason && <p className="mt-3 text-sm text-amber-800">Lý do đóng: {request.closeReason}</p>}
           {request.rejectionReason && <p className="mt-3 text-sm text-rose-700">Lý do từ chối: {request.rejectionReason}</p>}
-          <div className="mt-3 flex justify-end"><Button variant="outline" onClick={()=>setSelectedId(request.id)}><Eye className="h-4 w-4"/>Xem phương án & trao đổi</Button></div>
+          <div className="mt-3 flex flex-wrap justify-end gap-2"><ChatWithButton userId={request.targetCompanyId} context={{kind:"design-request",id:Number(request.id),title:`Yêu cầu thiết kế #${request.id}`,subtitle:request.destinations}}>Chat với Agency</ChatWithButton><Button variant="outline" onClick={()=>setSelectedId(request.id)}><Eye className="h-4 w-4"/>Xem phương án & trao đổi</Button></div>
         </div>
       </section>)}
     </div>

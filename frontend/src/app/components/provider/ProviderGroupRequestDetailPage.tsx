@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import {
   ArrowLeft,
   Calendar,
@@ -322,6 +323,9 @@ export function ProviderGroupRequestDetailPage({
                 <a href={`mailto:${request.agencyEmail}`} className="hover:text-sky-700 font-medium truncate">
                   {request.agencyEmail}
                 </a>
+              </div>
+              <div className="pt-3">
+                <ChatWithButton userId={request.agencyId} context={request.bookingId ? {kind:"booking", id:Number(request.bookingId), title:`Booking ${request.bookingCode}`} : undefined} className="w-full justify-center">Tin nhắn</ChatWithButton>
               </div>
             </div>
           </div>

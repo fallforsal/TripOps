@@ -34,10 +34,35 @@ public sealed partial class TourFlowTests
             await db.SaveChangesAsync();
         });
         var inbox=await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        Assert.All(inbox, request => Assert.Equal("agency", request.AgencyId));
         var meal=Assert.Single(inbox,r=>r.SlotKey.StartsWith("meal:"));
         Assert.Equal(new TimeSpan(18,45,0),meal.ServiceTime);
         Assert.Equal(new int?[]{30,7},meal.Guests.Select(guest=>guest.Age));
         Assert.Null(Assert.Single(inbox,r=>r.SlotKey.StartsWith("hotel:")).ServiceTime);
+    }
+
+    [Fact]
+    public async Task Provider_inbox_identifies_the_service_owner_and_can_start_chat_with_that_partner()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var customer = await app.Login("customer"); using var agency = await app.Login("agency"); using var provider = await app.Login("provider");
+        var booking = await PublishedBookingWithProviderServices(customer, agency);
+        await app.Inspect(async db => {
+            db.BookingAgencies.Add(new TripOps.Data.Entities.BookingAgency { BookingId=booking.Id, AgencyId="other", IsHost=false });
+            (await db.BookingAccommodations.SingleAsync(h => h.BookingId==booking.Id)).AgencyId="other";
+            var partner = await db.Users.Include(u=>u.BusinessProfile).SingleAsync(u=>u.Id=="other");
+            partner.BusinessProfile!.BusinessName="Agency đối tác";
+            await db.SaveChangesAsync();
+        });
+        var inbox = await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        var hotel = Assert.Single(inbox, r=>r.SlotKey.StartsWith("hotel:"));
+        Assert.Equal("other",hotel.AgencyId); Assert.Equal("Agency đối tác",hotel.AgencyName);
+        Assert.Equal("other@example.test",hotel.AgencyEmail);
+        Assert.Equal("agency",Assert.Single(inbox,r=>r.SlotKey.StartsWith("meal:")).AgencyId);
+        var chat = await provider.PostAsJsonAsync("/api/v1/chat/conversations",new {userId=hotel.AgencyId});
+        chat.EnsureSuccessStatusCode();
+        var conversation = (await chat.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("contact");
+        Assert.Equal("other",conversation.GetProperty("id").GetString());
     }
 
     [Fact]
