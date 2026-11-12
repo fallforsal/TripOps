@@ -15,18 +15,10 @@ namespace TripOps.Api.Controllers;
 public sealed record PassengerEdit(int Id, [Required, StringLength(150)] string FullName, DateTime? DateOfBirth,
     string? Gender, string? IdentityNumber, string? Note, string? RoommateNote, string? RestaurantNote);
 public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
+// The Guide confirms arrival. Skipping cannot advance the itinerary.
 public sealed record LocationCheckin(
     [Required, AllowedValues("CheckedIn")] string Status,
-    [StringLength(500)] string? Note,
-    [Range(-90.0, 90.0)] double? Latitude = null,
-    [Range(-180.0, 180.0)] double? Longitude = null,
-    [Range(0.0, 100.0)] double? AccuracyMeters = null,
-    DateTime? RecordedAtUtc = null);
-public sealed record BookingStopGeofence(
-    [Range(1, int.MaxValue)] int LocationId,
-    [Range(-90.0, 90.0)] double Latitude,
-    [Range(-180.0, 180.0)] double Longitude,
-    [Range(200, 20000)] int RadiusMeters);
+    [StringLength(500)] string? Note);
 
 [ApiController, Authorize, Route("api/v1/bookings/{id:int}")]
 [Tags("Booking Management")]
@@ -41,12 +33,14 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
         var b = await db.Bookings.Include(x => x.Tour).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
         if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Bạn không có quyền sửa hành khách.");
         if (b.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.InProgress) throw new BookingException(409, "Booking không còn cho phép sửa hành khách.");
-        if (request.Participants.Select(p => p.Id).Distinct().Count() != request.Participants.Length || request.Participants.Length != b.Participants.Count) throw new BookingException(422, "Thêm/bớt khách cần chốt lại giá với Agency; thao tác này chỉ sửa hồ sơ hiện có.");
+        if (request.Participants.Length==0 || request.Participants.Select(p => p.Id).Distinct().Count() != request.Participants.Length) throw new BookingException(422, "Chỉ sửa thông tin hành khách đã có.");
         foreach (var input in request.Participants)
         {
             var p = b.Participants.SingleOrDefault(p => p.Id == input.Id) ?? throw new BookingException(422, "Passenger does not belong to booking.");
             if (input.DateOfBirth?.Date != p.DateOfBirth?.Date) throw new BookingException(422, "Đổi ngày sinh cần Agency kiểm tra lại phân khúc giá.");
-            p.FullName = input.FullName.Trim(); p.Gender = input.Gender; p.IdentityNumber = input.IdentityNumber; p.Note = input.Note; p.RoommateNote = input.RoommateNote; p.RestaurantNote = input.RestaurantNote;
+            foreach(var copy in b.Participants.Where(row=>row.ParticipantIndex==p.ParticipantIndex)) {
+                copy.FullName = input.FullName.Trim(); copy.Gender = input.Gender; copy.IdentityNumber = input.IdentityNumber; copy.Note = input.Note; copy.RoommateNote = input.RoommateNote; copy.RestaurantNote = input.RestaurantNote;
+            }
         }
         await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct));
     }
@@ -56,36 +50,19 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RemoveGuide(int id, string guideId, CancellationToken ct)
     {
-        var b = await db.Bookings.Include(x => x.Tour).Include(x => x.AssignedGuides).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
-        if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Agency does not own this booking.");
+        var b = await db.Bookings.Include(x => x.Tour).Include(x=>x.BookingAgencies).Include(x => x.AssignedGuides).Include(x => x.Participants).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new BookingException(404, "Booking not found.");
+        if (!BookingAlliance.IsMember(b,Actor)) throw new BookingException(403, "Agency không thuộc booking.");
         if (b.Status is BookingStatus.InProgress or BookingStatus.Completed) throw new BookingException(409, "Cannot remove a guide after departure.");
         var assignment = b.AssignedGuides.SingleOrDefault(g => g.GuideId == guideId) ?? throw new BookingException(404, "Assignment not found.");
+        if(assignment.AgencyId!=Actor)throw new BookingException(403,"Chỉ được gỡ HDV của công ty mình.");
+        var routes=await db.BookingAttractionCheckins.Where(c=>c.BookingTimelineAttraction.BookingTimeline.BookingId==id && c.GuideId==guideId).ToListAsync(ct);
+        if(routes.Any(c=>c.AttendanceStatus!=AttractionCheckinStatus.Pending))throw new BookingException(409,"HDV đã check-in, không thể gỡ phân công.");
+        db.BookingAttractionCheckins.RemoveRange(routes);
+        foreach(var location in await db.BookingTimelineAttractions.Include(a=>a.Checkins).Where(a=>a.BookingTimeline.BookingId==id && a.GuideId==guideId).ToListAsync(ct)) {
+            location.GuideId=null;
+        }
         foreach (var p in b.Participants.Where(p => p.AssignedGuideId == guideId)) p.AssignedGuideId = null;
         await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
-        return Ok(await bookings.Get(Actor, id, ct));
-    }
-    [HttpPut("locations/{locationId:int}/geofence"), Authorize(Roles = "agency")]
-    [EndpointSummary("Configure stop geofence before guide check-in")]
-    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ConfigureGeofence(int id, int locationId,
-        BookingStopGeofence request, CancellationToken ct)
-    {
-        if (request.LocationId != locationId)
-            throw new BookingException(422, "Location ID does not match route.");
-        var b = await db.Bookings.Include(x => x.Tour).SingleOrDefaultAsync(x => x.Id == id, ct)
-            ?? throw new BookingException(404, "Booking not found.");
-        if (b.Tour?.AgencyId != Actor) throw new BookingException(403, "Only the managing Agency can configure stop GPS.");
-        if (b.Status is BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.Rejected)
-            throw new BookingException(409, "Booking is closed.");
-        var stop = await db.BookingTimelineAttractions
-            .SingleOrDefaultAsync(x => x.Id == locationId && x.BookingTimeline.BookingId == id, ct)
-            ?? throw new BookingException(404, "Booking stop not found.");
-        if (stop.AttendanceStatus == "CheckedIn")
-            throw new BookingException(409, "A completed stop cannot be moved.");
-        stop.Latitude = request.Latitude;
-        stop.Longitude = request.Longitude;
-        stop.GeofenceRadiusMeters = request.RadiusMeters;
-        await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
 }
@@ -102,87 +79,72 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     [HttpPost("complete")]
     [EndpointSummary("Complete an assigned tour already in progress")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Complete(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status != BookingStatus.InProgress) throw new BookingException(409, "Booking must be in progress."); b.Status = BookingStatus.Completed; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
-    private static double DistanceMeters(double aLat, double aLon, double bLat, double bLon)
+    public async Task<IActionResult> Complete(int id, [FromServices] TripOps.Service.Settlements.AgencySettlementService settlements, CancellationToken ct)
     {
-        const double earth = 6371000.0;
-        static double Radians(double d) => d * Math.PI / 180.0;
-        var dLat = Radians(bLat - aLat);
-        var dLon = Radians(bLon - aLon);
-        var hav = Math.Pow(Math.Sin(dLat / 2), 2) +
-            Math.Cos(Radians(aLat)) * Math.Cos(Radians(bLat)) * Math.Pow(Math.Sin(dLon / 2), 2);
-        return earth * 2 * Math.Asin(Math.Min(1.0, Math.Sqrt(hav)));
+        var b = await Assigned(id, ct);
+        if (b.Status != BookingStatus.InProgress) throw new BookingException(409, "Booking must be in progress.");
+        var agencies = await db.BookingAgencies.CountAsync(a => a.BookingId == id, ct);
+        if (agencies > 1)
+        {
+            if (b.AssignedGuides.Single(g => g.GuideId == Actor).AgencyId != b.Tour!.AgencyId)
+                throw new BookingException(403, "Chỉ HDV của Agency chủ trì được hoàn thành toàn bộ tour liên minh.");
+            var lastDay = await db.BookingTimelines.Where(t => t.BookingId == id)
+                .Select(t => (int?)t.DayNumber).MaxAsync(ct) ?? 1;
+            if (b.StartDate.Date.AddDays(Math.Max(0, lastDay - 1)) > TripOps.Service.Payments.PaymentRules.VietnamDate(DateTime.UtcNow))
+                throw new BookingException(409, "Tour liên minh chưa đến ngày kết thúc để quyết toán.");
+        }
+        b.Status = BookingStatus.Completed;
+        // Mốc quyết toán: chốt phí sàn và hẹn ngày tự chuyển tiền cho Agency (mặc định sau 2 ngày).
+        await settlements.MarkTourCompleted(b, ct);
+        await db.SaveChangesAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
     }
-
     [HttpPost("locations/{locationId:int}/check-in")]
-    [EndpointSummary("GPS-validated ordered guide check-in, from Vietnam departure date onwards")]
+    [EndpointSummary("Check in next itinerary stop on or after the departure date, without GPS")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct)
     {
+        // Sequential calls must not race to skip their predecessors.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var b = await Assigned(id, ct);
-        if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress))
-            throw new BookingException(409, "Booking is not active.");
-        var now = DateTime.UtcNow;
-        if (PaymentRules.VietnamDate(now) < b.StartDate.Date)
-            throw new BookingException(409, "Chưa đến ngày khởi hành, không thể check-in.");
+        var booking = await Assigned(id, ct);
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+            throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
         if (request.Status != "CheckedIn")
-            throw new BookingException(422, "Chỉ hỗ trợ xác nhận đã đến địa điểm; không thể bỏ qua thứ tự.");
+            throw new BookingException(422, "Chỉ được xác nhận đã đến địa điểm.");
 
-        var stops = await db.BookingTimelineAttractions.Include(x => x.BookingTimeline)
-            .Where(x => x.BookingTimeline.BookingId == id).ToListAsync(ct);
-        var ordered = stops.OrderBy(x => x.BookingTimeline.DayNumber)
-            .ThenBy(x => x.VisitOrder > 0 ? x.VisitOrder : int.MaxValue)
-            .ThenBy(x => x.Id).ToList();
-        var location = ordered.SingleOrDefault(x => x.Id == locationId)
+        // Read the complete itinerary rather than only the requested stop.
+        // A guide from another Agency may not check in another Agency's stage.
+        var days = await db.BookingTimelines.Include(d => d.Attractions)
+            .Where(d => d.BookingId == id).ToListAsync(ct);
+        var ordered = GuideLocationCheckinRules.OrderedStops(days);
+        var location = ordered.SingleOrDefault(a => a.Id == locationId)
             ?? throw new BookingException(404, "Booking location not found.");
+        var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
+        if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
+            throw new BookingException(403, "HDV chỉ check-in điểm thuộc chặng công ty mình.");
         if (location.AttendanceStatus == "CheckedIn")
-            throw new BookingException(409, "Điểm dừng này đã được check-in.");
-        var next = ordered.FirstOrDefault(x => x.AttendanceStatus != "CheckedIn");
-        if (next?.Id != locationId)
-            throw new BookingException(409, "Phải check-in điểm đến trước đó theo thứ tự lịch trình.");
+            throw new BookingException(409, "Điểm đến này đã check-in.");
 
-        if (!location.Latitude.HasValue || !location.Longitude.HasValue ||
-            !double.IsFinite(location.Latitude.Value) || !double.IsFinite(location.Longitude.Value) ||
-            location.Latitude.Value is < -90 or > 90 ||
-            location.Longitude.Value is < -180 or > 180)
-            throw new BookingException(409, "Agency chưa cấu hình tọa độ GPS hợp lệ cho điểm đến.");
-        if (!request.Latitude.HasValue || !request.Longitude.HasValue ||
-            !request.AccuracyMeters.HasValue || !request.RecordedAtUtc.HasValue)
-            throw new BookingException(422, "Cần vị trí GPS hiện tại và độ chính xác.");
-        if (!double.IsFinite(request.Latitude.Value) || !double.IsFinite(request.Longitude.Value) ||
-            !double.IsFinite(request.AccuracyMeters.Value) ||
-            request.Latitude.Value is < -90 or > 90 || request.Longitude.Value is < -180 or > 180 ||
-            request.AccuracyMeters.Value is < 0 or > 100)
-            throw new BookingException(422, "Tọa độ hoặc độ chính xác GPS không hợp lệ.");
-        var recordedAt = request.RecordedAtUtc.Value.ToUniversalTime();
-        if (now - recordedAt > TimeSpan.FromMinutes(3) || recordedAt - now > TimeSpan.FromSeconds(30))
-            throw new BookingException(422, "Vị trí GPS đã cũ, hãy cập nhật GPS mới.");
-        var distance = DistanceMeters(request.Latitude.Value, request.Longitude.Value,
-            location.Latitude.Value, location.Longitude.Value);
-        var radius = location.GeofenceRadiusMeters;
-        if (radius is < 200 or > 20000 || distance + request.AccuracyMeters.Value > radius)
-            throw new BookingException(409, "Bạn chưa ở trong phạm vi GPS của điểm đến.");
+        var nextId = GuideLocationCheckinRules.NextUncheckedStopId(days);
+        if (nextId != locationId)
+            throw new BookingException(409, "Phải check-in lần lượt: điểm trước đó chưa hoàn thành.");
 
-        var check = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
+        // No GPS, coordinates, location permission, or device-location payload.
+        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
             x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
-        if (check is null)
+        if (checkin is null)
         {
-            check = new BookingAttractionCheckin
+            checkin = new BookingAttractionCheckin
             {
                 BookingTimelineAttractionId = locationId,
                 GuideId = Actor,
-                AgencyId = b.AssignedGuides.Single(x => x.GuideId == Actor).AgencyId
+                AgencyId = agencyId
             };
-            db.BookingAttractionCheckins.Add(check);
+            db.BookingAttractionCheckins.Add(checkin);
         }
-        check.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
-        check.CheckinTime = now;
-        check.GpsLatitude = request.Latitude;
-        check.GpsLongitude = request.Longitude;
-        check.GpsAccuracyMeters = request.AccuracyMeters;
-        check.GpsRecordedAtUtc = recordedAt;
-        check.Note = request.Note;
+        checkin.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
+        checkin.CheckinTime = DateTime.UtcNow;
+        checkin.Note = request.Note;
         location.GuideId = Actor;
         location.AttendanceStatus = "CheckedIn";
         await db.SaveChangesAsync(ct);

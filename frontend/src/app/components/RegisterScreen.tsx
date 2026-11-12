@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { register } from "@/app/services/authService";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -599,16 +600,7 @@ export function RegisterScreen({
             </div>
 
             {/* Error Message */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-medium flex items-center gap-2"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
-                {error}
-              </motion.div>
-            )}
+            {error && <NotificationMessage message={error} /> }
 
             {/* Tùy chọn 2: Form 4 trường cơ bản */}
             <form onSubmit={handleSubmit} className="space-y-4">

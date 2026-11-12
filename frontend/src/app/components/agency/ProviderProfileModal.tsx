@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import React, { useState } from "react";
 import { User, Service } from "@/app/types";
 import {
@@ -322,6 +323,7 @@ export function ProviderProfileModal({
             <ExternalLink className="w-3.5 h-3.5" />
             Mở xem hồ sơ ở tab mới
           </Button>
+            <ChatWithButton userId={provider.id}>Chat với Provider</ChatWithButton>
 
           <Button
             onClick={onClose}

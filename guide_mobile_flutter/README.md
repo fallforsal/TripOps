@@ -150,15 +150,16 @@ The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / th
 **Verification:** `flutter analyze`, `flutter test`, and Android debug build run on GitHub Actions. Check final CI status before merging. Use an Android emulator to evaluate accessibility, small-screen wrapping, keyboard input, and operational flows against a working TripOps backend.
 
 
-## Attendance: departure day only
+## Attendance: departure or assigned stage day
 
 The backend now enforces that **passenger attendance can be changed only when the
-booking's `startDate` equals today's **Vietnam-local calendar date (UTC+7)**,
+booking's `startDate` (single Agency), or the Agency's first assigned stage day
+(alliance booking), equals today's **Vietnam-local calendar date (UTC+7)**,
 using the existing backend `PaymentRules.VietnamDate` helper. Earlier or later requests return
 HTTP 409 and do not change attendance, `checkedBy` or `checkedAt`.
 
 `GET /api/v1/guide/bookings/{id}` now includes the backward-compatible
-`canRecordAttendance` boolean. The app uses this server-authoritative value
+`canRecordAttendance` boolean and optional `attendanceDate`. The app uses this server-authoritative value
 to disable "Có mặt", "Vắng mặt" and "Đặt lại: Chưa rõ" outside departure day
 and shows an explanation with the scheduled date. HDVs can still view prior
 attendance statuses. Older backend versions omit this field, so the app
@@ -192,73 +193,38 @@ From this point on, development changes to the Guide Flutter app are committed
 to the persistent `hiep` branch, based on `develop`. Pull `hiep` to run
 new changes before merging them to `develop`.
 
+## Check-in địa điểm theo scope mới (nhánh `hiep`)
 
-## Ordered geofenced tour stop check-in (hiep)
+Đã đối chiếu nhánh `develop` mới nhất và giữ nghiệp vụ tour liên minh/Agency theo code team.
 
-A Tour Guide can now check in a stop **only on or after the tour's departure date**
-(using Vietnam time UTC+7), and **only after every earlier stop has been
-successfully CheckedIn**. The sequence covers all itinerary days, ordered by
-day and visit order. The "Skipped" action is removed: skipping cannot unlock
-later destinations. The backend also denies duplicate check-ins.
+- HDV chỉ check-in khi **ngày Việt Nam đã tới hoặc qua ngày khởi hành**, booking còn hoạt động.
+- **Check-in đúng thứ tự** theo ngày lịch trình, giờ thăm quan (nếu có), rồi ID điểm để ổn định khi dữ liệu legacy không có thứ tự tường minh.
+- Điểm trước chưa CheckedIn thì điểm sau bị khóa. Không hỗ trợ bỏ qua; điểm đã check-in không thể check-in lại.
+- Không dùng GPS, kinh/vĩ độ, bán kính hay quyền Location. Không phải chạy migration geofence.
+- Backend là nơi kiểm tra thật, Flutter chỉ biểu diễn trạng thái và gửi `{status:"CheckedIn",note?}`.
+- Không làm thay đổi việc điểm danh hành khách, nghiệp vụ Booking Alliance và phân quyền check-in chặng của Agency.
 
-The managing Agency configures a geofence around each specific stop:
-`latitude`, `longitude` and `radiusMeters` (200–20,000 m, default 1,500 m).
-For example, configure the **actual tour location in Vũng Tàu**, not merely
-the city name, and choose an appropriate radius for that stop. The mobile app
-will request foreground location permission, then obtain a **fresh high-accuracy
-GPS position** when the HDV presses "Xác nhận check-in GPS". The backend accepts
-it only if (distance from authoritative destination center + GPS accuracy)
-is inside the configured radius, accuracy is at most 100 m, and the position
-timestamp is within three minutes (with at most 30 seconds clock skew).
+### Seed tour khởi hành hôm nay
 
-The guide booking detail API includes `canCheckInLocations`,
-`nextLocationCheckInId`, and each stop's `latitude`, `longitude`,
-`geofenceRadiusMeters` and `visitOrder`. The Flutter UI disables all
-out-of-sequence/too-early/unconfigured stops, but **backend verification is
-authoritative**.
+Seed kiểm thử được giữ lại, nhưng **đã bỏ toàn bộ dữ liệu GPS**. Để seed ngày hiện hành theo Việt Nam, ở môi trường Development:
 
-### Required database and Agency setup
-
-Run the new EF migration `20261110150000_AddGuideLocationGeofencing`
-against the same database used by the running API, then restart backend.
-Newly created tours may include optional activity GPS fields in the tour
-configuration. Those coordinates are copied into each new booking itinerary.
-
-**Existing tours/bookings have no historical coordinates** and are intentionally
-locked until the managing Agency configures each booked stop:
-
-```http
-PUT /api/v1/bookings/{bookingId}/locations/{locationId}/geofence
-Content-Type: application/json
-Cookie: TripOps.Session=... (Agency session only)
-
-{
-  "locationId": 123,
-  "latitude": 10.345,
-  "longitude": 107.08,
-  "radiusMeters": 1500
-}
+```powershell
+git switch hiep
+git pull --ff-only origin hiep
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:SeedGuideGpsDemo = "true"
+dotnet run --project backend/src/TripOps.Api
+Remove-Item Env:SeedGuideGpsDemo
+Remove-Item Env:ASPNETCORE_ENVIRONMENT
 ```
 
-Use surveyed or trusted map coordinates for the *specific stop*. Example
-coordinates above are placeholders only; do not assign them to a real tour
-without verification. The endpoint requires an authenticated owner-Agency
-account, rejects location ID mismatch, closed bookings and completed stops.
+Tên cờ `SeedGuideGpsDemo` được giữ để tương thích lệnh cũ, **không sử dụng GPS**.
 
-### Device and privacy notes
+- HDV demo: `guide-gps-demo@tripops.test`
+- Mật khẩu chỉ khi tài khoản mới tạo: `DemoGps#2026!`
+- Booking: `GPS-TEST-YYYYMMDD` (giữ mã cũ để chạy lại không nhân bản)
+- Tour có 3 điểm **A → B → C**, 4 hành khách; không yêu cầu Emulator Location.
 
-- Android: `ACCESS_COARSE_LOCATION` and `ACCESS_FINE_LOCATION` are declared
-  in the main AndroidManifest; the app requests location permission **only
-  when performing check-in**. iOS support would require an
-  `NSLocationWhenInUseUsageDescription` in its Info.plist.
-- `geolocator` retrieves a new position for each attempt; no background
-  location tracking is enabled.
-- GPS accuracy and reported position are stored as evidence in
-  `booking_attraction_checkins` (no continuous location history).
-- Mobile GPS, device clocks and JSON requests **can be spoofed**. The server
-  validates reported coordinates against a server-owned geofence but cannot
-  cryptographically prove a human's physical presence. Higher-assurance use
-  needs device integrity attestation and anti-mock-location protections.
-- Stop status changes require a valid API session and permission; app controls
-  alone do not grant permission. If a GPS location is unavailable, too far,
-  stale, or inaccurate, **no check-in is recorded**.
+Script chỉ seed và thoát; khởi động lại backend bình thường sau đó. Chạy lại trong cùng ngày không reset check-in, nên muốn thử lại từ đầu hãy dùng database test mới.
+
+Nếu đã chạy migration GPS ở nhánh `hiep` cũ, các cột thừa không ảnh hưởng check-in; cần quản lý/rollback lịch sử migration theo kế hoạch DB riêng, **không tự xóa cột trên database đang dùng chung**.

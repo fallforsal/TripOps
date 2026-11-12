@@ -1,3 +1,5 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState, useMemo, useEffect } from "react";
 import { Booking, GuideSchedule, Tour, User } from "@/app/types";
 import {
@@ -30,7 +32,7 @@ import {
   RotateCcw,
   KeyRound,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { changeAgencyGuidePassword, listAgencyGuides, getAgencyGuide, createAgencyGuide,
   updateAgencyGuide, changeGuideAccountStatus, deleteAgencyGuide } from "@/app/services/agencyGuides";
 import { Button } from "@/app/components/ui/button";
@@ -998,7 +1000,7 @@ export function AgencyGuideManagement({
             noValidate
             className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
           >
-            {formError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{formError}</p>}
+            {formError && <NotificationMessage tone="error" message={formError} />}
             {/* NHÓM 1: THÔNG TIN CÁ NHÂN & TÀI KHOẢN ĐĂNG NHẬP */}
             <div className="bg-slate-50/70 p-5 rounded-xl border border-slate-200/80 space-y-4">
               <div className="flex items-center justify-between">
@@ -2109,11 +2111,11 @@ export function AgencyGuideManagement({
       {/* ==================================================================== */}
       {/* MODAL 4: XÁC NHẬN XÓA HỒ SƠ (CHẶN XÓA CỨNG KHI ĐÃ CÓ LỊCH SỬ TOUR)    */}
       {/* ==================================================================== */}
-      <Dialog
+      <AlertDialog
         open={!!deleteTargetGuide}
         onOpenChange={(open) => !open && setDeleteTargetGuide(null)}
       >
-        <DialogContent className="max-w-md bg-white rounded-2xl border border-[#CBD5E1]">
+        <AlertDialogContent aria-describedby={undefined} tone={deleteTargetGuide && getGuideAssignments(deleteTargetGuide.id).length ? "warning" : "error"} className="max-w-md bg-white rounded-2xl border border-[#CBD5E1]">
           {deleteTargetGuide &&
             (() => {
               const assignments = getGuideAssignments(deleteTargetGuide.id);
@@ -2121,8 +2123,8 @@ export function AgencyGuideManagement({
 
               return (
                 <>
-                  <DialogHeader>
-                    <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                       <AlertCircle
                         className={`w-5 h-5 ${
                           hasTourHistory ? "text-amber-600" : "text-rose-600"
@@ -2131,8 +2133,8 @@ export function AgencyGuideManagement({
                       {hasTourHistory
                         ? "Không thể xóa cứng Hướng dẫn viên đã có lịch sử tour"
                         : "Xác nhận xóa hồ sơ Hướng dẫn viên"}
-                    </DialogTitle>
-                  </DialogHeader>
+                    </AlertDialogTitle>
+                  </AlertDialogHeader>
 
                   {hasTourHistory ? (
                     <div className="space-y-3 text-xs text-slate-600 mt-1">
@@ -2149,16 +2151,16 @@ export function AgencyGuideManagement({
                         ứng dụng và ngừng phân công tour mới.
                       </p>
                       <div className="flex justify-end gap-2 pt-2">
-                        <Button
+                        <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                           variant="outline"
                           size="sm"
                           onClick={() => setDeleteTargetGuide(null)}
                         >
                           Đóng
-                        </Button>
+                        </Button></AlertDialogCancel>
                         {deleteTargetGuide.mobileAccountStatus !==
                           "suspended" && (
-                          <Button
+                          <Button data-slot="alert-dialog-action"
                             size="sm"
                             className="bg-[#075985] hover:bg-[#F97316] text-white"
                             onClick={() => {
@@ -2182,14 +2184,14 @@ export function AgencyGuideManagement({
                         sách của {companyName}?
                       </p>
                       <div className="flex justify-end gap-2 pt-2">
-                        <Button
+                        <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                           variant="outline"
                           size="sm"
                           onClick={() => setDeleteTargetGuide(null)}
                         >
                           Hủy
-                        </Button>
-                        <Button
+                        </Button></AlertDialogCancel>
+                        <Button data-slot="alert-dialog-action"
                           size="sm"
                           className="bg-rose-600 hover:bg-rose-700 text-white"
                           disabled={isSaving}
@@ -2203,8 +2205,8 @@ export function AgencyGuideManagement({
                 </>
               );
             })()}
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ==================================================================== */}
       {/* MODAL ĐỔI MẬT KHẨU HDV */}

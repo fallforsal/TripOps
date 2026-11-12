@@ -12,14 +12,13 @@ class _FakeGuides implements GuideRepository {
 BookingDetail _detail({
   required bool dateAllowed,
   int? nextId = 1,
-  bool firstHasCoordinates = true,
 }) => BookingDetail(
   id: 123,
   code: 'BK-123',
   name: 'Tour Vũng Tàu',
   status: 'Confirmed',
-  startDate: DateTime(2026, 11, 10),
-  endDate: DateTime(2026, 11, 12),
+  startDate: DateTime(2026, 11, 12),
+  endDate: DateTime(2026, 11, 14),
   totalGuests: 1,
   passengers: const [],
   incidents: const [],
@@ -27,19 +26,17 @@ BookingDetail _detail({
   nextLocationCheckInId: nextId,
   days: [
     TourDay(dayNumber: 1, title: 'Ngày 1', stops: [
-      TourStop(
-        id: 1, name: 'Điểm 1', status: 'Pending',
-        latitude: firstHasCoordinates ? 10.34 : null,
-        longitude: firstHasCoordinates ? 107.08 : null,
-      ),
-      const TourStop(id: 2, name: 'Điểm 2', status: 'Pending',
-        latitude: 10.35, longitude: 107.09),
+      const TourStop(id: 1, name: 'Điểm A', status: 'Pending'),
+      const TourStop(id: 2, name: 'Điểm B', status: 'Pending'),
+    ]),
+    TourDay(dayNumber: 2, title: 'Ngày 2', stops: [
+      const TourStop(id: 3, name: 'Điểm C', status: 'Pending'),
     ]),
   ],
 );
 
 Future<void> showScreen(WidgetTester tester, BookingDetail detail) async {
-  tester.view.physicalSize = const Size(430, 1400);
+  tester.view.physicalSize = const Size(430, 1700);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -51,31 +48,60 @@ Future<void> showScreen(WidgetTester tester, BookingDetail detail) async {
 }
 
 void main() {
-  testWidgets('before departure, all GPS check-in buttons are disabled', (tester) async {
+  testWidgets('before departure all check-in actions are disabled', (tester) async {
     await showScreen(tester, _detail(dateAllowed: false));
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
     expect(find.textContaining('Chưa đến ngày khởi hành'), findsWidgets);
   });
 
-  testWidgets('only the next stop may be checked in', (tester) async {
-    await showScreen(tester, _detail(dateAllowed: true, nextId: 1));
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-1'))).onPressed, isNotNull);
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
-    expect(find.text('Cần check-in điểm trước đó'), findsOneWidget);
+  testWidgets('on departure date only first itinerary stop is enabled',
+      (tester) async {
+    await showScreen(tester, _detail(dateAllowed: true));
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-1'))).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
+    expect(find.text('Cần check-in điểm trước đó'), findsWidgets);
+    expect(find.textContaining('GPS'), findsOneWidget);
+    expect(find.textContaining('Phạm vi GPS'), findsNothing);
+    expect(find.text('Bỏ qua'), findsNothing);
   });
 
-  testWidgets('missing Agency geofence blocks otherwise eligible stop', (tester) async {
-    await showScreen(tester, _detail(
-      dateAllowed: true, nextId: 1, firstHasCoordinates: false,
-    ));
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
-    expect(find.text('Agency chưa cấu hình GPS điểm này'), findsOneWidget);
-  });
-
-  testWidgets('when server advances sequence, next stop is enabled', (tester) async {
+  testWidgets('server advancement unlocks the next stop even without GPS',
+      (tester) async {
     await showScreen(tester, _detail(dateAllowed: true, nextId: 2));
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('checkin-2'))).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-2'))).onPressed, isNotNull);
+  });
+
+  testWidgets('later-day stop unlocks only when earlier stops completed',
+      (tester) async {
+    await showScreen(tester, _detail(dateAllowed: true, nextId: 3));
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-3'))).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
+  });
+
+  testWidgets('older backend without permission flag disables check-in',
+      (tester) async {
+    final dto = BookingDetail.fromJson({
+      'id': 123, 'bookingCode': 'BK-123',
+      'tourName': 'Tour Demo', 'status': 'Confirmed',
+      'startDate': '2026-11-12', 'endDate': '2026-11-13',
+      'snapshotDays': [
+        {'dayNumber': 1, 'title': 'Ngày 1', 'locations': [
+          {'id': 1, 'name': 'Điểm A', 'attendanceStatus': 'Pending'}
+        ]}
+      ]
+    });
+    await showScreen(tester, dto);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
   });
 }

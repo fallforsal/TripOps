@@ -62,29 +62,16 @@ class Passenger {
 }
 
 class TourStop {
-  const TourStop({
-    required this.id, required this.name, required this.status,
-    this.time, this.latitude, this.longitude,
-    this.geofenceRadiusMeters = 1500, this.visitOrder = 0,
-  });
+  const TourStop({required this.id, required this.name, required this.status, this.time});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
-  final double? latitude;
-  final double? longitude;
-  final int geofenceRadiusMeters;
-  final int visitOrder;
-  bool get hasGpsReference => latitude != null && longitude != null;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
-    latitude: (j['latitude'] as num?)?.toDouble(),
-    longitude: (j['longitude'] as num?)?.toDouble(),
-    geofenceRadiusMeters: (j['geofenceRadiusMeters'] as num?)?.toInt() ?? 1500,
-    visitOrder: (j['visitOrder'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -120,6 +107,7 @@ class BookingDetail {
     required this.passengers, required this.days, required this.incidents,
     this.customerName, this.contactPhone, this.agencyName,
     this.canRecordAttendance = false,
+    this.attendanceDate,
     this.canCheckInLocations = false,
     this.nextLocationCheckInId,
   });
@@ -136,8 +124,10 @@ class BookingDetail {
   final String? customerName;
   final String? contactPhone;
   final String? agencyName;
-  /// Backend-enforced rule: attendance is possible only on departure date (UTC).
+  /// Backend-enforced departure/stage date in Vietnam.
   final bool canRecordAttendance;
+  final DateTime? attendanceDate;
+  /// Backend-enforced departure date and itinerary state.
   final bool canCheckInLocations;
   final int? nextLocationCheckInId;
 
@@ -153,6 +143,7 @@ class BookingDetail {
     contactPhone: j['contactPhone']?.toString(),
     agencyName: j['agencyName']?.toString(),
     canRecordAttendance: j['canRecordAttendance'] == true,
+    attendanceDate: j['attendanceDate'] == null ? null : parseCalendarDate(j['attendanceDate']),
     canCheckInLocations: j['canCheckInLocations'] == true,
     nextLocationCheckInId: (j['nextLocationCheckInId'] as num?)?.toInt(),
     passengers: (j['participants'] as List<dynamic>? ?? [])

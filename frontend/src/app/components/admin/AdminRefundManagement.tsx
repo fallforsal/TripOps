@@ -73,6 +73,7 @@ const BANK_CODE_MAP: Record<string, string> = {
 };
 
 const REASON_LABELS: Record<RefundReasonType, { label: string; color: string }> = {
+  PRICE_REDUCTION: {label:"Hoàn do giảm giá (tour tiếp tục)",color:"bg-emerald-50 text-emerald-800 border-emerald-200"},
   CUSTOMER_REQUEST: { label: "Khách đổi kế hoạch", color: "bg-blue-50 text-blue-700 border-blue-200" },
   WEATHER_FORCE_MAJEURE: { label: "Thời tiết / Bất khả kháng", color: "bg-amber-50 text-amber-700 border-amber-200" },
   SERVICE_QUALITY: { label: "Chất lượng dịch vụ", color: "bg-purple-50 text-purple-700 border-purple-200" },
@@ -253,7 +254,7 @@ export function AdminRefundManagement({
             <span>Quản lý & Xử lý Yêu cầu Hoàn tiền</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Thẩm định yêu cầu hủy tour từ khách hàng, đối chiếu chính sách hoàn tiền và thực hiện chuyển khoản giải ngân.
+            Xử lý hoàn tiền do hủy tour hoặc giảm giá đã được chủ trì duyệt; đối chiếu số tiền và tài khoản nhận hoàn.
           </p>
         </div>
 
@@ -664,6 +665,8 @@ export function AdminRefundManagement({
                             <Button
                               type="button"
                               variant="outline"
+                              disabled={item.reason==="PRICE_REDUCTION"}
+                              title={item.reason==="PRICE_REDUCTION"?"Khoản giảm đã được chủ trì duyệt; cần xử lý hoàn đúng số tiền.":"Từ chối"}
                               onClick={() => {
                                 setRejectingRefund(item);
                                 setRejectReason("");
@@ -774,7 +777,7 @@ export function AdminRefundManagement({
                       </div>
 
                       <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 text-slate-600 leading-relaxed text-[11px]">
-                        <strong>Căn cứ điều khoản hoàn hủy:</strong> Yêu cầu gửi lúc{" "}
+                        <strong>{selectedRefund.reason==="PRICE_REDUCTION"?"Khoản giảm đã được duyệt:":"Căn cứ điều khoản hoàn hủy:"}</strong> Yêu cầu gửi lúc{" "}
                         {new Date(selectedRefund.createdAt).toLocaleDateString("vi-VN")}. Tỷ lệ khấu trừ được tự động tính
                         toán theo thời gian cách ngày khởi hành ({selectedRefund.refundPercentage}% hoàn trả).
                       </div>
@@ -785,7 +788,7 @@ export function AdminRefundManagement({
                       <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
                         <AlertTriangle className="w-4 h-4 text-[#075985]" />
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          2. Lý do hủy tour từ khách hàng
+                          2. Nội dung yêu cầu hoàn tiền
                         </h3>
                       </div>
 
@@ -1027,7 +1030,7 @@ export function AdminRefundManagement({
                 <strong>{formatVND(approvingRefund?.refundFee || 0)}</strong>
                 {approvingRefund?.feePercent !== undefined ? ` (${approvingRefund.feePercent}%)` : ""}
               </p>
-              <p>Duyệt xong đơn sẽ chuyển sang "Đã hủy". Chuyển khoản trước rồi nhập mã giao dịch bên dưới.</p>
+              <p>{approvingRefund?.reason==="PRICE_REDUCTION"?"Đây là hoàn tiền do giảm giá. Tour tiếp tục hoạt động, không chuyển sang Đã hủy. Hoàn đúng số tiền đã được chủ trì duyệt.":"Duyệt xong đơn sẽ chuyển sang Đã hủy. Chuyển khoản trước rồi nhập mã giao dịch bên dưới."}</p>
             </div>
 
             <div className="space-y-1.5">

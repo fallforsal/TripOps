@@ -1,6 +1,6 @@
-import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { useMemo, useState } from "react";
-import { Booking, User, PaymentRequest } from "@/app/types";
+import { Booking, User } from "@/app/types";
 import {
   ArrowUpDown,
   Calendar,
@@ -14,7 +14,6 @@ import {
   Mail,
   MapPin,
   FileText,
-  CreditCard,
   Eye,
   Printer,
   Sparkles,
@@ -41,7 +40,6 @@ export interface AgencyBookingManagementProps {
   onApproveBooking: (bookingId: string) => void;
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
-  onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
   onMarkFullyPaid?: (bookingId: string) => void;
   onGenerateContract?: (bookingId: string) => void;
@@ -171,7 +169,6 @@ export function AgencyBookingManagement({
   onApproveBooking,
   onRejectBooking,
   onAssignGuide,
-  onCreatePaymentRequest,
   onMarkDepositPaid,
   onMarkFullyPaid,
   onGenerateContract,
@@ -180,16 +177,10 @@ export function AgencyBookingManagement({
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [contractBooking, setContractBooking] = useState<Booking | null>(null);
-  const [paymentTarget, setPaymentTarget] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-
-  // Payment request form state
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDescription, setPaymentDescription] = useState("");
-  const [paymentDueDate, setPaymentDueDate] = useState("");
 
   const filtered = useMemo(() => {
     return bookings
@@ -297,7 +288,7 @@ export function AgencyBookingManagement({
                   </th>
                   <th scope="col" className="px-4 py-3.5">Khách hàng</th>
                   <th scope="col" className="px-4 py-3.5">Thông tin Tour & Khởi hành</th>
-                  <th scope="col" className="px-4 py-3.5">Tổng tiền & Thanh toán</th>
+                  <th scope="col" className="px-4 py-3.5">Giá trị & Thanh toán</th>
                   <th scope="col" className="px-4 py-3.5 text-center">Trạng thái</th>
                   <th scope="col" className="px-4 py-3.5">Hướng dẫn viên</th>
                   <th scope="col" className="px-4 py-3.5 text-right">Thao tác</th>
@@ -382,11 +373,11 @@ export function AgencyBookingManagement({
                         )}
 
                         {/* Co-Hosting Alliance Badge */}
-                        {(booking.isCoHosted || booking.tour?.isCoHosted) && (
+                        {(booking.isCoHosted ?? booking.tour?.isCoHosted ?? false) && (
                           <div className="mt-1 flex items-center gap-1">
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs">
                               <Handshake className="w-3 h-3 text-amber-700" />
-                              Tour Liên Minh ({booking.coHosts?.map((c) => c.companyName).join(" & ") || booking.tour?.coHosts?.map((c) => c.companyName).join(" & ") || "2 Bên Phối Hợp"})
+                              Tour Liên Minh ({(booking.coHosts ?? booking.tour?.coHosts)?.map((c) => c.companyName).join(" & ") || "2 Bên Phối Hợp"})
                             </span>
                           </div>
                         )}
@@ -397,12 +388,12 @@ export function AgencyBookingManagement({
                         <div className="font-bold text-gray-900 text-sm">
                           {formatVND(booking.totalPrice)}
                         </div>
-                        <div className="mt-1">
+                        {booking.isPartnerView?<p className="mt-1 text-xs text-sky-700">Doanh thu chặng của bạn</p>:<div className="mt-1">
                           <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border ${pst.badgeBg} ${pst.color}`}>
                             {pst.label}
                           </span>
-                        </div>
-                        {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
+                        </div>}
+                        {!booking.isPartnerView && booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
                           <div className="text-[11px] text-amber-700 mt-1 font-medium">
                             Còn lại: {formatVND(booking.remainingAmount)}
                           </div>
@@ -478,9 +469,9 @@ export function AgencyBookingManagement({
       </div>
 
       {/* Reject modal */}
-      <Dialog open={!!rejectTarget} onOpenChange={() => setRejectTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Từ chối đặt tour</DialogTitle></DialogHeader>
+      <AlertDialog open={!!rejectTarget} onOpenChange={() => setRejectTarget(null)}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-sm">
+          <AlertDialogHeader><AlertDialogTitle>Từ chối đặt tour</AlertDialogTitle></AlertDialogHeader>
           <Textarea
             placeholder="Lý do từ chối (sẽ thông báo đến khách hàng)..."
             value={rejectReason}
@@ -488,8 +479,8 @@ export function AgencyBookingManagement({
             rows={3}
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>Hủy</Button>
-            <Button
+            <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel" variant="outline" onClick={() => setRejectTarget(null)}>Hủy</Button></AlertDialogCancel>
+            <Button data-slot="alert-dialog-action"
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
                 if (rejectTarget) {
@@ -502,8 +493,8 @@ export function AgencyBookingManagement({
               Xác nhận từ chối
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Assign guide modal */}
       <Dialog open={!!assignTarget} onOpenChange={() => setAssignTarget(null)}>
@@ -540,90 +531,6 @@ export function AgencyBookingManagement({
             </div>
           )}
           <Button variant="outline" className="w-full" onClick={() => setAssignTarget(null)}>Đóng</Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create payment request modal */}
-      <Dialog open={!!paymentTarget} onOpenChange={() => setPaymentTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#075985]" />
-              Tạo yêu cầu thanh toán
-            </DialogTitle>
-          </DialogHeader>
-          {paymentTarget && (() => {
-            const b = bookings.find((bk) => bk.id === paymentTarget);
-            if (!b) return null;
-            return (
-              <div className="space-y-3">
-                <div className="bg-[#F0F9FF] rounded-lg p-3 text-sm">
-                  <p className="text-gray-600">Booking: <strong>{b.contactName || b.userName}</strong></p>
-                  <p className="text-gray-600">Tổng giá tour: <strong className="text-[#075985]">{formatVND(b.totalPrice)}</strong></p>
-                  {(() => {
-                    const totalPaid = (b.paymentRequests ?? [])
-                      .filter((pr) => pr.status === "paid")
-                      .reduce((sum, pr) => sum + pr.amount, 0);
-                    return totalPaid > 0 ? (
-                      <p className="text-gray-600">Khách đã thanh toán: <strong className="text-emerald-600">{formatVND(totalPaid)}</strong></p>
-                    ) : null;
-                  })()}
-                  {b.remainingAmount ? <p className="text-gray-600">Còn lại: <strong className="text-red-600">{formatVND(b.remainingAmount)}</strong></p> : null}
-                </div>
-                <div>
-                  <Label className="text-sm">Số tiền yêu cầu (VNĐ) <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    placeholder={b.remainingAmount?.toString() ?? ""}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Mô tả <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={paymentDescription}
-                    onChange={(e) => setPaymentDescription(e.target.value)}
-                    placeholder="VD: Thanh toán đợt 2 trước khi khởi hành"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Hạn thanh toán <span className="text-red-500">*</span></Label>
-                  <VietnameseDatePicker
-                    value={paymentDueDate}
-                    onChange={setPaymentDueDate}
-                    min={new Date().toLocaleDateString("sv-SE")}
-                    placeholder="Chọn hạn thanh toán"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setPaymentTarget(null)}>Hủy</Button>
-                  <Button
-                    className="bg-[#075985] hover:bg-[#F97316] text-white"
-                    disabled={!paymentAmount || !paymentDescription || !paymentDueDate}
-                    onClick={() => {
-                      if (paymentTarget && paymentAmount && paymentDescription && paymentDueDate) {
-                        onCreatePaymentRequest(paymentTarget, {
-                          amount: parseInt(paymentAmount),
-                          description: paymentDescription,
-                          dueDate: paymentDueDate,
-                        });
-                        setPaymentTarget(null);
-                        setPaymentAmount("");
-                        setPaymentDescription("");
-                        setPaymentDueDate("");
-                      }
-                    }}
-                  >
-                    Tạo yêu cầu
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
         </DialogContent>
       </Dialog>
 

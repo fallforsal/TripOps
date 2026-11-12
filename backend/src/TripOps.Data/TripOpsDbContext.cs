@@ -26,11 +26,11 @@ public class TripOpsDbContext : DbContext
     public DbSet<TouristAttraction> TouristAttractions => Set<TouristAttraction>();
     public DbSet<TourMeal> TourMeals => Set<TourMeal>();
     public DbSet<TourAccommodation> TourAccommodations => Set<TourAccommodation>();
+    public DbSet<TourVersionAgency> TourVersionAgencies => Set<TourVersionAgency>();
     public DbSet<TourVersion> TourVersions => Set<TourVersion>();
     public DbSet<TourProvince> TourProvinces => Set<TourProvince>();
     public DbSet<AgencySupplier> AgencySuppliers => Set<AgencySupplier>();
     public DbSet<TourDesignRequest> TourDesignRequests => Set<TourDesignRequest>();
-    public DbSet<TourPlanProposal> TourPlanProposals => Set<TourPlanProposal>();
     public DbSet<TourDesignRequestAgency> TourDesignRequestAgencies => Set<TourDesignRequestAgency>();
 
     // 4. Bookings & Operations
@@ -44,6 +44,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<BookingAttractionCheckin> BookingAttractionCheckins => Set<BookingAttractionCheckin>();
     public DbSet<BookingIncident> BookingIncidents => Set<BookingIncident>();
     public DbSet<BookingPriceAdjustment> BookingPriceAdjustments => Set<BookingPriceAdjustment>();
+    public DbSet<BookingFinancialChange> BookingFinancialChanges => Set<BookingFinancialChange>();
     public DbSet<BookingAgency> BookingAgencies => Set<BookingAgency>();
     public DbSet<BookingSupplierRequest> BookingSupplierRequests => Set<BookingSupplierRequest>();
     public DbSet<BookingQuotation> BookingQuotations => Set<BookingQuotation>();
@@ -72,13 +73,10 @@ public class TripOpsDbContext : DbContext
 
     private void PrepareForSave()
     {
-        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Tour history is immutable.");
+        if (ChangeTracker.Entries<TourVersion>().Any(e => e.State == EntityState.Deleted || (e.State == EntityState.Modified && e.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(TourVersion.SharedAt) or nameof(TourVersion.SharedBy))) && !(e.Entity.Tour?.IsRequest == true && e.Entity.Tour.Version == e.Entity.VersionNumber))))
+            throw new InvalidOperationException("Only the selected private design version may be edited.");
         if (ChangeTracker.Entries<BookingQuotation>().Any(e => e.State == EntityState.Deleted && e.Entity.SentAt.HasValue))
             throw new InvalidOperationException("Sent quotations cannot be deleted.");
-        foreach (var entry in ChangeTracker.Entries<TourPlanProposal>().Where(e => e.State == EntityState.Modified))
-            if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(TourPlanProposal.Status) or nameof(TourPlanProposal.AgencyReply) or nameof(TourPlanProposal.RespondedAt))))
-                throw new InvalidOperationException("Customer change requests are immutable.");
         foreach (var entry in ChangeTracker.Entries<BookingQuotation>().Where(e => e.State == EntityState.Modified && e.OriginalValues.GetValue<DateTime?>(nameof(BookingQuotation.SentAt)).HasValue))
             if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not (nameof(BookingQuotation.Status) or nameof(BookingQuotation.AcceptedAt))))
                 throw new InvalidOperationException("Sent quotations are immutable.");
@@ -156,53 +154,15 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<Tour>().ToTable("tours");
         modelBuilder.Entity<TourAccommodation>().ToTable("tour_hotels");
         modelBuilder.Entity<TourDesignRequest>().ToTable("tour_design_requests");
-        modelBuilder.Entity<TourPlanProposal>().ToTable("tour_plan_proposals");
-        modelBuilder.Entity<TourPlanProposal>(e => {
-            e.Property(x => x.Id).HasColumnName("id");
-            e.Property(x => x.RequestId).HasColumnName("request_id");
-            e.Property(x => x.TourId).HasColumnName("tour_id");
-            e.Property(x => x.CustomerId).HasColumnName("customer_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
-            e.Property(x => x.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
-            e.Property(x => x.BaseTourVersion).HasColumnName("base_tour_version");
-            e.Property(x => x.ProposalJson).HasColumnName("proposal_json").HasColumnType("nvarchar(max)");
-            e.Property(x => x.Message).HasColumnName("message").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
-            e.Property(x => x.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30);
-            e.Property(x => x.AgencyReply).HasColumnName("agency_reply").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
-            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-            e.Property(x => x.RespondedAt).HasColumnName("responded_at").HasColumnType("datetime2");
-            e.HasOne<TourDesignRequest>().WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Tour>().WithMany().HasForeignKey(x => x.TourId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<User>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<User>().WithMany().HasForeignKey(x => x.AgencyId).OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(x => new { x.RequestId, x.CreatedAt });
-            e.HasIndex(x => new { x.AgencyId, x.Status });
-        });
-        modelBuilder.Entity<TourDesignRequestAgency>().ToTable("tour_design_request_agencies");
-        modelBuilder.Entity<TourMeal>().ToTable("tour_restaurants");
-        modelBuilder.Entity<TourPricingTier>().ToTable("tour_pricing_tiers");
         modelBuilder.Entity<TourTimeline>().ToTable("tour_timeline");
         modelBuilder.Entity<TourVersion>().ToTable("tour_versions");
         modelBuilder.Entity<TouristAttraction>().ToTable("tourist_locations");
-        modelBuilder.Entity<TouristAttraction>(e => {
-            e.Property(x => x.Latitude).HasColumnName("latitude");
-            e.Property(x => x.Longitude).HasColumnName("longitude");
-            e.Property(x => x.GeofenceRadiusMeters).HasColumnName("geofence_radius_meters").HasDefaultValue(1500);
-        });
-        modelBuilder.Entity<BookingTimelineAttraction>(e => {
-            e.Property(x => x.VisitOrder).HasColumnName("visit_order").HasDefaultValue(0);
-            e.Property(x => x.Latitude).HasColumnName("latitude");
-            e.Property(x => x.Longitude).HasColumnName("longitude");
-            e.Property(x => x.GeofenceRadiusMeters).HasColumnName("geofence_radius_meters").HasDefaultValue(1500);
-        });
-        modelBuilder.Entity<BookingAttractionCheckin>(e => {
-            e.Property(x => x.GpsLatitude).HasColumnName("gps_latitude");
-            e.Property(x => x.GpsLongitude).HasColumnName("gps_longitude");
-            e.Property(x => x.GpsAccuracyMeters).HasColumnName("gps_accuracy_meters");
-            e.Property(x => x.GpsRecordedAtUtc).HasColumnName("gps_recorded_at_utc");
-        });
         modelBuilder.Entity<User>().ToTable("users");
         DatabaseDesignConfiguration.Configure(modelBuilder);
         BookingQuotationConfiguration.Configure(modelBuilder);
+        DesignCoHostConfiguration.Configure(modelBuilder);
+        modelBuilder.ConfigureBookingAlliance();
+        modelBuilder.ConfigureBookingFinancialChanges();
         modelBuilder.Entity<TourDesignRequest>().Property(x => x.Revision).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.Status).IsConcurrencyToken();
         modelBuilder.Entity<BookingSupplierRequest>().Property(x => x.AvailableQuantity).HasPrecision(19, 2);
@@ -212,6 +172,22 @@ public class TripOpsDbContext : DbContext
             e.Property(x => x.UserId).HasMaxLength(36);
             e.Property(x => x.Message).HasMaxLength(1000);
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
+        });
+        modelBuilder.Entity<Tour>().Property(t => t.Id).UseIdentityColumn();
+        modelBuilder.Entity<ChatConversation>(e => {
+            // Computed canonical pair also protects reversed requests and direct database writes.
+            e.Property<string>("pair_low").HasMaxLength(36).HasComputedColumnSql("CASE WHEN user_one_id < user_two_id THEN user_one_id ELSE user_two_id END", stored: true);
+            e.Property<string>("pair_high").HasMaxLength(36).HasComputedColumnSql("CASE WHEN user_one_id < user_two_id THEN user_two_id ELSE user_one_id END", stored: true);
+            e.HasIndex("pair_low", "pair_high").IsUnique().HasFilter(null);
+            e.ToTable("chat_conversations", t => t.HasCheckConstraint("CK_chat_distinct_users", "user_one_id <> user_two_id"));
+            e.HasIndex(x => new { x.UserOneId, x.LastMessageAt });
+            e.HasIndex(x => new { x.UserTwoId, x.LastMessageAt });
+        });
+        modelBuilder.Entity<ChatMessage>(e => {
+            e.Property(x => x.ClientMessageId).HasColumnName("client_message_id");
+            e.HasIndex(x => new { x.ConversationId, x.SenderId, x.ClientMessageId }).IsUnique().HasFilter("[client_message_id] IS NOT NULL");
+            e.HasIndex(x => new { x.ConversationId, x.Id });
+            e.HasIndex(x => new { x.ConversationId, x.SenderId, x.IsRead });
         });
         DatabaseDesignDefaults.Configure(modelBuilder, Database.IsSqlServer());
         if (!Database.IsSqlServer())

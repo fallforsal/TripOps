@@ -56,6 +56,7 @@ void main() {
 
     expect(detail.endDate, DateTime(2026, 11, 12));
     expect(detail.canRecordAttendance, isTrue);
+    expect(detail.canCheckInLocations, isFalse);
     expect(detail.passengers.single.status, 'CheckedIn');
     expect(detail.days.single.stops.single.id, 25);
     expect(detail.incidents.single.status, 'Reported');
@@ -78,6 +79,38 @@ void main() {
       'totalGuests': 1,
     });
     expect(detail.canRecordAttendance, isFalse);
+    expect(detail.attendanceDate, isNull);
   });
+
+  test('assigned stage attendance date is independent of the tour departure date', () {
+    final detail = BookingDetail.fromJson({
+      'id': 18,
+      'bookingCode': 'BK-18',
+      'startDate': '2026-11-10T00:00:00',
+      'endDate': '2026-11-14T00:00:00',
+      'canRecordAttendance': true,
+      'attendanceDate': '2026-11-12T00:00:00',
+    });
+    expect(detail.canRecordAttendance, isTrue);
+    expect(detail.attendanceDate, DateTime(2026, 11, 12));
+  });
+
+  test('location check-in flags parse from backend and remain optional', () {
+    final detail = BookingDetail.fromJson({
+      'id': 32, 'status': 'InProgress',
+      'startDate': '2026-11-12', 'endDate': '2026-11-14',
+      'canCheckInLocations': true,
+      'nextLocationCheckInId': 99,
+      'snapshotDays': [
+        {'dayNumber': 1, 'title': 'Day 1', 'locations': [
+          {'id': 99, 'name': 'Stop A', 'attendanceStatus': 'Pending'}
+        ]}
+      ],
+    });
+    expect(detail.canCheckInLocations, isTrue);
+    expect(detail.nextLocationCheckInId, 99);
+    expect(detail.days.single.stops.single.id, 99);
+  });
+
 
 }

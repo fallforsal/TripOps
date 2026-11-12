@@ -1,3 +1,5 @@
+import { toast } from "@/app/lib/notifications";
+import { requestText } from "@/app/lib/notificationDialogs";
 /**
  * Example Component: Booking Management with API
  * Ví dụ quản lý bookings với API services
@@ -46,11 +48,11 @@ export function UserBookingsExample({
     const response = await cancelBooking(bookingId);
 
     if (response.success) {
-      alert("Hủy booking thành công!");
+      toast.success("Hủy booking thành công!");
       // Refresh bookings
       execute(userId);
     } else {
-      alert("Lỗi: " + response.error);
+      toast.error("Lỗi: " + response.error);
     }
   };
 
@@ -109,15 +111,15 @@ export function AdminBookingManagementExample() {
     });
 
     if (response.success) {
-      alert("Duyệt booking thành công!");
+      toast.success("Duyệt booking thành công!");
       execute(); // Refresh
     } else {
-      alert("Lỗi: " + response.error);
+      toast.error("Lỗi: " + response.error);
     }
   };
 
   const handleReject = async (bookingId: string) => {
-    const reason = prompt("Nhập lý do từ chối:");
+    const reason = await requestText("Nhập lý do từ chối:");
     if (!reason) return;
 
     const response = await updateBookingStatus(bookingId, {
@@ -126,16 +128,16 @@ export function AdminBookingManagementExample() {
     });
 
     if (response.success) {
-      alert("Từ chối booking thành công!");
+      toast.success("Từ chối booking thành công!");
       execute(); // Refresh
     } else {
-      alert("Lỗi: " + response.error);
+      toast.error("Lỗi: " + response.error);
     }
   };
 
   const handleAssignGuide = async (bookingId: string) => {
     // In real app, this would open a modal to select guide
-    const guideName = prompt("Nhập tên hướng dẫn viên:");
+    const guideName = await requestText("Nhập tên hướng dẫn viên:");
     if (!guideName) return;
 
     const response = await assignGuide(bookingId, {
@@ -145,10 +147,10 @@ export function AdminBookingManagementExample() {
     });
 
     if (response.success) {
-      alert("Phân công HDV thành công!");
+      toast.success("Phân công HDV thành công!");
       execute(); // Refresh
     } else {
-      alert("Lỗi: " + response.error);
+      toast.error("Lỗi: " + response.error);
     }
   };
 

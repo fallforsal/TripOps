@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Service.Accounts;
+using TripOps.Api.Infrastructure;
 using TripOps.Service.Tours;
 
 namespace TripOps.Api.Controllers;
@@ -12,17 +13,26 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-    [HttpPost("images"), RequestSizeLimit(6 * 1024 * 1024)]
-    [EndpointSummary("Upload a PNG or JPEG tour image from the Agency's computer")]
-    [ProducesResponseType<TourImageUploadResponse>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> UploadImage(IFormFile? image, CancellationToken ct)
+    [HttpPost("with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save a new tour and upload selected local images together")]
+    [ProducesResponseType<TourDto>(201)]
+    public async Task<IActionResult> CreateWithImages([FromForm] TourSaveForm form,CancellationToken ct)
     {
-        await tours.Agency(Actor, ct);
-        if (image is null || image.Length is <= 0 or > 5 * 1024 * 1024)
-            throw new TourException(400, "A PNG or JPEG image up to 5 MB is required.");
-        using var stream = new MemoryStream();
-        await image.CopyToAsync(stream, ct);
-        return Ok(new TourImageUploadResponse(await storage.UploadTourImage(Actor, stream.ToArray(), image.ContentType, ct)));
+        await tours.Agency(Actor,ct);
+        var configuration=await form.Upload(form.Read<TourConfiguration>(),storage,Actor,ct);
+        var tour=await tours.Create(Actor,configuration,ct);
+        return CreatedAtAction(nameof(Get),new {id=tour.Id},tour);
+    }
+    [HttpPut("{id:int}/with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save the selected tour configuration and its local images together")]
+    [ProducesResponseType<TourDto>(200)]
+    public async Task<IActionResult> UpdateWithImages(int id,[FromForm] TourSaveForm form,CancellationToken ct)
+    {
+        var input=form.Read<UpdateTourRequest>();
+        var current=await tours.Get(Actor,id,false,ct);
+        if(input.Revision!=current.Revision)throw new TourException(409,"Tour đã thay đổi. Vui lòng tải lại.");
+        var configuration=await form.Upload(input.Configuration,storage,Actor,ct);
+        return Ok(await tours.Update(Actor,id,input with {Configuration=configuration},ct));
     }
 
     [HttpPost]
@@ -51,7 +61,7 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await tours.Get(Actor, id, false, ct));
     [HttpPut("{id:int}")]
-    [EndpointSummary("Replace itinerary, services, options and pricing as a new draft version")]
+    [EndpointSummary("Save the current working itinerary, services, options and pricing")]
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(int id, UpdateTourRequest request, CancellationToken ct) => Ok(await tours.Update(Actor, id, request, ct));
     [HttpGet("{id:int}/validation")]
@@ -74,8 +84,8 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
     [HttpDelete("{id:int}")]
     [EndpointSummary("Soft archive a hidden tour and preserve its history")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Delete(int id, [FromQuery] int version, CancellationToken ct)
-    { await tours.Command(Actor, id, "delete", new(version), ct); return NoContent(); }
+    public async Task<IActionResult> Delete(int id, [FromQuery] int revision, CancellationToken ct)
+    { await tours.Command(Actor, id, "delete", new(revision), ct); return NoContent(); }
     [HttpPost("{id:int}/duplicate")]
     [EndpointSummary("Duplicate a tour into an independent draft")]
     [ProducesResponseType<TourDto>(StatusCodes.Status201Created)]
@@ -85,17 +95,14 @@ public sealed class AgencyToursController(TourService tours, CloudinaryStorage s
         return CreatedAtAction(nameof(Get), new { id = tour.Id }, tour);
     }
     [HttpGet("{id:int}/versions")]
-    [EndpointSummary("List immutable tour version metadata")]
+    [EndpointSummary("List private design tour version metadata")]
     [ProducesResponseType<TourPage<TourVersionDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Versions(int id, CancellationToken ct, int page = 1, int pageSize = 20) => Ok(await tours.Versions(Actor, id, page, pageSize, ct));
     [HttpGet("{id:int}/versions/{number:int}")]
-    [EndpointSummary("Get an immutable historical tour snapshot")]
+    [EndpointSummary("Get a private design tour snapshot")]
     [ProducesResponseType<TourVersionDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Version(int id, int number, CancellationToken ct) => Ok(await tours.Version(Actor, id, number, ct));
-    [HttpPost("{id:int}/versions/{number:int}/restore")]
-    [EndpointSummary("Restore historical configuration into a new draft version")]
-    [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Restore(int id, int number, TourCommand request, CancellationToken ct) => Ok(await tours.Restore(Actor, id, number, request, ct));
+
 }
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/suppliers")]

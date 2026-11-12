@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
@@ -37,40 +36,10 @@ class _LocationScreenState extends State<LocationScreen> {
     }
   }
 
-  Future<Position> currentGps() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw StateError('Hãy bật GPS/Dịch vụ vị trí trên điện thoại.');
-    }
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied) {
-      throw StateError('Cần cấp quyền vị trí để check-in.');
-    }
-    if (permission == LocationPermission.deniedForever) {
-      throw StateError('Quyền vị trí đã bị chặn. Hãy cấp quyền trong Cài đặt.');
-    }
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 20),
-      ),
-    );
-    if (position.accuracy > 100 || position.accuracy < 0) {
-      throw StateError(
-        'GPS chưa đủ chính xác (±${position.accuracy.round()} m). '
-        'Hãy ra vị trí thoáng và thử lại.',
-      );
-    }
-    return position;
-  }
-
   Future<void> check(TourStop stop) async {
     if (busy != null ||
         !current.canCheckInLocations ||
         current.nextLocationCheckInId != stop.id ||
-        !stop.hasGpsReference ||
         stop.status == 'CheckedIn') {
       return;
     }
@@ -83,8 +52,8 @@ class _LocationScreenState extends State<LocationScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Ứng dụng sẽ lấy GPS hiện tại và backend kiểm tra '
-                'bạn có đang ở gần điểm đến hay không.'),
+            const Text('Xác nhận đã đến địa điểm này. '
+                'Các điểm tiếp theo chỉ mở khi điểm trước đã check-in.'),
             const SizedBox(height: 12),
             TextField(
               controller: noteController,
@@ -100,7 +69,7 @@ class _LocationScreenState extends State<LocationScreen> {
               child: const Text('Hủy')),
           FilledButton(
             onPressed: () => Navigator.pop(context, noteController.text.trim()),
-            child: const Text('Xác nhận GPS'),
+            child: const Text('Xác nhận'),
           ),
         ],
       ),
@@ -113,21 +82,16 @@ class _LocationScreenState extends State<LocationScreen> {
     });
 
     try {
-      final position = await currentGps();
       final updated = await widget.guides.checkIn(
         current.id,
         stop.id,
         'CheckedIn',
         note.isEmpty ? null : note,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        accuracyMeters: position.accuracy,
-        recordedAtUtc: position.timestamp.toUtc(),
       );
       if (!mounted) return;
       setState(() => current = updated);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Check-in GPS được backend xác nhận.')),
+        const SnackBar(content: Text('Check-in địa điểm thành công.')),
       );
     } catch (e) {
       // The backend checks actual eligibility again on each submission;
@@ -192,12 +156,11 @@ class _LocationScreenState extends State<LocationScreen> {
           ]),
           space(15),
           GuideInfoBanner(
-            icon: enabledByDate ? Icons.gps_fixed : Icons.lock_clock_outlined,
+            icon: enabledByDate ? Icons.route_outlined : Icons.lock_clock_outlined,
             warning: !enabledByDate,
             message: enabledByDate
-                ? 'Check-in theo đúng thứ tự hành trình. '
-                  'Ứng dụng lấy GPS mới tại thời điểm xác nhận; '
-                  'backend kiểm tra phạm vi điểm dừng.'
+                ? 'Đã đến ngày khởi hành. Chỉ được check-in điểm kế tiếp '
+                  'theo thứ tự lịch trình; không cần bật GPS.'
                 : 'Chưa đến ngày khởi hành hoặc tour không còn cho phép check-in.',
           ),
           if (error != null) ...[
@@ -240,17 +203,14 @@ class _LocationScreenState extends State<LocationScreen> {
                 ...day.stops.map((stop) {
                   final done = stop.status == 'CheckedIn';
                   final isNext = nextId == stop.id && !done;
-                  final canCheck = enabledByDate && isNext &&
-                      stop.hasGpsReference && busy == null;
+                  final canCheck = enabledByDate && isNext && busy == null;
                   final blockedReason = done
                       ? 'Đã hoàn thành'
                       : !enabledByDate
                           ? 'Chưa đến ngày khởi hành'
                           : !isNext
                               ? 'Cần check-in điểm trước đó'
-                              : !stop.hasGpsReference
-                                  ? 'Agency chưa cấu hình GPS điểm này'
-                                  : 'Sẵn sàng xác nhận GPS';
+                              : 'Sẵn sàng check-in';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(child: Padding(
@@ -287,10 +247,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           Text(blockedReason, style: const TextStyle(
                             fontSize: 11, color: muted,
                           )),
-                          if (stop.hasGpsReference)
-                            Text('Phạm vi GPS: ${stop.geofenceRadiusMeters} m',
-                              style: const TextStyle(fontSize: 11, color: muted)),
-                          if (busy == stop.id) ...[
+radius                          if (busy == stop.id) ...[
                             space(9),
                             const LinearProgressIndicator(),
                           ],
@@ -300,8 +257,8 @@ class _LocationScreenState extends State<LocationScreen> {
                             child: FilledButton.icon(
                               key: ValueKey('checkin-${stop.id}'),
                               onPressed: canCheck ? () => check(stop) : null,
-                              icon: const Icon(Icons.gps_fixed, size: 17),
-                              label: const Text('Xác nhận check-in GPS'),
+                              icon: const Icon(Icons.check_circle_outline, size: 17),
+                              label: const Text('Check-in điểm đến'),
                             ),
                           ),
                         ],

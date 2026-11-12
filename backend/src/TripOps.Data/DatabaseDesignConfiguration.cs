@@ -60,6 +60,10 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.ApprovedAt).HasColumnName("approved_at").HasColumnType("datetime2");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
+            entity.Property(e => e.BankName).HasColumnName("bank_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasColumnName("bank_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.BankAccountHolder).HasColumnName("bank_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountUpdatedAt).HasColumnName("bank_account_updated_at").HasColumnType("datetime2");
         });
         modelBuilder.Entity<Service>(entity =>
         {
@@ -129,7 +133,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Version).HasColumnName("version").HasColumnType("int");
             entity.Property(e => e.ChangeNote).HasColumnName("change_note").HasColumnType("nvarchar(max)");
             entity.Property(e => e.DesignRequestId).HasColumnName("design_request_id").HasColumnType("int");
-            entity.Property(e => e.IsSharedToCustomer).HasColumnName("is_shared_to_customer").HasColumnType("bit");
+            entity.Property(e => e.SharedVersion).HasColumnName("shared_version");
+            entity.Property(e => e.ClonedFromTourId).HasColumnName("cloned_from_tour_id");
+            entity.HasIndex(e => e.DesignRequestId).IsUnique().HasFilter("[design_request_id] IS NOT NULL");
             entity.Property(e => e.IsAiGenerated).HasColumnName("is_ai_generated").HasColumnType("bit");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
@@ -211,8 +217,6 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CustomerId).HasColumnName("user_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.BusinessName).HasColumnName("business_name").HasColumnType("nvarchar(255)").HasMaxLength(255);
-            entity.Property(e => e.BusinessEmail).HasColumnName("business_email").HasColumnType("nvarchar(191)").HasMaxLength(191);
-            entity.Property(e => e.BusinessPhone).HasColumnName("business_phone").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.ContactName).HasColumnName("contact_name").HasColumnType("nvarchar(150)").HasMaxLength(150).IsRequired();
             entity.Property(e => e.ContactEmail).HasColumnName("contact_email").HasColumnType("nvarchar(191)").HasMaxLength(191).IsRequired();
             entity.Property(e => e.ContactPhone).HasColumnName("contact_phone").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
@@ -224,11 +228,16 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.HotelRatingRequirement).HasColumnName("hotel_rating_requirement").HasColumnType("nvarchar(50)").HasMaxLength(50);
             entity.Property(e => e.SpecialRequirements).HasColumnName("special_requirements").HasColumnType("nvarchar(max)");
             entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(50)").HasMaxLength(50);
-            entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.Status).HasConversion(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<CustomRequestStatus, string>(v => v == CustomRequestStatus.InProgress ? "in_progress" : v.ToString().ToLowerInvariant(), v => v == "in_progress" ? CustomRequestStatus.InProgress : Enum.Parse<CustomRequestStatus>(v, true)));
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
         });
-        modelBuilder.Entity<Tour>().HasIndex(e => e.DesignRequestId);
+
+        modelBuilder.Entity<TourDesignRequest>().Property(e => e.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(2000);
+        modelBuilder.Entity<TourDesignRequest>().Property(e => e.RespondedAt).HasColumnName("responded_at");
+        modelBuilder.Entity<Tour>().Property(t => t.Id).ValueGeneratedOnAdd();
+        modelBuilder.Entity<Tour>().HasOne<Tour>().WithMany().HasForeignKey(e => e.ClonedFromTourId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Tour>().HasOne<TourVersion>().WithMany().HasForeignKey(e => new { e.Id, e.SharedVersion }).HasPrincipalKey(e => new { e.TourId, e.VersionNumber }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourVersion>(entity =>
         {
             entity.ToTable("tour_versions");
@@ -242,6 +251,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.TourId, e.Id }).IsUnique();
             entity.HasIndex(e => new { e.TourId, e.VersionNumber }).IsUnique();
+            entity.Property(e => e.SharedAt).HasColumnName("shared_at");
+            entity.Property(e => e.SharedBy).HasColumnName("shared_by").HasMaxLength(36);
+            entity.Property(e => e.RestoredFromVersion).HasColumnName("restored_from_version");
         });
         modelBuilder.Entity<AgencySupplier>(entity =>
         {
@@ -275,25 +287,12 @@ internal static class DatabaseDesignConfiguration
             entity.HasIndex(e => new { e.TourId, e.ProvinceCode }).IsUnique();
             entity.HasIndex(e => new { e.ProvinceCode, e.TourId });
         });
-        modelBuilder.Entity<TourDesignRequestAgency>(entity =>
-        {
-            entity.ToTable("tour_design_request_agencies");
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.TourDesignRequestId).HasColumnName("request_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.IsHost).HasColumnName("is_host").HasColumnType("bit");
-            entity.Property(e => e.StageArea).HasColumnName("stage_area").HasColumnType("nvarchar(255)").HasMaxLength(255);
-            entity.Property(e => e.SuggestedBudget).HasColumnName("suggested_budget").HasColumnType("decimal(12, 2)");
-            entity.Property(e => e.CommunicationNotes).HasColumnName("communication_notes").HasColumnType("nvarchar(max)");
-            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(50)").HasMaxLength(50);
-            entity.Property(e => e.AssignedAt).HasColumnName("assigned_at").HasColumnType("datetime2");
-            entity.Property(e => e.RespondedAt).HasColumnName("responded_at").HasColumnType("datetime2");
-            entity.HasIndex(e => new { e.TourDesignRequestId, e.AgencyId }).IsUnique();
-        });
         modelBuilder.Entity<Booking>(entity =>
         {
             entity.ToTable("bookings");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.TourVersion).HasColumnName("tour_version");
+            entity.Property(e => e.TourConfigurationData).HasColumnName("tour_configuration_data").HasColumnType("nvarchar(max)");
             entity.Property(e => e.BookingCode).HasColumnName("booking_code").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
             entity.HasIndex(e => e.BookingCode).IsUnique();
             entity.Property(e => e.CustomerId).HasColumnName("customer_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
@@ -320,7 +319,8 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<BookingParticipant>(entity =>
         {
             entity.Property(e => e.CreationKey).HasColumnName("creation_key").HasColumnType("uniqueidentifier");
-            entity.HasIndex(e => new { e.BookingId, e.CreationKey }).IsUnique().HasFilter("[creation_key] IS NOT NULL");
+            entity.HasIndex(e => new { e.BookingId, e.AgencyId, e.CreationKey }).IsUnique().HasFilter("[creation_key] IS NOT NULL");
+            entity.HasIndex(e => new { e.BookingId, e.ParticipantIndex, e.AgencyId }).IsUnique();
             entity.ToTable("booking_participants");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.BookingId).HasColumnName("booking_id").HasColumnType("int").IsRequired();
@@ -479,7 +479,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.PaidAt).HasColumnName("paid_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.BookingId, e.Id }).IsUnique();
-            // Mỗi đơn chỉ có một khoản đang hiệu lực cho mỗi đợt (khoản đã hủy được giữ lại làm lịch sử).
+            // Má»—i Ä‘Æ¡n chá»‰ cÃ³ má»™t khoáº£n Ä‘ang hiá»‡u lá»±c cho má»—i Ä‘á»£t (khoáº£n Ä‘Ã£ há»§y Ä‘Æ°á»£c giá»¯ láº¡i lÃ m lá»‹ch sá»­).
             entity.HasIndex(e => new { e.BookingId, e.Stage }).IsUnique()
                 .HasDatabaseName("UX_payment_requests_active_stage")
                 .HasFilter("[stage] IS NOT NULL AND [status] IN ('Pending', 'Overdue', 'Paid')");
@@ -535,6 +535,19 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.SettlementStatus).HasConversion<string>();
             entity.Property(e => e.PayoutTransferredAt).HasColumnName("payout_transferred_at").HasColumnType("datetime2");
             entity.Property(e => e.BankReferenceCode).HasColumnName("bank_reference_code").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.TourCompletedAt).HasColumnName("tour_completed_at").HasColumnType("datetime2");
+            entity.Property(e => e.AutoPayoutAt).HasColumnName("auto_payout_at").HasColumnType("datetime2");
+            entity.Property(e => e.FeePercent).HasColumnName("fee_percent").HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.PayoutMethod).HasColumnName("payout_method").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.PayoutReference).HasColumnName("payout_reference").HasColumnType("nvarchar(60)").HasMaxLength(60);
+            entity.Property(e => e.PayoutGatewayId).HasColumnName("payout_gateway_id").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.PayoutAttempts).HasColumnName("payout_attempts").HasColumnType("int").HasDefaultValue(0).IsRequired();
+            entity.Property(e => e.PayoutNote).HasColumnName("payout_note").HasColumnType("nvarchar(500)").HasMaxLength(500);
+            entity.Property(e => e.PayoutBankName).HasColumnName("payout_bank_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.PayoutAccountNumber).HasColumnName("payout_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.PayoutAccountHolder).HasColumnName("payout_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.SettledBy).HasColumnName("settled_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
+            entity.HasIndex(e => e.PayoutReference).IsUnique().HasFilter("[payout_reference] IS NOT NULL");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.BookingId, e.AgencyId }).IsUnique();
@@ -596,8 +609,12 @@ internal static class DatabaseDesignConfiguration
         });
         modelBuilder.Entity<ChatMessage>(entity =>
         {
+            entity.Property(e => e.ContextData).HasColumnName("context_data").HasColumnType("nvarchar(max)");
             entity.ToTable("chat_messages");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.DesignRequestId).HasColumnName("design_request_id");
+            entity.HasIndex(e => new { e.DesignRequestId, e.Id });
+            entity.HasOne<TourDesignRequest>().WithMany().HasForeignKey(e => e.DesignRequestId).OnDelete(DeleteBehavior.Restrict);
             entity.Property(e => e.ConversationId).HasColumnName("conversation_id").HasColumnType("int").IsRequired();
             entity.Property(e => e.SenderId).HasColumnName("sender_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
             entity.Property(e => e.Content).HasColumnName("content").HasColumnType("nvarchar(max)").IsRequired();
@@ -828,8 +845,6 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<TourAccommodation>().HasOne<User>().WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourAccommodation>().HasOne(e => e.Tour).WithMany(e => e.Accommodations).HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourDesignRequest>().HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<TourDesignRequestAgency>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<TourDesignRequestAgency>().HasOne(e => e.TourDesignRequest).WithMany(e => e.RequestAgencies).HasForeignKey(e => e.TourDesignRequestId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourMeal>().HasOne<User>().WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourMeal>().HasOne(e => e.TourTimeline).WithMany(e => e.Meals).HasForeignKey(e => e.TourTimelineId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TourPricingTier>().HasOne<User>().WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
@@ -857,12 +872,13 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<BookingParticipant>().HasOne<BookingAgency>().WithMany().HasForeignKey(e => new { e.BookingId, e.AgencyId }).HasPrincipalKey(e => new { e.BookingId, e.AgencyId }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingParticipant>().HasOne<BookingAssignedGuide>().WithMany().HasForeignKey(e => new { e.BookingId, e.AgencyId, e.AssignedGuideId }).HasPrincipalKey(e => new { e.BookingId, e.AgencyId, e.GuideId }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<BookingTimelineAttraction>().HasOne<User>().WithMany().HasForeignKey(e => e.GuideId).HasPrincipalKey(e => e.Id).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<Tour>().Property(e => e.Version).IsConcurrencyToken();
+        modelBuilder.Entity<Tour>().Property(e => e.Revision).HasColumnName("revision").IsConcurrencyToken();
+        modelBuilder.Entity<Tour>().Property(e => e.ConfigurationData).HasColumnName("configuration_data").HasColumnType("nvarchar(max)");
+        modelBuilder.Entity<Tour>().Property(e => e.HasDraftChanges).HasColumnName("has_draft_changes");
         modelBuilder.Entity<Tour>().HasQueryFilter(e => e.Status != TourStatus.Deleted);
         modelBuilder.Entity<Complaint>().HasQueryFilter(e => e.DeletedAt == null);
         modelBuilder.Entity<TourAccommodation>().Property(e => e.NightsCount).HasSentinel(-1);
         modelBuilder.Entity<BookingParticipant>().HasIndex(e => new { e.BookingId, e.ParticipantIndex }).IsUnique().HasFilter("[is_primary] = 1");
         modelBuilder.Entity<BookingAgency>().HasIndex(e => e.BookingId).IsUnique().HasFilter("[is_host] = 1");
-        modelBuilder.Entity<TourDesignRequestAgency>().HasIndex(e => e.TourDesignRequestId).IsUnique().HasFilter("[is_host] = 1");
     }
 }

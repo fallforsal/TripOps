@@ -103,6 +103,7 @@ export interface Location {
 }
 
 export interface TourAlternativeMeal {
+  createdByCompanyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -142,6 +143,7 @@ export interface TourMeal {
 }
 
 export interface TourAlternativeHotel {
+  createdByCompanyId?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
   supplier?: TourSupplierSnapshot;
@@ -230,6 +232,7 @@ export interface TourDepartureDate {
 }
 
 export interface TourPriceRow {
+  tierKey?: string;
   ageGroup: "adult" | "child_2_11" | "child_under_2" | string;
   ageGroupLabel: string; // e.g. "Người lớn"
   ageRange?: string; // e.g. "Từ 12 tuổi"
@@ -385,6 +388,7 @@ export interface CustomMealChange {
 }
 
 export interface PaymentRequest {
+  beneficiaryAgencyId?:string;beneficiaryAgencyName?:string;
   id: string;
   bookingId: string;
   /** Số tiền còn phải trả của đợt (đợt đã trả: tổng tiền đợt). */
@@ -434,6 +438,8 @@ export interface BookingPriceAdjustment {
 
 // Bảng booking_agencies: Quản lý phân chia chặng, doanh thu và giải ngân cho từng công ty
 export interface BookingAgencyShare {
+  surchargeAmount?:number;reductionAmount?:number;pendingRefundAmount?:number;
+  stageArea?:string;pricingTiers?:import("@/app/services/wf05Bookings").BookingAgencyDto["pricingTiers"];paidSurchargeAmount?:number;unpaidSurchargeAmount?:number;
   id?: string;
   bookingId: string;
   agencyId: string;
@@ -486,6 +492,13 @@ export interface TourReview {
 }
 
 export interface Tour {
+  designReadOnly?: boolean;
+  revision?: number;
+  hasDraftChanges?: boolean;
+  createNewVersion?: boolean;
+  pendingTourImages?: { url: string; file: File }[];
+  agencyPricing?: {agencyId:string;tiers:{key?:string|null;name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[]}[];
+  sharedVersion?: number;
   planGuestCount?: number;
   updatedAt?: string;
   id: string;
@@ -565,7 +578,7 @@ export interface TourCoHost {
   companyPhone?: string;
   companyEmail?: string;
   role: "lead" | "partner"; // 'lead': Công ty chủ trì, 'partner': Công ty đối tác
-  status: "pending" | "accepted" | "rejected"; // Trạng thái lời mời
+  status: "pending" | "accepted" | "rejected" | "revoked"; // Trạng thái lời mời
   rejectionReason?: string;
   assignedDays?: number[]; // Ngày phụ trách trong lịch trình (tự động nhận diện từ các ngày có đóng góp)
   assignedSegments?: string; // Tên chặng (ví dụ: "Chặng Đà Lạt - Nha Trang")
@@ -609,6 +622,8 @@ export interface BookingAssignedGuide {
 }
 
 export interface Booking {
+  agencyDirectory?:{agencyId:string;agencyName:string}[];
+  isPartnerView?: boolean;
   paidAmount?: number;
   tourEndDate?: string;
   bookingCode?: string;
@@ -867,6 +882,7 @@ export interface RoomBooking {
 }
 // Thành viên trong đoàn khách - Khớp chuẩn với bảng booking_participants trong DATABASE_SCHEMA
 export interface GroupGuestMember {
+  age?: number;
   id: number | string;
   participantIndex: number; // participant_index: STT khách trong đoàn (1, 2, 3...)
   fullName: string; // full_name: Họ và tên
@@ -924,14 +940,22 @@ export interface ProviderGroupReservationRequest {
 }
 
 export interface CustomTourRequest {
+  archivedAt?: string;
+  closedAt?: string;
+  closeReason?: string;
+  bookingId?: string;
+  collaborationVersions?: number[];
+  hasCollaborations?: boolean;
+  sharedTourThumbnail?: string;
+  sharedTourName?: string;
+  rejectionReason?: string;
+  sharedVersion?: number;
   sourceTourId?: string;
   initialChanges?: { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
   id: string;
   userId?: string;
   // Business / contact info
   businessName?: string;
-  businessEmail?: string;
-  businessPhone?: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -947,7 +971,7 @@ export interface CustomTourRequest {
   targetCompanyId: string;
   targetCompanyName: string;
   // Lifecycle
-  status: "pending" | "reviewing" | "designed" | "quoted" | "accepted" | "rejected" | "cancelled";
+  status: "pending" | "reviewing" | "designed" | "quoted" | "accepted" | "rejected" | "cancelled" | "closed" | "booked";
   createdAt: string;
   // Company response & Designed tour
   companyNote?: string;
@@ -964,6 +988,7 @@ export interface CustomTourRequest {
 // REFUND REQUESTS (Theo DATABASE_SCHEMA - Copy.md: Table refund_requests)
 // ============================================================================
 export type RefundReasonType =
+  | "PRICE_REDUCTION"
   | "CUSTOMER_REQUEST"
   | "TOUR_CANCELLED"
   | "SERVICE_QUALITY"

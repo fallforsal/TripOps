@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
 import { CheckCircle2, Download, ExternalLink, FileSignature, FileText, QrCode, RotateCcw, Upload, X } from "lucide-react";
@@ -216,7 +217,7 @@ export function ContractCard({ bookingId, contract: c, onUploadSigned, onReview,
           )}
         </div>
       )}
-      {error && <p className="text-[11px] text-rose-600">{error}</p>}
+      {error && <NotificationMessage tone="error" message={error} />}
 
       {signSession && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">

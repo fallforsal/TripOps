@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -132,7 +133,7 @@ export function CancellationStatusCard({ cancellation: c, onSaveRefundAccount }:
                   <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value.toUpperCase())} className="h-9 text-xs uppercase" />
                 </div>
               </div>
-              {error && <p className="text-[11px] text-rose-600">{error}</p>}
+              {error && <NotificationMessage tone="error" message={error} />}
               <Button size="sm" onClick={save} disabled={saving} className="h-8 text-xs">
                 {saving ? "Đang lưu..." : "Lưu tài khoản nhận hoàn"}
               </Button>

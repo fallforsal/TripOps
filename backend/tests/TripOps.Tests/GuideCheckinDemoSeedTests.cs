@@ -13,7 +13,7 @@ namespace TripOps.Tests;
 public sealed partial class BookingFlowTests
 {
     [Fact]
-    public async Task GuideGpsDemoSeed_IsRepeatable_AndTourIsReadyToday()
+    public async Task GuideCheckinDemoSeed_IsRepeatable_AndTourIsReadyToday()
     {
         using var app = new App();
         await app.Initialize();
@@ -42,15 +42,9 @@ public sealed partial class BookingFlowTests
             Assert.Equal(4, booking.Participants.Count);
             Assert.All(booking.Participants, p => Assert.Equal(AttendanceStatus.Pending, p.AttendanceStatus));
             Assert.Single(booking.AssignedGuides);
-            var stops = booking.Timelines.Single().Attractions.OrderBy(x => x.VisitOrder).ToList();
-            Assert.Equal(new[] { 1, 2, 3 }, stops.Select(s => s.VisitOrder).ToArray());
-            Assert.All(stops, s =>
-            {
-                Assert.NotNull(s.Latitude);
-                Assert.NotNull(s.Longitude);
-                Assert.Equal(300, s.GeofenceRadiusMeters);
-                Assert.Equal("Pending", s.AttendanceStatus);
-            });
+            var stops = booking.Timelines.Single().Attractions.OrderBy(x => x.Time).ToList();
+            Assert.Equal(3, stops.Count);
+            Assert.All(stops, s => Assert.Equal("Pending", s.AttendanceStatus));
         }
 
         using var guide = app.CreateClient();
@@ -69,7 +63,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal(detail.SnapshotDays[0].Locations[0].Id, detail.NextLocationCheckInId);
         Assert.All(detail.Participants, p => Assert.NotNull(p.PhoneNumber));
 
-        // Repeating the fixture should not reset attendance or recorded GPS.
+        // Repeating the fixture should not reset attendance or recorded check-in.
         var participantId = detail.Participants[0].Id;
         var attendanceResponse = await guide.PostAsJsonAsync(
             $"/api/v1/guide/bookings/{first.BookingId}/attendance",
@@ -77,11 +71,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.OK, attendanceResponse.StatusCode);
         var checkInResponse = await guide.PostAsJsonAsync(
             $"/api/v1/guide/bookings/{first.BookingId}/locations/{detail.NextLocationCheckInId}/check-in",
-            new
-            {
-                status = "CheckedIn", latitude = 10.342, longitude = 107.082,
-                accuracyMeters = 10.0, recordedAtUtc = DateTime.UtcNow
-            });
+            new { status = "CheckedIn", note = "No GPS required" });
         checkInResponse.EnsureSuccessStatusCode();
 
         var again = await GuideCheckinDemoSeed.Run(app.Services, applyMigrations: false);

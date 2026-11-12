@@ -28,6 +28,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR(options => options.MaximumReceiveMessageSize = 16 * 1024);
+builder.Services.AddScoped<TripOps.Service.Chat.IChatEvents, TripOps.Api.Hubs.SignalRChatEvents>();
 builder.Services.AddRateLimiter(options => {
     options.RejectionStatusCode = 429;
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -73,7 +75,7 @@ if (builder.Configuration.GetValue<bool>("SeedDemo"))
 if (builder.Configuration.GetValue<bool>("SeedGuideGpsDemo"))
 {
     if (!app.Environment.IsDevelopment())
-        throw new InvalidOperationException("Guide GPS demo seed is only available in Development.");
+        throw new InvalidOperationException("Guide demo seed is only available in Development.");
     await GuideCheckinDemoSeed.Run(app.Services);
     return;
 }
@@ -86,7 +88,7 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.Use(async (context, next) => {
     // Browser mutations must originate from this app or an explicitly allowed frontend.
-    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
+    if (context.Request.Path.StartsWithSegments("/hubs/chat") || HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
         var origin = context.Request.Headers.Origin.ToString();
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         var crossSite = context.Request.Headers["Sec-Fetch-Site"] == "cross-site";
@@ -126,6 +128,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllers();
+app.MapHub<TripOps.Api.Hubs.ChatHub>("/hubs/chat", options => options.CloseOnAuthenticationExpiration = true);
 app.Run();
 
 public partial class Program;

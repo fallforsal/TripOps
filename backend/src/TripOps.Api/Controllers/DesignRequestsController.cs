@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Service.Tours;
+using TripOps.Service.Accounts;
+using TripOps.Api.Infrastructure;
 
 namespace TripOps.Api.Controllers;
 
@@ -35,12 +37,9 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Tour(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTour(Actor, id, ct));
     [HttpGet("{id:int}/plans")]
-    [EndpointSummary("List all completed custom Tour plans shared with this customer")]
+    [EndpointSummary("View the current shared snapshot of the customer-owned private tour")]
     [ProducesResponseType<IReadOnlyList<TourDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Plans(int id, CancellationToken ct) => Ok(await tours.CustomerRequestTours(Actor, id, ct));
-    [HttpGet("{id:int}/history")]
-    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]
-    public async Task<IActionResult> History(int id, CancellationToken ct) => Ok(await requests.History(Actor, id, false, ct));
     [HttpGet("{id:int}/messages")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.RequestMessage>>(200)]
     public async Task<IActionResult> Messages(int id, CancellationToken ct) => Ok(await requests.Messages(Actor, id, ct));
@@ -54,33 +53,23 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [HttpGet("{id:int}/source")]
     [ProducesResponseType<System.Text.Json.JsonElement>(200)]
     public async Task<IActionResult> Source(int id, CancellationToken ct) => Ok(await requests.Source(Actor, id, ct));
-    [HttpPost("{id:int}/agree-plan")]
-    [ProducesResponseType(204)]
-    public async Task<IActionResult> Agree(int id, DesignRequestService.PlanAgreement input, CancellationToken ct)
-    { await requests.Agree(Actor, id, input, ct); return NoContent(); }
-    [HttpGet("{id:int}/proposals")]
-    [EndpointSummary("List customer changes and Agency replies for a custom tour request")]
-    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Proposals(int id, CancellationToken ct) =>
-        Ok(await requests.Proposals(Actor, id, false, ct));
-    [HttpPost("{id:int}/proposals")]
-    [EndpointSummary("Send a customer-owned edited Tour plan to its Agency for review")]
-    [ProducesResponseType<DesignRequestService.PlanProposalDto>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> SubmitProposal(int id, DesignRequestService.PlanProposalInput input, CancellationToken ct) =>
-        StatusCode(StatusCodes.Status201Created, await requests.SubmitProposal(Actor, id, input, ct));
+
 }
 
 [ApiController, Route("api/v1/agency/tour-design-requests"), Authorize(Roles = "agency")]
 [Tags("Custom Tour Requests")]
-public sealed class AgencyDesignRequestsController(DesignRequestService requests, TourService tours) : ControllerBase
+public sealed class AgencyDesignRequestsController(DesignRequestService requests, TourService tours,CloudinaryStorage storage) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet]
     [EndpointSummary("List custom tour requests addressed to the signed-in Agency")]
     [ProducesResponseType<IReadOnlyList<DesignRequestDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await requests.List(Actor, true, ct));
+    [HttpPost("{id:int}/lifecycle")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> Lifecycle(int id,DesignLifecycleInput input,CancellationToken ct) {await requests.Lifecycle(Actor,id,input,ct);return NoContent();}
     [HttpPost("{id:int}/action")]
-    [EndpointSummary("Review or reject an Agency-owned custom tour request")]
+    [EndpointSummary("Receive an Agency-owned design request or reject it with a reason")]
     [ProducesResponseType<DesignRequestDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Act(int id, DesignRequestAction input, CancellationToken ct) => Ok(await requests.Act(Actor, id, input, ct));
     [HttpPost("{id:int}/tours")]
@@ -91,6 +80,35 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
         var tour = await tours.CreateForRequest(Actor, id, configuration, ct);
         return Created($"/api/v1/agency/tours/{tour.Id}", tour);
     }
+    [HttpPut("{id:int}/tour")]
+    [EndpointSummary("Save a private tour draft or completed design atomically with one version increment")]
+    [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveTour(int id, SaveDesignTourInput input, CancellationToken ct) =>
+        Ok(await tours.SaveForRequest(Actor, id, input, ct));
+    [HttpPut("{id:int}/tour-with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Save the selected design version and upload its local images together")]
+    [ProducesResponseType<TourDto>(200)]
+    public async Task<IActionResult> SaveWithImages(int id,[FromForm] TourSaveForm form,CancellationToken ct)
+    {
+        await tours.Agency(Actor,ct);await requests.Source(Actor,id,ct);
+        var input=form.Read<SaveDesignTourInput>();
+        if(input.Revision.HasValue) {
+            var current=await tours.DesignVersion(Actor,id,input.Version??1,ct);
+            if(current.Revision!=input.Revision)throw new TourException(409,"Tour đã thay đổi. Vui lòng tải lại.");
+        }
+        var configuration=await form.Upload(input.Configuration,storage,Actor,ct);
+        return Ok(await tours.SaveForRequest(Actor,id,input with {Configuration=configuration},ct));
+    }
+    [HttpPost("{id:int}/clone")]
+    [EndpointSummary("Clone an Agency-owned tour into the accepted design request")]
+    [ProducesResponseType<TourDto>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> Clone(int id, DesignCloneInput input, CancellationToken ct) =>
+        StatusCode(201, await tours.CloneForRequest(Actor, id, input, ct));
+    [HttpPost("{id:int}/share")]
+    [EndpointSummary("Share the completed working version without publishing it publicly")]
+    [ProducesResponseType<TourDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Share(int id, ShareDesignVersionInput input, CancellationToken ct) =>
+        Ok(await tours.ShareForRequest(Actor, id, input, ct));
     [HttpGet("{id:int}/history")]
     [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanHistory>>(200)]
     public async Task<IActionResult> History(int id, CancellationToken ct) => Ok(await requests.History(Actor, id, true, ct));
@@ -107,14 +125,4 @@ public sealed class AgencyDesignRequestsController(DesignRequestService requests
     [HttpGet("{id:int}/source")]
     [ProducesResponseType<System.Text.Json.JsonElement>(200)]
     public async Task<IActionResult> Source(int id, CancellationToken ct) => Ok(await requests.Source(Actor, id, ct));
-    [HttpGet("{id:int}/proposals")]
-    [EndpointSummary("List customer Tour plan changes addressed to this Agency")]
-    [ProducesResponseType<IReadOnlyList<DesignRequestService.PlanProposalDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Proposals(int id, CancellationToken ct) =>
-        Ok(await requests.Proposals(Actor, id, true, ct));
-    [HttpPost("{id:int}/proposals/{proposalId:int}/reply")]
-    [EndpointSummary("Agency responds to a customer's edited Tour plan")]
-    [ProducesResponseType<DesignRequestService.PlanProposalDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReplyProposal(int id, int proposalId, DesignRequestService.PlanProposalReply input, CancellationToken ct) =>
-        Ok(await requests.ReplyProposal(Actor, id, proposalId, input, ct));
 }

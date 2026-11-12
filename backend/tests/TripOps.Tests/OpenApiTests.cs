@@ -36,13 +36,17 @@ public sealed class OpenApiTests
         Assert.Contains(operations, o => o.Path == "/api/v1/payments/payos/return" && o.Method == "get");
         Assert.DoesNotContain(operations, o => o.Path.Contains("/vnpay", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
-        Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/images" && o.Method == "post");
+        Assert.DoesNotContain(operations, o => o.Path == "/api/v1/agency/tours/images");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/with-images" && o.Method == "post");
+        Assert.DoesNotContain(operations,o=>o.Path=="/api/v1/tour-design-requests/{id}/history");
+        Assert.DoesNotContain(operations,o=>o.Path=="/api/v1/bookings/{bookingId}/quotations/change-plan");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/bookings/available-guides" && o.Method == "get");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/{id}" && o.Method == "put");
         foreach (var action in new[] { "publish", "hide" }) Assert.Contains(operations, o => o.Path == $"/api/v1/agency/tours/{{id}}/{action}" && o.Method == "post");
         foreach (var action in new[] { "submit", "approve", "reject" }) Assert.DoesNotContain(operations, o =>
             (o.Path.StartsWith("/api/v1/agency/tours/") || o.Path.StartsWith("/api/v1/admin/tours/")) && o.Path.EndsWith($"/{{id}}/{action}"));
-        Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/{id}/versions/{number}/restore");
+        Assert.DoesNotContain(operations, o => o.Path == "/api/v1/agency/tours/{id}/versions/{number}/restore");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/tour-design-requests/{id}/versions/{number}");
         Assert.Contains(operations, o => o.Path == "/api/v1/provider/services" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/admin/services/{id}/approve" && o.Method == "post");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/suppliers" && o.Method == "get");
@@ -95,10 +99,10 @@ public sealed class OpenApiTests
         foreach (var tag in new[] { "Authentication", "Partner Management", "Service Management", "Tour Management", "Tour Moderation", "Tour Publishing", "Health" }) Assert.Contains(tag, tags);
         Assert.DoesNotContain("Tour Approval", tags);
         foreach (var item in operations) {
-            Assert.False(string.IsNullOrWhiteSpace(item.Operation.GetProperty("summary").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(item.Operation.GetProperty("summary").GetString()), $"Missing summary for {item.Method} {item.Path}");
             var responses = item.Operation.GetProperty("responses");
             foreach (var response in responses.EnumerateObject().Where(r => r.Name.StartsWith('2') && r.Name != "204" && !item.Path.StartsWith("/api/v1/files/")))
-                Assert.True(response.Value.GetProperty("content").GetProperty("application/json").TryGetProperty("schema", out _), $"Missing response schema for {item.Method} {item.Path}");
+                Assert.True(response.Value.TryGetProperty("content", out var content) && content.TryGetProperty("application/json", out var jsonContent) && jsonContent.TryGetProperty("schema", out _), $"Missing response schema for {item.Method} {item.Path}");
         }
         var paths = root.GetProperty("paths");
         Assert.True(paths.GetProperty("/api/v1/agency/tours").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));

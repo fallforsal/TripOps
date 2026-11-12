@@ -6,13 +6,16 @@ using TripOps.Api.Controllers;
 using TripOps.Data.Enums;
 using TripOps.Service.Common;
 using TripOps.Service.Tours;
+using TripOps.Service.Services;
 
 namespace TripOps.Tests;
 
 public sealed partial class TourFlowTests
 {
-    [Fact]
-    public async Task Service_metadata_and_additional_images_round_trip_through_all_existing_read_APIs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Service_metadata_and_additional_images_round_trip_through_all_existing_read_APIs(bool legacyText)
     {
         await using var app = new App();
         await app.Initialize();
@@ -26,6 +29,11 @@ public sealed partial class TourFlowTests
             service.OperatingHours = "Nhận phòng 14:00, trả phòng 12:00";
             service.HiddenReason = "Lý do ẩn trước đó";
             service.Capacity = 37;
+            service.Street = "12 Trần Phú";
+            service.Ward = "Phường Xuân Hương";
+            service.PriceUnit = "room_night";
+            service.Policies = legacyText ? "Nhận phòng cần giấy tờ" : "[\"Nhận phòng cần giấy tờ\",\"Trả phòng trước 12:00\"]";
+            service.Amenities = legacyText ? "Wifi" : "[\"Wifi\",\"Hồ bơi\"]";
             service.ThumbnailUrl = thumbnail;
             service.Images = JsonSerializer.Serialize(new string?[] { thumbnail, extra, extra, null });
             await db.SaveChangesAsync();
@@ -50,6 +58,12 @@ public sealed partial class TourFlowTests
         Assert.Equal(detail.HiddenReason, listed.HiddenReason);
         Assert.Equal(new[] { extra }, listed.Images);
 
+        using var provider = await app.Login("provider");
+        var providerDetail = await provider.GetFromJsonAsync<AdminServiceDto>("/api/v1/provider/services/102");
+        Assert.NotNull(providerDetail);
+        Assert.NotEmpty(providerDetail.Policies);
+        Assert.NotEmpty(providerDetail.Amenities);
+
         using var anonymous = app.CreateClient();
         var items = await anonymous.GetFromJsonAsync<CatalogueItem[]>("/api/v1/catalogue");
         var item = Assert.Single(items!, s => s.Id == "102");
@@ -62,6 +76,14 @@ public sealed partial class TourFlowTests
         Assert.Equal(thumbnail, item.Image);
         Assert.Equal(thumbnail, item.ThumbnailUrl);
         Assert.Equal(new[] { extra }, item.Images);
+        Assert.Equal(providerDetail.ThumbnailUrl, item.ThumbnailUrl);
+        Assert.Equal(providerDetail.Images, item.Images);
+        Assert.Equal(providerDetail.Policies, item.Policies);
+        Assert.Equal(providerDetail.Amenities, item.Amenities);
+        Assert.Equal(providerDetail.Street, item.Street);
+        Assert.Equal(providerDetail.Ward, item.Ward);
+        Assert.Equal(providerDetail.PriceUnit, item.PriceUnit);
+        Assert.Equal(providerDetail.CreatedAt, item.CreatedAt);
 
         await app.Inspect(async db =>
         {

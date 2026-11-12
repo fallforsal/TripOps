@@ -9,7 +9,7 @@ namespace TripOps.Api.Infrastructure;
 
 /// <summary>
 /// Explicit, development-only, repeatable fixture for Tour Guide operations.
-/// Creates demo identities and one confirmed booking departing today (Vietnam time).
+/// Creates demo identities and one confirmed booking departing today (Vietnam time), with ordered stops and NO GPS requirement.
 /// Does not modify bookings or attendance/check-ins when executed again.
 /// </summary>
 public static class GuideCheckinDemoSeed
@@ -93,20 +93,18 @@ public static class GuideCheckinDemoSeed
                 ExperienceYears = 3,
                 Languages = "[\"Tiếng Việt\"]",
                 Routes = "[\"Vũng Tàu\"]",
-                Specialties = "[\"Tour GPS demo\"]",
-                Bio = "Tài khoản chỉ dùng để kiểm thử check-in GPS, không phải hướng dẫn viên thực tế.",
+                Specialties = "[\"Tour thứ tự demo\"]",
+                Bio = "Tài khoản dùng để kiểm thử check-in đúng thứ tự, không phải HDV thực tế.",
             });
         }
         await db.SaveChangesAsync(cancellationToken);
 
-        // Three deliberately separated *simulated* coordinates near Vũng Tàu.
-        // They do not represent verified tourist landmarks. Use Android Emulator
-        // Location / adb geo fix to move between them (longitude before latitude).
-        var points = new (string Name, double Lat, double Lon, int Hour)[]
+        // Three ordered test stops, no GPS coordinates or location checks.
+        var points = new (string Name, int Hour)[]
         {
-            ("[TEST GPS] Điểm A - Vũng Tàu", 10.342000, 107.082000, 8),
-            ("[TEST GPS] Điểm B - Vũng Tàu", 10.350000, 107.090000, 10),
-            ("[TEST GPS] Điểm C - Vũng Tàu", 10.358000, 107.098000, 14),
+            ("[TEST] Điểm A - Vũng Tàu", 8),
+            ("[TEST] Điểm B - Vũng Tàu", 10),
+            ("[TEST] Điểm C - Vũng Tàu", 14),
         };
         var tour = await db.Tours.SingleOrDefaultAsync(
             x => x.Code == tourCode, cancellationToken);
@@ -116,8 +114,8 @@ public static class GuideCheckinDemoSeed
             {
                 AgencyId = agency.Id,
                 Code = tourCode,
-                Name = $"[TEST GPS] Tour Vũng Tàu - {departure:dd/MM/yyyy}",
-                Destination = "Vũng Tàu (mô phỏng GPS)",
+                Name = $"[TEST] Tour Vũng Tàu - {departure:dd/MM/yyyy}",
+                Destination = "Vũng Tàu",
                 DepartureLocation = "Vũng Tàu",
                 DurationDays = 1,
                 DurationNights = 0,
@@ -146,15 +144,13 @@ public static class GuideCheckinDemoSeed
                     new TourTimeline
                     {
                         DayNumber = 1,
-                        Title = "Ngày 1 - Kiểm thử GPS và thứ tự check-in",
-                        Description = "Điểm A → B → C. Tọa độ chỉ dùng để mô phỏng.",
+                        Title = "Ngày 1 - Kiểm thử thứ tự check-in",
+                        Description = "Điểm A → B → C. Không cần vị trí GPS.",
                         Attractions = points.Select(p => new TouristAttraction
                         {
                             Name = p.Name,
                             AgencyId = agency.Id,
-                            Latitude = p.Lat,
-                            Longitude = p.Lon,
-                            GeofenceRadiusMeters = 300,
+
                             Time = new DateTime(2000, 1, 1, p.Hour, 0, 0),
                         }).ToList(),
                     },
@@ -230,17 +226,15 @@ public static class GuideCheckinDemoSeed
                     new BookingTimeline
                     {
                         DayNumber = 1,
-                        Title = "Ngày 1 - Vũng Tàu (GPS mô phỏng)",
+                        Title = "Ngày 1 - Vũng Tàu",
                         Description = "Check-in bắt buộc theo đúng thứ tự A → B → C.",
-                        Attractions = points.Select((p, index) => new BookingTimelineAttraction
+                        Attractions = points.Select(p => new BookingTimelineAttraction
                         {
-                            VisitOrder = index + 1,
+
                             AgencyId = agency.Id,
                             OriginalLocationName = p.Name,
                             CurrentLocationName = p.Name,
-                            Latitude = p.Lat,
-                            Longitude = p.Lon,
-                            GeofenceRadiusMeters = 300,
+
                             Time = departure.AddHours(p.Hour),
                             AttendanceStatus = "Pending",
                         }).ToList(),
@@ -259,11 +253,10 @@ public static class GuideCheckinDemoSeed
 
         await transaction.CommitAsync(cancellationToken);
         var result = new SeedSummary(departure, booking.Id, bookingCode, tour.Id, tourCode, GuideEmail, created);
-        Console.WriteLine($"GPS demo seed {(created ? "created" : "already exists")}: {bookingCode} ({departure:dd/MM/yyyy}, VN), booking ID={booking.Id}.");
+        Console.WriteLine($"Guide check-in demo seed {(created ? "created" : "already exists")}: {bookingCode} ({departure:dd/MM/yyyy}, VN), booking ID={booking.Id}.");
         Console.WriteLine($"Guide: {GuideEmail} / password {DemoPassword} (only when the account was newly created).");
-        Console.WriteLine("Emulator positions (adb emu geo fix <LONGITUDE> <LATITUDE>):");
-        foreach (var point in points)
-            Console.WriteLine($"  {point.Name}: {point.Lon:F6} {point.Lat:F6} (radius 300m)");
+        Console.WriteLine("Check-in order: " + string.Join(" -> ", points.Select(p => p.Name)));
+        Console.WriteLine("No GPS or location permissions required.");
         return result;
     }
 }

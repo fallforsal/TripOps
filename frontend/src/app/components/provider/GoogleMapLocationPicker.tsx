@@ -1,3 +1,4 @@
+import { toast } from "@/app/lib/notifications";
 import { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -177,7 +178,7 @@ export function GoogleMapLocationPicker({
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("Trình duyệt không hỗ trợ tính năng định vị GPS.");
+      toast.warning("Trình duyệt không hỗ trợ tính năng định vị GPS.");
       return;
     }
     setIsLocatingGPS(true);
@@ -190,7 +191,7 @@ export function GoogleMapLocationPicker({
       },
       (err) => {
         setIsLocatingGPS(false);
-        alert("Không thể lấy vị trí hiện tại: " + err.message);
+        toast.error("Không thể lấy vị trí hiện tại: " + err.message);
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );

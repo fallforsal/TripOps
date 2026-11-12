@@ -1,3 +1,5 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
+import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
 import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -151,11 +153,7 @@ const formatPriceSummary = (service: Service) => {
   return "Liên hệ báo giá";
 };
 
-const formatAddress = (service: Service) => {
-  const parts = [service.street, service.ward, service.province].filter(Boolean);
-  if (parts.length > 0) return parts.join(", ");
-  return service.location || "Việt Nam";
-};
+const formatAddress = serviceAddress;
 
 const provinceCoordinates: Record<string, [number, number, number]> = {
   "Lâm Đồng": [11.9404, 108.4583, 12],
@@ -579,10 +577,6 @@ export function AgencyServicesExplorer({
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-  // B2B Contact Provider Modal
-  const [contactingService, setContactingService] = useState<Service | null>(null);
-  const [inquirySent, setInquirySent] = useState(false);
-
   // Extract unique provinces for filter dropdown
   const provincesList = Array.from(
     new Set(
@@ -618,10 +612,7 @@ export function AgencyServicesExplorer({
   // VIEW: FULL SERVICE POST DETAIL
   // =========================================================================
   if (selectedService) {
-    const imagesList =
-      selectedService.images && selectedService.images.length > 0
-        ? selectedService.images
-        : [selectedService.image];
+    const imagesList = serviceGallery(selectedService);
 
     const meta = getCategoryMeta(selectedService.category);
     const CategoryIcon = meta.icon;
@@ -654,17 +645,7 @@ export function AgencyServicesExplorer({
 
           {/* B2B Action Button: Contact Provider */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button
-              size="sm"
-              onClick={() => {
-                setContactingService(selectedService);
-                setInquirySent(false);
-              }}
-              className="rounded-xl bg-[#075985] hover:bg-[#F97316] text-white shadow-xs flex-1 sm:flex-initial"
-            >
-              <Phone className="w-4 h-4 mr-1.5" />
-              Liên hệ Đối tác
-            </Button>
+            <ChatWithButton userId={selectedService.providerId} context={{kind:"service",id:Number(selectedService.id),title:selectedService.name,thumbnailUrl:selectedService.thumbnailUrl}}>Chat với Provider</ChatWithButton>
           </div>
         </div>
 
@@ -881,6 +862,13 @@ export function AgencyServicesExplorer({
                   </div>
                 )}
 
+                {selectedService.operatingHours && (
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-500 block mb-0.5">Khung giờ hoạt động / đón khách:</span>
+                    <span className="font-semibold text-gray-900 text-sm">{selectedService.operatingHours}</span>
+                  </div>
+                )}
+
                 {selectedService.ticketIncludes && (
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 sm:col-span-2">
                     <span className="text-gray-500 block mb-0.5">Quyền lợi vé tham quan:</span>
@@ -1070,111 +1058,13 @@ export function AgencyServicesExplorer({
               </div>
 
               <div className="space-y-2 pt-1 text-xs">
-                <Button
-                  onClick={() => {
-                    setContactingService(selectedService);
-                    setInquirySent(false);
-                  }}
-                  className="w-full rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white font-semibold py-2.5 text-xs shadow-xs"
-                >
-                  <MessageCircle className="w-4 h-4 mr-1.5" />
-                  Gửi yêu cầu Báo giá & Hợp đồng
-                </Button>
+                <ChatWithButton userId={selectedService.providerId} context={{kind:"service",id:Number(selectedService.id),title:selectedService.name,thumbnailUrl:selectedService.thumbnailUrl}}>Chat với Provider</ChatWithButton>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Modal: Contact Provider */}
-        {contactingService && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-gray-100 shadow-2xl">
-              <div className="flex items-center justify-between border-b pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-[#F0F9FF] text-[#075985]">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base">
-                      Liên hệ Đối tác Cung cấp
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      {contactingService.providerName}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setContactingService(null)}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
 
-              {inquirySent ? (
-                <div className="py-6 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-bold text-gray-900 text-base">
-                    Đã gửi yêu cầu thành công!
-                  </h4>
-                  <p className="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed">
-                    Hệ thống đã chuyển thông tin yêu cầu của Quý công ty tới{" "}
-                    <strong>{contactingService.providerName}</strong>. Đại diện nhà cung cấp sẽ liên hệ qua điện thoại/email trong vòng 2 giờ làm việc.
-                  </p>
-                  <Button
-                    onClick={() => setContactingService(null)}
-                    className="rounded-xl bg-[#075985] text-white text-xs px-6"
-                  >
-                    Đóng cửa sổ
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4 text-xs">
-                  <div className="p-3 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
-                    <p className="text-gray-600">
-                      <strong>Dịch vụ quan tâm:</strong> {contactingService.name}
-                    </p>
-                    <p className="text-gray-600">
-                      <strong>Công ty lữ hành:</strong> {companyName}
-                    </p>
-                    <p className="text-gray-600">
-                      <strong>Địa chỉ phục vụ:</strong> {formatAddress(contactingService)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-gray-700 block mb-1">
-                      Nội dung tin nhắn / Yêu cầu báo giá số lượng đoàn:
-                    </label>
-                    <textarea
-                      rows={3}
-                      defaultValue={`Kính gửi ${contactingService.providerName},\nCông ty chúng tôi dự kiến có đoàn khách cần sử dụng dịch vụ "${contactingService.name}". Xin vui lòng gửi bảng giá chiết khấu đại lý và chính sách hợp tác qua email của chúng tôi.`}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-[#075985] focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setContactingService(null)}
-                      className="flex-1 rounded-xl text-xs"
-                    >
-                      Hủy
-                    </Button>
-                    <Button
-                      onClick={() => setInquirySent(true)}
-                      className="flex-1 rounded-xl bg-[#075985] hover:bg-[#F97316] text-white text-xs"
-                    >
-                      Gửi yêu cầu liên hệ
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     );
   }

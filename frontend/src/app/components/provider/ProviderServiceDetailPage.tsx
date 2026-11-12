@@ -1,3 +1,5 @@
+import { confirmAction } from "@/app/lib/notificationDialogs";
+import { serviceGallery } from "@/app/lib/servicePresentation";
 import { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -40,7 +42,7 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { ImageUploadManager } from "../ImageUploadManager";
 import { mockServices } from "@/app/data/mockData";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { RejectServiceModal } from "../admin/RejectServiceModal";
 import { ProviderProfileLink } from "../admin/ProviderProfileLink";
 
@@ -103,11 +105,7 @@ export function ProviderServiceDetailPage({
     );
   }
 
-  const primaryThumb = service.thumbnailUrl || service.image;
-  const rawImages = service.images || [];
-  const imagesList = primaryThumb
-    ? (rawImages.includes(primaryThumb) ? rawImages : [primaryThumb, ...rawImages])
-    : (rawImages.length > 0 ? rawImages : ["https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"]);
+  const imagesList = serviceGallery(service);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showImageManager, setShowImageManager] = useState(false);
@@ -344,9 +342,9 @@ export function ProviderServiceDetailPage({
                 variant="outline"
                 size="sm"
                 className="text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl text-xs font-semibold gap-1.5"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    confirm(
+                    await confirmAction(
                       `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                     )
                   ) {
@@ -375,9 +373,9 @@ export function ProviderServiceDetailPage({
                 variant="outline"
                 size="sm"
                 className="text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    confirm(
+                    await confirmAction(
                       `Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này không thể hoàn tác.`
                     )
                   ) {
@@ -882,9 +880,9 @@ export function ProviderServiceDetailPage({
 
                 {onDelete && (<Button
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      confirm(
+                      await confirmAction(
                         `[Admin] Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này sẽ gỡ bỏ hoàn toàn bài đăng khỏi hệ thống.`
                       )
                     ) {
