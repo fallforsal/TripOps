@@ -247,7 +247,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           Text(blockedReason, style: const TextStyle(
                             fontSize: 11, color: muted,
                           )),
-radius                          if (busy == stop.id) ...[
+                          if (busy == stop.id) ...[
                             space(9),
                             const LinearProgressIndicator(),
                           ],
