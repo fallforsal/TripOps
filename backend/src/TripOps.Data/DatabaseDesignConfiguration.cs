@@ -5,6 +5,12 @@ namespace TripOps.Data;
 
 internal static class DatabaseDesignConfiguration
 {
+    /// <summary>Đọc attendance_status của hành khách; dữ liệu cũ ghi "Present" (có mặt) được hiểu là CheckedIn.</summary>
+    internal static AttendanceStatus ReadAttendance(string value) =>
+        string.Equals(value, "Present", StringComparison.OrdinalIgnoreCase) ? AttendanceStatus.CheckedIn
+        : Enum.TryParse<AttendanceStatus>(value, true, out var status) ? status
+        : AttendanceStatus.Pending;
+
     public static void Configure(ModelBuilder modelBuilder)
     {
 
@@ -26,6 +32,10 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2").IsRequired();
+            entity.Property(e => e.BankName).HasColumnName("bank_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountNumber).HasColumnName("bank_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.BankAccountHolder).HasColumnName("bank_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountUpdatedAt).HasColumnName("bank_account_updated_at").HasColumnType("datetime2");
         });
         modelBuilder.Entity<GuideProfile>(entity =>
         {
@@ -337,7 +347,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Price).HasColumnName("price").HasColumnType("decimal(12, 2)").IsRequired();
             entity.Property(e => e.AssignedGuideId).HasColumnName("assigned_guide_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.AttendanceStatus).HasColumnName("attendance_status").HasColumnType("nvarchar(50)").HasMaxLength(50);
-            entity.Property(e => e.AttendanceStatus).HasConversion<string>();
+            // Ghi như cũ (tên enum). Đọc thì chịu được dữ liệu cũ: "Present" = CheckedIn; giá trị lạ = Pending (không làm sập trang).
+            entity.Property(e => e.AttendanceStatus).HasConversion(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<AttendanceStatus, string>(
+                v => v.ToString(), v => ReadAttendance(v)));
             entity.Property(e => e.CheckedBy).HasColumnName("checked_by").HasColumnType("nvarchar(36)").HasMaxLength(36);
             entity.Property(e => e.CheckedAt).HasColumnName("checked_at").HasColumnType("datetime2");
             entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(20)").HasMaxLength(20);

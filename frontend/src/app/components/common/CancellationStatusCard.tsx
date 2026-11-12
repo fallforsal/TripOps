@@ -1,12 +1,15 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import type { CancellationRequestDto, RefundAccountInput } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime } from "@/app/services/payos";
-import { VIETNAM_BANKS } from "@/app/data/vietnamBanks";
+import { BankCombobox } from "@/app/components/common/BankCombobox";
+import { AccountHolderInput } from "@/app/components/common/AccountHolderInput";
+import { finalHolderName, toAccountNumber } from "@/app/lib/bankAccountText";
+import { loadSavedBankAccount } from "@/app/services/profileBankAccount";
 
 const REASON_LABELS: Record<string, string> = {
   CUSTOMER_REQUEST: "Khách đổi kế hoạch",
@@ -29,21 +32,37 @@ interface CancellationStatusCardProps {
 export function CancellationStatusCard({ cancellation: c, onSaveRefundAccount }: CancellationStatusCardProps) {
   const pending = c.status === "Pending" || c.status === "Reviewing";
   const needsAccount = pending && !c.hasRefundAccount && c.suggestedRefund > 0;
-  const [bankName, setBankName] = useState(VIETNAM_BANKS[0].name);
+  const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Khách đã lưu tài khoản trong hồ sơ thì điền sẵn, chỉ cần bấm lưu.
+  const canEnter = needsAccount && !!onSaveRefundAccount;
+  useEffect(() => {
+    if (!canEnter) return;
+    let active = true;
+    loadSavedBankAccount().then((saved) => {
+      if (!active || !saved) return;
+      setBankName(saved.bankName ?? "");
+      setAccountNumber(saved.accountNumber ?? "");
+      setAccountHolder(saved.accountHolder ?? "");
+    });
+    return () => {
+      active = false;
+    };
+  }, [canEnter]);
+
   const save = async () => {
     const number = accountNumber.replace(/\s/g, "");
-    if (!bankName.trim() || !accountHolder.trim() || !/^\d{6,30}$/.test(number)) {
+    if (!bankName.trim() || !finalHolderName(accountHolder) || !/^\d{6,30}$/.test(number)) {
       setError("Nhập đủ ngân hàng, số tài khoản (6–30 chữ số) và tên chủ tài khoản.");
       return;
     }
     if (!onSaveRefundAccount) return;
     setSaving(true);
-    const ok = await onSaveRefundAccount({ bankName: bankName.trim(), accountNumber: number, accountHolder: accountHolder.trim().toUpperCase() });
+    const ok = await onSaveRefundAccount({ bankName: bankName.trim(), accountNumber: number, accountHolder: finalHolderName(accountHolder) });
     setSaving(false);
     if (ok) setError("");
   };
@@ -112,25 +131,15 @@ export function CancellationStatusCard({ cancellation: c, onSaveRefundAccount }:
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="space-y-1">
                   <Label className="text-[11px]">Ngân hàng</Label>
-                  <select
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    className="w-full h-9 px-2 text-xs rounded-md border border-gray-300 bg-white"
-                  >
-                    {VIETNAM_BANKS.map((b) => (
-                      <option key={b.bin} value={b.name}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
+                  <BankCombobox id={`refund-account-bank-${c.id}`} value={bankName} onChange={setBankName} disabled={saving} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[11px]">Số tài khoản</Label>
-                  <Input value={accountNumber} inputMode="numeric" onChange={(e) => setAccountNumber(e.target.value)} className="h-9 text-xs" />
+                  <Input value={accountNumber} inputMode="numeric" onChange={(e) => setAccountNumber(toAccountNumber(e.target.value))} className="h-9 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[11px]">Chủ tài khoản</Label>
-                  <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value.toUpperCase())} className="h-9 text-xs uppercase" />
+                  <AccountHolderInput value={accountHolder} onChange={setAccountHolder} placeholder="VD NGUYEN VAN A" className="h-9 text-xs" />
                 </div>
               </div>
               {error && <NotificationMessage tone="error" message={error} />}

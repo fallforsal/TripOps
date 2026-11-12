@@ -4,6 +4,8 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { BankCombobox } from "@/app/components/common/BankCombobox";
+import { AccountHolderInput } from "@/app/components/common/AccountHolderInput";
+import { finalHolderName, toAccountNumber } from "@/app/lib/bankAccountText";
 import { formatVietnamDateTime } from "@/app/services/payos";
 import {
   formatVND,
@@ -52,7 +54,7 @@ export function AgencyPayoutPanel() {
     if (holder.trim().length < 2) return setError("Vui lòng nhập tên chủ tài khoản.");
     setSaving(true);
     try {
-      const next = await saveAgencyPayoutAccount(bankName, accountNumber, holder);
+      const next = await saveAgencyPayoutAccount(bankName, accountNumber, finalHolderName(holder));
       setAccount(next);
       setAccountNumber(next.accountNumber ?? "");
       setHolder(next.accountHolder ?? "");
@@ -67,7 +69,7 @@ export function AgencyPayoutPanel() {
   const changed =
     bankName !== (account?.bankName ?? "") ||
     accountNumber.replace(/\s/g, "") !== (account?.accountNumber ?? "") ||
-    holder.trim() !== (account?.accountHolder ?? "");
+    finalHolderName(holder) !== (account?.accountHolder ?? "");
 
   if (loading) return <div className="p-6 text-sm text-slate-500">Đang tải tài khoản nhận tiền...</div>;
 
@@ -94,11 +96,11 @@ export function AgencyPayoutPanel() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="payout-number">Số tài khoản</Label>
-            <Input id="payout-number" inputMode="numeric" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="h-10 rounded-xl" />
+            <Input id="payout-number" inputMode="numeric" value={accountNumber} onChange={(e) => setAccountNumber(toAccountNumber(e.target.value))} className="h-10 rounded-xl" />
           </div>
           <div className="space-y-1">
             <Label htmlFor="payout-holder">Tên chủ tài khoản</Label>
-            <Input id="payout-holder" value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="VD CONG TY TNHH ABC" className="h-10 rounded-xl" />
+            <AccountHolderInput id="payout-holder" value={holder} onChange={setHolder} placeholder="VD CONG TY TNHH ABC" className="h-10 rounded-xl" />
           </div>
         </div>
         <p className="text-[11px] text-slate-500">

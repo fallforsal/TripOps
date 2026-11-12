@@ -38,3 +38,9 @@ public sealed record PartnerDto(ProfileDto Profile, string Name, string Email, s
 public sealed record PartnerPageDto(IReadOnlyList<PartnerDto> Items, int Total, int Page, int PageSize);
 public sealed class AccountException(int status, string message) : Exception(message)
 { public int Status { get; } = status; }
+// Tài khoản ngân hàng nhận tiền hoàn lưu trong hồ sơ người dùng.
+public sealed record BankAccountDto(string? BankName, string? AccountNumber, string? AccountHolder, DateTime? UpdatedAt, bool HasAccount);
+public sealed record BankAccountInput(
+    [Required, StringLength(150)] string BankName,
+    [Required, StringLength(30)] string AccountNumber,
+    [Required, StringLength(150)] string AccountHolder);
