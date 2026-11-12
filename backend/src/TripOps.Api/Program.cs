@@ -7,6 +7,36 @@ using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
+
+//
+if (builder.Environment.IsDevelopment())
+{
+    Console.WriteLine(
+        $"Environment: {builder.Environment.EnvironmentName}");
+
+    Console.WriteLine(
+        $"ContentRoot: {builder.Environment.ContentRootPath}");
+
+    foreach (var key in new[]
+    {
+        "CloudName",
+        "ApiKey",
+        "ApiSecret"
+    })
+    {
+        var value = builder.Configuration[$"Cloudinary:{key}"];
+
+        Console.WriteLine(
+            $"Cloudinary:{key} = " +
+            (string.IsNullOrWhiteSpace(value) ? "MISSING" : "SET"));
+    }
+
+    Console.WriteLine(
+        $"Storage:UseLocal = " +
+        builder.Configuration["Storage:UseLocal"]);
+}
+//
+
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole();
 builder.Services.AddTripOpsServices(builder.Configuration);
