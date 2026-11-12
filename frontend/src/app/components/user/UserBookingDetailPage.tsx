@@ -749,7 +749,7 @@ export function UserBookingDetailPage({
                                 {p.idNumber !== undefined && p.idNumber !== null && String(p.idNumber).trim() !== "" && (
                                   <span className="mt-0.5 font-mono text-xs text-gray-500">{String(p.idNumber)}</span>
                                 )}
-                                {p.phone && <span className="text-xs text-[#075985]">{p.phone}</span>}
+                                {p.phone && <a href={`tel:${p.phone}`} className="text-xs text-[#075985] hover:underline">SĐT: {p.phone}</a>}
                                 {p.status === "INACTIVE" && (
                                   <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full w-fit">
                                     Đã rút khỏi toàn bộ tour

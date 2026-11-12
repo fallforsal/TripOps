@@ -15,7 +15,7 @@ public sealed record AgencyParticipantInput(
     [StringLength(2000)] string? RestaurantNote, [StringLength(2000)] string? Note,
     [Range(typeof(decimal), "0", "9999999999")] decimal TicketPrice,
     [Required, StringLength(240, MinimumLength = 3)] string Reason,
-    decimal ExpectedTotal, Guid RequestId,string[]? AgencyIds=null);
+    decimal ExpectedTotal, Guid RequestId,string[]? AgencyIds=null, [Phone, StringLength(30)] string? PhoneNumber=null);
 public sealed record ParticipantStagesInput([Required] string[] AgencyIds,
     [Required,StringLength(240,MinimumLength=3)] string Reason,decimal ExpectedTotal,Guid RequestId);
 
@@ -84,7 +84,7 @@ public sealed partial class BookingQuotationService
             var tier=BookingAlliance.Tier(config,agency,age);
             Require(b.BookingAgencies.Count==1 || tier!=null,"Không có giá chặng phù hợp độ tuổi trong phiên bản đã đặt.");
             var row=new BookingParticipant {CreationKey=input.RequestId,AgencyId=agency,ParticipantIndex=next,IsPrimary=agency==selected[0],FullName=input.FullName.Trim(),DateOfBirth=input.DateOfBirth.Date,
-                Gender=input.Gender,IdentityNumber=identity,RoommateNote=input.RoommateNote?.Trim(),RestaurantNote=input.RestaurantNote?.Trim(),Note=input.Note?.Trim(),TierName=tier?.Name??(age<12?"Trẻ em":"Người lớn"),
+                PhoneNumber=string.IsNullOrWhiteSpace(input.PhoneNumber)?null:input.PhoneNumber.Trim(),Gender=input.Gender,IdentityNumber=identity,RoommateNote=input.RoommateNote?.Trim(),RestaurantNote=input.RestaurantNote?.Trim(),Note=input.Note?.Trim(),TierName=tier?.Name??(age<12?"Trẻ em":"Người lớn"),
                 Price=b.BookingAgencies.Count>1?Money(tier!.PricePerGuest):input.TicketPrice,Status="ACTIVE"};
             b.Participants.Add(row);await ChargeStage(b,actor,row,"Bổ sung "+row.FullName+": "+input.Reason.Trim(),input.RequestId,ct);
         }

@@ -679,7 +679,7 @@ function Application() {
       })),
       participants: data.passengers.map((p) => ({
         fullName: p.fullName,
-        phoneNumber: p.phone || undefined,
+        phoneNumber: p.phone?.trim() || undefined,
         note: p.notes,
         roommateNote: p.roommateNote || p.roomingPreference,
         restaurantNote: p.dietaryNote,
@@ -1488,6 +1488,7 @@ function Application() {
         body: JSON.stringify({
           participants: passengers.map((p) => ({
             id: Number(p.id),
+            phoneNumber: p.phone?.trim() || null,
             fullName: p.fullName,
             dateOfBirth: p.dateOfBirth || null,
             gender: p.gender === "female" ? "Nữ" : "Nam",

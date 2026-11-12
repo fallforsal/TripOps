@@ -19,7 +19,7 @@ export type ProviderInboxRow = {
   agencyId: string; agencyLogo?: string | null; agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
   specialRequests: string | null; cancelReason: string | null; cancelledAt: string | null;
   serviceTime?: string | null;
-  guests: Array<{ age?: number | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
+  guests: Array<{ age?: number | null; phoneNumber?: string | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
 };
 
 const STATUS_MAP: Record<string, ProviderGroupReservationRequest["status"]> = {
@@ -59,6 +59,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
       id: i + 1,
       participantIndex: i + 1,
       fullName: g.fullName,
+      phone: g.phoneNumber || undefined,
       gender: g.gender === "Nữ" || /^f/i.test(g.gender || "") ? "female" : "male",
       tierName: g.tierName || undefined,
       age: g.age ?? undefined,

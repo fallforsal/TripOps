@@ -20,7 +20,7 @@ public sealed partial class TourFlowTests
         var original = b.TotalAmount; var contractId = b.Contract?.Id;
         var input = new AgencyParticipantInput("Agency guest", new DateTime(2001, 1, 1), "Nữ", "GUEST-123",
             "Ở cùng người thân, hai giường đơn", "Ăn chay, dị ứng tôm", "Cần hỗ trợ xe lăn", price,
-            "Bổ sung người theo thỏa thuận", original, Guid.NewGuid());
+            "Bổ sung người theo thỏa thuận", original, Guid.NewGuid(), PhoneNumber: "0901234567");
         var url = $"/api/v1/agency/bookings/{b.Id}/participants";
         Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync(url, input)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync(url, input)).StatusCode);
@@ -33,7 +33,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(input.RoommateNote, passenger.RoommateNote);
         Assert.Equal(input.RestaurantNote, passenger.RestaurantNote);
         Assert.Equal(input.Note, passenger.Note); Assert.Equal(price, passenger.Price);
-        Assert.Null(passenger.PhoneNumber);
+        Assert.Equal("0901234567", passenger.PhoneNumber);
         if (approved) {
             Assert.Equal(contractId, b.Contract!.Id); Assert.Equal(original, b.BaseTourAmount);
             Assert.Equal(price, b.SurchargeAmount);
