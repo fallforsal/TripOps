@@ -1,14 +1,12 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
-import '../domain/checkin_photo.dart';
+import 'checkin_photo_dialog.dart';
 
 class LocationScreen extends StatefulWidget {
   const LocationScreen({super.key, required this.detail, required this.guides});
@@ -24,7 +22,6 @@ class _LocationScreenState extends State<LocationScreen> {
   late BookingDetail current = widget.detail;
   int? busy;
   String? error;
-  final picker = ImagePicker();
   final Map<String, Future<Uint8List>> photoDownloads = {};
 
   Future<void> refresh() async {
@@ -50,149 +47,10 @@ class _LocationScreenState extends State<LocationScreen> {
       return;
     }
 
-    final noteController = TextEditingController();
-    final selected = <CheckinPhoto>[];
-    String? photoError;
-    var dialogOpen = true;
-
-    Future<void> choosePhotos(ImageSource source, StateSetter redraw) async {
-      try {
-        final files = source == ImageSource.camera
-            ? [
-                if (await picker.pickImage(
-                  source: ImageSource.camera,
-                  maxWidth: 1800, maxHeight: 1800,
-                  imageQuality: 78, requestFullMetadata: false,
-                ) case final XFile image) image,
-              ]
-            : await picker.pickMultiImage(
-                maxWidth: 1800, maxHeight: 1800,
-                imageQuality: 78, requestFullMetadata: false,
-                limit: CheckinPhotoLimits.maxFiles - selected.length,
-              );
-        if (!dialogOpen || !mounted) return;
-        final additions = <CheckinPhoto>[];
-        for (final image in files) {
-          additions.add(CheckinPhoto(
-            path: image.path, name: image.name,
-            mime: CheckinPhoto.mimeForFileName(image.name) ?? '',
-            bytes: await image.length(),
-          ));
-        }
-        final validation = CheckinPhoto.validate([...selected, ...additions]);
-        redraw(() {
-          photoError = validation;
-          if (validation == null) selected.addAll(additions);
-        });
-      } catch (_) {
-        if (dialogOpen && mounted) {
-          redraw(() => photoError = 'Không thể mở camera hoặc thư viện ảnh.');
-        }
-      }
-    }
-
-    final submission = await showDialog<({String note, List<CheckinPhoto> images})>(
+    final submission = await showDialog<CheckinSubmission>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, redraw) => AlertDialog(
-          title: Text('Check-in ${stop.name}'),
-          content: SizedBox(
-            width: 360,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Xác nhận đã đến địa điểm này. '
-                      'Ảnh đính kèm không bắt buộc; chỉ được check-in '
-                      'điểm kế tiếp trong lịch trình.'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 2, maxLength: 500,
-                    decoration: const InputDecoration(
-                      labelText: 'Ghi chú (không bắt buộc)',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Ảnh minh chứng (tối đa 5)',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  const Text('JPG, PNG, WebP · tối đa 5 MB/ảnh, 20 MB tổng',
-                    style: TextStyle(color: muted, fontSize: 11)),
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    if (selected.length < CheckinPhotoLimits.maxFiles) ...[
-                      OutlinedButton.icon(
-                        key: const ValueKey('pick-checkin-gallery'),
-                        onPressed: () => choosePhotos(ImageSource.gallery, redraw),
-                        icon: const Icon(Icons.photo_library_outlined, size: 17),
-                        label: const Text('Thư viện'),
-                      ),
-                      OutlinedButton.icon(
-                        key: const ValueKey('pick-checkin-camera'),
-                        onPressed: () => choosePhotos(ImageSource.camera, redraw),
-                        icon: const Icon(Icons.camera_alt_outlined, size: 17),
-                        label: const Text('Chụp ảnh'),
-                      ),
-                    ],
-                  ]),
-                  if (selected.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
-                      for (var index = 0; index < selected.length; index++)
-                        Stack(clipBehavior: Clip.none, children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(selected[index].path), width: 72, height: 72,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => const Icon(
-                                Icons.broken_image_outlined, size: 65),
-                            ),
-                          ),
-                          Positioned(top: -8, right: -8, child: IconButton.filledTonal(
-                            tooltip: 'Bỏ ảnh này',
-                            icon: const Icon(Icons.close, size: 14),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => redraw(() {
-                              selected.removeAt(index);
-                              photoError = null;
-                            }),
-                          )),
-                        ]),
-                    ]),
-                    const SizedBox(height: 7),
-                    Text('${selected.length}/5 ảnh  •  '
-                        '${(selected.fold<int>(0, (n, p) => n + p.bytes) / (1024 * 1024)).toStringAsFixed(1)} MB',
-                        style: const TextStyle(color: muted, fontSize: 11)),
-                  ],
-                  if (photoError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(photoError!, style: const TextStyle(color: Colors.red)),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Hủy'),
-            ),
-            FilledButton(
-              key: const ValueKey('confirm-checkin'),
-              onPressed: photoError != null ? null : () =>
-                  Navigator.pop(dialogContext,
-                    (note: noteController.text.trim(), images: List.of(selected))),
-              child: const Text('Xác nhận check-in'),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) => CheckinPhotoDialog(stopName: stop.name),
     );
-    dialogOpen = false;
-    noteController.dispose();
     if (submission == null || !mounted) return;
     setState(() {
       busy = stop.id;
