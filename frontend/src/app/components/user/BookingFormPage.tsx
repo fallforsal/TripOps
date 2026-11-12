@@ -19,6 +19,7 @@ export {
   parseDateString,
 } from "@/app/utils/guestValidation";
 import * as XLSX from "xlsx";
+import { isValidPassengerPhone, phoneFromSpreadsheet } from "@/app/lib/passengerPhone";
 import {
   Tour,
   BookingPassenger,
@@ -362,6 +363,7 @@ export function BookingFormPage({
             "Muốn ở cùng Trần Thị Bình (STT 2), ưu tiên hai giường đơn",
           "Yêu cầu ăn uống / Dị ứng thực phẩm": "Ăn chay nhẹ, không ăn cay",
           "Ghi chú cá nhân": "Người đại diện đoàn",
+          "Số điện thoại": "0901234567",
         },
         {
           STT: 2,
@@ -374,6 +376,7 @@ export function BookingFormPage({
             "Muốn ở cùng Nguyễn Văn An (STT 1)",
           "Yêu cầu ăn uống / Dị ứng thực phẩm": "Không ăn thịt bò",
           "Ghi chú cá nhân": "Hay say xe ngồi đầu xe",
+          "Số điện thoại": "0912345678",
         },
         {
           STT: 3,
@@ -387,6 +390,7 @@ export function BookingFormPage({
           "Yêu cầu ăn uống / Dị ứng thực phẩm":
             "Dị ứng hải sản, tôm cua, kiêng đậu phộng",
           "Ghi chú cá nhân": "Trẻ nhỏ cần chú ý",
+          "Số điện thoại": "",
         },
         {
           STT: 4,
@@ -400,6 +404,7 @@ export function BookingFormPage({
           "Yêu cầu ăn uống / Dị ứng thực phẩm":
             "Dùng thức ăn mềm / cháo dinh dưỡng",
           "Ghi chú cá nhân": "Trẻ nhỏ cần hỗ trợ",
+          "Số điện thoại": "",
         },
       ];
 
@@ -407,7 +412,7 @@ export function BookingFormPage({
 
       // Định dạng kiểu text 's' và format '@' cho cột CCCD (Cột C) để không bị mất số 0 đầu
       Object.keys(ws).forEach((cellKey) => {
-        if (/^C\d+$/.test(cellKey) && cellKey !== "C1") {
+        if (/^[CJ]\d+$/.test(cellKey) && !["C1", "J1"].includes(cellKey)) {
           if (ws[cellKey]) {
             ws[cellKey].t = "s";
             ws[cellKey].z = "@";
@@ -425,6 +430,7 @@ export function BookingFormPage({
         { wch: 45 }, // Nguyện vọng xếp phòng / Muốn ở cùng ai
         { wch: 40 }, // Yêu cầu ăn uống / Dị ứng thực phẩm
         { wch: 35 }, // Ghi chú cá nhân
+        { wch: 22 }, // Số điện thoại (text)
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Danh_Sach_Khach");
@@ -601,6 +607,8 @@ export function BookingFormPage({
 
           const price = getPassengerPrice(tour, ageGroup, calculatedAge);
 
+          const phone = phoneFromSpreadsheet(row);
+          if (!isValidPassengerPhone(phone)) throw new Error(`Dòng ${i + 2}: Số điện thoại của ${fullName} không hợp lệ (tối đa 30 ký tự).`);
           parsed.push({
             id: `p_excel_${Date.now()}_${i}`,
             fullName,
@@ -609,6 +617,7 @@ export function BookingFormPage({
             ageGroup,
             price,
             idNumber,
+            phone,
             roommateNote: roommateNote || "",
             dietaryNote: dietaryNote || "",
             notes: notes || "",
@@ -650,7 +659,7 @@ export function BookingFormPage({
   const isStep2Valid =
     guestValidation.isValid &&
     tourStartDate.trim() &&
-    passengers.every((p) => p.fullName.trim() && p.dateOfBirth) &&
+    passengers.every((p) => p.fullName.trim() && p.dateOfBirth && isValidPassengerPhone(p.phone)) &&
     contactName.trim() &&
     contactPhone.trim() &&
     contactEmail.trim();
@@ -1215,6 +1224,15 @@ export function BookingFormPage({
                           <option value="female">Nữ</option>
                         </select>
                       </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs text-gray-500">Số điện thoại hành khách (tùy chọn)</Label>
+                        <Input type="tel" inputMode="tel" autoComplete="tel" maxLength={30}
+                          value={p.phone ?? ""} onChange={e => updatePassenger(p.id, { phone: e.target.value })}
+                          placeholder="VD: 0901234567 hoặc +84901234567" className="mt-1 text-sm"
+                          aria-invalid={!isValidPassengerPhone(p.phone)} />
+                        {!isValidPassengerPhone(p.phone) && <p className="mt-1 text-xs text-red-600">Số điện thoại không hợp lệ.</p>}
+                        <p className="mt-1 text-xs text-slate-500">Có thể để trống nếu hành khách không có số riêng.</p>
+                      </div>
                       {/* Nguyện vọng xếp phòng / Muốn ở cùng ai */}
                       <div className="sm:col-span-2 space-y-1">
                         <Label className="text-xs font-semibold text-gray-700">
@@ -1548,6 +1566,7 @@ export function BookingFormPage({
                             <td className="px-3 py-3 min-w-[170px]">
                               <p className="font-semibold text-gray-900">{p.fullName}</p>
                               {p.idNumber && <p className="mt-0.5 font-mono text-xs text-gray-500">{p.idNumber}</p>}
+                              {p.phone && <p className="mt-0.5 text-xs text-sky-800">SĐT: {p.phone}</p>}
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap">
                               <p className="text-gray-800">{dob}</p>

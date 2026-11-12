@@ -23,7 +23,7 @@ public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, s
     decimal? AvailableQuantity = null, string? ThumbnailUrl = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
-    string? RoommateNote, string? RestaurantNote, int? Age = null);
+    string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null);
 /// <summary>Yêu cầu dịch vụ hiển thị cho Provider: các trường của ProviderRequestView kèm thông tin booking,
 /// công ty lữ hành và đoàn khách. Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
 public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
@@ -288,6 +288,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             booking.Participants = input.Participants.Select((p, i) => new BookingParticipant {
                 BookingId = bookingId, AgencyId = tour.AgencyId!, ParticipantIndex = i + 1,
                 FullName = p.FullName.Trim(), DateOfBirth = p.DateOfBirth,
+                PhoneNumber = string.IsNullOrWhiteSpace(p.PhoneNumber) ? null : p.PhoneNumber.Trim(),
                 Gender = p.Gender, IdentityNumber = p.IdentityNumber, Note = p.Note,
                 RoommateNote = p.RoommateNote, RestaurantNote = p.RestaurantNote,
                 TierName = TierName(p, i),
@@ -424,7 +425,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 closed ? b.CancelledAt : null,
                 b.Participants.Where(p => p.Status != "INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(b,r.SlotKey)).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
-                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null))
+                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null, p.PhoneNumber))
                     .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay,
                 AgencyId: agencyId, AgencyLogo: agency?.Logo);
         }).ToArray();

@@ -9,7 +9,7 @@ namespace TripOps.Tests;
 
 public sealed partial class TourFlowTests
 {
-    private static async Task<BookingDto> PublishedBookingWithProviderServices(HttpClient customer, HttpClient agency)
+    private static async Task<BookingDto> PublishedBookingWithProviderServices(HttpClient customer, HttpClient agency, string? phoneNumber = null)
     {
         var draft = await CreateCore(agency, Complete() with { Timelines = [new TimelineInput(1, "Arrival",
             Meals: [new MealInput("lunch", "Restaurant", ServiceId: 103)],
@@ -18,7 +18,7 @@ public sealed partial class TourFlowTests
         await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Revision)));
         return await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",
             new CreateBookingRequest(plan.Id, DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
-                [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
+                [new ParticipantInput("One", phoneNumber, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)])), HttpStatusCode.Created);
     }
 
     [Fact]

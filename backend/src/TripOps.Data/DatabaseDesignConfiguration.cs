@@ -330,6 +330,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.FullName).HasColumnName("full_name").HasColumnType("nvarchar(150)").HasMaxLength(150).IsRequired();
             entity.Property(e => e.DateOfBirth).HasColumnName("date_of_birth").HasColumnType("date");
             entity.Property(e => e.Gender).HasColumnName("gender").HasColumnType("nvarchar(20)").HasMaxLength(20);
+            entity.Property(e => e.PhoneNumber).HasColumnName("phone_number").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.IdentityNumber).HasColumnName("identity_card_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
             entity.Property(e => e.Note).HasColumnName("note").HasColumnType("nvarchar(max)");
             entity.Property(e => e.TierName).HasColumnName("tier_name").HasColumnType("nvarchar(100)").HasMaxLength(100);

@@ -91,7 +91,7 @@ import {
   CheckCircle2,
   SlidersHorizontal,
 } from "lucide-react";
-import * as XLSX from "xlsx";
+import { isValidPassengerPhone } from "@/app/lib/passengerPhone";
 import { Button } from "@/app/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/app/components/ui/popover";
 import { mockUsers } from "@/app/data/mockData";
@@ -835,6 +835,7 @@ export function AgencyBookingDetailPage({
   const [passengerDob, setPassengerDob] = useState("");
   const [passengerGender, setPassengerGender] = useState<"male" | "female">("male");
   const [passengerIdNumber, setPassengerIdNumber] = useState("");
+  const [passengerPhone, setPassengerPhone] = useState("");
   const [passengerSaving, setPassengerSaving] = useState(false);
   const [passengerError, setPassengerError] = useState("");
   const passengerCreationKey = useRef("");
@@ -1283,6 +1284,7 @@ export function AgencyBookingDetailPage({
     setPassengerDob("1995-01-01");
     setPassengerGender("male");
     setPassengerIdNumber("");
+    setPassengerPhone("");
     passengerCreationKey.current = crypto.randomUUID();
     setSelectedPassengerAgencies(agenciesList.map(a=>a.agencyId));
     setPassengerError("");
@@ -1303,6 +1305,7 @@ export function AgencyBookingDetailPage({
     setPassengerDob(p.dateOfBirth || "1995-01-01");
     setPassengerGender(p.gender || "male");
     setPassengerIdNumber(p.idNumber || "");
+    setPassengerPhone(p.phone || "");
     setPassengerError("");
     setPassengerRoommateNote(p.roommateNote || "");
     setPassengerDietaryNote(p.dietaryNote || "");
@@ -1327,6 +1330,7 @@ export function AgencyBookingDetailPage({
     if (passengerSaving) return;
     if(passengerModalMode==="add" && isCoHostedTour && selectedPassengerAgencies.length===0){setPassengerError("Chọn ít nhất một chặng tham gia.");return;}
     if (!passengerName.trim() || !passengerDob) { setPassengerError("Vui lòng nhập họ tên và ngày sinh."); return; }
+    if (!isValidPassengerPhone(passengerPhone)) { setPassengerError("Số điện thoại hành khách không hợp lệ (tối đa 30 ký tự)."); return; }
     const price = Number(passengerCustomPrice);
     if (!Number.isSafeInteger(price) || price < 0) { setPassengerError("Giá vé phải là số nguyên không âm."); return; }
     setPassengerSaving(true); setPassengerError("");
@@ -1334,7 +1338,7 @@ export function AgencyBookingDetailPage({
       if (passengerModalMode === "add") {
         const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/participants`, {
           method: "POST", body: JSON.stringify({ fullName: passengerName.trim(), dateOfBirth: passengerDob,
-            gender: passengerGender === "female" ? "Nữ" : "Nam", identityNumber: passengerIdNumber.trim() || null,
+            phoneNumber: passengerPhone.trim() || null, gender: passengerGender === "female" ? "Nữ" : "Nam", identityNumber: passengerIdNumber.trim() || null,
             roommateNote: passengerRoommateNote.trim(), restaurantNote: passengerDietaryNote.trim(), note: passengerNotes.trim(),
             agencyIds:isCoHostedTour?selectedPassengerAgencies:undefined, ticketPrice: price, reason: customAdjustmentReason.trim(), expectedTotal: booking.totalPrice, requestId: passengerCreationKey.current }),
         });
@@ -1344,7 +1348,7 @@ export function AgencyBookingDetailPage({
       } else if (editingPassengerId) {
         const edited=passengersList.find(p=>p.id===editingPassengerId);
         const next = passengersList.map(p => p.participantIndex === edited?.participantIndex ? { ...p, fullName: passengerName.trim(),
-          dateOfBirth: passengerDob, gender: passengerGender, idNumber: passengerIdNumber.trim(),
+          phone: passengerPhone.trim(), dateOfBirth: passengerDob, gender: passengerGender, idNumber: passengerIdNumber.trim(),
           roommateNote: passengerRoommateNote.trim(), dietaryNote: passengerDietaryNote.trim(), notes: passengerNotes.trim() } : p);
         await onUpdateBookingPassengers?.(booking.id, next.filter(p=>p.isPrimary));
         setPassengersList(next);
@@ -3692,6 +3696,7 @@ export function AgencyBookingDetailPage({
               <label className="space-y-1.5 font-semibold">CCCD / Hộ chiếu<Input maxLength={50} value={passengerIdNumber} onChange={e => setPassengerIdNumber(e.target.value)} placeholder="Không bắt buộc với trẻ nhỏ" /></label>
               <div className="space-y-1.5"><label className="font-semibold">Ngày sinh *</label><VietnameseDatePicker value={passengerDob} onChange={passengerModalMode === "add" ? handlePassengerDobChange : setPassengerDob} /></div>
               <label className="space-y-1.5 font-semibold">Giới tính<select value={passengerGender} onChange={e => setPassengerGender(e.target.value as "male" | "female")} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3"><option value="male">Nam</option><option value="female">Nữ</option></select></label>
+              <label className="space-y-1.5 font-semibold sm:col-span-2">Số điện thoại (tùy chọn)<Input type="tel" inputMode="tel" maxLength={30} value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} placeholder="VD: 0901234567 hoặc +84901234567" aria-invalid={!isValidPassengerPhone(passengerPhone)} /></label>
               <label className="space-y-1.5 font-semibold">Nguyện vọng xếp phòng<Textarea rows={2} maxLength={2000} value={passengerRoommateNote} onChange={e => setPassengerRoommateNote(e.target.value)} placeholder="VD: Ở cùng Nguyễn Văn An, ưu tiên hai giường đơn…" /></label>
               <label className="space-y-1.5 font-semibold">Ăn uống / Dị ứng<Textarea rows={2} maxLength={2000} value={passengerDietaryNote} onChange={e => setPassengerDietaryNote(e.target.value)} placeholder="VD: Ăn chay, dị ứng hải sản, không ăn cay…" /></label>
               <label className="space-y-1.5 font-semibold sm:col-span-2">Hỗ trợ đặc biệt / Ghi chú<Textarea rows={2} maxLength={2000} value={passengerNotes} onChange={e => setPassengerNotes(e.target.value)} placeholder="VD: Cần xe lăn, dễ say xe, người thân đi cùng…" /></label>

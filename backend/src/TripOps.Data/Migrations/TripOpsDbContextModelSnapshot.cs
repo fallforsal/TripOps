@@ -1062,6 +1062,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("participant_index");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("phone_number");
+
                     b.Property<decimal>("Price")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(12, 2)")

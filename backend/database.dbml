@@ -382,6 +382,7 @@ Table booking_participants {
 
   // Thông tin cá nhân
   full_name varchar(150) [not null]
+  phone_number nvarchar(30) // Số điện thoại hành khách (tùy chọn)
   date_of_birth date
   gender varchar(20) // MALE, FEMALE, OTHER
   identity_card_number varchar(50) // CCCD / CMND / Hộ chiếu

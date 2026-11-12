@@ -882,6 +882,7 @@ export interface RoomBooking {
 }
 // Thành viên trong đoàn khách - Khớp chuẩn với bảng booking_participants trong DATABASE_SCHEMA
 export interface GroupGuestMember {
+  phone?: string;
   age?: number;
   id: number | string;
   participantIndex: number; // participant_index: STT khách trong đoàn (1, 2, 3...)
