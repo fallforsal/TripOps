@@ -228,3 +228,54 @@ Tên cờ `SeedGuideGpsDemo` được giữ để tương thích lệnh cũ, **k
 Script chỉ seed và thoát; khởi động lại backend bình thường sau đó. Chạy lại trong cùng ngày không reset check-in, nên muốn thử lại từ đầu hãy dùng database test mới.
 
 Nếu đã chạy migration GPS ở nhánh `hiep` cũ, các cột thừa không ảnh hưởng check-in; cần quản lý/rollback lịch sử migration theo kế hoạch DB riêng, **không tự xóa cột trên database đang dùng chung**.
+
+
+## Ảnh minh chứng khi check-in địa điểm
+
+Sau khi tới ngày khởi hành và đến lượt điểm dừng, HDV có thể xác nhận
+check-in **không cần ảnh** hoặc đính kèm **1–5 ảnh JPEG/PNG/WebP**.
+
+| Giới hạn | Giá trị |
+|---|---|
+| Số ảnh | 1–5 nếu có chọn |
+| Mỗi ảnh | Tối đa 5 MiB |
+| Tổng dung lượng | Tối đa 20 MiB |
+| Upload multipart | Request tối đa 22 MiB (kể cả multipart overhead) |
+
+App có lựa chọn camera/thư viện, xem trước và xóa ảnh. Ảnh được resize
+tối đa 1800 px và nén chất lượng 78 khi định dạng hỗ trợ. Cả app và backend
+đều kiểm tra dung lượng. Không cần quyền vị trí GPS.
+
+API JSON cũ vẫn hoạt động:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in`
+với `{"status":"CheckedIn","note":"..."}`.
+
+API mới để gửi ảnh:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in-with-images`
+(`multipart/form-data`) với `Status=CheckedIn`, `Note` tùy chọn,
+và nhiều phần `Images` (mỗi phần là một file).
+
+Server dùng chung điều kiện ngày khởi hành, thứ tự điểm đến và
+quyền HDV được phân công. Không được upload ảnh cho điểm
+không hợp lệ, đã check-in hoặc chưa đến lượt.
+
+Backend lưu danh sách URL ảnh dưới dạng JSON trong cột
+`booking_attraction_checkins.photo_proof_url` vốn có sẵn, không cần
+migration mới. Dữ liệu `photoUrls` trong `snapshotDays[].locations[]`
+giúp hiển thị lại các ảnh đã nộp.
+
+Development `Storage:UseLocal=true` lưu ảnh dưới
+`App_Data/uploads/guide-checkins/<guideId>/`, API
+`GET /api/v1/files/guide-checkins/{owner}/{name}` yêu cầu đăng nhập
+với vai trò HDV đã gửi hoặc Agency quản lý chặng. Production sử dụng
+Cloudinary authenticated image upload/signed delivery URL.
+Không sử dụng ảnh check-in làm thumbnail công khai của tour.
+
+Nếu mạng lỗi trong khi gửi, giao diện không xác nhận thành công;
+HDV cần kiểm tra trạng thái bằng nút làm mới trước khi gửi lại.
+Đối với lỗi upload từng phần lên storage, có thể còn file chưa được
+gắn vào booking (cần lifecycle cleanup định kỳ khi đưa vào production).
+
+**Lần đầu cài image_picker:** chạy `flutter pub get` và build lại ứng dụng.
+Trên iOS phải thêm `NSCameraUsageDescription` và
+`NSPhotoLibraryUsageDescription` vào Info.plist theo hướng dẫn package.

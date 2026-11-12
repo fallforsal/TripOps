@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import '../../../core/network/api_client.dart';
+import '../../location_checkin/domain/checkin_photo.dart';
 import '../domain/booking_models.dart';
 
 class GuideRepository {
@@ -46,6 +49,34 @@ class GuideRepository {
         'guide/bookings/$bookingId/locations/$locationId/check-in',
         {'status': status, 'note': note},
       ));
+
+  Future<BookingDetail> checkInWithImages(
+    int bookingId, int locationId, String? note, List<CheckinPhoto> photos,
+  ) async {
+    final validation = CheckinPhoto.validate(photos);
+    if (photos.isEmpty || validation != null) {
+      throw ApiFailure(validation ?? 'Vui lòng chọn ảnh.');
+    }
+    final form = FormData();
+    form.fields.add(const MapEntry('Status', 'CheckedIn'));
+    if (note != null && note.trim().isNotEmpty) {
+      form.fields.add(MapEntry('Note', note.trim()));
+    }
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path,
+        filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    return BookingDetail.fromJson(await api.postForm(
+      'guide/bookings/$bookingId/locations/$locationId/check-in-with-images',
+      form,
+    ));
+  }
+
+  Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
 
   Future<void> incident(int id, {required String type, required String title,
     required String description, String? severity}) async {

@@ -62,16 +62,18 @@ class Passenger {
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time});
+  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const []});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
+  final List<String> photoUrls;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
+    photoUrls: (j['photoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
   );
 }
 

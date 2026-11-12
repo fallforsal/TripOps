@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -84,6 +85,43 @@ class TripOpsApi {
     try {
       final response = await _dio.post<dynamic>(route, data: body);
       return _map(response.data);
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> postForm(String route, FormData form) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        route,
+        data: form,
+        options: Options(contentType: 'multipart/form-data',
+          sendTimeout: const Duration(seconds: 75),
+          receiveTimeout: const Duration(seconds: 75)),
+      );
+      return _map(response.data);
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// Protected local images use the same HttpOnly session cookie as the API.
+  /// Cloudinary's signed HTTPS links can be fetched without exposing cookies
+  /// to other domains (the cookie manager scopes them by URL).
+  Future<Uint8List> imageBytes(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !(url.startsWith('/api/v1/files/guide-checkins/') ||
+          (uri.scheme == 'https' && uri.host.isNotEmpty))) {
+      throw const ApiFailure('Đường dẫn ảnh check-in không hợp lệ.');
+    }
+    try {
+      final response = await _dio.get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes,
+          headers: {'Accept': 'image/*'}),
+      );
+      return Uint8List.fromList(response.data ?? []);
     } on DioException catch (e) {
       throw _failure(e);
     }

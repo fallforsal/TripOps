@@ -9,6 +9,7 @@ using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Service.Bookings;
 using TripOps.Service.Payments;
+using TripOps.Service.Accounts;
 
 namespace TripOps.Api.Controllers;
 
@@ -19,6 +20,16 @@ public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
 public sealed record LocationCheckin(
     [Required, AllowedValues("CheckedIn")] string Status,
     [StringLength(500)] string? Note);
+
+/// <summary>One to five check-in photos, uploaded in the same action.</summary>
+public sealed class GuideCheckinImagesForm
+{
+    [Required, AllowedValues("CheckedIn")]
+    public string Status { get; set; } = "CheckedIn";
+    [StringLength(500)]
+    public string? Note { get; set; }
+    public List<IFormFile> Images { get; set; } = [];
+}
 
 [ApiController, Authorize, Route("api/v1/bookings/{id:int}")]
 [Tags("Booking Management")]
@@ -68,7 +79,7 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
 }
 
 [ApiController, Authorize(Roles = "guide"), Route("api/v1/guide/bookings/{id:int}"), Tags("Guide Operations")]
-public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings) : ControllerBase
+public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings, CloudinaryStorage media) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private async Task<Booking> Assigned(int id, CancellationToken ct) => await db.Bookings.Include(b => b.Tour).Include(b => b.AssignedGuides).SingleOrDefaultAsync(b => b.Id == id && b.AssignedGuides.Any(g => g.GuideId == Actor), ct) ?? throw new BookingException(403, "Guide is not assigned to this booking.");
@@ -100,11 +111,29 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         return Ok(await bookings.Get(Actor, id, ct));
     }
     [HttpPost("locations/{locationId:int}/check-in")]
-    [EndpointSummary("Check in next itinerary stop on or after the departure date, without GPS")]
+    [EndpointSummary("Confirm next stop, with optional note and no photos")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct)
+    public Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct) =>
+        CheckinInternal(id, locationId, request, null, ct);
+
+    [HttpPost("locations/{locationId:int}/check-in-with-images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(22 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
+    [EndpointSummary("Check in next stop with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public Task<IActionResult> CheckinWithImages(
+        int id, int locationId, [FromForm] GuideCheckinImagesForm request, CancellationToken ct) =>
+        CheckinInternal(id, locationId, new LocationCheckin(request.Status, request.Note), request.Images, ct);
+
+    private async Task<IActionResult> CheckinInternal(
+        int id, int locationId, LocationCheckin request, IReadOnlyList<IFormFile>? images, CancellationToken ct)
     {
-        // Sequential calls must not race to skip their predecessors.
+        if (images is not null)
+            GuideCheckinPhotoRules.ValidateFiles(images.Select(f => (f.Length, f.ContentType)).ToArray());
+
+        // Preserve the original sequential/date/Agency validation for JSON and multipart.
+        // Serializable transaction prevents two parallel check-ins from racing forward.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var booking = await Assigned(id, ct);
         if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
@@ -141,6 +170,20 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
                 AgencyId = agencyId
             };
             db.BookingAttractionCheckins.Add(checkin);
+        }
+        if (images is not null)
+        {
+            var photoUrls = new List<string>(images.Count);
+            foreach (var file in images)
+            {
+                await using var stream = new MemoryStream();
+                await file.CopyToAsync(stream, ct);
+                var bytes = stream.ToArray();
+                if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
+                    throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
+                photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
+            }
+            checkin.PhotoUrl = GuideCheckinPhotoRules.Encode(photoUrls);
         }
         checkin.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
         checkin.CheckinTime = DateTime.UtcNow;

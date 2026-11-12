@@ -21,4 +21,4 @@ jobs:
       - name: Restore
         run: dotnet restore backend/tests/TripOps.Tests/TripOps.Tests.csproj
       - name: Check-in and seed tests
-        run: dotnet test backend/tests/TripOps.Tests/TripOps.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GuideLocationCheckin_|FullyQualifiedName~GuideCheckinDemoSeed_|FullyQualifiedName~Snapshot_selection_passenger_preferences_and_guide_operations_persist'
+        run: dotnet test backend/tests/TripOps.Tests/TripOps.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GuideLocationCheckin_|FullyQualifiedName~GuideCheckinDemoSeed_|FullyQualifiedName~GuideCheckinImages_|FullyQualifiedName~GuideCheckinPhotos_|FullyQualifiedName~Snapshot_selection_passenger_preferences_and_guide_operations_persist'

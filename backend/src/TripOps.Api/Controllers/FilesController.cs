@@ -2,18 +2,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using TripOps.Data;
 
 namespace TripOps.Api.Controllers;
 
 [ApiController, Route("api/v1/files"), Tags("Media")]
-public sealed class FilesController(IWebHostEnvironment environment) : ControllerBase
+public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbContext db) : ControllerBase
 {
     private IActionResult Read(string kind, string owner, string name)
     {
         if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") || !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg|webp)$")) return NotFound();
         var file = Path.Combine(environment.ContentRootPath, "App_Data", "uploads", kind, owner, name);
         if (!System.IO.File.Exists(file)) return NotFound();
-        Response.Headers.CacheControl = kind == "licenses" ? "private, no-store" : "public, max-age=3600";
+        Response.Headers.CacheControl = kind is "licenses" or "guide-checkins" ? "private, no-store" : "public, max-age=3600";
         Response.Headers.XContentTypeOptions = "nosniff";
         return PhysicalFile(file, name.EndsWith(".png") ? "image/png" : name.EndsWith(".webp") ? "image/webp" : "image/jpeg");
     }
@@ -33,6 +35,25 @@ public sealed class FilesController(IWebHostEnvironment environment) : Controlle
     [EndpointSummary("Read a public guide avatar uploaded in local development mode")]
     [Produces("image/png", "image/jpeg", "image/webp")]
     public IActionResult Guide(string owner, string name) => Read("guides", owner, name);
+
+    [HttpGet("guide-checkins/{owner}/{name}"), Authorize]
+    [EndpointSummary("Read check-in image privately as the assigned Guide or stage Agency")]
+    [Produces("image/png", "image/jpeg", "image/webp")]
+    public async Task<IActionResult> CheckinPhoto(string owner, string name, CancellationToken ct)
+    {
+        if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") ||
+            !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg|webp)$")) return NotFound();
+        var url = $"/api/v1/files/guide-checkins/{owner}/{name}";
+        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var guide = User.IsInRole("guide");
+        var agency = User.IsInRole("agency");
+        var allowed = await db.BookingAttractionCheckins.AsNoTracking().AnyAsync(c =>
+            c.PhotoUrl != null && c.PhotoUrl.Contains(url) &&
+            (guide && c.GuideId == actor || agency && c.AgencyId == actor), ct);
+        if (!allowed) return Forbid();
+        Response.Headers.CacheControl = "private, no-store";
+        return Read("guide-checkins", owner, name);
+    }
 
     [HttpGet("licenses/{owner}/{name}"), Authorize]
     [EndpointSummary("Read a business license as its owner or an Admin")]

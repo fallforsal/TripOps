@@ -104,4 +104,17 @@ void main() {
     expect(tester.widget<FilledButton>(
       find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
   });
+  testWidgets('check-in dialog offers camera, gallery, and optional photos',
+      (tester) async {
+    await showScreen(tester, _detail(dateAllowed: true, nextId: 1));
+    await tester.tap(find.byKey(const ValueKey('checkin-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
+    expect(find.textContaining('20 MB'), findsOneWidget);
+    expect(find.byKey(const ValueKey('confirm-checkin')), findsOneWidget);
+    await tester.tap(find.text('Hủy'));
+    await tester.pumpAndSettle();
+  });
+
 }
