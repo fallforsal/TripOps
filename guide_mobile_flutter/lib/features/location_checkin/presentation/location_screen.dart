@@ -147,7 +147,7 @@ class _LocationScreenState extends State<LocationScreen> {
                             child: Image.file(
                               File(selected[index].path), width: 72, height: 72,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => const Icon(
+                              errorBuilder: (context, error, stackTrace) => const Icon(
                                 Icons.broken_image_outlined, size: 65),
                             ),
                           ),
