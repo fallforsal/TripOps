@@ -33,9 +33,6 @@ class GuideRepository {
   Future<BookingDetail> start(int id) async =>
       BookingDetail.fromJson(await api.postMap('guide/bookings/$id/start'));
 
-  Future<BookingDetail> complete(int id) async =>
-      BookingDetail.fromJson(await api.postMap('guide/bookings/$id/complete'));
-
   Future<void> attendance(int bookingId, int participantId, String status) async {
     await api.postMap('guide/bookings/$bookingId/attendance', {
       'participantId': participantId,
