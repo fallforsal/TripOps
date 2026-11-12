@@ -139,6 +139,7 @@ interface AgencyBookingDetailPageProps {
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ duyệt", color: "bg-amber-100 text-amber-800 border-amber-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  in_progress: { label: "Đang diễn ra", color: "bg-sky-100 text-sky-800 border-sky-200" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-200" },
   completed: { label: "Hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-[#CBD5E1]" },
   rejected: { label: "Từ chối", color: "bg-gray-100 text-gray-800 border-gray-200" },
