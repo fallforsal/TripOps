@@ -1,6 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TripOps.Data;
+using TripOps.Data.Enums;
+using TripOps.Service.Payments;
+using TripOps.Service.Settlements;
 using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
@@ -108,7 +113,7 @@ public sealed class CustomerBookingsController(BookingService bookings, IWebHost
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/bookings")]
 [Tags("Booking Management")]
-public sealed class AgencyBookingsController(BookingService bookings) : ControllerBase
+public sealed class AgencyBookingsController(BookingService bookings, TripOpsDbContext db, AgencySettlementService settlements) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
@@ -129,6 +134,40 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) =>
         Ok(await bookings.Get(Actor, id, ct));
+
+    [HttpPost("{id:int}/complete")]
+    [EndpointSummary("Host Agency completes an in-progress tour and begins settlement")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Complete(int id, CancellationToken ct)
+    {
+        var booking = await db.Bookings.Include(b => b.Tour)
+            .SingleOrDefaultAsync(b => b.Id == id, ct)
+            ?? throw new BookingException(404, "Booking not found.");
+
+        // Only the tour-owning Agency can finalize the entire booking;
+        // partner Agencies and assigned Guides cannot trigger settlement.
+        if (booking.Tour?.AgencyId != Actor)
+            throw new BookingException(403, "Chỉ Agency chủ trì được xác nhận hoàn tất tour.");
+        if (booking.Status != BookingStatus.InProgress)
+            throw new BookingException(409, "Tour phải ở trạng thái đang diễn ra mới được hoàn tất.");
+
+        // Preserve the existing alliance rule: the last itinerary date must
+        // have arrived before completing a multi-Agency booking.
+        var agencyCount = await db.BookingAgencies.CountAsync(a => a.BookingId == id, ct);
+        if (agencyCount > 1)
+        {
+            var lastDay = await db.BookingTimelines.Where(t => t.BookingId == id)
+                .Select(t => (int?)t.DayNumber).MaxAsync(ct) ?? 1;
+            if (booking.StartDate.Date.AddDays(Math.Max(0, lastDay - 1)) >
+                PaymentRules.VietnamDate(DateTime.UtcNow))
+                throw new BookingException(409, "Tour liên minh chưa đến ngày kết thúc để quyết toán.");
+        }
+
+        booking.Status = BookingStatus.Completed;
+        await settlements.MarkTourCompleted(booking, ct);
+        await db.SaveChangesAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
+    }
 
     [HttpPost("{id:int}/decision")]
     [EndpointSummary("Approve or reject a tour booking")]
