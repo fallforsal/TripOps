@@ -33,7 +33,7 @@ export function MyRequestsPage({ requests: initialRequests, onCancelRequest, onN
   const [status,setStatus]=useState(()=>requests.some(r=>r.status==="designed") ? "designed" : "pending");
   const inGroup=(request:CustomTourRequest,group:string)=>group==="closed" ? ["closed","cancelled","rejected"].includes(request.status) : group==="designed" ? ["designed","quoted","accepted"].includes(request.status) : request.status===group;
   const rows=requests.filter(request=>inGroup(request,status));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(()=>new URLSearchParams(window.location.hash.split("?")[1]).get("requestId"));
   const [viewing, setViewing] = useState(false);
   const [plan, setPlan] = useState<Tour | null>(null);
   const [reload, setReload] = useState(0); const [loading, setLoading] = useState(false);

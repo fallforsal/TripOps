@@ -1,3 +1,4 @@
+import { ChatTourPage } from "@/app/components/chat/ChatTourPage";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
@@ -1978,6 +1979,10 @@ function useSignToken(): string | null {
 
 export default function App() {
   const signToken = useSignToken();
+  const [chatHash,setChatHash]=useState(window.location.hash);
+  useEffect(()=>{const sync=()=>setChatHash(window.location.hash);window.addEventListener("hashchange",sync);return()=>window.removeEventListener("hashchange",sync);},[]);
+  const chatTour=/^#\/chat-tour\/(\d+)\/(\d+)$/.exec(chatHash);
+  if(chatTour) return <ServiceCatalogueProvider><ChatTourPage reference={{conversationId:Number(chatTour[1]),messageId:Number(chatTour[2])}} onClose={()=>{window.location.hash="#/tours";}}/></ServiceCatalogueProvider>;
   if (signToken) return <SignContractPage token={signToken} />;
   return (
     <ServiceCatalogueProvider>

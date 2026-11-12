@@ -643,6 +643,9 @@ Table payment_transactions {
 // 3. NHẬT KÝ ĐIỀU CHỈNH TĂNG / GIẢM GIÁ TOUR DO PHÁT SINH
 // ============================================================================
 Table booking_supplier_requests {
+  parent_request_id int // Yêu cầu trước đó, giữ phạm vi khách bổ sung
+  agency_supplier_id int // Nhà cung cấp riêng của Agency
+  participant_indices_json nvarchar(max) // Danh sách participant_index phục vụ riêng cho yêu cầu này; NULL cho dữ liệu cũ
   AvailabilityConfirmed boolean [not null]
   AvailableQuantity decimal(19,2)
   HoldUntil timestamp
@@ -651,8 +654,8 @@ Table booking_supplier_requests {
   ResponseHistoryJson text [not null]
   id int [pk, increment]
   booking_id int [not null]
-  service_id int [not null]
-  provider_id varchar(36) [not null]
+  service_id int
+  provider_id varchar(36)
   slot_key varchar(100) [not null]
   service_name varchar(255) [not null]
   service_date_from date
@@ -668,9 +671,11 @@ Table booking_supplier_requests {
   indexes {
     (provider_id, status)
     (booking_id, slot_key)
-  }
 }
+}
+Ref: booking_supplier_requests.agency_supplier_id > agency_suppliers.id
 Ref: booking_supplier_requests.booking_id > bookings.id
+Ref: booking_supplier_requests.parent_request_id > booking_supplier_requests.id
 Ref: booking_supplier_requests.service_id > services.id
 Ref: booking_supplier_requests.provider_id > users.id
 

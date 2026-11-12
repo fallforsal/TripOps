@@ -5,6 +5,7 @@ import { toast } from "@/app/lib/notifications";
 import { confirmAction } from "@/app/lib/notificationDialogs";
 import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { PartnerBookingRevenue } from "./PartnerBookingRevenue";
+import { BookingSupplementRequests } from "./BookingSupplementRequests";
 import { BookingStagePassengers } from "./BookingStagePassengers";
 import { BookingFinancialChangesPanel } from "./BookingFinancialChangesPanel";
 import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
@@ -1345,6 +1346,7 @@ export function AgencyBookingDetailPage({
         setPassengersList(fromApiBooking(updated, [booking.tour]).passengers || []);
         onBookingChanged?.(updated);
         window.dispatchEvent(new Event("booking-suppliers-changed"));
+        toast.success("Đã thêm khách. Yêu cầu bổ sung đã gửi đến Provider của các dịch vụ trên sàn đang chọn.");
       } else if (editingPassengerId) {
         const edited=passengersList.find(p=>p.id===editingPassengerId);
         const next = passengersList.map(p => p.participantIndex === edited?.participantIndex ? { ...p, fullName: passengerName.trim(),
@@ -1495,6 +1497,7 @@ export function AgencyBookingDetailPage({
 
 
 
+      <BookingSupplementRequests state={currentQuotationState} passengers={passengersList} viewerAgencyId={companyId} canAmend={canAmend} onOpenService={setViewingServiceId} />
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (Main Details & Customization Breakdown) */}
@@ -1721,6 +1724,7 @@ export function AgencyBookingDetailPage({
             const customHotelChanges = hotelChanges;
 
             let accommodationList: Array<{
+              dateFrom?:string; dateTo?:string;
               agencyId?: string;
               itemId?: string;
               serviceId?: string;
@@ -1753,6 +1757,7 @@ export function AgencyBookingDetailPage({
                   supplier: change ? { address: change.address, contactPhone: change.providerPhone } : h.supplier,
                   destination: dest,
                   nights: h.nights || 1,
+                  dateFrom:h.dateFrom,dateTo:h.dateTo,
                   hotelName: change ? change.newHotelName : h.name,
                   stars: change?.stars || h.stars || 4,
                   originalHotelName: h.originalName || change?.originalHotelName || h.name,
@@ -1827,7 +1832,7 @@ export function AgencyBookingDetailPage({
                           <div>
                             <p className="text-sm font-bold text-gray-900">{acc.destination}</p>
                             <p className="text-xs text-gray-500">
-                              {acc.nights} đêm • {acc.hotelName} {acc.stars ? `(${acc.stars}★)` : ""}
+                              {acc.nights} đêm • {acc.hotelName} {acc.stars ? <span className="font-semibold text-amber-500">({acc.stars}★)</span> : null}
                             </p>
                           </div>
                         </div>
@@ -1876,7 +1881,7 @@ export function AgencyBookingDetailPage({
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500">Khách sạn được chọn:</span>
                           <span className="font-bold text-gray-900 text-sm">
-                            {acc.hotelName} {acc.stars ? `(${acc.stars}★)` : ""}
+                            {acc.hotelName} {acc.stars ? <span className="font-semibold text-amber-500">({acc.stars}★)</span> : null}
                           </span>
                         </div>
                         {acc.isChanged && acc.originalHotelName && acc.originalHotelName !== acc.hotelName && (
@@ -1899,6 +1904,7 @@ export function AgencyBookingDetailPage({
                         )}
                         <BookingSupplierConfirmation state={currentQuotationState}
                           slot={{ kind: "hotel", itemId: acc.itemId, serviceId: acc.serviceId }}
+                          serviceName={acc.hotelName} stay={{from:acc.dateFrom,to:acc.dateTo}}
                           supplierSource={acc.supplierSource} supplier={acc.supplier || { address: acc.address }}
                           onOpenService={setViewingServiceId} />
                       </div>

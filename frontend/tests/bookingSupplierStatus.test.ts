@@ -28,3 +28,9 @@ test("superseded responses never override the current response", () => {
   const rows = [request({ id: 2 }), request({ id: 3, status: "Superseded" })];
   assert.equal(findBookingSupplierRequest(rows, slot)?.id, 2);
 });
+
+ test("supplementary requests never replace the main group confirmation", () => {
+  const rows=[request(),request({id:9,parentRequestId:1,status:"Rejected"})];
+  assert.equal(findBookingSupplierRequest(rows,slot)?.status,"Confirmed");
+  assert.equal(findBookingSupplierRequest(rows,slot)?.id,1);
+});

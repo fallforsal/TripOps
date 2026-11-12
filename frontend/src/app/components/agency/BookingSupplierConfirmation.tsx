@@ -1,3 +1,4 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { CheckCircle2, Clock, ExternalLink, Eye, MapPin, Phone, XCircle } from "lucide-react";
 import type { TourSupplierSnapshot } from "@/app/types";
 import { findBookingSupplierRequest, providerResponseInstant, type BookingSupplierState, type BookingServiceSlot } from "@/app/lib/bookingSupplierStatus";
@@ -11,9 +12,9 @@ const statuses = {
   Rejected: { label: "Provider từ chối", tone: "bg-rose-50 text-rose-800 border-rose-200", icon: XCircle },
 };
 
-export function BookingSupplierConfirmation({ state, slot, supplierSource, supplier, onOpenService }:
+export function BookingSupplierConfirmation({ state, slot, supplierSource, supplier, onOpenService, serviceName, stay }:
   { state: BookingSupplierState; slot: BookingServiceSlot; supplierSource?: string;
-    supplier?: TourSupplierSnapshot; onOpenService: (id: string) => void }) {
+    supplier?: TourSupplierSnapshot; serviceName?: string; stay?: {from?: string; to?: string}; onOpenService: (id: string) => void }) {
   const services = useServiceCatalogue();
   const ownSupplier = supplierSource === "AGENCY_SUPPLIER" || (!slot.serviceId && supplierSource !== "PLATFORM_PARTNER");
   const request = ownSupplier ? undefined : findBookingSupplierRequest(state.requests, slot);
@@ -34,7 +35,7 @@ export function BookingSupplierConfirmation({ state, slot, supplierSource, suppl
     </button>}
     <div className="min-w-0 flex-1 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-gray-600">{ownSupplier ? "Nhà cung cấp riêng của Agency" : request?.providerName || "Dịch vụ Provider trên sàn"}</span>
+        <div><strong className="text-sm text-slate-900">{serviceName || request?.serviceName || service?.name}</strong>{service?.stars ? <span className="ml-1 font-semibold text-amber-500">({service.stars}★)</span> : null}<p className="mt-1 text-gray-500">{ownSupplier ? "Nhà cung cấp riêng của Agency" : request?.providerName || "Dịch vụ Provider trên sàn"}</p></div>
         <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold ${
           ownSupplier ? "bg-violet-50 text-violet-800 border-violet-200" : status?.tone || "bg-gray-50 text-gray-600 border-gray-200"
         }`}>
@@ -42,6 +43,7 @@ export function BookingSupplierConfirmation({ state, slot, supplierSource, suppl
           {ownSupplier ? "Agency làm việc trực tiếp" : state.loading ? "Đang tải xác nhận" : state.error ? "Không tải được xác nhận" : status?.label || "Chưa có yêu cầu xác nhận"}
         </span>
       </div>
+      {slot.kind === "hotel" && (request?.serviceDateFrom || stay?.from) && <p className="text-slate-600">Nhận phòng: <strong>{(request?.serviceDateFrom || stay?.from)?.slice(0,10).split("-").reverse().join("/")}</strong> · Trả phòng: <strong>{(request?.serviceDateTo || stay?.to)?.slice(0,10).split("-").reverse().join("/") || "Chưa cập nhật"}</strong></p>}
       {request?.quotedCost != null && <p>Giá xác nhận: <strong className="text-gray-900">{request.quotedCost.toLocaleString("vi-VN")}đ</strong> <span className="text-gray-500">/ toàn bộ dịch vụ</span></p>}
       {request?.respondedAt && <p className="text-gray-500">Phản hồi lúc: {formatVietnamDateTime(providerResponseInstant(request.respondedAt))} (giờ VN)</p>}
       {request?.note && <p className={`whitespace-pre-wrap break-words ${request.status === "Rejected" ? "text-rose-700" : "text-gray-600"}`}>
@@ -53,6 +55,7 @@ export function BookingSupplierConfirmation({ state, slot, supplierSource, suppl
           className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-2.5 py-1 font-medium text-indigo-700 hover:bg-indigo-50">
           <Eye className="h-3.5 w-3.5" /> Xem bài viết
         </button>}
+        {!ownSupplier && <ChatWithButton userId={request?.providerId || service?.providerId} context={{kind:"booking",id:Number(state.bookingId),title:`Booking #${state.bookingId}`,subtitle:serviceName || request?.serviceName}}>Nhắn Provider</ChatWithButton>}
         {address && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[#075985] hover:underline"><MapPin className="h-3.5 w-3.5" /> Bản đồ <ExternalLink className="h-3 w-3" /></a>}
         {phone && <a href={`tel:${phone}`} className="inline-flex items-center gap-1 text-gray-600 hover:text-[#075985]"><Phone className="h-3.5 w-3.5" />{phone}</a>}

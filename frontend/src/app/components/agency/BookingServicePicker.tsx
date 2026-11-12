@@ -10,8 +10,8 @@ export type BookingReplacement = {
   supplier?: { address?: string; contactPhone?: string; referencePrice?: number };
 };
 
-export function BookingServicePicker({ kind, value, onChange }:
-  { kind: "hotel" | "meal"; value: BookingReplacement | null; onChange: (value: BookingReplacement | null) => void }) {
+export function BookingServicePicker({ kind, value, onChange, platformOnly = false, allowManual = true }:
+  { kind: "hotel" | "meal"; value: BookingReplacement | null; onChange: (value: BookingReplacement | null) => void; platformOnly?: boolean; allowManual?: boolean }) {
   const services = useServiceCatalogue();
   const [source, setSource] = useState<"platform" | "directory" | "manual">("platform");
   const [suppliers, setSuppliers] = useState<AgencySupplier[]>([]);
@@ -21,12 +21,13 @@ export function BookingServicePicker({ kind, value, onChange }:
   const [search, setSearch] = useState("");
   const [preview, setPreview] = useState(false);
   useEffect(() => {
+    if (platformOnly) { setLoading(false); return; }
     const abort = new AbortController();
     agencySuppliers(kind === "hotel" ? "HOTEL" : "RESTAURANT", "", abort.signal)
       .then(setSuppliers).catch(e => !abort.signal.aborted && setError(e.message))
       .finally(() => !abort.signal.aborted && setLoading(false));
     return () => abort.abort();
-  }, [kind]);
+  }, [kind, platformOnly]);
   const label = kind === "hotel" ? "khách sạn" : "nhà hàng";
   const Icon = kind === "hotel" ? Building2 : Utensils;
   const address = (s: typeof services[number]) => s.fullAddress || [s.street, s.ward, s.province].filter(Boolean).join(", ");
@@ -46,12 +47,12 @@ export function BookingServicePicker({ kind, value, onChange }:
   return <div className="min-w-0 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <span className="font-semibold text-slate-800">Dịch vụ thay thế</span>
-      <button type="button" className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5 font-medium text-sky-800 hover:bg-sky-50"
+      {!platformOnly && <button type="button" className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5 font-medium text-sky-800 hover:bg-sky-50"
         onClick={() => switchSource(source === "platform" ? "directory" : "platform")}>
         {source === "platform" ? `+ Nhập ${label} ngoài sàn` : "Chọn dịch vụ trên sàn"}
-      </button>
+      </button>}
     </div>
-    {source !== "platform" && <div className="grid grid-cols-2 rounded-lg bg-violet-50 p-1 text-xs" aria-label="Nguồn ngoài sàn">
+    {allowManual && source !== "platform" && <div className="grid grid-cols-2 rounded-lg bg-violet-50 p-1 text-xs" aria-label="Nguồn ngoài sàn">
       <button type="button" onClick={() => switchSource("directory")} className={`rounded-md px-3 py-2 font-semibold ${source === "directory" ? "bg-white text-violet-900 shadow-sm" : "text-slate-500"}`}>Từ danh bạ Agency</button>
       <button type="button" onClick={() => switchSource("manual")} className={`rounded-md px-3 py-2 font-semibold ${source === "manual" ? "bg-white text-violet-900 shadow-sm" : "text-slate-500"}`}>Nhập nhà cung cấp mới</button>
     </div>}

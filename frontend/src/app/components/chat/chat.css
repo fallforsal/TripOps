@@ -184,3 +184,5 @@
 .chat-card-open:focus-visible { outline: 2px solid #075985; outline-offset: 5px; }
 .chat-card-open .chat-card-action { margin-top: 3px; font-weight: 600; color: #075985; }
 .chat-tour-preview .chat-floating-window { display: none; }
+
+.chat-card-open { text-decoration: none; color: inherit; display: flex; }

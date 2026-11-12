@@ -39,7 +39,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("all");
   const [workspaceTab, setWorkspaceTab] = useState("versions");
   const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(()=>new URLSearchParams(window.location.hash.split("?")[1]).get("requestId"));
   const [designing, setDesigning] = useState<CustomTourRequest | null>(null);
   const [editing, setEditing] = useState<Tour | null>(null);
   const [template, setTemplate] = useState<Tour | null>(null);
@@ -132,6 +132,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   if (designing) return <TourFormPage company={company} tour={editing || template} customRequest={designing} isCustomTour={true} ownershipCollaboration
     onManageCoHosts={() => { setCollaborating(designing.id); setDesigning(null); }} onBack={() => setDesigning(null)} onSubmit={save} />;
   const viewed = requests.find(r => r.id === viewing) || null;
+  if(viewed && new URLSearchParams(window.location.hash.split("?")[1]).has("requestId")) return <CustomRequestDetailModal embedded isOpen onClose={()=>{setViewing(null);window.location.hash="#/agency/custom-requests";}} request={viewed} matchingTour={currentTour(viewed)} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={setPreview}/>;
   return <div className="space-y-5">
     <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-1">
       <div><h1 className="text-2xl font-semibold text-slate-900">Yêu cầu thiết kế tour</h1>

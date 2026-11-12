@@ -37,3 +37,19 @@ test("superseded request remains a separate, non-actionable history entry with r
   assert.equal(old.cancelledByName, "Agency thay đổi dịch vụ");
   assert.notEqual(old.id, toGroupRequest(row, "provider").id);
 });
+
+
+test("a new service request is independent even when internally linked to an extra-guest request", () => {
+  const request = toGroupRequest({...row, id:16, parentRequestId:15, isSupplement:false, guests:[row.guests[0]]}, "provider");
+  assert.equal(request.isSupplement, false);
+  assert.equal(request.status, "pending");
+  assert.equal(request.numberOfGuests, 1);
+  assert.equal(request.id, "16");
+});
+
+test("a declined request keeps its rejection reason after Agency requests another service", () => {
+  const rejected = toGroupRequest({...row, id:15, status:"Rejected", note:"Không đủ phòng", parentRequestId:10, isSupplement:true}, "provider");
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.rejectionReason, "Không đủ phòng");
+  assert.equal(rejected.cancellationReason, undefined);
+});

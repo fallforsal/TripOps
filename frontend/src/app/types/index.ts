@@ -166,6 +166,7 @@ export interface TourAlternativeHotel {
 }
 
 export interface TourHotel {
+  dateFrom?:string; dateTo?:string;
   originalName?: string;
   supplierSource?: "PLATFORM_PARTNER" | "AGENCY_SUPPLIER";
   agencySupplierId?: number;
@@ -898,6 +899,7 @@ export interface GroupGuestMember {
 
 // Group accommodation reservation & quotation request from Tour Agency to Service Provider
 export interface ProviderGroupReservationRequest {
+  isSupplement?: boolean;
   id: string;
   bookingCode: string; // e.g. "BK-8821", "TC-9901"
   tourName: string; // e.g. "Tour Đà Lạt Romantic 3N2Đ - Đoàn FPT Telecom"
