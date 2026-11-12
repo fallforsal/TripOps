@@ -1,3 +1,4 @@
+import { AgencyLogo } from "@/app/components/common/AgencyLogo";
 import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { ServiceOptionCard } from "@/app/components/service/ServiceOptionCard";
@@ -105,6 +106,10 @@ function formatVND(n: number) {
 
 // -------- Program Tab --------
 function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
+  const ownerLogo=(id?:string,name?:string)=>{
+    const owner=tour.coHosts?.find(h=>h.companyId===(id||tour.companyId));
+    return <AgencyLogo name={owner?.companyName||name||tour.companyName} logo={owner?.companyLogo||((!id||id===tour.companyId)?tour.companyLogo:undefined)}/>;
+  };
   const [viewingMealService, setViewingMealService] = useState<Service | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(
     new Set(tour.itinerary.slice(0, 1).map((d) => d.id)),
@@ -307,12 +312,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                           Bản đồ
                                         </a>
                                       </div>
-                                      {loc.createdByCompanyName && (
-                                        <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                                          <Building2 className="w-3 h-3 text-gray-400" />
-                                          Tạo bởi: {loc.createdByCompanyName}
-                                        </p>
-                                      )}
+                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(loc.createdByCompanyId,loc.createdByCompanyName)}</div>
                                     </div>
                                   </div>
                                 );
@@ -407,12 +407,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                         <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
                                         <span>{address || "Chưa cập nhật địa chỉ"}</span>
                                       </p>
-                                      {meal.createdByCompanyName && (
-                                        <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                                          <Building2 className="w-3 h-3 text-gray-400" />
-                                          Tạo bởi: {meal.createdByCompanyName}
-                                        </p>
-                                      )}
+                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(meal.createdByCompanyId,meal.createdByCompanyName)}</div>
                                     </div>
                                   </div>
                                 );
@@ -2447,13 +2442,7 @@ export function TourDetailPage({
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-gray-900 flex items-center gap-2">
-                          {ch.companyLogo && (
-                            <img
-                              src={ch.companyLogo}
-                              alt=""
-                              className="w-6 h-6 rounded-md object-cover"
-                            />
-                          )}
+                          <AgencyLogo name={ch.companyName} logo={ch.companyLogo} className="h-9 w-9"/>
                           {ch.companyName}
                         </span>
                         <span
@@ -2670,7 +2659,7 @@ export function TourDetailPage({
                       <Phone className="w-4 h-4 text-emerald-600" />
                       Gọi tư vấn
                     </a>}
-                    <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{kind:"tour",id:Number(tour.id),version:tour.is_request?tour.version:undefined,title:tour.name,thumbnailUrl:tour.image}} className="w-full">Tin nhắn</ChatWithButton>
+                    {!previewOnly && <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{kind:"tour",id:Number(tour.id),version:tour.is_request?tour.version:undefined,title:tour.name,thumbnailUrl:tour.image}} className="w-full">Tin nhắn</ChatWithButton>}
                   </div>
                 );
               })()}

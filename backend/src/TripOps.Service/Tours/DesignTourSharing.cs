@@ -92,6 +92,10 @@ public sealed partial class TourService
         var count = await db.TourDesignRequests.Where(r => r.Id == requestId && r.AgencyId == actor)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
         if (count == 0) throw new TourException(404, "Không tìm thấy yêu cầu.");
+        // Multipart validation may already track this request. ExecuteUpdate bypasses
+        // EF's tracker, so refresh its concurrency token after acquiring the lock.
+        var tracked = db.ChangeTracker.Entries<TourDesignRequest>().SingleOrDefault(e => e.Entity.Id == requestId);
+        if (tracked is not null) await tracked.ReloadAsync(ct);
     }
     public async Task<TourDto> ShareForRequest(string actor, int requestId, ShareDesignVersionInput input, CancellationToken ct)
     {
@@ -104,6 +108,10 @@ public sealed partial class TourService
         var tour = await repository.Find((await db.Tours.Where(t => t.DesignRequestId == requestId).Select(t => (int?)t.Id).SingleOrDefaultAsync(ct)) ?? 0, actor, false, ct)
             ?? throw new TourException(404, "Chưa có tour thiết kế.");
         Expected(tour, input.Revision);
+        if(input.Hidden) {
+            tour.SharedVersion=null;tour.Revision++;
+            await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Dto(tour);
+        }
         var target = input.Version ?? tour.Version ?? 1;
         var version = await db.TourVersions.SingleOrDefaultAsync(v => v.TourId == tour.Id && v.VersionNumber == target, ct)
             ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
@@ -134,15 +142,16 @@ public sealed partial class TourService
         var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == tour.SharedVersion, ct);
         var snapshot = JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData, Json)!;
         return new TourDto(tour.Id, tour.AgencyId, tour.Code, "completed", "hidden", true, tour.IsAiGenerated == true,
-            version.VersionNumber, DesignRequestService.CustomerConfiguration(snapshot.Configuration), tour.CreatedAt ?? DateTime.UnixEpoch,
+            version.VersionNumber, DesignRequestService.CustomerConfiguration(snapshot.Configuration with {CoHosts=await CoHosts(requestId,ct,version.VersionNumber)}), tour.CreatedAt ?? DateTime.UnixEpoch,
             version.SharedAt ?? version.CreatedAt ?? DateTime.UnixEpoch, requestId, tour.SharedVersion, tour.Revision,
             Agency: await AgencyContact(tour.AgencyId, ct));
     }
-    public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct)
+    public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct, int? selectedVersion = null)
     {
         if (identity.IsRequest != true) return identity;
-        await ValidateVersionMembers(identity.DesignRequestId!.Value,identity.SharedVersion??0,ct);
-        var version = await db.TourVersions.AsNoTracking().SingleOrDefaultAsync(v => v.TourId == identity.Id && v.VersionNumber == identity.SharedVersion, ct)
+        var number=selectedVersion??identity.SharedVersion;
+        await ValidateVersionMembers(identity.DesignRequestId!.Value,number??0,ct);
+        var version = await db.TourVersions.AsNoTracking().SingleOrDefaultAsync(v => v.TourId == identity.Id && v.VersionNumber == number && (v.SharedAt != null || v.VersionNumber==identity.SharedVersion), ct)
             ?? throw new TourException(409, "Phương án chưa được chia sẻ.");
         return MaterializeSnapshot(identity, version);
     }

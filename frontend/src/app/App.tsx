@@ -272,7 +272,7 @@ function Application() {
         .map((r) => customerRequestPlans(r.id)))).flat();
       setTours((previous) => {
         const byId = new Map(previous.map((tour) => [tour.id, tour]));
-        for (const tour of privateTours) byId.set(tour.id, tour);
+        for (const tour of [...privateTours].reverse()) byId.set(tour.id, tour);
         return [...byId.values()];
       });
     } else setCustomTourRequests([]);
@@ -435,6 +435,19 @@ function Application() {
         }
       } else if (rawHash.startsWith("booking/")) {
         const tourId = rawHash.replace("booking/", "");
+        const params = new URLSearchParams(query);
+        const requestId=params.get("requestId"), version=Number(params.get("version"));
+        if(requestId && version>0) {
+          setBookingTour(null);
+          const expectedHash=window.location.hash;
+          void customerRequestPlans(requestId).then(plans=>{
+            if(window.location.hash!==expectedHash)return;
+            const selected=plans.find(p=>p.id===tourId && p.version===version);
+            if(!selected){toast.error("Phiên bản này chưa được Agency cho phép đặt.");return;}
+            setBookingTour(selected);setCurrentPage("booking-form");
+          }).catch(e=>toast.error(e instanceof Error?e.message:"Không tải được phiên bản tour."));
+          return;
+        }
         const found = tours.find(
           (t) => t.id === tourId || t.tourCode === tourId,
         );
@@ -643,7 +656,7 @@ function Application() {
       setBookingTour(tour);
       setBookingCustomData(customData ?? null);
       setCurrentPage("booking-form");
-      window.location.hash = `#/booking/${tour.id}`;
+      window.location.hash = `#/booking/${tour.id}${tour.is_request && tour.customRequestId ? `?requestId=${tour.customRequestId}&version=${tour.version}` : ""}`;
     });
   };
 

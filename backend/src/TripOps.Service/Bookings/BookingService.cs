@@ -40,7 +40,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!await repository.CanStartDesignBooking(tour, customerId, ct, request.TourVersion, request.TourRevision))
             throw new BookingException(409, "Phương án đã thay đổi hoặc yêu cầu đã có booking. Vui lòng tải lại phương án đang chia sẻ.");
 
-        tour = await tourService.BookingSnapshot(tour, ct);
+        tour = await tourService.BookingSnapshot(tour, ct, request.TourVersion);
 
         if (request.Participants.Length == 0)
             throw new BookingException(400, "Cần có ít nhất một hành khách trong đơn đặt.");

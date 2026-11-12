@@ -107,22 +107,25 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync($"/api/v1/agency/tour-design-requests/{request.Id}/clone",new DesignCloneInput(source.Id))).StatusCode);
     }
     [Fact]
-    public async Task Design_chat_uses_existing_tables_and_is_scoped_to_owned_request()
+    public async Task Design_discussions_use_chat_and_legacy_request_message_routes_are_removed()
     {
-        await using var app=new App();await app.Initialize();using var customer=await app.Login("customer");using var agency=await app.Login("agency");using var other=await app.Login("other");
-        var request=await DesignRequest(customer);var second=await DesignRequest(customer);
-        var url=$"/api/v1/tour-design-requests/{request.Id}/messages";var agencyUrl=$"/api/v1/agency/tour-design-requests/{request.Id}/messages";
-        Assert.Equal(HttpStatusCode.NoContent,(await customer.PostAsJsonAsync(url,new {message="Xin dùng lại phiên bản 2"})).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,(await agency.PostAsJsonAsync(agencyUrl,new {message="Agency sẽ điều chỉnh và chia sẻ lại"})).StatusCode);
-        Assert.Equal(2,(await Read<DesignRequestService.RequestMessage[]>(await customer.GetAsync(url))).Length);
-        Assert.Empty(await Read<DesignRequestService.RequestMessage[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{second.Id}/messages")));
-        Assert.Equal(HttpStatusCode.NotFound,(await other.GetAsync(agencyUrl)).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await customer.PostAsJsonAsync(url,new {message=" "})).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await customer.PostAsJsonAsync(url,new {message=new string('x',2001)})).StatusCode);
-        await app.Inspect(async db=> { Assert.Single(await db.ChatConversations.ToListAsync());Assert.Equal(2,await db.ChatMessages.CountAsync(m=>m.DesignRequestId==request.Id));
-            Assert.DoesNotContain(db.Model.GetEntityTypes(),t=>t.GetTableName() is "tour_plan_proposals"); });
-        Assert.Equal(HttpStatusCode.NotFound,(await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/agree-plan",new {tourId=1,version=1})).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/proposals")).StatusCode);
+        await using var app = new App(); await app.Initialize();
+        using var customer = await app.Login("customer"); using var agency = await app.Login("agency"); using var other = await app.Login("other");
+        var request = await DesignRequest(customer);
+        var conversation = await Read<System.Text.Json.JsonElement>(await customer.PostAsJsonAsync("/api/v1/chat/conversations", new { userId = "agency" }));
+        var chatUrl = $"/api/v1/chat/conversations/{conversation.GetProperty("id").GetInt32()}/messages";
+        var context = new TripOps.Service.Chat.ChatContextInput("design-request", request.Id);
+        await Read<TripOps.Service.Chat.MessageDto>(await customer.PostAsJsonAsync(chatUrl, new { content = "Tôi muốn xem phiên bản khác", clientMessageId = Guid.NewGuid(), context }));
+        await Read<TripOps.Service.Chat.MessageDto>(await agency.PostAsJsonAsync(chatUrl, new { content = "Tôi sẽ thiết kế thêm phương án", clientMessageId = Guid.NewGuid(), context }));
+        var history = await Read<TripOps.Service.Chat.MessagePage>(await customer.GetAsync(chatUrl));
+        Assert.Equal(2, history.Items.Count);
+        Assert.All(history.Items, message => Assert.Equal("design-request", message.Context!.Kind));
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(chatUrl)).StatusCode);
+        foreach (var prefix in new[] { "/api/v1", "/api/v1/agency" }) {
+            var oldUrl = $"{prefix}/tour-design-requests/{request.Id}/messages";
+            Assert.Equal(HttpStatusCode.NotFound, (await customer.GetAsync(oldUrl)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await customer.PostAsJsonAsync(oldUrl, new { message = "Legacy message" })).StatusCode);
+        }
     }
     [Fact]
     public async Task Rejected_platform_hotel_can_be_replaced_with_agency_supplier_before_approval()

@@ -43,7 +43,8 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
   useEffect(()=>{let alive=true;setWorking(null);setError("");requestAgencies().then(rows=>{if(alive)setAgencies(rows);}).catch(e=>{if(alive)setError(e.message);});
     load().catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;loadSequence.current++;};},[request.id,version]);
   const action = async (fn: () => Promise<void>) => { if(busy || loading)return;setBusy(true);setError("");try {await fn();await onChanged();} catch(e){setError(e instanceof Error?e.message:"Không thể lưu liên minh.");}finally{setBusy(false);} };
-  if (editing) return <TourFormPage company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
+  if (editing) return <TourFormPage key={`${editing.id}-${editing.version}`} designVersions={request.collaborationVersions}
+    onDesignVersionChange={async selected => { await action(async () => { const fresh=fromApiTour(await http<ApiTour>(`${root}/working-tour?version=${selected}`)); setVersion(selected); setEditing(fresh); }); }} company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
     const config=toConfiguration({...editing,...data});
     const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({revision:editing.revision || 1,
       version:editing.version,timelines:config.timelines,pricingTiers:config.pricingTiers})}));

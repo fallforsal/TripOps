@@ -26,8 +26,8 @@ public sealed partial class ChatService
         var version = card.Version ?? tour.SharedVersion;
         var admin = await Db.Users.AnyAsync(u => u.Id == actor && u.Role == UserRole.Admin, ct);
         if (request.CustomerId == actor) {
-            if (!version.HasValue || version != tour.SharedVersion)
-                throw new AccountException(403, "Phiên bản này không còn được Agency chia sẻ. Vui lòng xem phương án hiện tại trong yêu cầu thiết kế.");
+            if (!version.HasValue || !tour.SharedVersion.HasValue || !await Db.TourVersions.AnyAsync(v=>v.TourId==tour.Id && v.VersionNumber==version && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion),ct))
+                throw new AccountException(403, "Phiên bản này chưa được Agency cho phép xem. Vui lòng kiểm tra yêu cầu thiết kế.");
         } else if (!admin && tour.AgencyId != actor && !await Db.TourVersionAgencies.AnyAsync(a => a.AgencyId == actor && a.Status == "accepted" &&
             a.TourVersion.TourId == tour.Id && a.TourVersion.VersionNumber == version, ct))
             throw new AccountException(403, "Bạn không có quyền xem phiên bản tour này.");
@@ -39,7 +39,7 @@ public sealed partial class ChatService
             u.BusinessProfile != null ? u.BusinessProfile.BusinessName ?? u.Name : u.Name,
             u.BusinessProfile != null ? u.BusinessProfile.LogoUrl ?? u.Avatar : u.Avatar, u.Phone, u.Email)).SingleAsync(ct);
         return new(tour.Id, tour.AgencyId, tour.Code, "completed", "hidden", true, tour.IsAiGenerated == true,
-            saved.VersionNumber, DesignRequestService.CustomerConfiguration(snapshot.Configuration), tour.CreatedAt ?? DateTime.UnixEpoch,
+            saved.VersionNumber, DesignRequestService.CustomerConfiguration(await tours.EnrichAgencyLogos(snapshot.Configuration,ct)), tour.CreatedAt ?? DateTime.UnixEpoch,
             saved.CreatedAt ?? DateTime.UnixEpoch, tour.DesignRequestId, tour.SharedVersion, tour.Revision, Agency: agency);
     }
     static ChatContextDto? ReadContext(string? json)
@@ -105,8 +105,8 @@ public sealed partial class ChatService
                     throw new AccountException(403, "Người nhận không thuộc yêu cầu thiết kế của tour.");
                 var version = context.Version ?? tour.SharedVersion ?? tour.Version;
                 var customerInConversation = await Db.TourDesignRequests.AnyAsync(r => r.Id == requestId && (r.CustomerId == actor || r.CustomerId == recipient), ct);
-                if (customerInConversation && version != tour.SharedVersion)
-                    throw new AccountException(403, "Chỉ chia sẻ phiên bản tour đang hiển thị cho khách.");
+                if (customerInConversation && (!tour.SharedVersion.HasValue || !await Db.TourVersions.AnyAsync(v=>v.TourId==tour.Id && v.VersionNumber==version && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion),ct)))
+                    throw new AccountException(403, "Chỉ gửi phiên bản tour Agency đã cho phép khách xem.");
                 var snapshot = await Db.TourVersions.Where(v => v.TourId == tour.Id && v.VersionNumber == version).Select(v => v.SnapshotData).SingleOrDefaultAsync(ct)
                     ?? throw new AccountException(404, "Không tìm thấy phiên bản tour.");
                 using var doc = JsonDocument.Parse(snapshot);

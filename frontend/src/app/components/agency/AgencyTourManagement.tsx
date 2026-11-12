@@ -1,3 +1,4 @@
+import { customerTourPreview } from "@/app/lib/tourEditorPreview";
 import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
@@ -99,7 +100,6 @@ import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
-import { AIItineraryPlannerModal } from "@/app/components/ai/AIItineraryPlannerModal";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { DesignTourPricingTable } from "./DesignTourPricingTable";
 
@@ -1180,6 +1180,8 @@ export interface TourFormPageProps {
   initialTour?: Tour;
   ownershipCollaboration?: boolean;
   onManageCoHosts?: () => void;
+  designVersions?: number[];
+  onDesignVersionChange?: (version: number) => Promise<void>;
   customerMode?: boolean;
   customerContent?: import("react").ReactNode;
   customerSubmitLabel?: string;
@@ -1239,31 +1241,9 @@ export function TourFormPage(props: TourFormPageProps) {
   const isCustomTour = props.isCustomTour ?? props.isCustomDesign ?? false;
   const isCustom =
     props.customerMode || isCustomTour || !!customRequest || tour?.tourType === "custom_request";
-  const [changeNote, setChangeNote] = useState("");
+  const [switchingVersion, setSwitchingVersion] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>(props.customerMode ? "itinerary" : "general");
-  const [showAIPlanner, setShowAIPlanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleApplyAIItinerary = (generated: {
-    name: string;
-    destination: string;
-    duration: string;
-    highlights: string[];
-    description: string;
-    itinerary: DailyItinerary[];
-  }) => {
-    setName(generated.name);
-    setDestination(generated.destination);
-    setDuration(generated.duration);
-    setHighlights(generated.highlights);
-    setDescription(generated.description);
-    setItinerary(generated.itinerary.map((day) => ({ ...day,
-      meals: day.meals?.map((meal) => normalizeLegacyService(meal, meal.pricePerPerson, day.destinationCity || generated.destination)),
-      hotel: day.hotel ? normalizeLegacyService(day.hotel, day.hotel.pricePerNight, day.destinationCity || generated.destination) : undefined,
-    })));
-    setNumberOfDays(generated.itinerary.length);
-    setNumberOfNights(Math.max(1, generated.itinerary.length - 1));
-  };
 
   // Tab 1: General Info
   const [tourCode, setTourCode] = useState(
@@ -3171,7 +3151,7 @@ export function TourFormPage(props: TourFormPageProps) {
       version: tour?.version,
       revision: tour?.revision,
       createNewVersion: isCustom && createNewVersion,
-      changeNote: changeNote.trim() || (createNewVersion ? "Lưu với phiên bản mới" : isCustom ? "Cập nhật phiên bản tour" : "Cập nhật bản nháp"),
+      changeNote: (createNewVersion ? "Lưu với phiên bản mới" : isCustom ? "Cập nhật phiên bản tour" : "Cập nhật bản nháp"),
 
     };
 
@@ -3199,8 +3179,34 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
-  const mainHotel = hotels[0];
-  const hotelNights = hotels.reduce((sum, h) => sum + (h.nights || 1), 0);
+  const previewTour = customerTourPreview({
+    ...tour,
+    id: tour?.id || "preview-tour",
+    tourCode: tourCode || "Chưa có mã",
+    name: name || "Chưa nhập tên tour",
+    destination, provinceCodes, departureLocation, departureCity: departureLocation,
+    duration, numberOfDays, numberOfNights, operationPeriod,
+    image: chosenThumbnail, images, description,
+    price: !ownershipCollaboration && isCoHostedTour ? calculatedFinalPrice : price,
+    priceTable, minGuests, maxGuests,
+    highlights: highlights.filter(h => h.trim()),
+    hotels, itinerary,
+    inclusions: inclusions.filter(item => item.trim()),
+    exclusions: exclusions.filter(item => item.trim()),
+    regulations: regulations.filter(item => item.trim()), companyNote,
+    rating: tour?.rating || 0,
+    companyId: tour?.companyId || company.id,
+    companyName: tour?.companyName || company.name,
+    companyLogo: tour?.companyLogo || company.logo,
+    companyPhone: tour?.companyPhone || company.phone,
+    companyEmail: tour?.companyEmail || company.email,
+    coHosts: coHostsList,
+    tourType: isCustom ? "custom_request" : "public",
+    is_request: isCustom,
+    customRequestId: customRequest?.id || tour?.customRequestId,
+    targetCustomerName: customCustomer,
+    version: tour?.version || 1,
+  }, ownershipCollaboration ? company.id : undefined);
 
   return (
     <div className={props.customerMode ? "bg-slate-50 pb-6 space-y-6" : "bg-slate-50 min-h-screen pb-16 space-y-6 -m-6"}>
@@ -3270,14 +3276,26 @@ export function TourFormPage(props: TourFormPageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            type="button"
-            onClick={() => setShowAIPlanner(true)}
-            className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold text-xs shadow-md flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>✨ AI Lên Lịch Trình</span>
-          </Button>
+          {isCustom && (
+            <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-700">
+              Phiên bản đang thiết kế
+              <select aria-label="Phiên bản đang thiết kế" value={tour?.version || 1}
+                disabled={saving || switchingVersion || !props.onDesignVersionChange}
+                className="h-9 min-w-28 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:opacity-70"
+                onChange={async e => {
+                  const version = Number(e.target.value);
+                  if (!props.onDesignVersionChange || version === (tour?.version || 1)) return;
+                  setSwitchingVersion(true);
+                  try {
+                    if (await confirmAction("Các thay đổi chưa lưu sẽ không được giữ lại. Bạn muốn mở phiên bản đã chọn?", {title: "Chuyển phiên bản thiết kế", confirmLabel: "Chuyển phiên bản"}))
+                      await props.onDesignVersionChange(version);
+                  } finally { setSwitchingVersion(false); }
+                }}>
+                {[...new Set([...(props.designVersions || []), tour?.version || 1])].sort((a, b) => b - a).map(version => <option key={version} value={version}>Phiên bản v{version}</option>)}
+              </select>
+            </label>
+          )}
+          {switchingVersion && <span role="status" className="text-xs text-sky-700">Đang mở phiên bản…</span>}
           <Button
             type="button"
             variant="outline"
@@ -3286,63 +3304,18 @@ export function TourFormPage(props: TourFormPageProps) {
           >
             Hủy bỏ
           </Button>
-          <Button type="button" disabled={saving} onClick={() => handleSubmit(isCustom ? "draft" : "save")}
+          <Button type="button" disabled={saving || switchingVersion} onClick={() => handleSubmit(isCustom ? "draft" : "save")}
             className="bg-[#075985] hover:bg-sky-800 text-white font-semibold">
             {saving ? "Đang lưu…" : "Lưu"}
           </Button>
           {isCustom && isLeadCompany && tour && tour.id !== "0" && (
-            <Button type="button" variant="outline" disabled={saving || !name.trim() || !destination.trim()}
+            <Button type="button" variant="outline" disabled={saving || switchingVersion || !name.trim() || !destination.trim()}
               onClick={() => handleSubmit("draft", true)}>
               <Plus className="w-4 h-4 mr-1.5" />Lưu với phiên bản mới
             </Button>
           )}
         </div>
       </div>
-
-      {/* Custom Tour Banner & Change Note Input */}
-      {isCustom && (
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md border-b border-purple-700">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="bg-purple-500/30 text-purple-200 border border-purple-400/50 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-              <span>🔒</span> TOUR THIẾT KẾ RIÊNG
-            </span>
-            <span className="text-sm font-semibold">
-              Khách hàng:{" "}
-              <span className="text-purple-200">
-                {customRequest?.customerName || customRequest?.contactName ||
-                  tour?.targetCustomerName ||
-                  "Yêu cầu từ khách"}
-              </span>
-              {(customRequest?.customerPhone || tour?.targetCustomerPhone) && (
-                <span className="text-purple-300 ml-1">
-                  ({customRequest?.customerPhone || tour?.targetCustomerPhone})
-                </span>
-              )}
-            </span>
-            <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-purple-600">
-              {tour && tour.id !== "0"
-                ? `Đang chỉnh sửa v${tour.version || 1}`
-                : "Phiên bản đầu tiên: v1"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-xs text-purple-200 font-medium whitespace-nowrap">
-              Ghi chú thay đổi (Change Note):
-            </span>
-            <input
-              type="text"
-              value={changeNote}
-              onChange={(e) => setChangeNote(e.target.value)}
-              placeholder={
-                tour
-                  ? "Ghi chú thay đổi của bản nháp hoặc phiên bản mới..."
-                  : "Ghi chú ban đầu..."
-              }
-              className="text-xs bg-purple-950/80 text-white placeholder-purple-400 border border-purple-500/50 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 md:w-80"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Co-Hosting Collaboration Header & Multi-Company Alliance Bar */}
       {isCoHostedTour && (
@@ -3912,22 +3885,6 @@ export function TourFormPage(props: TourFormPageProps) {
         {/* TAB 2: CHỖ Ở, CHỖ ĂN & LỊCH TRÌNH CHI TIẾT (CHUẨN XÁC 100% NHƯ THONGTINTOUR.PNG) */}
         {activeTab === "itinerary" && (
           <div className="space-y-7">
-            {/* Header tip identical to thongtintour.png */}
-            <div className="flex items-center justify-between text-xs text-gray-500 border-b border-gray-100 pb-3">
-              <p>
-                Chọn khách sạn và tùy chỉnh lịch trình. Thay đổi địa điểm hoặc
-                tự nhập khách sạn → công ty sẽ báo giá.
-              </p>
-              <button
-                type="button"
-                onClick={addDay}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#CBD5E1] bg-white hover:bg-[#F0F9FF] text-gray-700 font-medium transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Thêm ngày tour
-              </button>
-            </div>
-
             {/* ===== 1. KHÁCH SẠN LƯU TRÚ ===== */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -4860,15 +4817,6 @@ export function TourFormPage(props: TourFormPageProps) {
                     dõi và tùy chỉnh trực quan.
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addDay}
-                  className="bg-[#F97316] hover:bg-[#EA580C] text-white text-xs gap-1.5 flex items-center shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Thêm ngày tour
-                </Button>
               </div>
 
               <div className="space-y-4">
@@ -7551,1001 +7499,15 @@ export function TourFormPage(props: TourFormPageProps) {
           </div>
         )}
 
-        {/* TAB 5: MÔ PHỎNG TOUR HIỂN THỊ (PREVIEW Y HỆT KHÁCH HÀNG XEM) */}
         {activeTab === "preview" && (
-          <div className="space-y-6 bg-[#F0F9FF]/70 p-4 rounded-2xl border border-[#CBD5E1]">
-            <div className="bg-[#F97316]/15/70 text-purple-900 border border-purple-300 p-3 rounded-2xl text-xs flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-[#EA580C]" />
-                <span>
-                  <strong>Chế độ mô phỏng trực tiếp:</strong> Đây là giao diện
-                  chính xác mà khách hàng sẽ thấy sau khi bạn đăng tour này.
-                </span>
-              </div>
-              <span className="text-[11px] font-bold bg-purple-200 px-2 py-0.5 rounded">
-                Preview Live
-              </span>
+          <section className="space-y-4" aria-label="Mô phỏng tour dành cho khách hàng">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+              <p>Nội dung đang thiết kế · {isCustom ? `Phiên bản v${tour?.version || 1}` : "Tour đăng bán"}. Chưa lưu thay đổi.</p>
+              <Button type="button" size="sm" variant="outline" onClick={() => setActiveTab("general")}>Quay lại thiết kế</Button>
             </div>
-
-            {/* Top Hero Preview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-4">
-                <div className="relative rounded-2xl overflow-hidden shadow-md h-72">
-                  <img
-                    src={chosenThumbnail}
-                    alt={name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
-                    {company.logo && (
-                      <img
-                        src={company.logo}
-                        alt=""
-                        className="w-5 h-5 rounded object-cover"
-                      />
-                    )}
-                    <span className="text-xs font-semibold text-gray-800">
-                      {company.name}
-                    </span>
-                  </div>
-                  <div className="absolute top-4 right-4 bg-amber-400 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                    <Star className="w-3.5 h-3.5 fill-white" />
-                    4.8
-                  </div>
-                  <div className="absolute bottom-4 left-4 right-4 text-white">
-                    <p className="text-[11px] text-white/70 font-medium mb-1">
-                      MÃ TOUR: {tourCode || "T-NEW"}
-                    </p>
-                    <h1 className="text-xl font-bold leading-tight drop-shadow-sm">
-                      {name || "Tên tour của bạn"}
-                    </h1>
-                  </div>
-                </div>
-
-                {/* Thumbnail gallery if multiple images */}
-                {images.length > 1 && (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {images.map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt=""
-                        className={`w-16 h-12 rounded-lg object-cover border-2 flex-shrink-0 ${thumbnailIndex === i
-                            ? "border-[#075985] ring-2 ring-blue-500/50"
-                            : "border-[#CBD5E1]"
-                          }`}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Meta strip */}
-                <div className="bg-white border border-[#CBD5E1] rounded-2xl p-3.5 flex flex-wrap gap-4 text-xs text-gray-700 shadow-2xs">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-blue-500" />
-                    <span>{destination || "Điểm đến"}</span>
-                    {provinceCodes.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap ml-1">
-                        {provinceCodes.map((code) => (
-                          <span
-                            key={code}
-                            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#E0F2FE] text-[#075985] border border-sky-200"
-                          >
-                            {getProvinceName(code)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-blue-500" />
-                    <span>{duration}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-blue-500" />
-                    <span>
-                      {minGuests}–{maxGuests} khách
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-blue-500" />
-                    <span>{operationPeriod}</span>
-                  </div>
-                </div>
-
-                {/* Preview Tabs View */}
-                <div className="bg-white border border-[#CBD5E1] rounded-2xl overflow-hidden shadow-2xs">
-                  <div className="flex border-b border-[#CBD5E1] bg-[#F0F9FF]/50">
-                    {[
-                      { id: "program", label: "Chương trình tour" },
-                      { id: "regulations", label: "Quy định" },
-                      { id: "pricing", label: "Bảng giá" },
-                      { id: "custom", label: "Lịch trình tùy chỉnh" },
-                      { id: "reviews", label: "Nhận xét" },
-                    ].map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setPreviewActiveTab(t.id as any)}
-                        className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${previewActiveTab === t.id
-                            ? "border-[#075985] text-[#075985] bg-white"
-                            : "border-transparent text-gray-500 hover:text-gray-800"
-                          }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="p-4 text-xs space-y-4">
-                    {/* CUSTOM TAB (EXACTLY MATCHING THONGTINTOUR.PNG) */}
-                    {previewActiveTab === "custom" && (
-                      <div className="space-y-5">
-                        <p className="text-gray-500 text-[11px]">
-                          Chọn khách sạn và tùy chỉnh lịch trình. Thay đổi địa
-                          điểm hoặc tự nhập khách sạn → công ty sẽ báo giá.
-                        </p>
-
-                        {/* 1. KHÁCH SẠN LƯU TRÚ */}
-                        <div className="space-y-2">
-                          <h4 className="font-bold text-gray-900 text-xs flex items-center gap-1.5 uppercase">
-                            <Building2 className="w-3.5 h-3.5 text-[#075985]" />
-                            Khách sạn lưu trú ({hotels.length})
-                          </h4>
-                          <div className="space-y-2">
-                            {hotels.map((h, hi) => (
-                              <div
-                                key={hi}
-                                className="border border-[#CBD5E1] rounded-2xl overflow-hidden bg-white shadow-2xs"
-                              >
-                                <div className="p-3 bg-[#F0F9FF]/80 flex items-center justify-between border-b border-gray-100">
-                                  <div className="flex items-center gap-2.5">
-                                    <Building2 className="w-4 h-4 text-[#075985]" />
-                                    <div>
-                                      <div className="flex items-center gap-1.5">
-                                        <p className="font-bold text-gray-900 text-xs">
-                                          {h.destination ||
-                                            destination ||
-                                            "Điểm đến"}
-                                        </p>
-                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                          {h.stars || 4} ★
-                                        </span>
-                                      </div>
-                                      <p className="text-[11px] text-gray-500">
-                                        {h.nights || 1} đêm •{" "}
-                                        {h.name || "Khách sạn lưu trú"} •{" "}
-                                        {h.stars || 4} sao (Tiêu chuẩn: 0đ)
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <span className="text-[10px] bg-white border border-[#CBD5E1] px-2 py-0.5 rounded text-gray-600 font-medium">
-                                    {(h.alternativeHotels || []).length > 0
-                                      ? `${(h.alternativeHotels || []).length + 1} phương án chỗ ở`
-                                      : "1 phương án chỗ ở tiêu chuẩn"}
-                                  </span>
-                                </div>
-                                {(h.alternativeHotels || []).length > 0 && (
-                                  <div className="p-2.5 space-y-1.5 bg-[#F0F9FF]/50">
-                                    {(h.alternativeHotels || []).map(
-                                      (alt, ai) => (
-                                        <div
-                                          key={ai}
-                                          className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-100 text-[11px]"
-                                        >
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="font-medium text-gray-800">
-                                              {alt.name}
-                                            </span>
-                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                              {alt.stars || 4} ★
-                                            </span>
-                                          </div>
-                                          <span
-                                            className={`font-bold ${alt.priceDifference > 0 ? "text-amber-700" : "text-emerald-600"}`}
-                                          >
-                                            {alt.priceDifference > 0 ? "+" : ""}
-                                            {formatVND(alt.priceDifference)}
-                                          </span>
-                                        </div>
-                                      ),
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* 2. LỊCH TRÌNH CHI TIẾT & CHẾ ĐỘ ĂN UỐNG (THEO TỪNG NGÀY) */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div>
-                              <h4 className="font-bold text-gray-900 text-xs flex items-center gap-1.5 uppercase">
-                                <Clock className="w-3.5 h-3.5 text-[#F97316]" />
-                                LỊCH TRÌNH CHI TIẾT &amp; BỮA ĂN TRONG NGÀY
-                                (THEO TỪNG NGÀY)
-                              </h4>
-                              <p className="text-[11px] text-gray-500">
-                                Khách hàng có thể linh hoạt giữ tiêu chuẩn hoặc
-                                chọn phương án thay thế
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            {itinerary.map((d) => (
-                              <div
-                                key={d.id}
-                                className="border border-[#CBD5E1] rounded-2xl p-3.5 bg-white space-y-3 shadow-2xs"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-[#F97316] text-white text-xs font-bold flex items-center justify-center shadow-xs">
-                                    {d.day}
-                                  </div>
-                                  <span className="font-bold text-gray-900 text-xs sm:text-sm">
-                                    {d.title || "Chưa nhập tiêu đề"}
-                                  </span>
-                                </div>
-                                {d.description && (
-                                  <p className="bg-[#F0F9FF] p-2.5 rounded-lg border border-gray-100 text-xs text-gray-600">
-                                    {d.description}
-                                  </p>
-                                )}
-
-                                {/* UNIFIED TIMELINE FOR CUSTOM PREVIEW */}
-                                <div className="relative pl-1 pt-1">
-                                  <div className="absolute left-[95px] top-3 bottom-3 w-0.5 bg-gray-200" />
-                                  <div className="space-y-3">
-                                    {(() => {
-                                      type UnifiedItem =
-                                        | {
-                                          kind: "location";
-                                          loc: (typeof d.locations)[0];
-                                          minutes: number;
-                                          time: string;
-                                        }
-                                        | {
-                                          kind: "meal";
-                                          meal: NonNullable<
-                                            typeof d.meals
-                                          >[0];
-                                          minutes: number;
-                                          time: string;
-                                        };
-
-                                      const items: UnifiedItem[] = [
-                                        ...(d.locations || []).map((loc) => ({
-                                          kind: "location" as const,
-                                          loc,
-                                          time: loc.time || "08:30",
-                                          minutes: parseTimeToMinutes(
-                                            loc.time || "08:30",
-                                          ),
-                                        })),
-                                        ...(d.meals || []).map((meal) => {
-                                          const defTime =
-                                            meal.type === "breakfast"
-                                              ? "07:30"
-                                              : meal.type === "lunch"
-                                                ? "12:00"
-                                                : "18:30";
-                                          return {
-                                            kind: "meal" as const,
-                                            meal,
-                                            time: meal.time || defTime,
-                                            minutes: parseTimeToMinutes(
-                                              meal.time || defTime,
-                                            ),
-                                          };
-                                        }),
-                                      ];
-
-                                      items.sort(
-                                        (a, b) => a.minutes - b.minutes,
-                                      );
-
-                                      if (items.length === 0) {
-                                        return (
-                                          <div className="p-3 border border-dashed border-[#CBD5E1] rounded-xl text-center text-xs text-gray-400 bg-gray-50">
-                                            Chưa có lịch trình cho Ngày {d.day}.
-                                          </div>
-                                        );
-                                      }
-
-                                      return items.map((tItem, idx) => {
-                                        if (tItem.kind === "location") {
-                                          const { loc, time } = tItem;
-                                          return (
-                                            <div
-                                              key={loc.id || `loc-${idx}`}
-                                              className="relative flex items-start gap-2.5"
-                                            >
-                                              <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
-                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
-                                                  <Clock className="w-3 h-3 text-blue-500" />
-                                                  {time}
-                                                </span>
-                                              </div>
-                                              <div className="relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center flex-shrink-0 shadow-2xs">
-                                                <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                              </div>
-                                              <div className="flex-1 flex items-center justify-between p-2.5 rounded-xl border border-[#CBD5E1] bg-white shadow-2xs">
-                                                <div className="flex items-center gap-2 text-xs">
-                                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                                                    Điểm đến
-                                                  </span>
-                                                  <span className="font-semibold text-gray-900">
-                                                    {loc.name}
-                                                  </span>
-                                                </div>
-                                                <span className="text-[10px] text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-[#CBD5E1] font-medium">
-                                                  Tùy chọn thay đổi
-                                                </span>
-                                              </div>
-                                            </div>
-                                          );
-                                        } else {
-                                          const { meal, time } = tItem;
-                                          const mealType = meal.type;
-                                          const label =
-                                            mealType === "breakfast"
-                                              ? "Ăn sáng"
-                                              : mealType === "lunch"
-                                                ? "Ăn trưa"
-                                                : "Ăn tối";
-                                          const isBreakfast =
-                                            mealType === "breakfast";
-                                          const isLunch = mealType === "lunch";
-
-                                          return (
-                                            <div
-                                              key={meal.id || `meal-${idx}`}
-                                              className="relative flex items-start gap-2.5"
-                                            >
-                                              <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
-                                                <span
-                                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${isBreakfast
-                                                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                                                      : isLunch
-                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                                        : "bg-purple-50 text-purple-700 border-purple-200"
-                                                    }`}
-                                                >
-                                                  <Clock className="w-3 h-3" />
-                                                  {time}
-                                                </span>
-                                              </div>
-                                              <div
-                                                className={`relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${isBreakfast
-                                                    ? "border-amber-400 text-amber-600"
-                                                    : isLunch
-                                                      ? "border-emerald-500 text-emerald-600"
-                                                      : "border-[#F97316] text-[#EA580C]"
-                                                  }`}
-                                              >
-                                                {isBreakfast ? (
-                                                  <Sun className="w-3.5 h-3.5" />
-                                                ) : (
-                                                  <Utensils className="w-3.5 h-3.5" />
-                                                )}
-                                              </div>
-                                              <div
-                                                className={`flex-1 border rounded-xl overflow-hidden bg-white shadow-2xs ${isBreakfast
-                                                    ? "border-amber-200"
-                                                    : isLunch
-                                                      ? "border-emerald-200"
-                                                      : "border-purple-200"
-                                                  }`}
-                                              >
-                                                <div
-                                                  className={`p-2.5 flex items-center justify-between border-b border-gray-100 ${isBreakfast
-                                                      ? "bg-amber-50/50"
-                                                      : isLunch
-                                                        ? "bg-emerald-50/50"
-                                                        : "bg-[#F0F9FF]/50"
-                                                    }`}
-                                                >
-                                                  <div className="flex items-center gap-2">
-                                                    <span
-                                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${isBreakfast
-                                                          ? "bg-amber-100 text-amber-800 border-amber-300"
-                                                          : isLunch
-                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                            : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
-                                                        }`}
-                                                    >
-                                                      {label}
-                                                    </span>
-                                                    <span className="font-semibold text-gray-900 text-xs">
-                                                      {meal.serviceName}
-                                                    </span>
-                                                  </div>
-                                                  <span className="text-[10px] bg-white border border-[#CBD5E1] px-2 py-0.5 rounded text-gray-600 font-medium">
-                                                    {(
-                                                      meal.alternativeMeals ||
-                                                      []
-                                                    ).length > 0
-                                                      ? `${(meal.alternativeMeals || []).length + 1} phương án ẩm thực`
-                                                      : "Tiêu chuẩn: 0đ"}
-                                                  </span>
-                                                </div>
-                                                {(meal.alternativeMeals || [])
-                                                  .length > 0 && (
-                                                    <div className="p-2 space-y-1 bg-[#F0F9FF]/40 text-[11px]">
-                                                      {(
-                                                        meal.alternativeMeals ||
-                                                        []
-                                                      ).map((alt, ai) => (
-                                                        <div
-                                                          key={ai}
-                                                          className="flex items-center justify-between p-1.5 rounded bg-white border border-gray-100"
-                                                        >
-                                                          <span className="font-medium text-gray-800">
-                                                            {alt.restaurantName}
-                                                          </span>
-                                                          <span
-                                                            className={`font-bold ${alt.priceDifference > 0 ? "text-amber-700" : "text-emerald-600"}`}
-                                                          >
-                                                            {alt.priceDifference >
-                                                              0
-                                                              ? "+"
-                                                              : ""}
-                                                            {formatVND(
-                                                              alt.priceDifference,
-                                                            )}
-                                                            /người
-                                                          </span>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                              </div>
-                                            </div>
-                                          );
-                                        }
-                                      });
-                                    })()}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* PROGRAM TAB (CHƯƠNG TRÌNH TOUR CHÍNH THỨC) */}
-                    {previewActiveTab === "program" && (
-                      <div className="space-y-6">
-                        {/* Thời gian hoạt động */}
-                        {operationPeriod && (
-                          <div className="bg-[#F0F9FF] border border-blue-100 rounded-2xl p-3.5">
-                            <h4 className="text-xs font-bold text-[#075985] uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5" />
-                              Thời gian hoạt động
-                            </h4>
-                            <p className="text-xs text-gray-700">
-                              <span className="text-gray-500">
-                                Mùa tour / Thời gian hoạt động:
-                              </span>{" "}
-                              <strong>{operationPeriod}</strong>
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Điểm nổi bật */}
-                        {highlights.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-bold text-red-600 mb-2.5 flex items-center gap-1.5">
-                              <Star className="w-4 h-4" />
-                              ĐIỂM NỔI BẬT:
-                            </h4>
-                            <ul className="space-y-1.5">
-                              {highlights.map((h, i) => (
-                                <li
-                                  key={i}
-                                  className="flex items-start gap-2 text-xs text-gray-700"
-                                >
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                                  <span>{h}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Lịch trình chi tiết */}
-                        <div>
-                          <h4 className="text-sm font-bold text-red-600 mb-3 uppercase">
-                            LỊCH TRÌNH CHI TIẾT:
-                          </h4>
-                          <div className="space-y-3">
-                            {itinerary.map((d) => {
-                              const isOpen = previewExpandedDays.has(d.id);
-                              return (
-                                <div
-                                  key={d.id}
-                                  className="border border-[#CBD5E1] rounded-2xl overflow-hidden bg-white shadow-2xs"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePreviewDay(d.id)}
-                                    className="w-full flex items-center gap-3 px-3.5 py-3 bg-[#F0F9FF] hover:bg-gray-100 transition-colors text-left"
-                                  >
-                                    <div className="w-7 h-7 bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-xs">
-                                      {d.day}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-bold text-gray-900 text-xs sm:text-sm">
-                                          {d.title || "Chưa nhập tiêu đề"}
-                                        </p>
-
-                                      </div>
-                                    </div>
-
-                                    {isOpen ? (
-                                      <ChevronUp className="w-4 h-4 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4 text-gray-400" />
-                                    )}
-                                  </button>
-
-                                  {isOpen && (
-                                    <div className="px-4 py-3.5 space-y-4 bg-white">
-                                      {d.description && (
-                                        <p className="text-gray-700 leading-relaxed text-xs bg-[#F0F9FF] p-3 rounded-xl border border-blue-100">
-                                          {d.description}
-                                        </p>
-                                      )}
-
-                                      {/* LỊCH TRÌNH CHI TIẾT & BỮA ĂN TRONG NGÀY (UNIFIED TIMELINE THEO KHUNG GIỜ) */}
-                                      <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                          <h5 className="text-[11px] font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                                            <Clock className="w-3.5 h-3.5 text-[#F97316]" />
-                                            Lịch trình chi tiết &amp; Bữa ăn
-                                            trong ngày {d.day}
-                                          </h5>
-                                          <span className="text-[10px] text-gray-500">
-                                            Sắp xếp theo thứ tự khung giờ trong
-                                            ngày
-                                          </span>
-                                        </div>
-
-                                        <div className="relative pl-1 pt-1">
-                                          {/* Đường trục dọc timeline liên tục */}
-                                          <div className="absolute left-[95px] top-3 bottom-3 w-0.5 bg-gray-200" />
-
-                                          <div className="space-y-3">
-                                            {(() => {
-                                              type UnifiedItem =
-                                                | {
-                                                  kind: "location";
-                                                  loc: (typeof d.locations)[0];
-                                                  minutes: number;
-                                                  time: string;
-                                                }
-                                                | {
-                                                  kind: "meal";
-                                                  meal: NonNullable<
-                                                    typeof d.meals
-                                                  >[0];
-                                                  minutes: number;
-                                                  time: string;
-                                                };
-
-                                              const items: UnifiedItem[] = [
-                                                ...(d.locations || []).map(
-                                                  (loc) => ({
-                                                    kind: "location" as const,
-                                                    loc,
-                                                    time: loc.time || "08:30",
-                                                    minutes: parseTimeToMinutes(
-                                                      loc.time || "08:30",
-                                                    ),
-                                                  }),
-                                                ),
-                                                ...(d.meals || []).map(
-                                                  (meal) => {
-                                                    const defTime =
-                                                      meal.type === "breakfast"
-                                                        ? "07:30"
-                                                        : meal.type === "lunch"
-                                                          ? "12:00"
-                                                          : "18:30";
-                                                    return {
-                                                      kind: "meal" as const,
-                                                      meal,
-                                                      time:
-                                                        meal.time || defTime,
-                                                      minutes:
-                                                        parseTimeToMinutes(
-                                                          meal.time || defTime,
-                                                        ),
-                                                    };
-                                                  },
-                                                ),
-                                              ];
-
-                                              items.sort(
-                                                (a, b) => a.minutes - b.minutes,
-                                              );
-
-                                              if (items.length === 0) {
-                                                return (
-                                                  <div className="p-3 border border-dashed border-[#CBD5E1] rounded-xl text-center text-xs text-gray-400 bg-gray-50">
-                                                    Chưa có điểm tham quan hoặc
-                                                    bữa ăn nào cho Ngày {d.day}.
-                                                  </div>
-                                                );
-                                              }
-
-                                              return items.map((tItem, idx) => {
-                                                if (tItem.kind === "location") {
-                                                  const { loc, time } = tItem;
-                                                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name + (destination ? " " + destination : ""))}`;
-
-                                                  return (
-                                                    <div
-                                                      key={
-                                                        loc.id || `loc-${idx}`
-                                                      }
-                                                      className="relative flex items-start gap-2.5"
-                                                    >
-                                                      {/* Time pill */}
-                                                      <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
-                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
-                                                          <Clock className="w-3 h-3 text-blue-500" />
-                                                          {time}
-                                                        </span>
-                                                      </div>
-
-                                                      {/* Dot on line */}
-                                                      <div className="relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 border-blue-400 text-blue-600 flex items-center justify-center flex-shrink-0 shadow-2xs">
-                                                        <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                                      </div>
-
-                                                      {/* Location card */}
-                                                      <div className="flex-1 border border-[#CBD5E1] rounded-xl p-2.5 bg-white shadow-2xs hover:border-blue-300 transition-colors">
-                                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                                          <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                                                              Tham quan
-                                                            </span>
-                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm">
-                                                              {loc.name}
-                                                            </span>
-                                                          </div>
-                                                          <a
-                                                            href={mapsUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
-                                                          >
-                                                            <MapPin className="w-3 h-3" />
-                                                            Bản đồ
-                                                          </a>
-                                                        </div>
-                                                        {loc.createdByCompanyName && (
-                                                          <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                                                            <Building2 className="w-3 h-3 text-gray-400" />
-                                                            Tạo bởi:{" "}
-                                                            {
-                                                              loc.createdByCompanyName
-                                                            }
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                } else {
-                                                  const { meal, time } = tItem;
-                                                  const mealType = meal.type;
-                                                  const mealLabel =
-                                                    mealType === "breakfast"
-                                                      ? "Ăn sáng"
-                                                      : mealType === "lunch"
-                                                        ? "Ăn trưa"
-                                                        : "Ăn tối";
-                                                  const isBreakfast =
-                                                    mealType === "breakfast";
-                                                  const isLunch =
-                                                    mealType === "lunch";
-
-                                                  return (
-                                                    <div
-                                                      key={
-                                                        meal.id || `meal-${idx}`
-                                                      }
-                                                      className="relative flex items-start gap-2.5"
-                                                    >
-                                                      {/* Time pill */}
-                                                      <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
-                                                        <span
-                                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${isBreakfast
-                                                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                                                              : isLunch
-                                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                                                : "bg-purple-50 text-purple-700 border-purple-200"
-                                                            }`}
-                                                        >
-                                                          <Clock className="w-3 h-3" />
-                                                          {time}
-                                                        </span>
-                                                      </div>
-
-                                                      {/* Dot on line */}
-                                                      <div
-                                                        className={`relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${isBreakfast
-                                                            ? "border-amber-400 text-amber-600"
-                                                            : isLunch
-                                                              ? "border-emerald-500 text-emerald-600"
-                                                              : "border-[#F97316] text-[#EA580C]"
-                                                          }`}
-                                                      >
-                                                        {isBreakfast ? (
-                                                          <Sun className="w-3.5 h-3.5" />
-                                                        ) : (
-                                                          <Utensils className="w-3.5 h-3.5" />
-                                                        )}
-                                                      </div>
-
-                                                      {/* Meal card */}
-                                                      <div
-                                                        className={`flex-1 border rounded-xl p-2.5 bg-white shadow-2xs ${isBreakfast
-                                                            ? "border-amber-200 bg-amber-50/20"
-                                                            : isLunch
-                                                              ? "border-emerald-200 bg-emerald-50/20"
-                                                              : "border-purple-200 bg-purple-50/20"
-                                                          }`}
-                                                      >
-                                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                                          <div className="flex items-center gap-2">
-                                                            <span
-                                                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${isBreakfast
-                                                                  ? "bg-amber-100 text-amber-800 border-amber-300"
-                                                                  : isLunch
-                                                                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                                    : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
-                                                                }`}
-                                                            >
-                                                              {mealLabel}
-                                                            </span>
-                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm">
-                                                              {meal.serviceName ||
-                                                                "Nhà hàng theo chương trình"}
-                                                            </span>
-                                                          </div>
-                                                          {meal.alternativeMeals &&
-                                                            meal
-                                                              .alternativeMeals
-                                                              .length > 0 && (
-                                                              <span className="text-[10px] font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                                                                +
-                                                                {
-                                                                  meal
-                                                                    .alternativeMeals
-                                                                    .length
-                                                                }{" "}
-                                                                phương án ẩm
-                                                                thực
-                                                              </span>
-                                                            )}
-                                                        </div>
-                                                        {meal.description && (
-                                                          <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                                                            {meal.description}
-                                                          </p>
-                                                        )}
-                                                        {meal.createdByCompanyName && (
-                                                          <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                                                            <Building2 className="w-3 h-3 text-gray-400" />
-                                                            Tạo bởi:{" "}
-                                                            {
-                                                              meal.createdByCompanyName
-                                                            }
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                }
-                                              });
-                                            })()}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* PRICING TAB */}
-                    {previewActiveTab === "pricing" && (
-                      <div className="space-y-3">
-                        <h4 className="font-bold text-gray-900">
-                          BẢNG GIÁ THEO LỨA TUỔI:
-                        </h4>
-                        <table className="w-full border border-[#CBD5E1] rounded-lg overflow-hidden">
-                          <thead className="bg-gray-100">
-                            <tr>
-                              <th className="p-2 text-left">Phân loại</th>
-                              <th className="p-2 text-center">
-                                Độ tuổi áp dụng
-                              </th>
-                              <th className="p-2 text-right">Giá vé</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {priceTable.map((p, idx) => (
-                              <tr key={idx}>
-                                <td className="p-2 font-medium">
-                                  {p.ageGroupLabel}
-                                </td>
-                                <td className="p-2 text-center text-gray-600">
-                                  {p.minAge !== undefined &&
-                                    p.maxAge !== undefined
-                                    ? p.maxAge >= 100
-                                      ? `Từ ${p.minAge} tuổi trở lên`
-                                      : `Từ ${p.minAge} đến ${p.maxAge} tuổi`
-                                    : p.ageRange || "-"}
-                                </td>
-                                <td className="p-2 text-right font-bold text-[#075985]">
-                                  {p.price === 0
-                                    ? "Miễn phí"
-                                    : formatVND(p.price)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {/* REGULATIONS TAB */}
-                    {previewActiveTab === "regulations" && (
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-bold text-emerald-700 mb-1">
-                            GIÁ TOUR BAO GỒM:
-                          </h4>
-                          <ul className="space-y-0.5 list-disc pl-4 text-gray-700">
-                            {inclusions.map((inc, i) => (
-                              <li key={i}>{inc}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-red-600 mb-1">
-                            GIÁ TOUR KHÔNG BAO GỒM:
-                          </h4>
-                          <ul className="space-y-0.5 list-disc pl-4 text-gray-700">
-                            {exclusions.map((exc, i) => (
-                              <li key={i}>{exc}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-amber-700 mb-1">
-                            ĐIỀU KIỆN &amp; LƯU Ý:
-                          </h4>
-                          <ul className="space-y-0.5 list-disc pl-4 text-gray-700">
-                            {regulations.map((reg, i) => (
-                              <li key={i}>{reg}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* REVIEWS TAB */}
-                    {previewActiveTab === "reviews" && (
-                      <div className="space-y-4">
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
-                          <div className="text-center">
-                            <p className="text-4xl font-bold text-[#075985]">
-                              5.0
-                            </p>
-                            <div className="flex justify-center gap-0.5 mt-1">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <Star
-                                  key={i}
-                                  className="w-4 h-4 fill-amber-400 text-amber-400"
-                                />
-                              ))}
-                            </div>
-                            <p className="text-[11px] text-gray-500 mt-0.5">
-                              Tour mới (Chưa có đánh giá thực tế)
-                            </p>
-                          </div>
-                          <div className="flex-1 w-full space-y-1 text-xs">
-                            {[
-                              { star: 5, pct: "100%" },
-                              { star: 4, pct: "0%" },
-                              { star: 3, pct: "0%" },
-                              { star: 2, pct: "0%" },
-                              { star: 1, pct: "0%" },
-                            ].map(({ star, pct }) => (
-                              <div
-                                key={star}
-                                className="flex items-center gap-2"
-                              >
-                                <span className="text-xs text-gray-600 w-3">
-                                  {star}
-                                </span>
-                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                                  <div
-                                    className="bg-amber-400 h-1.5 rounded-full"
-                                    style={{ width: pct }}
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="p-4 border border-dashed border-[#CBD5E1] rounded-2xl text-center text-xs text-gray-400">
-                          Khách hàng sẽ để lại đánh giá và nhận xét sau khi hoàn
-                          thành chuyến đi.
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Booking Sidebar Preview */}
-              <div className="lg:col-span-1 space-y-4">
-                <div className="bg-white border border-[#CBD5E1] rounded-2xl shadow-sm p-4 space-y-3 text-xs">
-                  <div>
-                    <p className="text-gray-400">Giá từ</p>
-                    <p className="text-2xl font-bold text-[#075985]">
-                      {formatVND(price)}
-                    </p>
-                    <p className="text-gray-400 text-[10px]">/ người lớn</p>
-                  </div>
-
-                  <div className="bg-[#F0F9FF] rounded-2xl p-2.5">
-                    <p className="text-[10px] text-[#075985] font-bold uppercase mb-0.5">
-                      Thời gian hoạt động
-                    </p>
-                    <p className="font-semibold text-gray-800">
-                      {operationPeriod}
-                    </p>
-                  </div>
-
-                  <div className="bg-[#F0F9FF] rounded-2xl p-2.5 space-y-1 text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Thời lượng:</span>
-                      <strong className="text-gray-900">{duration}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Điểm đến:</span>
-                      <strong className="text-gray-900">{destination}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Quy mô đoàn:</span>
-                      <strong className="text-gray-900">
-                        {minGuests}–{maxGuests} khách
-                      </strong>
-                    </div>
-                  </div>
-
-                  <Button className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 text-xs rounded-2xl">
-                    Đặt tour ngay (Khách tự chọn ngày)
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+            <TourDetailPage tour={previewTour} services={mockServices} currentUser={company} previewOnly
+              onBack={() => setActiveTab("general")}/>
+          </section>
         )}
       </div>
 
@@ -8555,16 +7517,6 @@ export function TourFormPage(props: TourFormPageProps) {
           <Button type="button" disabled={saving} onClick={() => void handleSubmit()} className="bg-[#075985] text-white">{saving ? "Đang gửi…" : props.customerSubmitLabel || "Gửi yêu cầu thay đổi cho Agency"}</Button>
         </div>
       </div>}
-      {/* AI Itinerary Planner Modal */}
-      {showAIPlanner && (
-        <AIItineraryPlannerModal
-          isOpen={showAIPlanner}
-          onClose={() => setShowAIPlanner(false)}
-          onApplyItinerary={handleApplyAIItinerary}
-          initialDestination={destination}
-        />
-      )}
-
       {/* Modal Mời Đối Tác Liên Minh Đa Công Ty */}
       {showAddCoHostModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">

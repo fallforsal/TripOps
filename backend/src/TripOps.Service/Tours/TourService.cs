@@ -426,8 +426,21 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     {
         if (!await db.TourDesignRequests.AnyAsync(r => r.Id == requestId && r.CustomerId == actor, ct))
             throw new TourException(404, "Không tìm thấy yêu cầu.");
-        try { return [await SharedTour(actor, requestId, ct)]; }
-        catch (TourException e) when (e.Status == 404) { return []; }
+        var request=await db.TourDesignRequests.AsNoTracking().SingleAsync(r=>r.Id==requestId,ct);
+        if(request.Status is not (CustomRequestStatus.InProgress or CustomRequestStatus.Closed or CustomRequestStatus.Booked))return [];
+        var tour=await db.Tours.AsNoTracking().SingleOrDefaultAsync(t=>t.DesignRequestId==requestId && t.SharedVersion.HasValue && t.Status!=TourStatus.Deleted,ct);
+        if(tour==null)return [];
+        var versions=await db.TourVersions.AsNoTracking().Where(v=>v.TourId==tour.Id && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion)).OrderByDescending(v=>v.VersionNumber==tour.SharedVersion).ThenByDescending(v=>v.VersionNumber).ToListAsync(ct);
+        var result=new List<TourDto>();var agency=await AgencyContact(tour.AgencyId,ct);
+        foreach(var v in versions) {
+            var members=await CoHosts(requestId,ct,v.VersionNumber);
+            if(members.Any(m=>m.Status!="accepted"))continue;
+            var snapshot=JsonSerializer.Deserialize<TourSnapshot>(v.SnapshotData,Json)!;
+            result.Add(new TourDto(tour.Id,tour.AgencyId,tour.Code,"completed","hidden",true,tour.IsAiGenerated==true,v.VersionNumber,
+                DesignRequestService.CustomerConfiguration(snapshot.Configuration with {CoHosts=members}),tour.CreatedAt??DateTime.UnixEpoch,
+                v.SharedAt??v.CreatedAt??DateTime.UnixEpoch,requestId,tour.SharedVersion,tour.Revision,Agency:agency));
+        }
+        return result;
     }
     private async Task<TourDto> CreateDraft(string actor, TourConfiguration config, bool aiGenerated, CancellationToken ct)
     {
@@ -463,7 +476,13 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(Configuration(tour)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct));
+        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct));
+    }
+    internal async Task<TourConfiguration> EnrichAgencyLogos(TourConfiguration c,CancellationToken ct) {
+        if(c.CoHosts is not {Length:>0})return c;
+        var ids=c.CoHosts.Select(h=>h.CompanyId).Distinct().ToArray();
+        var logos=await db.Users.AsNoTracking().Where(u=>ids.Contains(u.Id)).Select(u=>new {u.Id,Logo=u.BusinessProfile!=null?u.BusinessProfile.LogoUrl??u.Avatar:u.Avatar}).ToDictionaryAsync(u=>u.Id,u=>u.Logo,ct);
+        return c with {CoHosts=c.CoHosts.Select(h=>h with {CompanyLogo=logos.GetValueOrDefault(h.CompanyId)??h.CompanyLogo}).ToArray()};
     }
     private Task<TourAgencyContact?> AgencyContact(string agencyId, CancellationToken ct) => db.Users.AsNoTracking()
         .Where(u => u.Id == agencyId).Select(u => new TourAgencyContact(u.Id,
