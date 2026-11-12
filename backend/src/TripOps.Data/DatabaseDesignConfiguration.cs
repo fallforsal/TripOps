@@ -32,6 +32,10 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2").IsRequired();
+            entity.Property(e => e.BankName).HasColumnName("bank_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountNumber).HasColumnName("bank_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(e => e.BankAccountHolder).HasColumnName("bank_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.BankAccountUpdatedAt).HasColumnName("bank_account_updated_at").HasColumnType("datetime2");
         });
         modelBuilder.Entity<GuideProfile>(entity =>
         {

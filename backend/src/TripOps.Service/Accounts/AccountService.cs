@@ -14,6 +14,36 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         p.BusinessAddress, storage.DeliveryUrl(p.BusinessLicenseUrl), p.Description,
         p.Status?.ToString().ToLowerInvariant() ?? "pending", p.RejectionReason, p.ApprovedAt,
         p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch, p.LogoUrl is null ? null : storage.DeliveryUrl(p.LogoUrl));
+    // ------------------------------------------------------------ tài khoản ngân hàng trong hồ sơ
+    public static BankAccountDto BankAccount(User u) => new(u.BankName, u.BankAccountNumber, u.BankAccountHolder,
+        u.BankAccountUpdatedAt is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : null,
+        !string.IsNullOrWhiteSpace(u.BankAccountNumber));
+    public async Task<BankAccountDto> GetBankAccount(string userId, CancellationToken ct) =>
+        BankAccount(await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AccountException(404, "Không tìm thấy tài khoản."));
+    public async Task<BankAccountDto> SetBankAccount(string userId, BankAccountInput input, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        var bank = input.BankName.Trim();
+        var number = Common.BankAccountText.Number(input.AccountNumber);
+        var holder = Common.BankAccountText.Holder(input.AccountHolder);
+        if (bank.Length == 0) throw new AccountException(422, "Vui lòng chọn ngân hàng.");
+        if (!Common.BankAccountText.IsValidNumber(number)) throw new AccountException(422, "Số tài khoản chỉ gồm 6–30 chữ số.");
+        if (holder.Length < 2) throw new AccountException(422, "Vui lòng nhập tên chủ tài khoản.");
+        if (user.BankName != bank || user.BankAccountNumber != number || user.BankAccountHolder != holder)
+        {
+            user.BankName = bank; user.BankAccountNumber = number; user.BankAccountHolder = holder;
+            user.BankAccountUpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+        return BankAccount(user);
+    }
+    public async Task ClearBankAccount(string userId, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        user.BankName = null; user.BankAccountNumber = null; user.BankAccountHolder = null; user.BankAccountUpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
         u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)

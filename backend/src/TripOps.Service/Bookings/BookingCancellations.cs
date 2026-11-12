@@ -1,6 +1,7 @@
 using System.Globalization;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
+using TripOps.Service.Common;
 using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
@@ -109,6 +110,7 @@ public sealed partial class BookingService
             Status = RefundStatus.Pending,
             CreatedAt = now
         });
+        await RememberRefundAccount(customerId, account, ct);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -127,6 +129,7 @@ public sealed partial class BookingService
         open.RefundBankName = account.Bank;
         open.RefundAccountNumber = account.Number;
         open.RefundAccountHolder = account.Holder;
+        await RememberRefundAccount(customerId, account, ct);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -483,7 +486,8 @@ public sealed partial class BookingService
 
     private static RefundAccount? Account(string? bank, string? number, string? holder, bool required)
     {
-        bank = bank?.Trim(); number = number?.Replace(" ", "").Trim(); holder = holder?.Trim().ToUpperInvariant();
+        bank = bank?.Trim(); number = number is null ? null : BankAccountText.Number(number);
+        holder = holder is null ? null : BankAccountText.Holder(holder);
         if (string.IsNullOrEmpty(bank) && string.IsNullOrEmpty(number) && string.IsNullOrEmpty(holder))
         {
             if (required) throw new BookingException(422, "Vui lòng nhập tài khoản ngân hàng nhận tiền hoàn.");
@@ -494,6 +498,19 @@ public sealed partial class BookingService
         if (!number.All(char.IsAsciiDigit) || number.Length is < 6 or > 30)
             throw new BookingException(422, "Số tài khoản chỉ gồm 6–30 chữ số.");
         return new RefundAccount(bank, number, holder);
+    }
+
+    /// <summary>Lưu tài khoản khách vừa nhập vào hồ sơ để lần sau tự điền (chỉ ghi khi có thay đổi).</summary>
+    private async Task RememberRefundAccount(string userId, RefundAccount? account, CancellationToken ct)
+    {
+        if (account is null) return;
+        var user = await Repo.FindUser(userId, ct);
+        if (user is null || (user.BankName == account.Bank && user.BankAccountNumber == account.Number && user.BankAccountHolder == account.Holder))
+            return;
+        user.BankName = account.Bank.Length <= 150 ? account.Bank : account.Bank[..150];
+        user.BankAccountNumber = account.Number;
+        user.BankAccountHolder = account.Holder.Length <= 150 ? account.Holder : account.Holder[..150];
+        user.BankAccountUpdatedAt = DateTime.UtcNow;
     }
 
     private static decimal SuggestedRefund(RefundRequest refund) =>

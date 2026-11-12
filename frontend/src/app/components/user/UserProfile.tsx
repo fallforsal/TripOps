@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
+import { ProfileBankAccountCard } from "@/app/components/user/ProfileBankAccountCard";
 
 interface UserProfileData {
   name: string;
@@ -212,6 +213,8 @@ export function UserProfile() {
           )}
         </form>
       </div>
+
+      <ProfileBankAccountCard />
 
       {/* Password Change Card */}
       <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
