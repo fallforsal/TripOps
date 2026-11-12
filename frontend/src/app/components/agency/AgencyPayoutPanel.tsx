@@ -84,7 +84,7 @@ export function AgencyPayoutPanel() {
           <div>
             <h2 className="text-base font-bold text-slate-900">Tài khoản nhận tiền quyết toán</h2>
             <p className="text-xs text-slate-500">
-              Sau khi hướng dẫn viên bấm hoàn thành tour 2 ngày, TripOps tự chuyển tiền tour (đã trừ 10% phí sàn) vào tài khoản này nếu
+              Sau khi Agency chủ trì bấm hoàn thành tour 2 ngày, TripOps tự chuyển tiền tour (đã trừ 10% phí sàn) vào tài khoản này nếu
               khách đã thanh toán đủ và không có khiếu nại. Có khiếu nại thì Admin liên hệ để xử lý trước khi chuyển.
             </p>
           </div>

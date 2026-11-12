@@ -242,7 +242,7 @@ public decimal? NetPayout { get; set; } = 0m;
 public SettlementStatus? SettlementStatus { get; set; } = TripOps.Data.Enums.SettlementStatus.Unpaid;
 public DateTime? PayoutTransferredAt { get; set; }
 public string? BankReferenceCode { get; set; }
-/// <summary>Thời điểm hướng dẫn viên bấm hoàn thành tour (UTC). Mốc tính ngày chuyển tiền tự động.</summary>
+/// <summary>Thời điểm Agency chủ trì bấm hoàn thành tour (UTC). Mốc tính ngày chuyển tiền tự động.</summary>
 public DateTime? TourCompletedAt { get; set; }
 /// <summary>Từ thời điểm này hệ thống được tự chuyển tiền (UTC). NULL = chỉ Admin chuyển tay.</summary>
 public DateTime? AutoPayoutAt { get; set; }

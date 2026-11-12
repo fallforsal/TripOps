@@ -1471,25 +1471,6 @@ function Application() {
     toast.success("Đã lưu báo cáo sự cố trên máy chủ.");
   };
 
-  // Wrap up tour handler (Guide)
-  const handleWrapUpTour = async (
-    scheduleId: string,
-    _report: { rating?: number; notes: string },
-  ) => {
-    const schedule = guideSchedules.find((s) => s.id === scheduleId);
-    if (!schedule) throw new Error("Không tìm thấy lịch");
-    const dto = await http<BookingDto>(
-      "/guide/bookings/" + schedule.booking.id + "/complete",
-      { method: "POST" },
-    );
-    const booking = fromApiBooking(dto, tours, currentUser);
-    setGuideSchedules((prev) =>
-      prev.map((s) => (s.id === scheduleId ? { ...s, booking } : s)),
-    );
-    setBookingReload((v) => v + 1);
-    toast.success("Đã hoàn tất tour");
-  };
-
   // Passenger update handler (User / Company)
   const handleUpdateBookingPassengers = async (
     bookingId: string,
@@ -1658,7 +1639,6 @@ function Application() {
               onCheckIn={handleCheckIn}
               onDepartureRollCall={handleDepartureRollCall}
               onReportIncident={handleReportIncident}
-              onWrapUpTour={handleWrapUpTour}
               onUpdateNotes={(scheduleId, personalNotes, guideNotesList) => {
                 setGuideSchedules((prev) =>
                   prev.map((s) =>

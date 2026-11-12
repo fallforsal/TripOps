@@ -4,7 +4,7 @@
 
 | Mục | Quy tắc |
 |---|---|
-| Mốc tính | Lúc **hướng dẫn viên bấm "hoàn thành tour"** (`POST /api/v1/guide/bookings/{id}/complete`) |
+| Mốc tính | Lúc **Agency chủ trì bấm "Hoàn thành tour"** (`POST /api/v1/agency/bookings/{id}/complete`) |
 | Ngày tự chuyển | Mốc + `Settlement:AutoPayoutDelayDays` (mặc định 2 ngày). VD hoàn thành 10/11 → tự chuyển từ 12/11 |
 | Phí sàn | `system_commission_configs` mới nhất còn hiệu lực; chưa có thì `Settlement:DefaultFeePercent` (10%). Chốt vào `booking_agencies.fee_percent` lúc hoàn thành |
 | Số tiền | Agency nhận = tiền khách đã trả − phí sàn. VD tour 10.000.000đ → phí 1.000.000đ → Agency nhận 9.000.000đ |
@@ -17,8 +17,10 @@
 
 Tiền thực thu dùng chung `BookingBilling.NetPaidAmount`: trừ các khoản hoàn giảm giá
 `PRICE_REDUCTION` đã hoàn tất, giữ nguyên giao dịch thu gốc. Không chuyển phần tiền đã hoàn
-hoặc chưa phân bổ cho Agency chủ trì. Booking liên minh chỉ HDV của Agency chủ trì được
-hoàn thành toàn bộ tour và phải đến ngày cuối lịch trình; HDV đối tác không kích hoạt quyết toán toàn đoàn.
+hoặc chưa phân bổ cho Agency chủ trì. Chỉ Agency chủ trì được hoàn thành booking đang diễn ra.
+Với booking liên minh, phải đến ngày cuối lịch trình mới được hoàn thành toàn bộ tour.
+HDV tiếp tục khởi hành, điểm danh và check-in; không có quyền hoàn thành booking.
+Bấm hoàn thành lặp lại trả trạng thái hiện tại, không thay đổi mốc quyết toán hoặc gửi thông báo trùng.
 
 **Tự động chuyển thêm cần:**
 - đã tới ngày hẹn;

@@ -28,7 +28,7 @@ public sealed partial class BookingFlowTests
         (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start",null)).EnsureSuccessStatusCode();
         var checkedResponse=await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{booking.Id}/locations/{booking.SnapshotDays![0].Locations[0].Id}/check-in",new{status="CheckedIn",note="Arrived"});checkedResponse.EnsureSuccessStatusCode();
         var read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");Assert.Equal("CheckedIn",read!.SnapshotDays![0].Locations[0].AttendanceStatus);
-        (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete",null)).EnsureSuccessStatusCode();
+        (await agency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete",null)).EnsureSuccessStatusCode();
         read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");Assert.Equal("Completed",read!.Status);
         var invalid=await customer.PostAsJsonAsync("/api/v1/bookings",request with{HotelChoices=[new("Da Nang","Not offered")]});Assert.Equal(HttpStatusCode.UnprocessableEntity,invalid.StatusCode);
     }

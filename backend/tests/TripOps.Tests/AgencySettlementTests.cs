@@ -36,7 +36,7 @@ public sealed partial class BookingFlowTests
         });
     });
 
-    /// <summary>Tour 10.000.000đ đã được hướng dẫn viên bấm hoàn thành lúc clock.Fixed. paid = khách đã trả đủ chưa.</summary>
+    /// <summary>Tour 10.000.000đ đã được Agency chủ trì bấm hoàn thành lúc clock.Fixed. paid = khách đã trả đủ chưa.</summary>
     private static async Task<(HttpClient Admin, HttpClient Agency, BookingDto Booking)> CompletedTour(App app, bool paid)
     {
         var customer = await app.Client("customer1@example.test");
@@ -48,7 +48,7 @@ public sealed partial class BookingFlowTests
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-assignments", new GuideAssignmentRequest("guide1", "lead_guide", null))).EnsureSuccessStatusCode();
         (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start", null)).EnsureSuccessStatusCode();
         if (paid) await PayInFull(app, booking.Id);
-        (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete", null)).EnsureSuccessStatusCode();
+        (await agency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete", null)).EnsureSuccessStatusCode();
         await Read<AgencyPayoutAccountDto>(await agency.PutAsJsonAsync("/api/v1/agency/payout-account",
             new PayoutAccountInput("Vietcombank", "0123 456 789", "Nguyễn Văn Đức")));
         return (await app.Client("admin1@example.test"), agency, booking);
@@ -76,7 +76,7 @@ public sealed partial class BookingFlowTests
         (await admin.GetFromJsonAsync<List<SettlementDto>>("/api/v1/admin/settlements"))!.Single(s => s.BookingId == bookingId);
 
     [Fact]
-    public async Task Agency_is_paid_automatically_two_days_after_the_guide_completes_the_tour_minus_the_platform_fee()
+    public async Task Agency_is_paid_automatically_two_days_after_the_agency_completes_the_tour_minus_the_platform_fee()
     {
         var payout = new FakePayout();
         var completedAt = Now(); // VD 10/11: tới 12/11 mới chuyển tự động

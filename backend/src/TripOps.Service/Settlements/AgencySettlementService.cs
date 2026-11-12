@@ -10,7 +10,7 @@ using TripOps.Service.Payments;
 namespace TripOps.Service.Settlements;
 
 // Quyết toán: trả tiền cho Agency sau khi tour hoàn thành.
-//  - Hướng dẫn viên bấm "hoàn thành" → mỗi dòng booking_agencies chuyển Ready, chốt phí sàn (mặc định 10%)
+//  - Agency chủ trì bấm "hoàn thành" → mỗi dòng booking_agencies chuyển Ready, chốt phí sàn (mặc định 10%)
 //    và hẹn ngày chuyển tự động = lúc hoàn thành + AutoPayoutDelayDays (mặc định 2 ngày: 10/11 → 12/11).
 //  - Tự động (SettlementWorker): tới hẹn, khách đã trả đủ, KHÔNG có khiếu nại mở, không có yêu cầu hoàn tiền mở,
 //    Agency đã nhập tài khoản (không vừa đổi trong 24 giờ) → tạo lệnh chi hộ payOS (TIỀN THẬT).
@@ -30,10 +30,10 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
     private DateTime UtcNow => clock.UtcNow;
     public SettlementOptions Options => options;
 
-    // ------------------------------------------------------------ hướng dẫn viên hoàn thành tour
+    // ------------------------------------------------------------ Agency chủ trì hoàn thành tour
 
     /// <summary>
-    /// Gọi khi hướng dẫn viên bấm hoàn thành (người gọi tự SaveChanges). Chốt phí sàn và hẹn ngày chuyển tự động.
+    /// Gọi khi Agency chủ trì bấm hoàn thành (người gọi tự SaveChanges). Chốt phí sàn và hẹn ngày chuyển tự động.
     /// </summary>
     public async Task MarkTourCompleted(Booking booking, CancellationToken ct)
     {
@@ -503,7 +503,7 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
         var openRefund = booking.RefundRequests.Any(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
 
         var payoutBlockers = new List<string>();
-        if (booking.Status != BookingStatus.Completed) payoutBlockers.Add("Tour chưa được hướng dẫn viên bấm hoàn thành.");
+        if (booking.Status != BookingStatus.Completed) payoutBlockers.Add("Tour chưa được Agency chủ trì bấm hoàn thành.");
         if (paid < booking.TotalAmount)
             payoutBlockers.Add($"Khách chưa thanh toán đủ (đã trả {Vnd(paid)} / {Vnd(booking.TotalAmount)}).");
         if (openRefund) payoutBlockers.Add("Booking đang có yêu cầu hủy/hoàn tiền chưa xử lý xong.");

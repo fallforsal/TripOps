@@ -71,29 +71,6 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     [EndpointSummary("Start an assigned tour on or after its departure date")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > DateTime.UtcNow.Date) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
-    [HttpPost("complete")]
-    [EndpointSummary("Complete an assigned tour already in progress")]
-    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Complete(int id, [FromServices] TripOps.Service.Settlements.AgencySettlementService settlements, CancellationToken ct)
-    {
-        var b = await Assigned(id, ct);
-        if (b.Status != BookingStatus.InProgress) throw new BookingException(409, "Booking must be in progress.");
-        var agencies = await db.BookingAgencies.CountAsync(a => a.BookingId == id, ct);
-        if (agencies > 1)
-        {
-            if (b.AssignedGuides.Single(g => g.GuideId == Actor).AgencyId != b.Tour!.AgencyId)
-                throw new BookingException(403, "Chỉ HDV của Agency chủ trì được hoàn thành toàn bộ tour liên minh.");
-            var lastDay = await db.BookingTimelines.Where(t => t.BookingId == id)
-                .Select(t => (int?)t.DayNumber).MaxAsync(ct) ?? 1;
-            if (b.StartDate.Date.AddDays(Math.Max(0, lastDay - 1)) > TripOps.Service.Payments.PaymentRules.VietnamDate(DateTime.UtcNow))
-                throw new BookingException(409, "Tour liên minh chưa đến ngày kết thúc để quyết toán.");
-        }
-        b.Status = BookingStatus.Completed;
-        // Mốc quyết toán: chốt phí sàn và hẹn ngày tự chuyển tiền cho Agency (mặc định sau 2 ngày).
-        await settlements.MarkTourCompleted(b, ct);
-        await db.SaveChangesAsync(ct);
-        return Ok(await bookings.Get(Actor, id, ct));
-    }
     [HttpPost("locations/{locationId:int}/check-in")]
     [EndpointSummary("Record a guide check-in against a booking itinerary location")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]

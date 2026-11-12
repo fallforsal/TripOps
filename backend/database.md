@@ -738,7 +738,7 @@ Table booking_agencies {
   settlement_status varchar(30) [default: 'Unpaid', note: 'Unpaid (tour chưa xong), Ready (HDV đã bấm hoàn thành, chờ chuyển), Processing (đang chi hộ payOS), Paid (đã chuyển), Failed (chi hộ lỗi, chờ Admin), OnHold (Admin tạm giữ)']
   payout_transferred_at timestamp [note: 'Thời điểm nền tảng chuyển khoản thực tế']
   bank_reference_code varchar(100) [note: 'Mã ủy nhiệm chi / GD ngân hàng']
-  tour_completed_at timestamp [note: 'Lúc hướng dẫn viên bấm hoàn thành tour; mốc tính ngày chuyển tự động']
+  tour_completed_at timestamp [note: 'Lúc Agency chủ trì bấm hoàn thành tour; mốc tính ngày chuyển tự động']
   auto_payout_at timestamp [note: 'Từ thời điểm này được chuyển tự động (mặc định hoàn thành + 2 ngày). NULL = chỉ Admin chuyển tay']
   fee_percent decimal(5, 2) [note: 'Tỷ lệ phí sàn (%) chốt lúc tour hoàn thành, VD 10']
   payout_method varchar(20) [note: 'PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay)']

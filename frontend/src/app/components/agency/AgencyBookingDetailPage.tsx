@@ -140,6 +140,7 @@ interface AgencyBookingDetailPageProps {
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ duyệt", color: "bg-amber-100 text-amber-800 border-amber-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  in_progress: { label: "Đang diễn ra", color: "bg-sky-100 text-sky-800 border-sky-200" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-200" },
   completed: { label: "Hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-[#CBD5E1]" },
   rejected: { label: "Từ chối", color: "bg-gray-100 text-gray-800 border-gray-200" },
@@ -227,6 +228,27 @@ export function AgencyBookingDetailPage({
   const ownsItem=(id?:string)=>!!companyId && (id||booking.companyId)===companyId;
   const currentQuotationState = useBookingSupplierState(booking.id);
   const [approvingBooking, setApprovingBooking] = useState(false);
+  const [completingBooking, setCompletingBooking] = useState(false);
+  const completionLock = useRef(false);
+  const handleCompleteBooking = async () => {
+    if (completionLock.current) return;
+    completionLock.current = true;
+    setCompletingBooking(true);
+    try {
+      if (!(await confirmAction(
+        "Xác nhận đoàn đã kết thúc chuyến đi? Booking sẽ chuyển sang Hoàn thành và bắt đầu thời gian chờ quyết toán cho các Agency. Việc chuyển tiền vẫn theo điều kiện quyết toán của hệ thống.",
+        { title: "Hoàn thành tour", confirmLabel: "Xác nhận hoàn thành", tone: "warning" },
+      ))) return;
+      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/complete`, { method: "POST" });
+      onBookingChanged?.(updated);
+      toast.success("Đã hoàn thành tour. Hệ thống đã ghi nhận mốc chờ quyết toán.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể hoàn thành tour.");
+    } finally {
+      completionLock.current = false;
+      setCompletingBooking(false);
+    }
+  };
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   // Hủy đơn đã duyệt (Agency): xem trước hệ quả do máy chủ tính rồi mới gửi.
   const [agencyCancelOpen, setAgencyCancelOpen] = useState(false);
@@ -1416,6 +1438,14 @@ export function AgencyBookingDetailPage({
 
           {/* Quick Action Buttons */}
           {!isClosedBooking && <div className="flex items-center gap-2 flex-wrap">
+            {isCurrentCompanyLead && booking.status === "in_progress" && (
+              <Button onClick={() => void handleCompleteBooking()} disabled={completingBooking}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-sm font-semibold"
+                title="Agency chủ trì xác nhận hoàn thành chuyến đi và bắt đầu mốc chờ quyết toán">
+                <CheckCheck className="w-4 h-4" />
+                {completingBooking ? "Đang xử lý…" : "Hoàn thành tour"}
+              </Button>
+            )}
             {booking.status === "pending" && (
               <>
                 {isCurrentCompanyLead ? (
