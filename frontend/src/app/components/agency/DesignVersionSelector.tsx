@@ -7,7 +7,7 @@ import type { Tour } from "@/app/types";
 type Version = { version: number; configuration: { name: string; images?: string[] } };
 export function DesignVersionSelector({ requestId, tour, sharedVersion, reload, disabled, updatingVersion, onChange }: {
   requestId: string; tour: Tour; sharedVersion?: number; reload: number;
-  disabled: boolean; updatingVersion?: number; onChange: (version: number) => void;
+  disabled: boolean; updatingVersion?: number; onChange: (version: number | null) => void;
 }) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [error, setError] = useState("");
@@ -34,9 +34,9 @@ export function DesignVersionSelector({ requestId, tour, sharedVersion, reload, 
         <span className="sr-only">Phiên bản khách xem</span>
         <select aria-label={`Phiên bản phương án yêu cầu ${requestId}`} title={name} value={sharedVersion ?? ""}
           aria-busy={updatingVersion != null} disabled={disabled || loading || !!error}
-          onChange={e => { if (e.target.value) onChange(Number(e.target.value)); }}
+          onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
           className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-50 disabled:opacity-70">
-          <option value="" disabled>Chọn phiên bản</option>
+          <option value="">Chưa cho khách xem</option>
           {rows.map(row => <option key={row.version} value={row.version}>v{row.version}</option>)}
         </select>
       </label>

@@ -43,7 +43,8 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
   useEffect(()=>{let alive=true;setWorking(null);setError("");requestAgencies().then(rows=>{if(alive)setAgencies(rows);}).catch(e=>{if(alive)setError(e.message);});
     load().catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;loadSequence.current++;};},[request.id,version]);
   const action = async (fn: () => Promise<void>) => { if(busy || loading)return;setBusy(true);setError("");try {await fn();await onChanged();} catch(e){setError(e instanceof Error?e.message:"Không thể lưu liên minh.");}finally{setBusy(false);} };
-  if (editing) return <TourFormPage company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
+  if (editing) return <TourFormPage key={`${editing.id}-${editing.version}`} designVersions={request.collaborationVersions}
+    onDesignVersionChange={async selected => { await action(async () => { const fresh=fromApiTour(await http<ApiTour>(`${root}/working-tour?version=${selected}`)); setVersion(selected); setEditing(fresh); }); }} company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
     const config=toConfiguration({...editing,...data});
     const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({revision:editing.revision || 1,
       version:editing.version,timelines:config.timelines,pricingTiers:config.pricingTiers})}));
@@ -86,7 +87,21 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
 
 export function AgencyDesignCoHosting({requests,company,onChanged}:{requests:CustomTourRequest[];company:TourCompany;onChanged:()=>void|Promise<void>}) {
   const [selected,setSelected]=useState<string|null>(null); const request=requests.find(r=>r.id===selected);
+  const [filter,setFilter]=useState("all");
+  const tabs=[{id:"all",label:"Tất cả"},{id:"pending",label:"Chờ phản hồi"},{id:"accepted",label:"Đã tham gia"},{id:"closed",label:"Đã kết thúc / Từ chối"}];
+  const collaborations=requests.filter(r=>r.hasCollaborations || r.coHosts?.some(h=>h.role==="partner"));
+  const matchesTab=(r:CustomTourRequest,tab:string)=>{
+    if(tab==="all")return true;
+    const closed=["cancelled","rejected","closed"].includes(r.status);
+    const partners=r.coHosts?.filter(h=>h.role==="partner" && (r.targetCompanyId===company.id || h.companyId===company.id)) || [];
+    if(tab==="closed")return closed || partners.some(h=>["rejected","revoked"].includes(h.status));
+    return !closed && partners.some(h=>h.status===tab);
+  };
   if(request)return <DesignCollaborationPanel key={request.id} request={request} company={company} onChanged={onChanged} onClose={()=>setSelected(null)}/>;
-  const rows=requests.filter(r=>(r.hasCollaborations || r.coHosts?.some(h=>h.role==="partner")) && r.status!=="cancelled" && r.status!=="rejected");
-  return <div className="space-y-5"><div className="rounded-2xl border bg-white p-5"><h1 className="flex items-center gap-2 text-2xl font-bold text-[#075985]"><Handshake/>Liên minh lữ hành</h1><p className="mt-2 text-sm text-slate-500">Lời mời đồng tổ chức, nội dung do mỗi bên đóng góp và bảng giá của Agency đối tác.</p></div>{!rows.length && <p className="rounded-xl border bg-white p-8 text-center text-slate-500">Chưa có liên minh. Agency chủ trì có thể mời đối tác từ trang Yêu cầu thiết kế riêng.</p>}{rows.map(r=>{const me=r.coHosts?.find(h=>h.companyId===company.id);return <article className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-white p-5" key={r.id}><div><h2 className="font-semibold">#{r.id} · {r.destinations}</h2><p className="mt-1 text-sm text-slate-500">Chủ trì: {r.targetCompanyName} · {r.numberOfPeople} khách</p><p className="mt-1 text-sm">{me?.role==="lead"?"Bạn là Agency chủ trì":me?.status==="pending"?"Đang chờ bạn phản hồi lời mời":`Nội dung hợp tác: ${me?.assignedSegments || "Cùng thiết kế tour"}`}</p></div><Button variant="outline" onClick={()=>setSelected(r.id)}>Xem liên minh</Button></article>;})}</div>;
+  const rows=collaborations.filter(r=>matchesTab(r,filter));
+  return <div className="space-y-5"><div className="rounded-2xl border bg-white p-5"><h1 className="flex items-center gap-2 text-2xl font-bold text-[#075985]"><Handshake/>Liên minh lữ hành</h1><p className="mt-2 text-sm text-slate-500">Lời mời đồng tổ chức, nội dung do mỗi bên đóng góp và bảng giá của Agency đối tác.</p></div>
+    <div role="tablist" aria-label="Trạng thái liên minh" className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2">
+      {tabs.map(tab=><button key={tab.id} type="button" role="tab" aria-selected={filter===tab.id} onClick={()=>setFilter(tab.id)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${filter===tab.id?"bg-[#075985] text-white":"text-slate-600 hover:bg-slate-50"}`}>{tab.label} <span className="ml-1.5 opacity-80">({collaborations.filter(r=>matchesTab(r,tab.id)).length})</span></button>)}
+    </div>
+    {!rows.length && <p className="rounded-xl border bg-white p-8 text-center text-slate-500">{filter==="all"?"Chưa có liên minh. Agency chủ trì có thể mời đối tác từ trang Yêu cầu thiết kế riêng.":"Chưa có liên minh trong trạng thái này."}</p>}{rows.map(r=>{const me=r.coHosts?.find(h=>h.companyId===company.id);return <article className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-white p-5" key={r.id}><div><h2 className="font-semibold">#{r.id} · {r.destinations}</h2><p className="mt-1 text-sm text-slate-500">Chủ trì: {r.targetCompanyName} · {r.numberOfPeople} khách</p><p className="mt-1 text-sm">{me?.role==="lead"?"Bạn là Agency chủ trì":me?.status==="pending"?"Đang chờ bạn phản hồi lời mời":`Nội dung hợp tác: ${me?.assignedSegments || "Cùng thiết kế tour"}`}</p></div><Button variant="outline" onClick={()=>setSelected(r.id)}>Xem liên minh</Button></article>;})}</div>;
 }

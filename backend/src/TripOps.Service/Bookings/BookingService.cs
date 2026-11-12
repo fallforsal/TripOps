@@ -41,7 +41,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!await repository.CanStartDesignBooking(tour, customerId, ct, request.TourVersion, request.TourRevision))
             throw new BookingException(409, "Phương án đã thay đổi hoặc yêu cầu đã có booking. Vui lòng tải lại phương án đang chia sẻ.");
 
-        tour = await tourService.BookingSnapshot(tour, ct);
+        tour = await tourService.BookingSnapshot(tour, ct, request.TourVersion);
 
         if (request.Participants.Length == 0)
             throw new BookingException(400, "Cần có ít nhất một hành khách trong đơn đặt.");
@@ -498,7 +498,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
                     SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
-                SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId)).ToList(),
+                SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
                 a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow),

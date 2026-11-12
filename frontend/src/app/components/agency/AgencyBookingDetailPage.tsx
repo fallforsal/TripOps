@@ -5,6 +5,7 @@ import { toast } from "@/app/lib/notifications";
 import { confirmAction } from "@/app/lib/notificationDialogs";
 import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { PartnerBookingRevenue } from "./PartnerBookingRevenue";
+import { BookingSupplementRequests } from "./BookingSupplementRequests";
 import { BookingStagePassengers } from "./BookingStagePassengers";
 import { BookingFinancialChangesPanel } from "./BookingFinancialChangesPanel";
 import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
@@ -227,26 +228,25 @@ export function AgencyBookingDetailPage({
   const ownsItem=(id?:string)=>!!companyId && (id||booking.companyId)===companyId;
   const currentQuotationState = useBookingSupplierState(booking.id);
   const [approvingBooking, setApprovingBooking] = useState(false);
-  const [completingTour, setCompletingTour] = useState(false);
-
-  const completeTourAsAgency = async () => {
-    if (completingTour || !isCurrentCompanyLead || booking.status !== "in_progress") return;
-    const accepted = await confirmAction(
-      "Xác nhận hoàn tất chuyến đi này? Trạng thái sẽ chuyển sang Hoàn thành và bắt đầu quy trình quyết toán cho các Agency.",
-      { title: "Hoàn tất tour", confirmLabel: "Xác nhận hoàn tất", tone: "warning" },
-    );
-    if (!accepted) return;
-    setCompletingTour(true);
+  const [completingBooking, setCompletingBooking] = useState(false);
+  const completionLock = useRef(false);
+  const handleCompleteBooking = async () => {
+    if (completionLock.current || !isCurrentCompanyLead || booking.status !== "in_progress") return;
+    completionLock.current = true;
+    setCompletingBooking(true);
     try {
-      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(
-        `/agency/bookings/${booking.id}/complete`, { method: "POST" },
-      );
+      if (!(await confirmAction(
+        "Xác nhận đoàn đã kết thúc chuyến đi? Booking sẽ chuyển sang Hoàn thành và bắt đầu thời gian chờ quyết toán cho các Agency. Việc chuyển tiền vẫn theo điều kiện quyết toán của hệ thống.",
+        { title: "Hoàn thành tour", confirmLabel: "Xác nhận hoàn thành", tone: "warning" },
+      ))) return;
+      const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/complete`, { method: "POST" });
       onBookingChanged?.(updated);
-      toast.success("Tour đã hoàn tất. Hệ thống đã bắt đầu quy trình quyết toán.");
+      toast.success("Đã hoàn thành tour. Hệ thống đã ghi nhận mốc chờ quyết toán.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không thể hoàn tất tour.");
+      toast.error(error instanceof Error ? error.message : "Không thể hoàn thành tour.");
     } finally {
-      setCompletingTour(false);
+      completionLock.current = false;
+      setCompletingBooking(false);
     }
   };
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -1368,6 +1368,7 @@ export function AgencyBookingDetailPage({
         setPassengersList(fromApiBooking(updated, [booking.tour]).passengers || []);
         onBookingChanged?.(updated);
         window.dispatchEvent(new Event("booking-suppliers-changed"));
+        toast.success("Đã thêm khách. Yêu cầu bổ sung đã gửi đến Provider của các dịch vụ trên sàn đang chọn.");
       } else if (editingPassengerId) {
         const edited=passengersList.find(p=>p.id===editingPassengerId);
         const next = passengersList.map(p => p.participantIndex === edited?.participantIndex ? { ...p, fullName: passengerName.trim(),
@@ -1438,15 +1439,12 @@ export function AgencyBookingDetailPage({
           {/* Quick Action Buttons */}
           {!isClosedBooking && <div className="flex items-center gap-2 flex-wrap">
             {isCurrentCompanyLead && booking.status === "in_progress" && (
-              <Button
-                type="button"
-                data-testid="agency-complete-tour"
-                disabled={completingTour}
-                onClick={() => void completeTourAsAgency()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-sm font-bold disabled:opacity-60"
-              >
-                <CheckCircle className="w-4 h-4" />
-                {completingTour ? "Đang hoàn tất…" : "Hoàn tất tour"}
+              <Button type="button" data-testid="agency-complete-tour"
+                onClick={() => void handleCompleteBooking()} disabled={completingBooking}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-sm font-semibold"
+                title="Agency chủ trì xác nhận hoàn thành chuyến đi và bắt đầu mốc chờ quyết toán">
+                <CheckCheck className="w-4 h-4" />
+                {completingBooking ? "Đang xử lý…" : "Hoàn thành tour"}
               </Button>
             )}
             {booking.status === "pending" && (
@@ -1530,6 +1528,7 @@ export function AgencyBookingDetailPage({
 
 
 
+      <BookingSupplementRequests state={currentQuotationState} passengers={passengersList} viewerAgencyId={companyId} canAmend={canAmend} onOpenService={setViewingServiceId} />
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (Main Details & Customization Breakdown) */}
@@ -1756,6 +1755,7 @@ export function AgencyBookingDetailPage({
             const customHotelChanges = hotelChanges;
 
             let accommodationList: Array<{
+              dateFrom?:string; dateTo?:string;
               agencyId?: string;
               itemId?: string;
               serviceId?: string;
@@ -1788,6 +1788,7 @@ export function AgencyBookingDetailPage({
                   supplier: change ? { address: change.address, contactPhone: change.providerPhone } : h.supplier,
                   destination: dest,
                   nights: h.nights || 1,
+                  dateFrom:h.dateFrom,dateTo:h.dateTo,
                   hotelName: change ? change.newHotelName : h.name,
                   stars: change?.stars || h.stars || 4,
                   originalHotelName: h.originalName || change?.originalHotelName || h.name,
@@ -1862,7 +1863,7 @@ export function AgencyBookingDetailPage({
                           <div>
                             <p className="text-sm font-bold text-gray-900">{acc.destination}</p>
                             <p className="text-xs text-gray-500">
-                              {acc.nights} đêm • {acc.hotelName} {acc.stars ? `(${acc.stars}★)` : ""}
+                              {acc.nights} đêm • {acc.hotelName} {acc.stars ? <span className="font-semibold text-amber-500">({acc.stars}★)</span> : null}
                             </p>
                           </div>
                         </div>
@@ -1911,7 +1912,7 @@ export function AgencyBookingDetailPage({
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500">Khách sạn được chọn:</span>
                           <span className="font-bold text-gray-900 text-sm">
-                            {acc.hotelName} {acc.stars ? `(${acc.stars}★)` : ""}
+                            {acc.hotelName} {acc.stars ? <span className="font-semibold text-amber-500">({acc.stars}★)</span> : null}
                           </span>
                         </div>
                         {acc.isChanged && acc.originalHotelName && acc.originalHotelName !== acc.hotelName && (
@@ -1934,6 +1935,7 @@ export function AgencyBookingDetailPage({
                         )}
                         <BookingSupplierConfirmation state={currentQuotationState}
                           slot={{ kind: "hotel", itemId: acc.itemId, serviceId: acc.serviceId }}
+                          serviceName={acc.hotelName} stay={{from:acc.dateFrom,to:acc.dateTo}}
                           supplierSource={acc.supplierSource} supplier={acc.supplier || { address: acc.address }}
                           onOpenService={setViewingServiceId} />
                       </div>

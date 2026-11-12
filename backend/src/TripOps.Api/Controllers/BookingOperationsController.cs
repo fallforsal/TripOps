@@ -113,8 +113,6 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         // Serializable transaction prevents two parallel check-ins from racing forward.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var booking = await Assigned(id, ct);
-        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
-            throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
         if (request.Status != "CheckedIn")
             throw new BookingException(422, "Chỉ được xác nhận đã đến địa điểm.");
 
@@ -128,6 +126,9 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
         if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
             throw new BookingException(403, "HDV chỉ check-in điểm thuộc chặng công ty mình.");
+        // Check ownership before lifecycle rules, including before departure.
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+            throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
         if (location.AttendanceStatus == "CheckedIn")
             throw new BookingException(409, "Điểm đến này đã check-in.");
 

@@ -254,6 +254,7 @@ export function fromApiBooking(
             createdByCompanyId:h.agencyId,
             stars: h.stars || 3,
             nights: h.nights,
+            dateFrom: h.dateFrom, dateTo: h.dateTo,
             pricePerNight: 0,
             serviceId: h.serviceId ? String(h.serviceId) : undefined,
             supplierSource: h.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER",

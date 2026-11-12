@@ -36,7 +36,7 @@ export function ServiceModeration({
   >(null);
   const [filterStatus, setFilterStatus] = useState<
     "all" | "pending" | "approved" | "rejected"
-  >("pending");
+  >("all");
   const [filterCategory, setFilterCategory] = useState<
     | "all"
     | "hotel"

@@ -11,9 +11,12 @@ public bool PriceConfirmed { get; set; }
 public bool AvailabilityConfirmed { get; set; }
 public string ResponseHistoryJson { get; set; } = "[]";
 
+    public int? ParentRequestId { get; set; }
+    public string? ParticipantIndicesJson { get; set; }
     public int BookingId { get; set; }
-    public int ServiceId { get; set; }
-    public string ProviderId { get; set; } = string.Empty;
+    public int? ServiceId { get; set; }
+    public int? AgencySupplierId { get; set; }
+    public string? ProviderId { get; set; }
     public string SlotKey { get; set; } = string.Empty;
     public string ServiceName { get; set; } = string.Empty;
     public DateTime? ServiceDateFrom { get; set; }

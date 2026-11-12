@@ -41,7 +41,8 @@ public sealed partial class TourFlowTests
         }
         await app.Inspect(async db => Assert.Single(await db.BookingParticipants.Where(p => p.BookingId == b.Id && p.CreationKey == input.RequestId).ToListAsync()));
         var providerRequests = await Read<ProviderRequestView[]>(await agency.GetAsync($"/api/v1/bookings/{b.Id}/quotations/supplier-requests"));
-        Assert.Equal(3, providerRequests.Single(r => r.ServiceId == 103 && r.Status != "Superseded").Quantity);
+        Assert.Equal(2, providerRequests.Single(r => r.ServiceId == 103 && !r.ParentRequestId.HasValue).Quantity);
+        Assert.Equal(1, providerRequests.Single(r => r.ServiceId == 103 && r.ParentRequestId.HasValue).Quantity);
         var reloaded = await Read<BookingDto>(await customer.GetAsync($"/api/v1/bookings/{b.Id}"));
         Assert.Equal(3, reloaded.TotalGuests);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(url, input with { RequestId = Guid.NewGuid(), ExpectedTotal = b.TotalAmount })).StatusCode);

@@ -13,7 +13,7 @@ namespace TripOps.Tests;
 public sealed partial class BookingFlowTests
 {
     [Fact]
-    public async Task Partner_guide_attends_own_stage_but_only_host_guide_can_complete_alliance_on_last_day()
+    public async Task Partner_guide_attends_own_stage_but_only_host_agency_can_complete_alliance_on_last_day()
     {
         using var app = SettlementApp(new FakePayout(), new TestClock { Fixed = Now() });
         await app.Initialize();
@@ -45,16 +45,17 @@ public sealed partial class BookingFlowTests
         Assert.All(detail.Participants, p => Assert.Equal("agency2", p.AgencyId));
         (await partnerGuide.PostAsJsonAsync($"/api/v1/guide/bookings/{booking.Id}/attendance",
             new AttendanceCheckinRequest(partnerParticipant, "CheckedIn"))).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Forbidden, (await partnerGuide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete", null)).StatusCode);
-        using var hostGuide = await app.Client("guide1@example.test");
-        Assert.Equal(HttpStatusCode.Conflict, (await hostGuide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete", null)).StatusCode);
+        using var partnerAgency = await app.Client("agency2@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden, (await partnerAgency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete", null)).StatusCode);
+        using var hostAgency = await app.Client("agency1@example.test");
+        Assert.Equal(HttpStatusCode.Conflict, (await hostAgency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete", null)).StatusCode);
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             var row = await db.Bookings.SingleAsync(b => b.Id == booking.Id); row.StartDate = today.AddDays(-2);
             await db.SaveChangesAsync();
         }
-        (await hostGuide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete", null)).EnsureSuccessStatusCode();
+        (await hostAgency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete", null)).EnsureSuccessStatusCode();
         using var final = app.Services.CreateScope();
         Assert.All(await final.ServiceProvider.GetRequiredService<TripOpsDbContext>().BookingAgencies
             .Where(a => a.BookingId == booking.Id).ToListAsync(), a => Assert.Equal(SettlementStatus.Ready, a.SettlementStatus));

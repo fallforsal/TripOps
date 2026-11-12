@@ -112,4 +112,4 @@ public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerat
 public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
 
 public sealed record SaveDesignTourInput(int? Revision, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null, bool CreateNewVersion = false, int? Version = null);
-public sealed record ShareDesignVersionInput(int Revision, int? Version = null);
+public sealed record ShareDesignVersionInput(int Revision, int? Version = null, bool Hidden = false);

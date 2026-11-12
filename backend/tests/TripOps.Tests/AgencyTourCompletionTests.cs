@@ -74,7 +74,26 @@ public sealed partial class BookingFlowTests
             var shares = await db.BookingAgencies.Where(a => a.BookingId == bookingId).ToListAsync();
             Assert.All(shares, s => Assert.NotNull(s.TourCompletedAt));
         }
-        Assert.Equal(HttpStatusCode.Conflict, (await host.PostAsync(agencyPath, null)).StatusCode);
+        // Retrying completion must preserve each Agency's original settlement deadline.
+        DateTime?[] completedTimes, payoutTimes;
+        int notifications;
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var shares = await db.BookingAgencies.Where(a => a.BookingId == bookingId).OrderBy(a => a.AgencyId).ToListAsync();
+            completedTimes = shares.Select(a => a.TourCompletedAt).ToArray();
+            payoutTimes = shares.Select(a => a.AutoPayoutAt).ToArray();
+            notifications = await db.WorkflowNotifications.CountAsync(n => n.BookingId == bookingId);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await host.PostAsync(agencyPath, null)).StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var shares = await db.BookingAgencies.Where(a => a.BookingId == bookingId).OrderBy(a => a.AgencyId).ToListAsync();
+            Assert.Equal(completedTimes, shares.Select(a => a.TourCompletedAt).ToArray());
+            Assert.Equal(payoutTimes, shares.Select(a => a.AutoPayoutAt).ToArray());
+            Assert.Equal(notifications, await db.WorkflowNotifications.CountAsync(n => n.BookingId == bookingId));
+        }
     }
 
     [Fact]

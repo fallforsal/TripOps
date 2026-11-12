@@ -36,6 +36,8 @@ public sealed class OpenApiTests
         Assert.Contains(operations, o => o.Path == "/api/v1/payments/payos/return" && o.Method == "get");
         Assert.DoesNotContain(operations, o => o.Path.Contains("/vnpay", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours" && o.Method == "post");
+        Assert.Contains(operations, o => o.Path == "/api/v1/agency/bookings/{id}/complete" && o.Method == "post");
+        Assert.DoesNotContain(operations, o => o.Path == "/api/v1/guide/bookings/{id}/complete");
         Assert.DoesNotContain(operations, o => o.Path == "/api/v1/agency/tours/images");
         Assert.Contains(operations, o => o.Path == "/api/v1/agency/tours/with-images" && o.Method == "post");
         Assert.DoesNotContain(operations,o=>o.Path=="/api/v1/tour-design-requests/{id}/history");

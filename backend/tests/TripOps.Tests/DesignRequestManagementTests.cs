@@ -68,7 +68,9 @@ public sealed partial class TourFlowTests
         Assert.Contains(previous.Configuration.Timelines!.SelectMany(d=>d.Activities??[]),a=>a.AgencyId=="other");
         var selected=await Read<TourDto>(await lead.PostAsJsonAsync(root+"/share",new ShareDesignVersionInput(clean.Revision,oldVersion)));
         Assert.Equal(oldVersion,selected.SharedVersion);
-        Assert.Equal(oldVersion,Assert.Single(await Read<TourDto[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/plans"))).Version);
+        // Selecting v1 changes the featured plan; both previously shared versions remain browsable.
+        var customerPlans = await Read<TourDto[]>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/plans"));
+        Assert.Equal(new[] { oldVersion, second.Version }.OrderBy(v => v), customerPlans.Select(p => p.Version).OrderBy(v => v));
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/agency?removeContent=true")).StatusCode);
         var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));
         var booking=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible)),HttpStatusCode.Created);

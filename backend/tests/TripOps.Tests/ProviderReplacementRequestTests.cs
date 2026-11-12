@@ -45,7 +45,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(old.ServiceDateFrom, fresh.ServiceDateFrom); Assert.Equal(old.ServiceDateTo, fresh.ServiceDateTo);
         var history = await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
         var replaced = Assert.Single(history, r => r.Id == old.Id);
-        Assert.Equal("Superseded", replaced.Status); Assert.Contains("thay dịch vụ", replaced.CancelReason);
+        Assert.Equal("Rejected", replaced.Status); Assert.Null(replaced.CancelReason);
         Assert.Equal("No rooms available", replaced.Note);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await provider.PostAsJsonAsync($"/api/v1/provider/booking-requests/{old.Id}/respond",
             new ProviderReply("confirm", 500000, "Cannot confirm superseded request"))).StatusCode);

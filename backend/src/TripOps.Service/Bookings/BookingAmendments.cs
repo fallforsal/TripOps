@@ -234,7 +234,8 @@ public sealed partial class BookingQuotationService
                 ProviderId = service.ProviderId, SlotKey = slot, ServiceName = name!,
                 ServiceDateFrom = hotel != null ? hotel.DateFrom : meal!.Time ?? meal.DateService,
                 ServiceDateTo = hotel != null ? hotel.DateTo : meal!.Time ?? meal.DateService,
-                Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity), ReplyDeadline = DateTime.UtcNow.AddHours(48) });
+                Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity), ReplyDeadline = DateTime.UtcNow.AddHours(48),
+                ParticipantIndicesJson=JsonSerializer.Serialize(b.Participants.Where(p=>p.Status!="INACTIVE" && p.AgencyId==(hotel?.AgencyId??meal?.AgencyId??actor)).Select(p=>p.ParticipantIndex).Distinct().ToArray(),Json) });
             Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = service.ProviderId, BookingId = id,
                 Message = $"Yêu cầu dịch vụ mới cho booking {b.BookingCode}: {name}. Agency đã thay {oldName}; vui lòng xác nhận giá và khả năng cung cấp." });
         }

@@ -1,3 +1,4 @@
+import { ChatTourPage } from "@/app/components/chat/ChatTourPage";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
@@ -271,7 +272,7 @@ function Application() {
         .map((r) => customerRequestPlans(r.id)))).flat();
       setTours((previous) => {
         const byId = new Map(previous.map((tour) => [tour.id, tour]));
-        for (const tour of privateTours) byId.set(tour.id, tour);
+        for (const tour of [...privateTours].reverse()) byId.set(tour.id, tour);
         return [...byId.values()];
       });
     } else setCustomTourRequests([]);
@@ -434,6 +435,19 @@ function Application() {
         }
       } else if (rawHash.startsWith("booking/")) {
         const tourId = rawHash.replace("booking/", "");
+        const params = new URLSearchParams(query);
+        const requestId=params.get("requestId"), version=Number(params.get("version"));
+        if(requestId && version>0) {
+          setBookingTour(null);
+          const expectedHash=window.location.hash;
+          void customerRequestPlans(requestId).then(plans=>{
+            if(window.location.hash!==expectedHash)return;
+            const selected=plans.find(p=>p.id===tourId && p.version===version);
+            if(!selected){toast.error("Phiên bản này chưa được Agency cho phép đặt.");return;}
+            setBookingTour(selected);setCurrentPage("booking-form");
+          }).catch(e=>toast.error(e instanceof Error?e.message:"Không tải được phiên bản tour."));
+          return;
+        }
         const found = tours.find(
           (t) => t.id === tourId || t.tourCode === tourId,
         );
@@ -642,7 +656,7 @@ function Application() {
       setBookingTour(tour);
       setBookingCustomData(customData ?? null);
       setCurrentPage("booking-form");
-      window.location.hash = `#/booking/${tour.id}`;
+      window.location.hash = `#/booking/${tour.id}${tour.is_request && tour.customRequestId ? `?requestId=${tour.customRequestId}&version=${tour.version}` : ""}`;
     });
   };
 
@@ -1457,25 +1471,6 @@ function Application() {
     toast.success("Đã lưu báo cáo sự cố trên máy chủ.");
   };
 
-  // Wrap up tour handler (Guide)
-  const handleWrapUpTour = async (
-    scheduleId: string,
-    _report: { rating?: number; notes: string },
-  ) => {
-    const schedule = guideSchedules.find((s) => s.id === scheduleId);
-    if (!schedule) throw new Error("Không tìm thấy lịch");
-    const dto = await http<BookingDto>(
-      "/guide/bookings/" + schedule.booking.id + "/complete",
-      { method: "POST" },
-    );
-    const booking = fromApiBooking(dto, tours, currentUser);
-    setGuideSchedules((prev) =>
-      prev.map((s) => (s.id === scheduleId ? { ...s, booking } : s)),
-    );
-    setBookingReload((v) => v + 1);
-    toast.success("Đã hoàn tất tour");
-  };
-
   // Passenger update handler (User / Company)
   const handleUpdateBookingPassengers = async (
     bookingId: string,
@@ -1644,7 +1639,6 @@ function Application() {
               onCheckIn={handleCheckIn}
               onDepartureRollCall={handleDepartureRollCall}
               onReportIncident={handleReportIncident}
-              onWrapUpTour={handleWrapUpTour}
               onUpdateNotes={(scheduleId, personalNotes, guideNotesList) => {
                 setGuideSchedules((prev) =>
                   prev.map((s) =>
@@ -1978,6 +1972,10 @@ function useSignToken(): string | null {
 
 export default function App() {
   const signToken = useSignToken();
+  const [chatHash,setChatHash]=useState(window.location.hash);
+  useEffect(()=>{const sync=()=>setChatHash(window.location.hash);window.addEventListener("hashchange",sync);return()=>window.removeEventListener("hashchange",sync);},[]);
+  const chatTour=/^#\/chat-tour\/(\d+)\/(\d+)$/.exec(chatHash);
+  if(chatTour) return <ServiceCatalogueProvider><ChatTourPage reference={{conversationId:Number(chatTour[1]),messageId:Number(chatTour[2])}} onClose={()=>{window.location.hash="#/tours";}}/></ServiceCatalogueProvider>;
   if (signToken) return <SignContractPage token={signToken} />;
   return (
     <ServiceCatalogueProvider>

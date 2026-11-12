@@ -228,7 +228,7 @@ public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string
 public sealed record BookingSupplierDto(string? Address, string? ContactPhone);
 public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null);
 public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);
-public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null);
+public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null,DateTime? DateFrom=null,DateTime? DateTo=null);
 
 public sealed record AvailableGuideDto(string Id, string Name, string? Phone);
 

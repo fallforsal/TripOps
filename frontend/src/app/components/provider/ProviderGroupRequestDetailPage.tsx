@@ -1,3 +1,4 @@
+import { providerQuoteCopy } from "@/app/lib/providerQuoteCopy";
 import { useState, useMemo } from "react";
 import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import {
@@ -108,12 +109,7 @@ export function ProviderGroupRequestDetailPage({
   const [quoteInputPrice, setQuoteInputPrice] = useState<string>(
     request.quotedTotalPrice ? request.quotedTotalPrice.toString() : ""
   );
-  const [providerNote, setProviderNote] = useState<string>(
-    request.providerNote ||
-      (isRestaurant
-        ? "Nhà hàng đã ghi nhận số lượng thành viên và các yêu cầu ăn uống/dị ứng của từng khách. Sẽ sắp xếp set ăn riêng theo đúng thực đơn và tiêu chuẩn phục vụ."
-        : "Khách sạn đã xem danh sách đoàn và bố trí đủ phòng theo nguyện vọng ghép phòng của khách. Giá trọn gói toàn đoàn đã gồm buffet sáng và thuế VAT.")
-  );
+  const [providerNote, setProviderNote] = useState<string>(request.providerNote || providerQuoteCopy(request).note);
   const [quoteError, setQuoteError] = useState<string>("");
 
   const [rejectionReason, setRejectionReason] = useState<string>(
@@ -148,7 +144,7 @@ export function ProviderGroupRequestDetailPage({
   const handleSubmitApproval = () => {
     const numPrice = Number(quoteInputPrice.replace(/\D/g, ""));
     if (!numPrice || numPrice <= 0) {
-      setQuoteError("Vui lòng nhập giá tổng hợp lệ cho toàn bộ đoàn khách.");
+      setQuoteError("Vui lòng nhập tổng chi phí hợp lệ cho khách trong yêu cầu này.");
       return;
     }
 
@@ -279,6 +275,10 @@ export function ProviderGroupRequestDetailPage({
         </div>
       )}
 
+      {request.isSupplement && <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+        <strong>Yêu cầu bổ sung {request.numberOfGuests} khách</strong>
+        <p className="mt-1 text-xs">Danh sách bên dưới chỉ gồm khách bổ sung. Vui lòng xác nhận và báo giá riêng phần này. Nếu không thể nhận thêm, hãy từ chối kèm lý do; dịch vụ đã xác nhận cho khách cũ vẫn giữ nguyên.</p>
+      </div>}
       {/* 3 Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: Agency Info */}
@@ -433,7 +433,7 @@ export function ProviderGroupRequestDetailPage({
           <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
             <DollarSign className="w-4 h-4 text-emerald-600" />
             <span>
-              {isRestaurant ? "Báo giá bữa ăn cho đoàn" : "Báo giá trọn gói toàn đoàn"}
+              {providerQuoteCopy(request).title}
             </span>
           </div>
 
@@ -727,7 +727,7 @@ export function ProviderGroupRequestDetailPage({
           <div className="space-y-4 pt-2 text-xs">
             <div className="space-y-1.5">
               <Label className="font-bold text-gray-800 text-xs">
-                {isRestaurant ? "Tổng giá tiền cho toàn bộ bữa ăn của đoàn (VNĐ) *" : "Tổng giá tiền trọn gói lưu trú toàn đoàn (VNĐ) *"}
+                {providerQuoteCopy(request).label}
               </Label>
               <Input
                 type="text"
@@ -741,7 +741,7 @@ export function ProviderGroupRequestDetailPage({
                 className="text-sm font-black text-emerald-700"
               />
               <p className="text-[11px] text-gray-500">
-                Lưu ý: Báo giá tổng cho toàn bộ đoàn {request.numberOfGuests} khách, không phải giá một người.
+                {providerQuoteCopy(request).hint}
               </p>
               {quoteError && <p className="text-rose-600 font-semibold">{quoteError}</p>}
             </div>
