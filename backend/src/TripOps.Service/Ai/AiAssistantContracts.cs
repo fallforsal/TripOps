@@ -32,6 +32,8 @@ public sealed class AiAssistantOptions
     public int TimeoutSeconds { get; init; } = 60;
     /// <summary>Tùy chọn cho model có suy luận (vd Gemini 3: "low" để trả lời nhanh). Để trống với model không hỗ trợ.</summary>
     public string? ReasoningEffort { get; init; }
+    /// <summary>Model dự phòng khi model chính quá tải (vd model flash ổn định hơn). Để trống nếu không cần.</summary>
+    public string? FallbackModel { get; init; }
     public int MaxToolRounds { get; init; } = 3;
     public bool Configured => !string.IsNullOrWhiteSpace(ApiKey);
 
@@ -45,6 +47,7 @@ public sealed class AiAssistantOptions
             BaseUrl = string.IsNullOrWhiteSpace(section["BaseUrl"]) ? "https://api.openai.com/v1" : section["BaseUrl"]!.Trim().TrimEnd('/'),
             TimeoutSeconds = int.TryParse(section["TimeoutSeconds"], out var timeout) && timeout is > 0 and <= 180 ? timeout : 60,
             ReasoningEffort = string.IsNullOrWhiteSpace(section["ReasoningEffort"]) ? null : section["ReasoningEffort"]!.Trim(),
+            FallbackModel = string.IsNullOrWhiteSpace(section["FallbackModel"]) ? null : section["FallbackModel"]!.Trim(),
             MaxToolRounds = int.TryParse(section["MaxToolRounds"], out var rounds) && rounds is > 0 and <= 5 ? rounds : 3,
         };
     }

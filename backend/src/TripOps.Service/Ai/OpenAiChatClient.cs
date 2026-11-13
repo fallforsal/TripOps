@@ -24,12 +24,39 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
     // Gửi tiếng Việt nguyên dạng UTF-8 (không đổi thành \uXXXX) để model đọc tự nhiên và log dễ đọc.
     private static readonly JsonSerializerOptions Json = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    // Lỗi tạm thời phía nhà cung cấp (quá tải, bảo trì) thì thử lại; lỗi khóa/hạn mức/tham số thì không.
+    private static readonly HashSet<HttpStatusCode> Transient =
+        [HttpStatusCode.InternalServerError, HttpStatusCode.BadGateway, HttpStatusCode.ServiceUnavailable, HttpStatusCode.GatewayTimeout];
+
+    /// <summary>
+    /// Gọi model chính, lỗi tạm thời (503 quá tải...) thì thử lại 2 lần (chờ 1s, 3s);
+    /// vẫn lỗi và có cấu hình OpenAI:FallbackModel thì chuyển sang model dự phòng.
+    /// </summary>
     public async Task<OpenAiTurn> Complete(JsonArray messages, JsonArray? tools, CancellationToken ct)
     {
         if (!options.Configured) throw new OpenAiException("OpenAI chưa được cấu hình.");
+        var models = new List<string> { options.Model };
+        if (options.FallbackModel is { } fallback && fallback != options.Model) models.Add(fallback);
+        OpenAiException? last = null;
+        foreach (var model in models)
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(attempt == 1 ? 1 : 3), ct);
+                try { return await Send(model, messages, tools, ct); }
+                catch (OpenAiException ex) when (ex.Status is { } status && Transient.Contains(status)) { last = ex; }
+                // Model không tồn tại/không có quyền: không thử lại model này, chuyển sang model dự phòng (nếu có).
+                catch (OpenAiException ex) when (ex.Status == HttpStatusCode.NotFound && models.Count > 1) { last = ex; break; }
+            }
+        }
+        throw new OpenAiException($"{last?.Message ?? "OpenAI lỗi."} Đã thử các model: {string.Join(", ", models)}.", last?.Status);
+    }
+
+    private async Task<OpenAiTurn> Send(string model, JsonArray messages, JsonArray? tools, CancellationToken ct)
+    {
         var body = new JsonObject
         {
-            ["model"] = options.Model,
+            ["model"] = model,
             ["messages"] = messages.DeepClone(),
             ["temperature"] = 0.3,
             ["max_completion_tokens"] = 900,
@@ -57,7 +84,7 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
         {
             var text = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
-                throw new OpenAiException($"OpenAI trả lỗi HTTP {(int)response.StatusCode}{ErrorCode(text)}.", response.StatusCode);
+                throw new OpenAiException($"Model '{model}' trả lỗi HTTP {(int)response.StatusCode}{ErrorCode(text)}.", response.StatusCode);
             JsonNode? root;
             try { root = JsonNode.Parse(text); }
             catch (JsonException) { throw new OpenAiException("Phản hồi OpenAI không hợp lệ."); }
@@ -90,7 +117,9 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
                 return string.Empty;
 
             // Google trả error.code dạng số và error.status dạng chuỗi; các API khác có thể dùng error.type.
+            // Ưu tiên mã cụ thể (vd model_not_found, invalid_api_key) rồi mới tới loại lỗi chung (invalid_request_error).
             var code = (error["status"] as JsonValue)?.ToString()
+                ?? (error["code"] is JsonValue c && c.TryGetValue<string>(out var named) ? named : null)
                 ?? (error["type"] as JsonValue)?.ToString()
                 ?? (error["code"] as JsonValue)?.ToString();
             if (string.IsNullOrWhiteSpace(code) || code.Length > 64 ||
