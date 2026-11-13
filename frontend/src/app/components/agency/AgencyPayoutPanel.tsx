@@ -77,14 +77,14 @@ export function AgencyPayoutPanel() {
   if (loading) return <div className="p-6 text-sm text-slate-500">Đang tải tài khoản nhận tiền...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10 space-y-5">
+    <div className="space-y-5">
       <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <Landmark className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">Tài khoản nhận tiền quyết toán</h2>
+            <h2 className="text-base font-bold text-slate-900">Tài khoản nhận tiền</h2>
             <p className="text-xs text-slate-500">
               Sau khi Agency chủ trì bấm hoàn thành tour 2 ngày, TripOps tự chuyển tiền tour (đã trừ 10% phí sàn) vào tài khoản này nếu
               khách đã thanh toán đủ và không có khiếu nại. Có khiếu nại thì Admin liên hệ để xử lý trước khi chuyển.
@@ -128,7 +128,7 @@ export function AgencyPayoutPanel() {
 
       <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <Banknote className="w-5 h-5 text-emerald-600" /> Tiền quyết toán các tour
+          <Banknote className="w-5 h-5 text-emerald-600" /> Tiền nhận từ tour
         </h2>
         <div role="tablist" aria-label="Trạng thái tiền quyết toán" className="flex flex-wrap gap-1">
           {settlementTabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={statusFilter === tab.id} onClick={() => setStatusFilter(tab.id)} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${statusFilter === tab.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
