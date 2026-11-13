@@ -47,6 +47,11 @@ public static class DependencyInjection
         services.AddScoped<Services.ProviderServiceService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();
         services.AddHttpClient<Accounts.CloudinaryStorage>(client => client.Timeout = TimeSpan.FromSeconds(20));
+        // Chatbot khách vãng lai: khóa OpenAI đọc từ user-secrets/biến môi trường (OpenAI:ApiKey); không có khóa thì dùng trả lời dự phòng.
+        services.AddSingleton(sp => Ai.AiAssistantOptions.From(sp.GetRequiredService<IConfiguration>()));
+        services.AddHttpClient<Ai.OpenAiChatClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+        services.AddScoped<Ai.PublicTourFinder>();
+        services.AddScoped<Ai.GuestAssistantService>();
         return services;
     }
 }

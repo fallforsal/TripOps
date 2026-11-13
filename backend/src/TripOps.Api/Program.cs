@@ -42,6 +42,10 @@ builder.Services.AddRateLimiter(options => {
     options.AddPolicy("contract-signing", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 40, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Chatbot AI không cần đăng nhập: giới hạn theo IP để tránh bị gọi liên tục làm tốn phí OpenAI.
+    options.AddPolicy("ai-chat", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
