@@ -15,12 +15,13 @@ public sealed record QuotationView(int Id, int BookingId, int Version, int TourI
     decimal SaleTotal, IReadOnlyList<CostLine>? Costs, string Reason, DateTime CreatedAt,
     DateTime? SentAt, DateTime? AcceptedAt, DateTime? ValidUntil = null,
     decimal DepositAmount = 0, int NumberOfGuests = 0, string? PlanSnapshotJson = null, string? PaymentPolicy = null);
-public sealed record ProviderRequestView(int Id, int BookingId, int ServiceId, string SlotKey,
+public sealed record ProviderRequestView(int Id, int BookingId, int? ServiceId, string SlotKey,
     string ServiceName, DateTime? ServiceDateFrom, DateTime? ServiceDateTo,
     decimal Quantity, string Unit, decimal EstimatedCost, decimal? QuotedCost, string Status, string? Note,
     DateTime? RespondedAt = null, string? ProviderId = null, string? ProviderName = null,
     string? ProviderPhone = null, string? FullAddress = null, DateTime? HoldUntil = null,
-    decimal? AvailableQuantity = null, string? ThumbnailUrl = null);
+    decimal? AvailableQuantity = null, string? ThumbnailUrl = null,
+    int? ParentRequestId = null, string? ParticipantIndicesJson = null, string? OwnerAgencyId = null, bool IsSupplement = false, int? AgencySupplierId = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
     string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null);
@@ -33,7 +34,7 @@ public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, str
     DateTime CreatedAt, string BookingCode, string TourName,
     string AgencyName, string? AgencyPhone, string? AgencyEmail, string? MealType, string? SpecialRequests,
     string? CancelReason, DateTime? CancelledAt, IReadOnlyList<ProviderGuestView> Guests, TimeSpan? ServiceTime = null,
-    string? AgencyId = null, string? AgencyLogo = null);
+    string? AgencyId = null, string? AgencyLogo = null, int? ParentRequestId = null, bool IsSupplement = false);
 public sealed record ProviderReply(string Decision, decimal? QuotedCost, string? Note,
     decimal? AvailableQuantity = null, DateTime? HoldUntil = null);
 public sealed record BookingPlanChange(int TourId, HotelChoiceInput[]? HotelChoices = null,
@@ -144,7 +145,8 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 db.BookingSupplierRequests.Add(new BookingSupplierRequest { BookingId = bookingId,
                     ServiceId = service.Id, ProviderId = service.ProviderId, SlotKey = s.Key,
                     ReplyDeadline = DateTime.UtcNow.AddHours(48), ServiceName = s.Name, ServiceDateFrom = s.From, ServiceDateTo = s.To,
-                    Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity) });
+                    Quantity = quantity, Unit = unit, EstimatedCost = Money(price * quantity),
+                    ParticipantIndicesJson = JsonSerializer.Serialize(booking.Participants.Where(p=>p.Status!="INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(booking,s.Key)).Select(p=>p.ParticipantIndex).Distinct().ToArray(),Json) });
             }
         }
         return lines;
@@ -257,7 +259,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             "Dịch vụ Provider đã ngừng hoạt động; hãy chọn phương án khác.");
         var rejectedServiceIds = await db.BookingSupplierRequests.Where(r => r.BookingId == bookingId &&
             r.Status == "Rejected").Select(r => r.ServiceId).Distinct().ToArrayAsync(ct);
-        Require(!selectedServiceIds.Intersect(rejectedServiceIds).Any(),
+        Require(!selectedServiceIds.Select(id=>(int?)id).Intersect(rejectedServiceIds).Any(),
             "Provider đã từ chối booking; Agency cần chọn dịch vụ khác.");
         if (previouslyApproved)
         {
@@ -379,12 +381,18 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
     }
     private IQueryable<ProviderRequestView> RequestViews(IQueryable<BookingSupplierRequest> requests) =>
         from r in requests
-        join service in db.Services.AsNoTracking() on r.ServiceId equals service.Id
+        join item in db.Services.AsNoTracking() on r.ServiceId equals item.Id into services
+        from service in services.DefaultIfEmpty()
+        join own in db.AgencySuppliers.AsNoTracking() on r.AgencySupplierId equals own.Id into suppliers
+        from supplier in suppliers.DefaultIfEmpty()
         select new ProviderRequestView(r.Id, r.BookingId, r.ServiceId, r.SlotKey, r.ServiceName,
             r.ServiceDateFrom, r.ServiceDateTo, r.Quantity, r.Unit, r.EstimatedCost, r.QuotedCost,
             r.Status, r.Note, r.RespondedAt, r.ProviderId,
-            service.Provider.BusinessProfile != null ? service.Provider.BusinessProfile.BusinessName : service.Provider.Name,
-            service.Provider.Phone, service.FullAddress, r.HoldUntil, r.AvailableQuantity, service.ThumbnailUrl);
+            service == null ? supplier.Name : service.Provider.BusinessProfile != null ? service.Provider.BusinessProfile.BusinessName : service.Provider.Name,
+            service == null ? supplier.ContactPhone : service.Provider.Phone, service == null ? supplier.Address : service.FullAddress, r.HoldUntil, r.AvailableQuantity, service == null ? null : service.ThumbnailUrl, r.ParentRequestId, r.ParticipantIndicesJson, null,
+            r.ParentRequestId.HasValue && db.BookingSupplierRequests.Any(parent=>parent.Id==r.ParentRequestId && !parent.ParentRequestId.HasValue && parent.ServiceId==r.ServiceId)
+                && !db.BookingSupplierRequests.Any(prior=>prior.BookingId==r.BookingId && prior.SlotKey==r.SlotKey && prior.ParentRequestId==r.ParentRequestId
+                    && prior.ParticipantIndicesJson==r.ParticipantIndicesJson && prior.Id<r.Id && prior.Status=="Superseded"),r.AgencySupplierId);
 
     public async Task<IReadOnlyList<ProviderInboxView>> ProviderRequests(string actor, CancellationToken ct)
     {
@@ -415,19 +423,20 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             var agencyId = BookingAlliance.OwnerOfSlot(b, r.SlotKey);
             var agency = agencies.GetValueOrDefault(agencyId);
             var closed = b.Status is BookingStatus.Cancelled or BookingStatus.Rejected;
-            return new ProviderInboxView(v.Id, v.BookingId, v.ServiceId, v.SlotKey, v.ServiceName,
+            var declined = r.Status == "Superseded" && LastProviderDecisionWasReject(r);
+            return new ProviderInboxView(v.Id, v.BookingId, v.ServiceId!.Value, v.SlotKey, v.ServiceName,
                 v.ServiceDateFrom, v.ServiceDateTo, v.Quantity, v.Unit, v.EstimatedCost, v.QuotedCost,
-                closed ? "Cancelled" : v.Status, v.Note, v.RespondedAt, v.ProviderId, v.ProviderName,
+                closed ? "Cancelled" : declined ? "Rejected" : v.Status, v.Note, v.RespondedAt, v.ProviderId, v.ProviderName,
                 v.ProviderPhone, v.FullAddress, r.CreatedAt, b.BookingCode,
                 b.Tour?.Name ?? "Tour", agency?.Name ?? "Công ty lữ hành", agency?.Phone,
                 agency?.Email, mealTypes.GetValueOrDefault(r.SlotKey), b.SpecialRequests,
-                closed ? b.CancelReason : r.Status == "Superseded" ? "Agency đã thay dịch vụ cho lịch phục vụ này. Yêu cầu cũ không còn hiệu lực." : null,
+                closed ? b.CancelReason : r.Status == "Superseded" && !declined ? "Agency đã thay dịch vụ cho lịch phục vụ này. Yêu cầu cũ không còn hiệu lực." : null,
                 closed ? b.CancelledAt : null,
-                b.Participants.Where(p => p.Status != "INACTIVE" && p.AgencyId==BookingAlliance.OwnerOfSlot(b,r.SlotKey)).OrderBy(p => p.ParticipantIndex)
+                RequestPassengers(b,r).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
                         p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null, p.PhoneNumber))
                     .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay,
-                AgencyId: agencyId, AgencyLogo: agency?.Logo);
+                AgencyId: agencyId, AgencyLogo: agency?.Logo, ParentRequestId: r.ParentRequestId, IsSupplement: v.IsSupplement);
         }).ToArray();
     }
     public async Task<IReadOnlyList<ProviderRequestView>> AgencyRequests(string actor, int bookingId, CancellationToken ct)
@@ -438,8 +447,8 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             .Concat(b.Timelines.SelectMany(d=>d.Meals).Where(m=>(m.AgencyId??b.Tour!.AgencyId)==actor).Select(m=>"meal:"+m.Id)).ToArray();
         var requests=await RequestViews(db.BookingSupplierRequests.AsNoTracking().Where(r => r.BookingId == bookingId)
             .OrderByDescending(r => r.CreatedAt)).ToListAsync(ct);
-        return requests.Select(r=>b.Tour!.AgencyId==actor || slots.Contains(r.SlotKey)?r:
-            r with {EstimatedCost=0,QuotedCost=null,Quantity=0,AvailableQuantity=null,Note=null}).ToArray();
+        return requests.Select(r=>b.Tour!.AgencyId==actor || slots.Contains(r.SlotKey)?r with {OwnerAgencyId=BookingAlliance.OwnerOfSlot(b,r.SlotKey)}:
+            r with {EstimatedCost=0,QuotedCost=null,Quantity=0,AvailableQuantity=null,Note=null,ParticipantIndicesJson=null,OwnerAgencyId=BookingAlliance.OwnerOfSlot(b,r.SlotKey)}).ToArray();
     }
     private static bool AcceptsSupplierResponses(BookingStatus? status) => status is
         BookingStatus.Pending or BookingStatus.Confirmed or BookingStatus.Deposited or BookingStatus.Paid or BookingStatus.InProgress;
@@ -460,6 +469,7 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         Require(request.Status != "Confirmed" || request.QuotedCost != input.QuotedCost || request.Note != input.Note,
             "Giá và ghi chú không thay đổi.");
         Require(input.Note == null || input.Note.Length <= 1000, "Ghi chú quá dài.");
+        Require(input.Decision != "reject" || !string.IsNullOrWhiteSpace(input.Note), "Cần nhập lý do không thể cung cấp dịch vụ.");
         Require(input.Decision is not ("confirm" or "counter") || !input.AvailableQuantity.HasValue || input.AvailableQuantity >= request.Quantity, "Cần xác nhận đủ số lượng hoặc phản hồi một phần.");
         Require(input.Decision != "partial" || (input.AvailableQuantity > 0 && input.AvailableQuantity < request.Quantity), "Số lượng cung cấp một phần không hợp lệ.");
         Require(!request.ReplyDeadline.HasValue || request.ReplyDeadline > DateTime.UtcNow, "Đã hết hạn phản hồi.");
@@ -487,8 +497,8 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         var lines = Lines(latest);
         if (response is not null && response.QuotedCost.HasValue)
         {
-            var i = lines.FindIndex(l => l.SlotKey == response.SlotKey);
-            if (i >= 0) lines[i] = lines[i] with { UnitCost = response.QuotedCost.Value / lines[i].Quantity,
+            var i = lines.FindIndex(l => l.SlotKey == RequestCostKey(response));
+            if (i >= 0) lines[i] = lines[i] with { UnitCost = response.QuotedCost.Value / Math.Max(1,lines[i].Quantity),
                 Total = response.QuotedCost.Value, Confirmed = response.Status == "Confirmed" };
         }
         latest.Status = "Superseded";

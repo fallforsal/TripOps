@@ -54,7 +54,7 @@ public sealed partial class TourService
         return rows.Where(a=>a.Status!="excluded" && a.Status!="cancelled").OrderByDescending(a=>a.IsHost).ThenBy(a=>a.Id).Select(a=>{
             var user=agencies[a.AgencyId];var status=!a.IsHost && a.Status=="accepted" && !global.Any(g=>g.AgencyId==a.AgencyId && g.Status=="accepted") ? "revoked" : a.Status;
             return new DesignCoHostDto(a.AgencyId,user.BusinessProfile?.BusinessName??user.Name??"Agency",a.IsHost?"lead":"partner",status,[],a.StageArea,a.SuggestedBudget,
-                Notes:a.CommunicationNotes,RejectionReason:a.Status=="rejected"?a.CommunicationNotes:null,InvitedAt:a.AssignedAt,RespondedAt:a.RespondedAt,CompanyPhone:user.Phone,CompanyEmail:user.Email,Version:version?.VersionNumber);
+                Notes:a.CommunicationNotes,RejectionReason:a.Status=="rejected"?a.CommunicationNotes:null,InvitedAt:a.AssignedAt,RespondedAt:a.RespondedAt,CompanyPhone:user.Phone,CompanyEmail:user.Email,Version:version?.VersionNumber,CompanyLogo:user.BusinessProfile?.LogoUrl??user.Avatar);
         }).ToArray();
     }
     private async Task RequireVersionAccess(string actor,TourDesignRequest request,TourVersion? version,CancellationToken ct,bool pending=false)

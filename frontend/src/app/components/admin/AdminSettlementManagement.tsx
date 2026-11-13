@@ -65,7 +65,7 @@ function friendlyNote(text: string): string {
 
 /**
  * Quyết toán cho Agency sau khi tour hoàn thành.
- * Tự động: hệ thống chuyển sau ngày hẹn (mặc định 2 ngày sau khi HDV bấm hoàn thành) nếu đủ điều kiện.
+ * Tự động: hệ thống chuyển sau ngày hẹn (mặc định 2 ngày sau khi Agency chủ trì bấm hoàn thành) nếu đủ điều kiện.
  * Thủ công: Admin chuyển qua payOS ngay, hoặc tự chuyển khoản rồi ghi nhận mã giao dịch.
  */
 export function AdminSettlementManagement() {
@@ -274,7 +274,7 @@ export function AdminSettlementManagement() {
         ) : visible.length === 0 ? (
           <div className="py-12 text-center text-gray-400 space-y-2">
             <Landmark className="w-10 h-10 mx-auto text-gray-300" />
-            <p className="text-sm">Chưa có khoản quyết toán nào (khoản chỉ xuất hiện khi hướng dẫn viên bấm hoàn thành tour).</p>
+            <p className="text-sm">Chưa có khoản quyết toán nào (khoản chỉ xuất hiện khi Agency chủ trì bấm hoàn thành tour).</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -18,7 +18,7 @@ export type ProviderInboxRow = {
   createdAt: string; respondedAt: string | null; bookingCode: string; tourName: string;
   agencyId: string; agencyLogo?: string | null; agencyName: string; agencyPhone: string | null; agencyEmail: string | null; mealType: string | null;
   specialRequests: string | null; cancelReason: string | null; cancelledAt: string | null;
-  serviceTime?: string | null;
+  serviceTime?: string | null; parentRequestId?: number | null; isSupplement?: boolean;
   guests: Array<{ age?: number | null; phoneNumber?: string | null; fullName: string; gender: string | null; tierName: string | null; roommateNote: string | null; restaurantNote: string | null }>;
 };
 
@@ -52,6 +52,7 @@ export function toGroupRequest(r: ProviderInboxRow, providerId: string): Provide
     checkInDate: day(r.serviceDateFrom),
     checkOutDate: day(r.serviceDateTo || r.serviceDateFrom),
     numberOfNights: isHotel ? hotelStayNights(r) : 0,
+    isSupplement: r.isSupplement ?? !!r.parentRequestId,
     numberOfGuests: guests.length || Number(r.quantity) || 0,
     adultGuests: guests.length - children,
     childGuests: children,

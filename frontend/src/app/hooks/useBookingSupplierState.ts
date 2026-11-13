@@ -11,7 +11,7 @@ export function useBookingSupplierState(bookingId: string): BookingSupplierState
       active?.abort();
       const request = new AbortController();
       active = request;
-      setState({ bookingId, loading: true, requests: [] });
+      setState(previous => previous.bookingId === bookingId ? previous : { bookingId, loading: true, requests: [] });
       try {
         const requests = await http<BookingSupplierRequest[]>(
           `/bookings/${Number(bookingId)}/quotations/supplier-requests`, { signal: request.signal });
@@ -22,9 +22,10 @@ export function useBookingSupplierState(bookingId: string): BookingSupplierState
       }
     };
     void refresh();
+    const timer = window.setInterval(() => { if (document.visibilityState !== "hidden") void refresh(); }, 15000);
     window.addEventListener("focus", refresh);
     window.addEventListener("booking-suppliers-changed", refresh);
-    return () => { active?.abort(); window.removeEventListener("focus", refresh); window.removeEventListener("booking-suppliers-changed", refresh); };
+    return () => { window.clearInterval(timer); active?.abort(); window.removeEventListener("focus", refresh); window.removeEventListener("booking-suppliers-changed", refresh); };
   }, [bookingId]);
   return state.bookingId === bookingId ? state : { bookingId, loading: true, requests: [] };
 }

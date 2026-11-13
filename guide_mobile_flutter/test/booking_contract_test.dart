@@ -56,6 +56,7 @@ void main() {
 
     expect(detail.endDate, DateTime(2026, 11, 12));
     expect(detail.canRecordAttendance, isTrue);
+    expect(detail.canCheckInLocations, isFalse);
     expect(detail.passengers.single.status, 'CheckedIn');
     expect(detail.days.single.stops.single.id, 25);
     expect(detail.incidents.single.status, 'Reported');
@@ -93,5 +94,23 @@ void main() {
     expect(detail.canRecordAttendance, isTrue);
     expect(detail.attendanceDate, DateTime(2026, 11, 12));
   });
+
+  test('location check-in flags parse from backend and remain optional', () {
+    final detail = BookingDetail.fromJson({
+      'id': 32, 'status': 'InProgress',
+      'startDate': '2026-11-12', 'endDate': '2026-11-14',
+      'canCheckInLocations': true,
+      'nextLocationCheckInId': 99,
+      'snapshotDays': [
+        {'dayNumber': 1, 'title': 'Day 1', 'locations': [
+          {'id': 99, 'name': 'Stop A', 'attendanceStatus': 'Pending'}
+        ]}
+      ],
+    });
+    expect(detail.canCheckInLocations, isTrue);
+    expect(detail.nextLocationCheckInId, 99);
+    expect(detail.days.single.stops.single.id, 99);
+  });
+
 
 }

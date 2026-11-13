@@ -57,6 +57,16 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.Forbidden,(await partner.PostAsJsonAsync(baseUrl+"/participants",extra)).StatusCode);
         var added=await Read<BookingDto>(await lead.PostAsJsonAsync(baseUrl+"/participants",extra));
         Assert.Equal(3,added.TotalGuests);Assert.Single(added.Participants,p=>p.FullName=="B-only");
+        using var provider=await app.Login("provider");
+        var supplierInbox=await Read<ProviderInboxView[]>(await provider.GetAsync("/api/v1/provider/booking-requests"));
+        var supplemental=supplierInbox.Where(r=>r.ParentRequestId.HasValue).ToArray();
+        Assert.Equal(2,supplemental.Length);
+        Assert.All(supplemental,r=>{Assert.Equal("other",r.AgencyId);Assert.Equal("B-only",Assert.Single(r.Guests).FullName);});
+        Assert.All(supplierInbox.Where(r=>!r.ParentRequestId.HasValue),r=>Assert.DoesNotContain(r.Guests,g=>g.FullName=="B-only"));
+        await Read<ProviderRequestView>(await provider.PostAsJsonAsync($"/api/v1/provider/booking-requests/{supplemental[0].Id}/respond",new ProviderReply("reject",null,"Không thể nhận thêm khách")));
+        Assert.Equal(HttpStatusCode.Forbidden,(await lead.PostAsJsonAsync($"/api/v1/bookings/{created.Id}/quotations/supplier-requests/{supplemental[0].Id}/replace-supplement",
+            new SupplementReplacementInput(102,"Chủ trì không sửa dịch vụ chặng B"))).StatusCode);
+
         Assert.Equal(original,added.BaseTourAmount);Assert.Equal(600000,added.SurchargeAmount);Assert.Equal("Confirmed",added.Status);
         Assert.Equal(schedule,added.PaymentSchedule!.Where(p=>p.Stage!="surcharge").Select(p=>(p.Id,p.Amount,p.DueAt)).ToArray());
         Assert.Equal("other",added.PaymentSchedule!.Single(p=>p.Stage=="surcharge").BeneficiaryAgencyId);

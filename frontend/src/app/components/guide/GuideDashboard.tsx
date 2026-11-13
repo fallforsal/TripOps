@@ -21,11 +21,9 @@ import {
   Info,
   Camera,
   ShieldCheck,
-  Award,
   NotebookPen,
   Users,
   Compass,
-  CheckCheck,
 } from "lucide-react";
 import { GuideSchedule, BookingPassenger, IncidentReport } from "@/app/types";
 import {
@@ -55,10 +53,6 @@ interface GuideDashboardProps {
     scheduleId: string,
     incident: Omit<IncidentReport, "id" | "reportedAt">,
   ) => void;
-  onWrapUpTour?: (
-    scheduleId: string,
-    wrapUpReport: { rating?: number; notes: string },
-  ) => void;
   onUpdateNotes?: (
     scheduleId: string,
     personalNotes: string,
@@ -74,7 +68,6 @@ export function GuideDashboard({
   onCheckIn,
   onDepartureRollCall,
   onReportIncident,
-  onWrapUpTour,
   onUpdateNotes,
 }: GuideDashboardProps) {
   // Viewport mode: Phone simulator vs Expanded
@@ -188,11 +181,6 @@ export function GuideDashboard({
   // Quick SOS Hotline Modal
   const [showHotlineModal, setShowHotlineModal] = useState(false);
 
-  // Tour wrap-up modal (báo cáo hoàn thành tour)
-  const [showWrapUpModal, setShowWrapUpModal] = useState(false);
-  const [wrapUpNotes, setWrapUpNotes] = useState("");
-  const [wrapUpSuccess, setWrapUpSuccess] = useState(false);
-
   // Helper info for current tour
   const tour = currentSchedule?.booking?.tour;
   const itinerary = tour?.itinerary || [];
@@ -209,15 +197,6 @@ export function GuideDashboard({
   );
   const completedLocationsCount =
     currentSchedule?.completedLocations?.length || 0;
-
-  // Condition for completion button: All locations checked in!
-  const isAllLocationsCheckedIn =
-    totalLocations > 0 && completedLocationsCount >= totalLocations;
-
-  // Identify last day & last location of the tour
-  const lastDay = itinerary[itinerary.length - 1];
-  const lastLocation = lastDay?.locations?.[lastDay.locations.length - 1];
-  const isViewingLastDay = lastDay && selectedDayNumber === lastDay.day;
 
   // Roll call calculations
   const presentCount = passengers.filter(
@@ -467,21 +446,6 @@ export function GuideDashboard({
     setIncidentLocation("");
     // Switch to incidents tab so user sees it right away
     setOperationSubTab("incidents");
-  };
-
-  // Wrap-up Tour submit
-  const handleConfirmWrapUp = async () => {
-    if (!currentSchedule) return;
-    if (onWrapUpTour) {
-      await onWrapUpTour(currentSchedule.id, {
-        notes: wrapUpNotes.trim(),
-      });
-    }
-    setWrapUpSuccess(true);
-    setTimeout(() => {
-      setShowWrapUpModal(false);
-      setWrapUpSuccess(false);
-    }, 2000);
   };
 
   if (!currentSchedule) {
@@ -1142,47 +1106,6 @@ export function GuideDashboard({
                       })}
                     </div>
 
-                    {/* NÚT BÁO CÁO HOÀN THÀNH TOUR:
-                        CHỈ HIỂN THỊ Ở ĐỊA ĐIỂM CUỐI CÙNG VÀ TẤT CẢ CÁC ĐỊA ĐIỂM ĐÃ ĐƯỢC CHECK-IN */}
-                    {isViewingLastDay && isAllLocationsCheckedIn && (
-                      <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-2xl p-4 text-white shadow-lg space-y-2.5 animate-in fade-in zoom-in-95">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                            <CheckCheck className="w-5 h-5 text-yellow-300" />
-                          </div>
-                          <div>
-                            <h4 className="font-extrabold text-xs uppercase tracking-wide">
-                              Đã hoàn thành toàn bộ lộ trình tour!
-                            </h4>
-                            <p className="text-[11px] text-emerald-100">
-                              Tất cả các điểm đến đã được check-in đầy đủ.
-                            </p>
-                          </div>
-                        </div>
-
-                        {currentSchedule.wrapUpReport ? (
-                          <div className="bg-white/15 rounded-xl p-2.5 text-xs">
-                            <span className="font-bold text-yellow-200 block">
-                              ✓ Tour đã được nghiệm thu kết thúc!
-                            </span>
-                            <p className="text-[11px] text-white/90 italic mt-0.5">
-                              "
-                              {currentSchedule.wrapUpReport.notes ||
-                                "Tour kết thúc thành công."}
-                              "
-                            </p>
-                          </div>
-                        ) : (
-                          <Button
-                            onClick={() => setShowWrapUpModal(true)}
-                            className="w-full bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-extrabold text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-2"
-                          >
-                            <Award className="w-4 h-4 text-slate-950" />
-                            <span>Báo Cáo Hoàn Thành & Kết Thúc Tour</span>
-                          </Button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1850,65 +1773,6 @@ export function GuideDashboard({
         </DialogContent>
       </Dialog>
 
-      {/* TOUR WRAP-UP MODAL (BÁO CÁO KẾT THÚC TOUR) */}
-      <Dialog open={showWrapUpModal} onOpenChange={setShowWrapUpModal}>
-        <DialogContent className="max-w-sm p-5 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-              <Award className="w-4 h-4 text-indigo-600" />
-              Tổng kết & Báo Cáo Kết Thúc Tour
-            </DialogTitle>
-            <DialogDescription className="text-[11px] text-slate-500">
-              Báo cáo hoàn thành tour cho điều hành lữ hành
-            </DialogDescription>
-          </DialogHeader>
-
-          {wrapUpSuccess ? (
-            <div className="py-6 text-center space-y-2">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-              <h4 className="font-bold text-sm text-slate-900">
-                Đã gửi báo cáo kết thúc tour!
-              </h4>
-              <p className="text-xs text-slate-500">
-                Cảm ơn bạn đã hoàn thành xuất sắc toàn bộ lộ trình tour.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Ghi chú tổng kết chuyến đi của HDV
-                </label>
-                <Textarea
-                  rows={4}
-                  value={wrapUpNotes}
-                  onChange={(e) => setWrapUpNotes(e.target.value)}
-                  placeholder="Ghi nhận tình hình chung của đoàn, phản hồi về đối tác khách sạn/nhà hàng hoặc các đề xuất cho chuyến đi sau..."
-                  className="text-xs"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowWrapUpModal(false)}
-                  className="text-xs"
-                >
-                  Đóng
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleConfirmWrapUp}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
-                >
-                  Xác Nhận Kết Thúc Tour
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

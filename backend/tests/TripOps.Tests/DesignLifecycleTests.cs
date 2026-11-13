@@ -42,7 +42,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(1,visible.Version);
         Assert.Equal(HttpStatusCode.Conflict,(await customer.PostAsJsonAsync("/api/v1/bookings",DesignBooking(visible))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(visible.Revision,Complete()))).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/messages",new {message="hello"})).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await customer.PostAsJsonAsync($"/api/v1/tour-design-requests/{request.Id}/messages",new {message="hello"})).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,(await lead.PostAsJsonAsync(root+"/lifecycle",new DesignLifecycleInput("reopen"))).StatusCode);
         row=Assert.Single(await Read<DesignRequestDto[]>(await customer.GetAsync("/api/v1/tour-design-requests")));
         Assert.Equal("designed",row.Status);Assert.Null(row.CloseReason);

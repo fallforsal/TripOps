@@ -11,7 +11,7 @@ public sealed class SettlementOptions
 {
     /// <summary>Phí sàn mặc định (%) khi chưa có dòng nào trong system_commission_configs.</summary>
     public decimal DefaultFeePercent { get; init; } = 10m;
-    /// <summary>Số ngày chờ sau khi hướng dẫn viên bấm hoàn thành rồi mới chuyển tự động (VD 10/11 → 12/11).</summary>
+    /// <summary>Số ngày chờ sau khi Agency chủ trì bấm hoàn thành rồi mới chuyển tự động (VD 10/11 → 12/11).</summary>
     public int AutoPayoutDelayDays { get; init; } = 2;
     /// <summary>Bật tác vụ chạy ngầm tự chuyển tiền. Mặc định false.</summary>
     public bool AutoPayoutEnabled { get; init; }

@@ -29,7 +29,7 @@ public sealed record DesignCoHostDto(string CompanyId, string CompanyName, strin
     decimal? QuoteAdult = null, decimal? QuoteChild = null, decimal? QuoteInfant = null,
     string? QuoteNote = null, DateTime? QuotedAt = null, string? Notes = null,
     string? RejectionReason = null, DateTime? InvitedAt = null, DateTime? RespondedAt = null,
-    string? CompanyPhone = null, string? CompanyEmail = null, int? Version = null);
+    string? CompanyPhone = null, string? CompanyEmail = null, int? Version = null, string? CompanyLogo = null);
 public sealed record InviteDesignCoHost([Required] string AgencyId, [StringLength(255)] string? Segment = null,
     [Range(typeof(decimal), "0", "9999999999")] decimal? Budget = null, [StringLength(2000)] string? Notes = null, int? Version = null);
 public sealed record DesignCoHostDecision([Required, AllowedValues("accept", "reject")] string Action, [StringLength(2000)] string? Reason = null, int? Version = null);

@@ -73,8 +73,8 @@ export const customerRequestPlans = async (requestId: string) =>
   (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map((t) => ({ ...fromApiTour(t), customRequestId: requestId }));
 export const cloneDesignTour = async (requestId: string, tourId: string) =>
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/clone`, { method: "POST", body: JSON.stringify({ tourId: Number(tourId) }) }));
-export const shareDesignTour = async (requestId: string, revision: number, version: number) =>
-  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version }) }));
+export const shareDesignTour = async (requestId: string, revision: number, version: number | null) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version, hidden: version === null }) }));
 export const getDesignVersion = async (requestId: string, version: number) =>
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/versions/${version}`));
 export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, revision?: number) => {

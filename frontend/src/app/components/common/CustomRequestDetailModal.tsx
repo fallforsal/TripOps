@@ -39,6 +39,7 @@ import { DesignRequestAgencyActions, type DesignRequestDecision } from "@/app/co
 
 export interface CustomRequestDetailModalProps {
   isOpen: boolean;
+  embedded?: boolean;
   onClose: () => void;
   request: CustomTourRequest | null;
   matchingTour?: Tour | null;
@@ -141,7 +142,7 @@ function calculateDaysNights(startIso: string, endIso: string): string {
 }
 
 export function CustomRequestDetailModal({
-  isOpen,
+  isOpen, embedded = false,
   onClose,
   request,
   matchingTour,
@@ -156,6 +157,8 @@ export function CustomRequestDetailModal({
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   if (!request) return null;
+  const Title = embedded ? "h2" : DialogTitle;
+  const Description = embedded ? "p" : DialogDescription;
 
   const cfg = STATUS_CONFIG[request.status] || STATUS_CONFIG.pending;
   const daysNightsText = calculateDaysNights(request.departureDate, request.returnDate);
@@ -172,9 +175,8 @@ export function CustomRequestDetailModal({
   const parsedPeople = request.numberOfPeople ? Number(request.numberOfPeople) : 0;
   const totalEstimatedBudget = parsedBudget > 0 && parsedPeople > 0 ? parsedBudget * parsedPeople : 0;
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-3xl w-full max-w-[95vw] bg-white rounded-2xl border border-[#CBD5E1] p-0 overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+  const content = (
+      <div className={embedded ? "mx-auto max-w-4xl overflow-hidden rounded-2xl border bg-white" : "flex min-h-0 flex-col"}>
         {/* Modal Header */}
         <div className="px-6 py-4.5 bg-[#F0F9FF] border-b border-[#CBD5E1] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -183,9 +185,9 @@ export function CustomRequestDetailModal({
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                <Title className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                   Hồ sơ yêu cầu thiết kế tour #{request.id}
-                </DialogTitle>
+                </Title>
                 <span
                   className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}
                 >
@@ -198,9 +200,9 @@ export function CustomRequestDetailModal({
                   </span>
                 )}
               </div>
-              <DialogDescription className="text-xs text-slate-500 mt-0.5">
+              <Description className="text-xs text-slate-500 mt-0.5">
                 Đơn vị nhận yêu cầu: <strong className="text-slate-700">{request.targetCompanyName || "Travel Agency"}</strong> · Gửi ngày: {formatDate(request.createdAt)}
-              </DialogDescription>
+              </Description>
             </div>
           </div>
         </div>
@@ -519,7 +521,7 @@ export function CustomRequestDetailModal({
             )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
   );
+  return embedded ? content : <Dialog open={isOpen} onOpenChange={open=>!open&&onClose()}><DialogContent className="sm:max-w-3xl w-full max-w-[95vw] bg-white rounded-2xl border border-[#CBD5E1] p-0 overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">{content}</DialogContent></Dialog>;
 }

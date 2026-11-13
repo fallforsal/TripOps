@@ -21,6 +21,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddScoped<Accounts.AccountService>();
+        services.AddScoped<Accounts.CustomerProfileService>();
         services.AddScoped<Guides.AgencyGuideService>();
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
         services.AddScoped<TripOps.Data.Repositories.BookingRepository>();

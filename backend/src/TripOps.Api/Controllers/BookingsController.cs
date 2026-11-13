@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TripOps.Service.Payments;
+using TripOps.Service.Settlements;
 using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
@@ -135,6 +137,14 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Decide(int id, BookingDecisionRequest request, CancellationToken ct) =>
         Ok(await bookings.Decide(Actor, id, request, ct));
+
+    [HttpPost("{id:int}/complete")]
+    [EndpointSummary("The host agency completes an in-progress booking and schedules agency settlements")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Complete(int id, [FromServices] AgencySettlementService settlements, CancellationToken ct) =>
+        Ok(await bookings.Complete(Actor, id, settlements, ct));
 
     [HttpGet("{id:int}/cancellation-quote")]
     [EndpointSummary("Preview what cancelling this booking means for the customer (immediate, full refund, or forfeited when overdue)")]

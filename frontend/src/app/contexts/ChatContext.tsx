@@ -8,8 +8,6 @@ interface State {
   connection: HubConnection | null;
   refresh: () => Promise<void>; activeView: string | undefined; registerView: (id: string) => () => void;
   composeRequest: { id: number; contact: ChatContact; context?: ChatBusinessContext; nonce: number } | null;
-  tourPreview: {conversationId: number; messageId: number} | null;
-  setTourPreview: (reference: {conversationId: number; messageId: number} | null) => void;
   openChat: (userId: string, context?: ChatBusinessContext) => Promise<void>;
   dismissContext: () => void;
 }
@@ -24,7 +22,6 @@ export function ChatProvider({children}: {children: ReactNode}) {
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const [views, setViews] = useState<string[]>([]);
   const [composeRequest, setComposeRequest] = useState<State['composeRequest']>(null);
-  const [tourPreview, setTourPreview] = useState<State['tourPreview']>(null);
   const dismissContext = useCallback(() => setComposeRequest(old => old ? { ...old, context: undefined } : old), []);
   const actorRef = useRef(user?.id);
   const composeSequence = useRef(0);
@@ -46,7 +43,7 @@ export function ChatProvider({children}: {children: ReactNode}) {
   }, []);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
-    setPanelOpen(false); setConversations([]); setError(''); setComposeRequest(null); setTourPreview(null);
+    setPanelOpen(false); setConversations([]); setError(''); setComposeRequest(null);
     if (!user) return;
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined, sequence = 0;
     const hub = new HubConnectionBuilder()
@@ -72,6 +69,6 @@ export function ChatProvider({children}: {children: ReactNode}) {
     setConnection(hub); void refresh(); void start();
     return () => { disposed = true; clearTimeout(timer); refreshRef.current = async () => {}; hub.off('ConversationUpdated'); void hub.stop(); setConnection(null); };
   }, [user?.id]);
-  return <ConfigProvider theme={{token:{colorPrimary:'#075985',borderRadius:8,fontFamily:'inherit'}}}><ChatContext.Provider value={{panelOpen,setPanelOpen,conversations,error,status,sync,connection,activeView:views.at(-1),registerView,composeRequest,openChat,dismissContext,tourPreview,setTourPreview,refresh: () => refreshRef.current()}}>{children}</ChatContext.Provider></ConfigProvider>;
+  return <ConfigProvider theme={{token:{colorPrimary:'#075985',borderRadius:8,fontFamily:'inherit'}}}><ChatContext.Provider value={{panelOpen,setPanelOpen,conversations,error,status,sync,connection,activeView:views.at(-1),registerView,composeRequest,openChat,dismissContext,refresh: () => refreshRef.current()}}>{children}</ChatContext.Provider></ConfigProvider>;
 }
 export function useChat() { const value = useContext(ChatContext); if (!value) throw new Error('ChatProvider required'); return value; }

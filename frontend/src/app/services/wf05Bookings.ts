@@ -143,6 +143,7 @@ export interface BookingDto {
     }[];
   }[];
   snapshotHotels?: {
+    dateFrom?:string; dateTo?:string;
     agencyId?:string;
     id: number;
     destination: string;

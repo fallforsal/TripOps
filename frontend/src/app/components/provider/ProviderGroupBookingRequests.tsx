@@ -1,5 +1,6 @@
+import { providerQuoteCopy } from "@/app/lib/providerQuoteCopy";
 import { toast } from "@/app/lib/notifications";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BedDouble,
   Calendar,
@@ -88,6 +89,11 @@ export function ProviderGroupBookingRequests({
 
   // State to manage dedicated standalone detail page
   const [viewingRequestId, setViewingRequestId] = useState<string | null>(null);
+
+  useEffect(()=>{
+    const bookingId=new URLSearchParams(window.location.hash.split("?")[1]).get("bookingId");
+    if(bookingId){const request=requests.find(r=>String(r.bookingId)===bookingId && r.status!=="cancelled");if(request)setViewingRequestId(request.id);}
+  },[requests]);
 
   // Quick modals for list actions
   const [approvingRequest, setApprovingRequest] =
@@ -211,12 +217,8 @@ export function ProviderGroupBookingRequests({
     setQuoteInputPrice(
       req.quotedTotalPrice ? req.quotedTotalPrice.toString() : ""
     );
-    const isRest = isRestaurantReq(req);
     setProviderNote(
-      req.providerNote ||
-        (isRest
-          ? "Nhà hàng đã xác nhận tiếp nhận đặt bàn và chuẩn bị set ăn riêng theo đúng yêu cầu ăn uống/dị ứng của đoàn."
-          : "Khách sạn đã xem danh sách đoàn và bố trí phòng theo đúng nguyện vọng ghép phòng của khách. Giá trọn gói toàn đoàn đã gồm buffet sáng và thuế VAT.")
+      req.providerNote || providerQuoteCopy(req).note
     );
     setQuoteError("");
   };
@@ -233,7 +235,7 @@ export function ProviderGroupBookingRequests({
     if (!approvingRequest) return;
     const numPrice = Number(quoteInputPrice.replace(/\D/g, ""));
     if (!numPrice || numPrice <= 0) {
-      setQuoteError("Vui lòng nhập giá tổng hợp lệ cho toàn bộ đoàn khách.");
+      setQuoteError("Vui lòng nhập tổng chi phí hợp lệ cho khách trong yêu cầu này.");
       return;
     }
 
@@ -513,6 +515,7 @@ export function ProviderGroupBookingRequests({
                         </span>
                       )}
 
+                      {req.isSupplement && <span className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800">Bổ sung {req.numberOfGuests} khách · giữ nguyên khách cũ</span>}
                       <span className="font-mono text-xs font-bold text-gray-500">
                         #{req.id}
                       </span>
@@ -631,7 +634,7 @@ export function ProviderGroupBookingRequests({
                   {!isCancelled && !!req.quotedTotalPrice && (
                     <div className="text-xs p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 flex items-center justify-between">
                       <span className="font-semibold text-emerald-800">
-                        {isRest ? "Báo giá bữa ăn toàn đoàn:" : "Báo giá lưu trú toàn đoàn:"}
+                        {providerQuoteCopy(req).title}:
                       </span>
                       <strong className="text-emerald-700 text-sm font-black">
                         {formatVND(req.quotedTotalPrice)}
@@ -727,9 +730,7 @@ export function ProviderGroupBookingRequests({
 
               <div className="space-y-1.5">
                 <Label className="font-bold text-gray-800 text-xs">
-                  {isRestaurantReq(approvingRequest)
-                    ? "Tổng giá tiền cho toàn bộ bữa ăn của đoàn (VNĐ) *"
-                    : "Tổng giá tiền trọn gói lưu trú cho đoàn (VNĐ) *"}
+                  {providerQuoteCopy(approvingRequest).label}
                 </Label>
                 <Input
                   type="text"
@@ -743,7 +744,7 @@ export function ProviderGroupBookingRequests({
                   className="text-sm font-black text-emerald-700"
                 />
                 <p className="text-[11px] text-gray-500">
-                  Giá tổng cho toàn bộ đoàn {approvingRequest.numberOfGuests} khách, không phải giá một người.
+                  {providerQuoteCopy(approvingRequest).hint}
                 </p>
                 {quoteError && <p className="text-rose-600 font-semibold">{quoteError}</p>}
               </div>

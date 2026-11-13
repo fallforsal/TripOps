@@ -8,3 +8,8 @@ export async function selectCustomerDesignVersion<T extends { revision?: number 
   const fresh = await load(version);
   return publish(fresh.revision || 1, version);
 }
+
+// A background refresh must keep the customer's choice, even if the Agency changes its recommendation.
+export function customerDesignVersion<T extends {version?:number}>(plans:readonly T[],selected:number|null):T|null {
+  return plans.find(plan=>plan.version===selected)??plans[0]??null;
+}

@@ -30,6 +30,12 @@ Table users {
   bank_account_number varchar(50) [note: 'Số tài khoản nhận tiền hoàn, chỉ gồm chữ số']
   bank_account_holder varchar(150) [note: 'Tên chủ tài khoản, IN HOA không dấu']
   bank_account_updated_at timestamp [note: 'Lần cập nhật tài khoản gần nhất']
+  organization_name varchar(200) [note: 'Tên cơ quan/doanh nghiệp của khách (tùy chọn)']
+  address_line varchar(255) [note: 'Số nhà, tên đường do khách tự nhập']
+  province_code varchar(10) [note: 'Mã tỉnh/thành theo danh mục hành chính hiện hành']
+  province_name varchar(100) [note: 'Tên tỉnh/thành tại thời điểm lưu']
+  ward_code varchar(10) [note: 'Mã phường/xã thuộc tỉnh đã chọn']
+  ward_name varchar(150) [note: 'Tên phường/xã tại thời điểm lưu']
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.
@@ -647,6 +653,9 @@ Table payment_transactions {
 // 3. NHẬT KÝ ĐIỀU CHỈNH TĂNG / GIẢM GIÁ TOUR DO PHÁT SINH
 // ============================================================================
 Table booking_supplier_requests {
+  parent_request_id int // Yêu cầu trước đó, giữ phạm vi khách bổ sung
+  agency_supplier_id int // Nhà cung cấp riêng của Agency
+  participant_indices_json nvarchar(max) // Danh sách participant_index phục vụ riêng cho yêu cầu này; NULL cho dữ liệu cũ
   AvailabilityConfirmed boolean [not null]
   AvailableQuantity decimal(19,2)
   HoldUntil timestamp
@@ -655,8 +664,8 @@ Table booking_supplier_requests {
   ResponseHistoryJson text [not null]
   id int [pk, increment]
   booking_id int [not null]
-  service_id int [not null]
-  provider_id varchar(36) [not null]
+  service_id int
+  provider_id varchar(36)
   slot_key varchar(100) [not null]
   service_name varchar(255) [not null]
   service_date_from date
@@ -672,9 +681,11 @@ Table booking_supplier_requests {
   indexes {
     (provider_id, status)
     (booking_id, slot_key)
-  }
 }
+}
+Ref: booking_supplier_requests.agency_supplier_id > agency_suppliers.id
 Ref: booking_supplier_requests.booking_id > bookings.id
+Ref: booking_supplier_requests.parent_request_id > booking_supplier_requests.id
 Ref: booking_supplier_requests.service_id > services.id
 Ref: booking_supplier_requests.provider_id > users.id
 
@@ -737,7 +748,7 @@ Table booking_agencies {
   settlement_status varchar(30) [default: 'Unpaid', note: 'Unpaid (tour chưa xong), Ready (HDV đã bấm hoàn thành, chờ chuyển), Processing (đang chi hộ payOS), Paid (đã chuyển), Failed (chi hộ lỗi, chờ Admin), OnHold (Admin tạm giữ)']
   payout_transferred_at timestamp [note: 'Thời điểm nền tảng chuyển khoản thực tế']
   bank_reference_code varchar(100) [note: 'Mã ủy nhiệm chi / GD ngân hàng']
-  tour_completed_at timestamp [note: 'Lúc hướng dẫn viên bấm hoàn thành tour; mốc tính ngày chuyển tự động']
+  tour_completed_at timestamp [note: 'Lúc Agency chủ trì bấm hoàn thành tour; mốc tính ngày chuyển tự động']
   auto_payout_at timestamp [note: 'Từ thời điểm này được chuyển tự động (mặc định hoàn thành + 2 ngày). NULL = chỉ Admin chuyển tay']
   fee_percent decimal(5, 2) [note: 'Tỷ lệ phí sàn (%) chốt lúc tour hoàn thành, VD 10']
   payout_method varchar(20) [note: 'PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay)']

@@ -576,6 +576,10 @@ export function AgencyServicesExplorer({
   const [viewMode, setViewMode] = useState<"split" | "grid">("split");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  useEffect(() => {
+    const sync=()=>{const id=/^#\/agency\/(?:services|provider-services)\/(\d+)/.exec(window.location.hash)?.[1];if(id)setSelectedService(services.find(s=>s.id===id)??null);};
+    sync();window.addEventListener("hashchange",sync);return()=>window.removeEventListener("hashchange",sync);
+  },[services]);
 
   // Extract unique provinces for filter dropdown
   const provincesList = Array.from(

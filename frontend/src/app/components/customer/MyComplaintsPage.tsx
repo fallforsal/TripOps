@@ -38,6 +38,15 @@ export function MyComplaintsPage({
   onAddComplaintMessage,
   onViewBookingDetail,
 }: MyComplaintsPageProps) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const statusTabs = [
+    { id: "all", label: "Tất cả" },
+    { id: "pending", label: "Chờ xử lý" },
+    { id: "processing", label: "Đang xử lý" },
+    { id: "resolved", label: "Đã giải quyết" },
+    { id: "rejected", label: "Đã từ chối" },
+  ];
+  const filteredComplaints = complaints.filter(c => statusFilter === "all" || c.status === statusFilter);
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(Boolean(initialSelectedBooking));
   const [selectedBookingId, setSelectedBookingId] = useState(
@@ -312,10 +321,17 @@ export function MyComplaintsPage({
         }
       />
 
+      <div role="tablist" aria-label="Trạng thái khiếu nại" className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2">
+        {statusTabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={statusFilter === tab.id} onClick={() => setStatusFilter(tab.id)}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${statusFilter === tab.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          {tab.label} <span className="ml-1.5 opacity-80">({complaints.filter(c => tab.id === "all" || c.status === tab.id).length})</span>
+        </button>)}
+      </div>
+
       {/* Complaints List */}
-      {complaints.length > 0 ? (
+      {filteredComplaints.length > 0 ? (
         <div className="space-y-4">
-          {complaints.map((comp) => (
+          {filteredComplaints.map((comp) => (
             <div
               key={comp.id}
               className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors space-y-3"
@@ -381,10 +397,10 @@ export function MyComplaintsPage({
       ) : (
         <EmptyState
           icon={ShieldAlert}
-          title="Không có khiếu nại nào"
-          description="Bạn chưa có phản ánh hay khiếu nại nào về chuyến đi. Nếu có bất kỳ vấn đề gì về dịch vụ khách sạn, xe hoặc hướng dẫn viên, bạn có thể gửi phản ánh để được hỗ trợ giải quyết."
-          actionText={userBookings.length > 0 ? "Gửi khiếu nại mới" : undefined}
-          onAction={() => setShowCreateModal(true)}
+          title={statusFilter === "all" ? "Không có khiếu nại nào" : "Chưa có khiếu nại trong trạng thái này"}
+          description={statusFilter === "all" ? "Bạn có thể gửi phản ánh về chuyến đi để được hỗ trợ giải quyết." : "Chọn Tất cả để xem toàn bộ khiếu nại của bạn."}
+          actionText={statusFilter !== "all" ? "Xem tất cả" : userBookings.length > 0 ? "Gửi khiếu nại mới" : undefined}
+          onAction={() => statusFilter !== "all" ? setStatusFilter("all") : setShowCreateModal(true)}
         />
       )}
 

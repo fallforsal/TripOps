@@ -21,6 +21,11 @@ public sealed class BookingQuotationsController(BookingQuotationService quotatio
     [HttpGet("supplier-requests/{id:int}/history"), Authorize(Roles = "agency")]
     [ProducesResponseType<object>(200)]
     public async Task<IActionResult> History(int bookingId, int id, CancellationToken ct) => Ok(await quotations.ResponseHistory(Actor, bookingId, id, ct));
+    [HttpPost("supplier-requests/{id:int}/replace-supplement"), Authorize(Roles = "agency")]
+    [EndpointSummary("Find a replacement only for supplementary guests after their Provider declines")]
+    [ProducesResponseType<ProviderRequestView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReplaceSupplement(int bookingId,int id,SupplementReplacementInput input,CancellationToken ct) =>
+        Ok(await quotations.ReplaceSupplement(Actor,bookingId,id,input,ct));
     [HttpGet("supplier-requests"), Authorize(Roles = "agency")]
     [EndpointSummary("List Provider confirmations requested for an Agency booking")]
     [ProducesResponseType<IReadOnlyList<ProviderRequestView>>(StatusCodes.Status200OK)]

@@ -1,0 +1,30 @@
+name: Agency Tour Completion Web CI
+on:
+  push:
+    branches: [hiep]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/agency-tour-completion-web.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/agency-tour-completion-web.yml'
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend
+        run: npm ci
+      - name: TypeScript validation
+        run: npm run typecheck
+      - name: Vite production build
+        run: npm run build
