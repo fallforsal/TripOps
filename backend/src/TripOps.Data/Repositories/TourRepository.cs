@@ -19,6 +19,13 @@ public sealed class TourRepository(TripOpsDbContext db)
         t.Agency.Status == UserStatus.Active && t.Agency.Role == UserRole.TravelAgency &&
         t.Agency.BusinessProfile != null && t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved);
 
+    /// <summary>Danh sách tour đang mở bán công khai (kèm Agency và giá theo độ tuổi) cho chatbot khách vãng lai.</summary>
+    public Task<List<Tour>> PublicCatalogue(int take, CancellationToken ct) => Public(db.Tours.AsNoTracking()
+            .Include(t => t.Agency).ThenInclude(a => a.BusinessProfile)
+            .Include(t => t.PricingTiers))
+        .OrderByDescending(t => t.CreatedAt).ThenBy(t => t.Id)
+        .Take(take).AsSplitQuery().ToListAsync(ct);
+
     public Task<Tour?> Find(int id, string? owner, bool publicOnly, CancellationToken ct, bool includeDeleted = false)
     {
         var query = Details();

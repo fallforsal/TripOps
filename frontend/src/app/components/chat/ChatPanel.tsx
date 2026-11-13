@@ -292,7 +292,6 @@ export function ChatWidget() {
   if (!user) return null;
   return (
     <>
-      {!chat.panelOpen && <div className="chat-launcher"><ChatButton /></div>}
       <section hidden={!chat.panelOpen} className="chat-floating-window" role="region" aria-label="Cửa sổ tin nhắn">
         <header className="chat-floating-header"><div><MessageCircle size={18}/><strong>Tin nhắn</strong></div><div>
           <button type="button" onClick={() => chat.setPanelOpen(false)} aria-label="Thu gọn tin nhắn" title="Thu gọn"><Minus size={19}/></button>

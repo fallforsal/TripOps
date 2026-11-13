@@ -37,6 +37,8 @@ public sealed partial class BookingFlowTests
                 ["PayOsPayout:ChecksumKey"] = "",
                 // Tác vụ tự chuyển tiền quyết toán không chạy trong test (test gọi lượt quét qua API).
                 ["Settlement:AutoPayoutEnabled"] = "false",
+                // Không dùng khóa OpenAI thật trên máy dev trong test (tốn phí, kết quả không cố định).
+                ["OpenAI:ApiKey"] = "",
             }));
             builder.ConfigureServices(services =>
             {
