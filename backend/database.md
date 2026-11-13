@@ -30,6 +30,12 @@ Table users {
   bank_account_number varchar(50) [note: 'Số tài khoản nhận tiền hoàn, chỉ gồm chữ số']
   bank_account_holder varchar(150) [note: 'Tên chủ tài khoản, IN HOA không dấu']
   bank_account_updated_at timestamp [note: 'Lần cập nhật tài khoản gần nhất']
+  organization_name varchar(200) [note: 'Tên cơ quan/doanh nghiệp của khách (tùy chọn)']
+  address_line varchar(255) [note: 'Số nhà, tên đường do khách tự nhập']
+  province_code varchar(10) [note: 'Mã tỉnh/thành theo danh mục hành chính hiện hành']
+  province_name varchar(100) [note: 'Tên tỉnh/thành tại thời điểm lưu']
+  ward_code varchar(10) [note: 'Mã phường/xã thuộc tỉnh đã chọn']
+  ward_name varchar(150) [note: 'Tên phường/xã tại thời điểm lưu']
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.

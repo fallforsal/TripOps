@@ -22,4 +22,11 @@ public string? BankName { get; set; }
 public string? BankAccountNumber { get; set; }
 public string? BankAccountHolder { get; set; }
 public DateTime? BankAccountUpdatedAt { get; set; }
+// Hồ sơ cá nhân của khách: cơ quan/doanh nghiệp (tùy chọn) và địa chỉ theo danh mục hành chính hiện hành (tỉnh → phường/xã).
+public string? OrganizationName { get; set; }
+public string? AddressLine { get; set; }
+public string? ProvinceCode { get; set; }
+public string? ProvinceName { get; set; }
+public string? WardCode { get; set; }
+public string? WardName { get; set; }
 }

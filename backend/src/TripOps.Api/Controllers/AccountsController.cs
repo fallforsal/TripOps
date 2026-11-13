@@ -34,6 +34,21 @@ public sealed class AccountsController(AccountService accounts) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout() { await HttpContext.SignOutAsync(); return NoContent(); }
 }
+[ApiController, Authorize, Route("api/v1/me/profile")]
+[Tags("Authentication")]
+public sealed class MyProfileController(CustomerProfileService profiles) : ControllerBase
+{
+    private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    [HttpGet]
+    [EndpointSummary("Get the signed-in customer's account information and address")]
+    [ProducesResponseType<CustomerProfileDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get(CancellationToken ct) => Ok(await profiles.Get(Actor, ct));
+    [HttpPut]
+    [EndpointSummary("Update the customer's name, organization, phone and address (province and ward are validated against the official list)")]
+    [ProducesResponseType<CustomerProfileDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Put(CustomerProfileInput input, CancellationToken ct) => Ok(await profiles.Update(Actor, input, ct));
+}
 [ApiController, Authorize, Route("api/v1/me/bank-account")]
 [Tags("Authentication")]
 public sealed class MyBankAccountController(AccountService accounts) : ControllerBase

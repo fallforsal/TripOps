@@ -3871,6 +3871,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("id");
 
+                    b.Property<string>("AddressLine")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("address_line");
+
                     b.Property<string>("AgencyId")
                         .HasMaxLength(36)
                         .HasColumnType("nvarchar(36)")
@@ -3930,6 +3935,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(150)")
                         .HasColumnName("name");
 
+                    b.Property<string>("OrganizationName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("organization_name");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
@@ -3939,6 +3949,16 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
                         .HasColumnName("phone");
+
+                    b.Property<string>("ProvinceCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("province_code");
+
+                    b.Property<string>("ProvinceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("province_name");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -3960,6 +3980,16 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("WardCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("ward_code");
+
+                    b.Property<string>("WardName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("ward_name");
 
                     b.HasKey("Id");
 

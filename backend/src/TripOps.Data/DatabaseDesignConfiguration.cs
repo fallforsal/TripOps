@@ -36,6 +36,12 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.BankAccountNumber).HasColumnName("bank_account_number").HasColumnType("nvarchar(50)").HasMaxLength(50);
             entity.Property(e => e.BankAccountHolder).HasColumnName("bank_account_holder").HasColumnType("nvarchar(150)").HasMaxLength(150);
             entity.Property(e => e.BankAccountUpdatedAt).HasColumnName("bank_account_updated_at").HasColumnType("datetime2");
+            entity.Property(e => e.OrganizationName).HasColumnName("organization_name").HasColumnType("nvarchar(200)").HasMaxLength(200);
+            entity.Property(e => e.AddressLine).HasColumnName("address_line").HasColumnType("nvarchar(255)").HasMaxLength(255);
+            entity.Property(e => e.ProvinceCode).HasColumnName("province_code").HasColumnType("nvarchar(10)").HasMaxLength(10);
+            entity.Property(e => e.ProvinceName).HasColumnName("province_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
+            entity.Property(e => e.WardCode).HasColumnName("ward_code").HasColumnType("nvarchar(10)").HasMaxLength(10);
+            entity.Property(e => e.WardName).HasColumnName("ward_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
         });
         modelBuilder.Entity<GuideProfile>(entity =>
         {

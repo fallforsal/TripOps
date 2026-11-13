@@ -21,6 +21,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddScoped<Accounts.AccountService>();
+        services.AddScoped<Accounts.CustomerProfileService>();
         services.AddScoped<Guides.AgencyGuideService>();
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
         services.AddScoped<TripOps.Data.Repositories.BookingRepository>();
@@ -43,6 +44,8 @@ public static class DependencyInjection
         services.AddSingleton(sp => Settlements.SettlementOptions.From(sp.GetRequiredService<IConfiguration>()));
         services.AddScoped<Settlements.AgencySettlementService>();
         services.AddHostedService<Settlements.SettlementWorker>();
+        // Agency chủ trì xem (chỉ đọc) lịch sử hoàn tiền của khách — UC-068/UC-069.
+        services.AddScoped<Refunds.AgencyRefundsService>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();
