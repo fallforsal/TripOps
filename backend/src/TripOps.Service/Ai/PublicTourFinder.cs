@@ -54,6 +54,10 @@ public sealed partial class PublicTourFinder(TourRepository tours)
 
     public Task<Tour?> Detail(int id, CancellationToken ct) => tours.Find(id, null, true, ct);
 
+    /// <summary>Câu có từ khóa thật để tìm tour không (khác lời chào, câu chung chung)?</summary>
+    public static bool HasKeywords(string? text) =>
+        GuestAssistantKnowledge.Fold(text).Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.Length >= 3 && !StopWords.Contains(w) && !w.All(char.IsDigit));
+
     private static int Score(Tour tour, string[] words, string[] bigrams)
     {
         var main = $" {GuestAssistantKnowledge.Fold(tour.Name)} {GuestAssistantKnowledge.Fold(tour.Destination)} ";

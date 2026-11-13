@@ -34,6 +34,7 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
             ["temperature"] = 0.3,
             ["max_completion_tokens"] = 900,
         };
+        if (options.ReasoningEffort is { } effort) body["reasoning_effort"] = effort;
         if (tools is { Count: > 0 })
         {
             body["tools"] = tools.DeepClone();
@@ -56,7 +57,7 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
         {
             var text = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
-                throw new OpenAiException($"OpenAI trả lỗi HTTP {(int)response.StatusCode}.", response.StatusCode);
+                throw new OpenAiException($"OpenAI trả lỗi HTTP {(int)response.StatusCode}{ErrorCode(text)}.", response.StatusCode);
             JsonNode? root;
             try { root = JsonNode.Parse(text); }
             catch (JsonException) { throw new OpenAiException("Phản hồi OpenAI không hợp lệ."); }
@@ -78,5 +79,25 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
             if (message["tool_calls"] is JsonArray original) assistant["tool_calls"] = original.DeepClone();
             return new OpenAiTurn(content, calls, assistant);
         }
+    }
+
+    /// <summary>Lấy mã lỗi có cấu trúc để ghi log; không ghi nội dung phản hồi hoặc khóa API.</summary>
+    private static string ErrorCode(string body)
+    {
+        try
+        {
+            if (JsonNode.Parse(body) is not JsonObject root || root["error"] is not JsonObject error)
+                return string.Empty;
+
+            // Google trả error.code dạng số và error.status dạng chuỗi; các API khác có thể dùng error.type.
+            var code = (error["status"] as JsonValue)?.ToString()
+                ?? (error["type"] as JsonValue)?.ToString()
+                ?? (error["code"] as JsonValue)?.ToString();
+            if (string.IsNullOrWhiteSpace(code) || code.Length > 64 ||
+                code.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-' or '.')))
+                return string.Empty;
+            return $" ({code})";
+        }
+        catch (JsonException) { return string.Empty; }
     }
 }

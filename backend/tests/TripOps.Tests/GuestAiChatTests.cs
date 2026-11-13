@@ -80,6 +80,37 @@ public sealed partial class BookingFlowTests
         Assert.Contains("Tour Đà Nẵng 3N2Đ", openAi.Requests[1].Body);
     }
 
+    [Theory]
+    [InlineData("{\"error\":{\"code\":400,\"status\":\"INVALID_ARGUMENT\"}}", "INVALID_ARGUMENT")]
+    [InlineData("{\"error\":\"invalid request\"}", null)]
+    [InlineData("<html>Service unavailable</html>", null)]
+    public async Task Openai_error_responses_do_not_crash_error_parser(string responseBody, string? expectedCode)
+    {
+        using var http = new HttpClient(new ErrorOpenAi(responseBody));
+        var client = new OpenAiChatClient(http, new AiAssistantOptions
+        {
+            ApiKey = "test-key", BaseUrl = "https://openai.test/v1", Model = "test-model",
+        });
+
+        var error = await Assert.ThrowsAsync<OpenAiException>(() =>
+            client.Complete(new System.Text.Json.Nodes.JsonArray
+            {
+                new System.Text.Json.Nodes.JsonObject { ["role"] = "user", ["content"] = "Xin chào" },
+            }, null, CancellationToken.None));
+        Assert.Equal(HttpStatusCode.BadRequest, error.Status);
+        Assert.Contains("HTTP 400", error.Message);
+        if (expectedCode is not null) Assert.Contains(expectedCode, error.Message);
+    }
+
+    private sealed class ErrorOpenAi(string body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
+    }
+
     private sealed class FakeOpenAi : HttpMessageHandler
     {
         public List<(string Body, string? Authorization)> Requests { get; } = [];

@@ -93,7 +93,7 @@ public sealed partial class GuestAssistantService(
         catch (OpenAiException ex)
         {
             // Không ghi nội dung câu hỏi hay khóa vào log; chỉ ghi lý do.
-            logger.LogWarning("Chatbot khách: OpenAI lỗi ({Status}) {Reason}. Chuyển sang trả lời dự phòng.", ex.Status, ex.Message);
+            logger.LogWarning("Chatbot khách: OpenAI lỗi ({Status}) {Reason} Chuyển sang trả lời dự phòng.", ex.Status, ex.Message);
             var fallback = await Offline(question, ct);
             return fallback with { Reply = "Trợ lý AI đang bận nên mình trả lời nhanh theo dữ liệu có sẵn nhé.\n\n" + fallback.Reply };
         }
@@ -199,6 +199,8 @@ public sealed partial class GuestAssistantService(
             parts.Add("Mình không xem được đơn của từng người. Bạn đăng nhập rồi vào mục \"Đơn của tôi\" để xem trạng thái, lịch thanh toán và hợp đồng nhé.");
 
         var policyOnly = parts.Count > 0 && !Has(folded, "tour di", "tour o", "tour den", "goi y", "tim tour", "co tour", "tour nao");
+        // Lời chào/câu chung chung ("xin chào", "bạn là ai") thì không liệt kê tour.
+        if (!PublicTourFinder.HasKeywords(question) && !Has(folded, "tour", "goi y", "du lich")) policyOnly = true;
         IReadOnlyList<TripOps.Data.Entities.Tour> tours = policyOnly ? Array.Empty<TripOps.Data.Entities.Tour>() : await finder.Search(new TourSearchCriteria(question, MaxPrice(folded), Guests(folded), MaxDays(folded)), ct);
         var cards = tours.Select(PublicTourFinder.Card).ToList();
 

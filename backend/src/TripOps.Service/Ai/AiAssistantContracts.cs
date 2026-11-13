@@ -29,7 +29,9 @@ public sealed class AiAssistantOptions
     public string? ApiKey { get; init; }
     public string Model { get; init; } = "gpt-4.1-mini";
     public string BaseUrl { get; init; } = "https://api.openai.com/v1";
-    public int TimeoutSeconds { get; init; } = 30;
+    public int TimeoutSeconds { get; init; } = 60;
+    /// <summary>Tùy chọn cho model có suy luận (vd Gemini 3: "low" để trả lời nhanh). Để trống với model không hỗ trợ.</summary>
+    public string? ReasoningEffort { get; init; }
     public int MaxToolRounds { get; init; } = 3;
     public bool Configured => !string.IsNullOrWhiteSpace(ApiKey);
 
@@ -41,7 +43,8 @@ public sealed class AiAssistantOptions
             ApiKey = section["ApiKey"],
             Model = string.IsNullOrWhiteSpace(section["Model"]) ? "gpt-4.1-mini" : section["Model"]!.Trim(),
             BaseUrl = string.IsNullOrWhiteSpace(section["BaseUrl"]) ? "https://api.openai.com/v1" : section["BaseUrl"]!.Trim().TrimEnd('/'),
-            TimeoutSeconds = int.TryParse(section["TimeoutSeconds"], out var timeout) && timeout is > 0 and <= 120 ? timeout : 30,
+            TimeoutSeconds = int.TryParse(section["TimeoutSeconds"], out var timeout) && timeout is > 0 and <= 180 ? timeout : 60,
+            ReasoningEffort = string.IsNullOrWhiteSpace(section["ReasoningEffort"]) ? null : section["ReasoningEffort"]!.Trim(),
             MaxToolRounds = int.TryParse(section["MaxToolRounds"], out var rounds) && rounds is > 0 and <= 5 ? rounds : 3,
         };
     }

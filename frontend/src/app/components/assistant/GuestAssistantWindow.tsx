@@ -122,7 +122,8 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     const controller = new AbortController();
     request.current?.abort();
     request.current = controller;
-    const timer = setTimeout(() => controller.abort(), 45000);
+    // Model có suy luận + gọi công cụ có thể mất vài chục giây.
+    const timer = setTimeout(() => controller.abort(), 150000);
     try {
       const answer = await askGuestAssistant(history.map(({ role, content }) => ({ role, content })), controller.signal);
       if (request.current !== controller) return;
