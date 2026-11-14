@@ -305,3 +305,40 @@ test("missing booking allocation data never invents agencies from a newer catalo
   assert.equal(booking.isCoHosted,false);assert.equal(booking.tour.isCoHosted,false);
   assert.deepEqual(booking.coHosts,[]);assert.deepEqual(booking.tour.coHosts,[]);
 });
+
+test("Agency booking detail receives incidents with category, reporter and evidence photos", () => {
+  const booking = fromApiBooking({
+    ...dto,
+    incidents: [{
+      id: 45, bookingId: dto.id, title: "[VEHICLE] Xe hỏng",
+      incidentType: "VEHICLE", agencyId: "agency",
+      reportedByName: "HDV Nguyễn Văn A",
+      description: "Xe đã dừng để sửa",
+      evidenceUrls: ["/api/v1/files/guide-incidents/guide1/a.png"],
+      status: "Reported", createdAt: "2026-11-14T07:00:00Z",
+    }],
+  });
+  assert.equal(booking.incidents?.length, 1);
+  const incident = booking.incidents![0];
+  assert.equal(incident.incidentType, "VEHICLE");
+  assert.equal(incident.title, "Xe hỏng");
+  assert.equal(incident.reportedByName, "HDV Nguyễn Văn A");
+  assert.equal(incident.status, "REPORTED");
+  assert.equal(incident.evidenceUrls?.length, 1);
+});
+
+test("SERVICE_PROVIDER incident remains a first-class Agency booking category", () => {
+  const booking = fromApiBooking({
+    ...dto,
+    incidents: [{
+      id: 92, bookingId: dto.id,
+      incidentType: "SERVICE_PROVIDER",
+      title: "[SERVICE_PROVIDER] Khách sạn không có phòng",
+      description: "Khách sạn thay đổi số phòng",
+      status: "Reported",
+      createdAt: "2026-11-14T06:00:00Z",
+    }],
+  });
+  assert.equal(booking.incidents?.[0].incidentType, "SERVICE_PROVIDER");
+  assert.equal(booking.incidents?.[0].title, "Khách sạn không có phòng");
+});

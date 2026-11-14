@@ -76,12 +76,22 @@ class GuideRepository {
   Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
 
   Future<void> incident(int id, {required String type, required String title,
-    required String description, String? severity}) async {
-    await api.postMap('guide/bookings/$id/incidents', {
-      'incidentType': type,
-      'title': title,
-      'description': description,
-      'severity': severity,
-    });
+    required String description, List<CheckinPhoto> images = const []}) async {
+    final validation = CheckinPhoto.validate(images);
+    if (validation != null) throw ApiFailure(validation);
+    // The single incident API accepts multipart/form-data even without photos.
+    final form = FormData();
+    form.fields.addAll([
+      MapEntry('IncidentType', type),
+      MapEntry('Title', title),
+      MapEntry('Description', description),
+    ]);
+    for (final photo in images) {
+      form.files.add(MapEntry('Images', await MultipartFile.fromFile(
+        photo.path, filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      )));
+    }
+    await api.postForm('guide/bookings/$id/incidents', form);
   }
 }

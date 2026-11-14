@@ -9,6 +9,8 @@ using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
 
+public sealed record IncidentEvidenceFile(byte[] Bytes, string Mime);
+
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
     TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService,
@@ -221,10 +223,14 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
                 AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
-            dto=dto with {Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
-                var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
-                return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
-            }).ToArray()};
+            dto=dto with {
+                // Incident photos are private operational evidence, not customer-facing assets.
+                Incidents=dto.Incidents?.Select(i => i with { EvidenceUrls = [] }).ToArray(),
+                Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
+                    var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
+                    return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
+                }).ToArray()
+            };
         }
         return dto;
     }
@@ -450,20 +456,40 @@ public sealed partial class BookingService(BookingRepository repository, Account
         return Participant(participant);
     }
 
-    // WF06: Báo cáo sự cố
-    public async Task<IncidentDto> ReportIncident(string guideId, int bookingId, ReportIncidentRequest request, CancellationToken ct)
+    // WF06: Báo cáo sự cố. Keep JSON clients working; images are optional.
+    public async Task<IncidentDto> ReportIncident(
+        string guideId, int bookingId, ReportIncidentRequest request, CancellationToken ct,
+        IReadOnlyList<IncidentEvidenceFile>? images = null)
     {
         var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         if (!booking.AssignedGuides.Any(ag => ag.GuideId == guideId))
             throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền báo sự cố.");
 
+        if (!IncidentTypeRules.IsAllowed(request.IncidentType))
+            throw new BookingException(422, "Loại sự cố không hợp lệ.");
+
+        if (images is { Count: > 0 })
+        {
+            GuideCheckinPhotoRules.ValidateFiles(images
+                .Select(f => ((long)f.Bytes.Length, f.Mime)).ToArray());
+            if (images.Any(f => !GuideCheckinPhotoRules.IsValidImage(f.Bytes, f.Mime)))
+                throw new BookingException(422, "Ảnh minh chứng phải là JPEG, PNG hoặc WebP hợp lệ.");
+        }
+
+        var evidenceUrls = new List<string>();
+        if (images is { Count: > 0 })
+            foreach (var image in images)
+                evidenceUrls.Add(await photoStorage.UploadGuideIncidentImage(
+                    guideId, image.Bytes, image.Mime, ct));
+
         var incident = new BookingIncident
         {
+            EvidenceUrls = evidenceUrls.Count == 0 ? null : GuideCheckinPhotoRules.Encode(evidenceUrls),
             BookingId = bookingId,
             AgencyId = booking.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId,
-            IncidentType = request.IncidentType.Trim(),
-            Title = string.IsNullOrWhiteSpace(request.IncidentType) ? request.Title.Trim() : $"[{request.IncidentType.Trim()}] {request.Title.Trim()}",
-            Description = IncidentDescription(request.Description, request.Severity),
+            IncidentType = request.IncidentType.Trim().ToUpperInvariant(),
+            Title = $"[{request.IncidentType.Trim().ToUpperInvariant()}] {request.Title.Trim()}",
+            Description = request.Description.Trim(),
             Status = IncidentStatus.Reported,
             ReportedBy = guideId
         };
@@ -471,10 +497,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         repository.AddIncident(incident);
         await repository.SaveChangesAsync(ct);
 
-        return new IncidentDto(
-            incident.Id, incident.BookingId,
-            incident.Title, incident.Description, Severity(incident.Description),
-            incident.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), incident.CreatedAt ?? DateTime.UnixEpoch);
+        return Incident(incident, reporterName: (await accounts.Current(guideId, ct)).Name);
     }
 
     private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName,
@@ -489,8 +512,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 ag.Id, ag.GuideId, ag.Guide?.Name ?? "", ag.Guide?.Phone,
                 ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId)).ToList(),
             b.CreatedAt ?? DateTime.UnixEpoch, b.UpdatedAt,
-            b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
-                i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),
+            b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i =>
+                Incident(i, i.Reporter?.Name)).ToList(),
             b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
                 GuideLocationCheckinRules.OrderedStops([t]).Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,a.AgencyId,
                     a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.PhotoUrl))
@@ -505,6 +528,13 @@ public sealed partial class BookingService(BookingRepository repository, Account
             CanCheckInLocations: GuideLocationCheckinRules.CanCheckIn(b, UtcNow),
             NextLocationCheckInId: GuideLocationCheckinRules.NextUncheckedStopId(b.Timelines));
 
+    private IncidentDto Incident(BookingIncident item, string? reporterName) => new(
+        item.Id, item.BookingId, item.Title, CleanLegacyIncidentDescription(item.Description),
+        item.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(),
+        item.CreatedAt ?? DateTime.UnixEpoch, item.IncidentType, item.AgencyId,
+        reporterName, GuideCheckinPhotoRules.Decode(item.EvidenceUrls)
+            .Select(url => photoStorage.DeliveryUrl(url)!).ToArray());
+
     private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
         snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
 
@@ -515,8 +545,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
-    private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)
-        ? description.Trim() : $"{description.Trim()}\nMức độ: {severity.Trim()}";
-    private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null
-        : System.Text.RegularExpressions.Regex.Match(description, @"(?:^|\n)Mức độ: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
+    // Old records appended a pseudo-severity line to free-text descriptions.
+    // Hide only that generated suffix in API responses; do not rewrite historical rows.
+    private static string CleanLegacyIncidentDescription(string description) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            description, @"(?:\r?\n)Mức độ:\s*(?:Low|Medium|High|Critical)\s*$",
+            "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).TrimEnd();
 }

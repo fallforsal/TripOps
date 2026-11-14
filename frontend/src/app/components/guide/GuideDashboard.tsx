@@ -147,12 +147,7 @@ export function GuideDashboard({
 
   // Incident reporting modal
   const [showIncidentModal, setShowIncidentModal] = useState(false);
-  const [incidentCategory, setIncidentCategory] = useState<
-    "medical" | "vehicle" | "weather" | "service" | "other"
-  >("medical");
-  const [incidentSeverity, setIncidentSeverity] = useState<
-    "low" | "medium" | "high" | "critical"
-  >("medium");
+  const [incidentCategory, setIncidentCategory] = useState<IncidentReport["category"]>("HEALTH");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentLocation, setIncidentLocation] = useState("");
 
@@ -167,8 +162,7 @@ export function GuideDashboard({
         guideId: currentSchedule?.booking.guideId ?? "",
         guideName: currentSchedule?.booking.guideName ?? "",
         title: "Chậm phương tiện",
-        category: "vehicle",
-        severity: "medium",
+        category: "VEHICLE",
         description:
           "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
         reportedAt: "09:30",
@@ -323,7 +317,6 @@ export function GuideDashboard({
   const handleOpenIncidentForLocation = (locationName: string) => {
     setIncidentLocation(locationName);
     setIncidentDescription("");
-    setIncidentSeverity("medium");
     setShowIncidentModal(true);
   };
 
@@ -416,7 +409,6 @@ export function GuideDashboard({
       guideName: currentSchedule.booking.guideName ?? "",
       title: incidentDescription.trim().slice(0, 100),
       category: incidentCategory,
-      severity: incidentSeverity,
       description: incidentDescription.trim(),
       location: incidentLocation.trim() || "Tại điểm tham quan",
       reportedAt: new Date().toLocaleTimeString("vi-VN", {
@@ -434,7 +426,6 @@ export function GuideDashboard({
         guideName: newInc.guideName,
         title: newInc.title,
         category: incidentCategory,
-        severity: incidentSeverity,
         description: incidentDescription.trim(),
         location: incidentLocation.trim(),
         status: "reported",
@@ -1371,29 +1362,17 @@ export function GuideDashboard({
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                    inc.severity === "critical"
-                                      ? "bg-rose-600 text-white animate-pulse"
-                                      : inc.severity === "high"
-                                        ? "bg-rose-100 text-rose-800"
-                                        : "bg-amber-100 text-amber-800"
-                                  }`}
-                                >
-                                  {inc.severity === "critical"
-                                    ? "🚨 Khẩn cấp"
-                                    : inc.severity === "high"
-                                      ? "Mức cao"
-                                      : "Trung bình"}
-                                </span>
                                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
-                                  {inc.category === "medical"
-                                    ? "Y tế"
-                                    : inc.category === "vehicle"
-                                      ? "Giao thông"
-                                      : inc.category === "weather"
-                                        ? "Thời tiết"
-                                        : "Khác"}
+                                  {({
+                                    HEALTH: "Y tế & Sức khỏe",
+                                    VEHICLE: "Phương tiện",
+                                    WEATHER: "Thời tiết",
+                                    CUSTOMER: "Khách hàng",
+                                    SECURITY: "An ninh",
+                                    SERVICE_PROVIDER: "Dịch vụ & Nhà cung cấp",
+                                    SCHEDULE: "Lịch trình",
+                                    OTHER: "Sự cố khác",
+                                  } as Record<IncidentReport["category"], string>)[inc.category]}
                                 </span>
                               </div>
                               <span className="font-mono text-[10px] text-slate-400">
@@ -1603,7 +1582,7 @@ export function GuideDashboard({
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-rose-700 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-600" />
-              Báo cáo sự cố khẩn cấp
+              Báo cáo sự cố
             </DialogTitle>
             <DialogDescription className="text-[11px] text-slate-500">
               Gửi thông tin về trung tâm điều hành lữ hành
@@ -1617,16 +1596,17 @@ export function GuideDashboard({
               </label>
               <select
                 value={incidentCategory}
-                onChange={(e) => setIncidentCategory(e.target.value as any)}
+                onChange={(e) => setIncidentCategory(e.target.value as IncidentReport["category"])}
                 className="w-full text-xs rounded-lg border border-slate-300 px-2.5 py-2 bg-white"
               >
-                <option value="medical">🚑 Y tế & Sức khỏe thành viên</option>
-                <option value="vehicle">🚌 Xe cộ & Giao thông di chuyển</option>
-                <option value="weather">
-                  ⛈️ Thời tiết cực đoan & Thiên tai
-                </option>
-                <option value="service">🏨 Đối tác khách sạn / nhà hàng</option>
-                <option value="other">📌 Tình huống khác</option>
+                <option value="HEALTH">🚑 Y tế & Sức khỏe</option>
+                <option value="VEHICLE">🚌 Phương tiện di chuyển</option>
+                <option value="WEATHER">⛈️ Thời tiết & Thiên tai</option>
+                <option value="CUSTOMER">👥 Khách hàng & Thành viên</option>
+                <option value="SECURITY">🛡️ An ninh & An toàn</option>
+                <option value="SERVICE_PROVIDER">🏨 Dịch vụ & Nhà cung cấp</option>
+                <option value="SCHEDULE">⏰ Lịch trình & Thời gian</option>
+                <option value="OTHER">📌 Sự cố khác</option>
               </select>
             </div>
 

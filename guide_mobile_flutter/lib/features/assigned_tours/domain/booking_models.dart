@@ -91,14 +91,22 @@ class TourDay {
 }
 
 class TourIncident {
-  const TourIncident({required this.title, required this.description, required this.status});
+  const TourIncident({
+    required this.title, required this.description, required this.status,
+    this.photoUrls = const [], this.incidentType,
+  });
   final String title;
   final String description;
   final String status;
+  final String? incidentType;
+  final List<String> photoUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
     status: (j['status'] ?? '').toString(),
+    incidentType: j['incidentType']?.toString(),
+    photoUrls: (j['evidenceUrls'] as List<dynamic>? ?? [])
+        .whereType<String>().toList(),
   );
 }
 

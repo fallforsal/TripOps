@@ -50,8 +50,7 @@ public sealed record AttendanceCheckinRequest(
 public sealed record ReportIncidentRequest(
     [Required, StringLength(100)] string IncidentType,
     [Required, StringLength(255)] string Title,
-    [Required, StringLength(2000)] string Description,
-    [StringLength(50)] string? Severity);
+    [Required, StringLength(2000)] string Description);
 
 public sealed record BookingDto(
     int Id,
@@ -281,8 +280,11 @@ public sealed record IncidentDto(
     int BookingId,
     string Title,
     string Description,
-    string? ResolutionNotes,
     string Status,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? IncidentType = null,
+    string? AgencyId = null,
+    string? ReportedByName = null,
+    IReadOnlyList<string>? EvidenceUrls = null);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

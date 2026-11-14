@@ -15,7 +15,7 @@ public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbCo
         if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") || !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg|webp)$")) return NotFound();
         var file = Path.Combine(environment.ContentRootPath, "App_Data", "uploads", kind, owner, name);
         if (!System.IO.File.Exists(file)) return NotFound();
-        Response.Headers.CacheControl = kind is "licenses" or "guide-checkins" ? "private, no-store" : "public, max-age=3600";
+        Response.Headers.CacheControl = kind is "licenses" or "guide-checkins" or "guide-incidents" ? "private, no-store" : "public, max-age=3600";
         Response.Headers.XContentTypeOptions = "nosniff";
         return PhysicalFile(file, name.EndsWith(".png") ? "image/png" : name.EndsWith(".webp") ? "image/webp" : "image/jpeg");
     }
@@ -53,6 +53,26 @@ public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbCo
         if (!allowed) return Forbid();
         Response.Headers.CacheControl = "private, no-store";
         return Read("guide-checkins", owner, name);
+    }
+
+    [HttpGet("guide-incidents/{owner}/{name}"), Authorize]
+    [EndpointSummary("Read incident evidence privately as reporter, stage Agency, or host Agency")]
+    [Produces("image/png", "image/jpeg", "image/webp")]
+    public async Task<IActionResult> IncidentPhoto(string owner, string name, CancellationToken ct)
+    {
+        if (!Regex.IsMatch(owner, @"^[a-zA-Z0-9-]{1,36}$") ||
+            !Regex.IsMatch(name, @"^[a-f0-9]{32}\.(png|jpg|webp)$")) return NotFound();
+        var url = $"/api/v1/files/guide-incidents/{owner}/{name}";
+        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var isGuide = User.IsInRole("guide");
+        var isAgency = User.IsInRole("agency");
+        var allowed = await db.BookingIncidents.AsNoTracking().AnyAsync(i =>
+            i.EvidenceUrls != null && i.EvidenceUrls.Contains(url) &&
+            ((isGuide && i.ReportedBy == actor) ||
+             (isAgency && (i.AgencyId == actor || i.Booking.Tour!.AgencyId == actor))), ct);
+        if (!allowed) return Forbid();
+        Response.Headers.CacheControl = "private, no-store";
+        return Read("guide-incidents", owner, name);
     }
 
     [HttpGet("licenses/{owner}/{name}"), Authorize]

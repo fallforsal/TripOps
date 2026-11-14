@@ -321,6 +321,32 @@ export function fromApiBooking(
     paymentTransactions,
     cancellation: dto.cancellation ?? undefined,
     travelContract: dto.contract ?? undefined,
+    incidents: (dto.incidents || []).map((incident) => {
+      // Agency booking detail consumes booking.incidents, not guideIncidents.
+      const rawType = (incident.incidentType ||
+        /^\[([^\]]+)\]/.exec(incident.title)?.[1] || "OTHER").toUpperCase();
+      const incidentType = ([
+        "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER",
+      ].includes(rawType) ? rawType : "OTHER") as import("../types/index.ts").IncidentCategory;
+      const title = incident.title.replace(/^\[[^\]]+\]\s*/, "");
+      const agencyId = incident.agencyId || dto.agencyId || "";
+      return {
+        id: String(incident.id),
+        bookingId: String(incident.bookingId),
+        agencyId,
+        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === agencyId)?.agencyName || dto.agencyName,
+        reportedById: "",
+        reportedByName: incident.reportedByName || "Hướng dẫn viên",
+        incidentType,
+        title,
+        description: incident.description,
+        evidenceUrls: incident.evidenceUrls || [],
+        status: (incident.status === "Resolved" ? "RESOLVED" :
+          incident.status === "Acknowledged" || incident.status === "InProgress"
+            ? "IN_PROGRESS" : "REPORTED") as import("../types/index.ts").IncidentStatus,
+        reportedAt: incident.createdAt,
+      };
+    }),
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),
@@ -341,11 +367,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(
-        i.resolutionNotes?.toLowerCase() || "",
-      )
-        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
-        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"
