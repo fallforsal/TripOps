@@ -425,6 +425,10 @@ export interface BookingPage<T> {
 }
 
 export interface IncidentDto {
+  incidentType?: string | null;
+  agencyId?: string | null;
+  reportedByName?: string | null;
+  evidenceUrls?: string[] | null;
   id: number;
   bookingId: number;
   title: string;
