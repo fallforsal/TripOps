@@ -465,7 +465,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!booking.AssignedGuides.Any(ag => ag.GuideId == guideId))
             throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền báo sự cố.");
 
-        if (images is not null)
+        if (!IncidentTypeRules.IsAllowed(request.IncidentType))
+            throw new BookingException(422, "Loại sự cố không hợp lệ.");
+
+        if (images is { Count: > 0 })
         {
             GuideCheckinPhotoRules.ValidateFiles(images
                 .Select(f => ((long)f.Bytes.Length, f.Mime)).ToArray());
@@ -474,7 +477,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
         }
 
         var evidenceUrls = new List<string>();
-        if (images is not null)
+        if (images is { Count: > 0 })
             foreach (var image in images)
                 evidenceUrls.Add(await photoStorage.UploadGuideIncidentImage(
                     guideId, image.Bytes, image.Mime, ct));
@@ -484,9 +487,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
             EvidenceUrls = evidenceUrls.Count == 0 ? null : GuideCheckinPhotoRules.Encode(evidenceUrls),
             BookingId = bookingId,
             AgencyId = booking.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId,
-            IncidentType = request.IncidentType.Trim(),
-            Title = string.IsNullOrWhiteSpace(request.IncidentType) ? request.Title.Trim() : $"[{request.IncidentType.Trim()}] {request.Title.Trim()}",
-            Description = IncidentDescription(request.Description, request.Severity),
+            IncidentType = request.IncidentType.Trim().ToUpperInvariant(),
+            Title = $"[{request.IncidentType.Trim().ToUpperInvariant()}] {request.Title.Trim()}",
+            Description = request.Description.Trim(),
             Status = IncidentStatus.Reported,
             ReportedBy = guideId
         };
@@ -542,8 +545,6 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
-    private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)
-        ? description.Trim() : $"{description.Trim()}\nMức độ: {severity.Trim()}";
     private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null
         : System.Text.RegularExpressions.Regex.Match(description, @"(?:^|\n)Mức độ: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
 }
