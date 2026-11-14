@@ -43,7 +43,6 @@ public virtual Booking? Booking { get; set; }
 public virtual User Complainant { get; set; } = null!;
 public virtual User? Target { get; set; }
 public virtual User? Admin { get; set; }
-public virtual ICollection<ComplaintMessage> Messages { get; set; } = new List<ComplaintMessage>();
 }
 
 public static class ComplaintTypes
@@ -52,15 +51,3 @@ public static class ComplaintTypes
     public const string Platform = "Platform";
 }
 
-/// <summary>Trao đổi giữa khách và Admin trong một khiếu nại. Agency không tham gia trên hệ thống.</summary>
-public class ComplaintMessage : BaseEntity<int> {
-public int ComplaintId { get; set; }
-public string SenderId { get; set; } = string.Empty;
-/// <summary>"customer" hoặc "admin".</summary>
-public string SenderRole { get; set; } = "customer";
-public string Content { get; set; } = string.Empty;
-public string? AttachmentUrls { get; set; }
-public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
-public virtual Complaint Complaint { get; set; } = null!;
-public virtual User Sender { get; set; } = null!;
-}

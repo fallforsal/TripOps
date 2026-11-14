@@ -23,14 +23,6 @@ public sealed class ComplaintForm
     public List<IFormFile> Images { get; set; } = [];
 }
 
-/// <summary>Tin nhắn trong khiếu nại, kèm 0–5 ảnh.</summary>
-public sealed class ComplaintMessageForm
-{
-    [Required, StringLength(4000, MinimumLength = 1)]
-    public string Content { get; set; } = "";
-    public List<IFormFile> Images { get; set; } = [];
-}
-
 internal static class ComplaintUploads
 {
     public const long RequestLimit = 27 * 1024 * 1024;
@@ -94,7 +86,7 @@ public sealed class MyComplaintsController(ComplaintService complaints) : Contro
     public async Task<IActionResult> BookingOptions(CancellationToken ct) => Ok(await complaints.BookingOptions(Actor, ct));
 
     [HttpGet("{id:int}")]
-    [EndpointSummary("Get one of the customer's complaints with its conversation with Admin")]
+    [EndpointSummary("Get one of the customer's complaints with the Admin response")]
     [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await complaints.MineDetail(Actor, id, ct));
 
@@ -111,15 +103,6 @@ public sealed class MyComplaintsController(ComplaintService complaints) : Contro
             new CreateComplaintInput(form.Type, form.BookingId, form.ReasonCode, form.Title, form.Description), images, ct);
         return Created($"/api/v1/me/complaints/{created.Id}", created);
     }
-
-    [HttpPost("{id:int}/messages")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(ComplaintUploads.RequestLimit)]
-    [RequestFormLimits(MultipartBodyLengthLimit = ComplaintUploads.RequestLimit)]
-    [EndpointSummary("Customer replies to Admin inside an open complaint")]
-    [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Message(int id, [FromForm] ComplaintMessageForm form, CancellationToken ct) =>
-        Ok(await complaints.CustomerMessage(Actor, id, form.Content, await ComplaintUploads.Read(form.Images, ct), ct));
 }
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/feedbacks")]
@@ -158,21 +141,12 @@ public sealed class AdminComplaintsController(ComplaintService complaints) : Con
     public async Task<IActionResult> AgencyStats(CancellationToken ct) => Ok(await complaints.AgencyStats(ct));
 
     [HttpGet("{id:int}")]
-    [EndpointSummary("Get a complaint with the full customer–Admin conversation")]
+    [EndpointSummary("Get a complaint with customer contact details for Admin review")]
     [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await complaints.AdminDetail(id, ct));
 
-    [HttpPost("{id:int}/messages")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(ComplaintUploads.RequestLimit)]
-    [RequestFormLimits(MultipartBodyLengthLimit = ComplaintUploads.RequestLimit)]
-    [EndpointSummary("Admin replies to the customer; a new complaint moves to InReview")]
-    [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Message(int id, [FromForm] ComplaintMessageForm form, CancellationToken ct) =>
-        Ok(await complaints.AdminMessage(Actor, id, form.Content, await ComplaintUploads.Read(form.Images, ct), ct));
-
     [HttpPost("{id:int}/resolve")]
-    [EndpointSummary("Admin closes a complaint as Resolved (upheld) or Rejected, with a conclusion")]
+    [EndpointSummary("Admin accepts (Resolved) or rejects (Rejected) a complaint with a response to the customer")]
     [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Resolve(int id, ResolveComplaintRequest request, CancellationToken ct) =>
         Ok(await complaints.Resolve(Actor, id, request, ct));

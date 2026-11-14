@@ -4,6 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { StarRating } from "@/app/components/reviews/StarRating";
+import { BookingPicker } from "@/app/components/reviews/BookingPicker";
 import {
   createFeedback,
   formatDate,
@@ -115,21 +116,23 @@ export function TourReviewDialog({
             {!bookingId ? (
               <div className="space-y-1.5">
                 <label htmlFor="review-booking" className="text-xs font-semibold text-[#0F172A]">Chuyến đi đã hoàn thành</label>
-                <select
+                <BookingPicker
                   id="review-booking"
                   value={selected}
-                  onChange={(e) => setSelected(Number(e.target.value))}
-                  className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                >
-                  {reviewable.map((b) => (
-                    <option key={b.bookingId} value={b.bookingId}>
-                      {b.bookingCode} – {b.tourName ?? "Tour"} (khởi hành {formatDate(b.startDate)})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelected}
+                  options={reviewable.map((b) => ({
+                    id: b.bookingId,
+                    code: b.bookingCode,
+                    title: b.tourName ?? "Tour",
+                    details: `Khởi hành ${formatDate(b.startDate)}${b.agencyName ? ` · ${b.agencyName}` : ""}`,
+                  }))}
+                />
               </div>
             ) : (
-              <p className="text-sm font-medium text-[#0F172A]">{booking?.bookingCode} – {booking?.tourName}</p>
+              <div className="rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2">
+                <p className="text-sm font-medium text-[#0F172A] leading-snug">{booking?.tourName}</p>
+                <p className="text-[11px] text-[#64748B]"><span className="font-mono">{booking?.bookingCode}</span> · Khởi hành {formatDate(booking?.startDate)}</p>
+              </div>
             )}
             {booking && <p className="text-[11px] text-slate-500">Hạn đánh giá: {formatDateTime(booking.deadline)}</p>}
 
@@ -142,8 +145,7 @@ export function TourReviewDialog({
               <div className="rounded-[6px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
                 <p className="flex items-start gap-1.5">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  Chuyến đi có sự cố cần TripOps can thiệp (sai dịch vụ, cần hoàn tiền…)? Đánh giá chỉ để chia sẻ cảm nhận —
-                  hãy gửi khiếu nại để Admin xử lý (trong 1 ngày sau khi tour kết thúc).
+                  Sai dịch vụ hoặc cần hoàn tiền? Gửi khiếu nại trong 1 ngày sau tour để Admin xử lý; đánh giá chỉ để chia sẻ cảm nhận.
                 </p>
                 {onComplain && (
                   <Button type="button" variant="outline" size="sm" onClick={() => { onOpenChange(false); onComplain(booking.bookingId); }}

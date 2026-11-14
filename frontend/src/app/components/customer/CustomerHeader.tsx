@@ -139,7 +139,7 @@ export function CustomerHeader({
                 key={link.id}
                 aria-current={
                   currentPage === link.id ||
-                  (link.id === "book-tours" && currentPage === "tour-detail")
+                    (link.id === "book-tours" && currentPage === "tour-detail")
                     ? "page"
                     : undefined
                 }
@@ -151,17 +151,8 @@ export function CustomerHeader({
           </nav>
         )}
         <div className="trip-header-actions">
-          <ChatButton />
-          {onOpenAIAdvisor && (
-            <button
-              className="trip-ai-trigger"
-              onClick={onOpenAIAdvisor}
-              aria-label="Tìm tour cùng AI"
-            >
-              <Sparkles aria-hidden="true" />
-              <span>Tìm tour cùng AI</span>
-            </button>
-          )}
+
+
           {currentUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger

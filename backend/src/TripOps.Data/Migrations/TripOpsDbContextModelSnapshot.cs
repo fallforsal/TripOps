@@ -2066,55 +2066,6 @@ namespace TripOps.Data.Migrations
                     b.ToTable("complaints", (string)null);
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.ComplaintMessage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AttachmentUrls")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("attachment_urls");
-
-                    b.Property<int>("ComplaintId")
-                        .HasColumnType("int")
-                        .HasColumnName("complaint_id");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("content");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("SYSUTCDATETIME()");
-
-                    b.Property<string>("SenderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("nvarchar(36)")
-                        .HasColumnName("sender_id");
-
-                    b.Property<string>("SenderRole")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasColumnName("sender_role");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ComplaintId");
-
-                    b.HasIndex("SenderId");
-
-                    b.ToTable("complaint_messages", (string)null);
-                });
-
             modelBuilder.Entity("TripOps.Data.Entities.ContractSignSession", b =>
                 {
                     b.Property<int>("Id")
@@ -4603,25 +4554,6 @@ namespace TripOps.Data.Migrations
                     b.Navigation("Target");
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.ComplaintMessage", b =>
-                {
-                    b.HasOne("TripOps.Data.Entities.Complaint", "Complaint")
-                        .WithMany("Messages")
-                        .HasForeignKey("ComplaintId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TripOps.Data.Entities.User", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Complaint");
-
-                    b.Navigation("Sender");
-                });
-
             modelBuilder.Entity("TripOps.Data.Entities.ContractSignSession", b =>
                 {
                     b.HasOne("TripOps.Data.Entities.BookingContract", "Contract")
@@ -5055,11 +4987,6 @@ namespace TripOps.Data.Migrations
             modelBuilder.Entity("TripOps.Data.Entities.ChatMessage", b =>
                 {
                     b.Navigation("Attachments");
-                });
-
-            modelBuilder.Entity("TripOps.Data.Entities.Complaint", b =>
-                {
-                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.PaymentRequest", b =>

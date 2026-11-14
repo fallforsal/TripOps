@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, Calendar, Info, Loader2, MessageSquare, Plus, ShieldAlert } from "lucide-react";
+import { Building2, Calendar, Loader2, Plus, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/app/components/customer/PageHeader";
 import { EmptyState } from "@/app/components/customer/EmptyState";
 import { Button } from "@/app/components/ui/button";
@@ -7,7 +7,8 @@ import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { EvidencePicker } from "@/app/components/reviews/EvidencePicker";
-import { ComplaintConversation } from "@/app/components/reviews/ComplaintConversation";
+import { BookingPicker } from "@/app/components/reviews/BookingPicker";
+import { ComplaintContent } from "@/app/components/reviews/ComplaintContent";
 import {
   COMPLAINT_STATUS_LABEL,
   COMPLAINT_STATUS_STYLE,
@@ -21,7 +22,6 @@ import {
   listComplaintBookingOptions,
   listMyComplaints,
   reasonLabel,
-  sendMyComplaintMessage,
   type ComplaintBookingOption,
   type ComplaintDetail,
   type ComplaintSummary,
@@ -31,8 +31,8 @@ import {
 type Tab = "all" | "open" | "closed";
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "Tất cả" },
-  { id: "open", label: "Đang xử lý" },
-  { id: "closed", label: "Đã kết thúc" },
+  { id: "open", label: "Chờ xem xét" },
+  { id: "closed", label: "Đã có phản hồi" },
 ];
 
 function TypeBadge({ type }: { type: ComplaintType }) {
@@ -124,11 +124,7 @@ export function MyComplaintsPage({
               </div>
             </div>
           )}
-          <ComplaintConversation
-            complaint={detail}
-            viewer="customer"
-            onSend={async (content, files) => setDetail(await sendMyComplaintMessage(detail.id, content, files))}
-          />
+          <ComplaintContent complaint={detail} />
         </div>
       </div>
     );
@@ -138,7 +134,7 @@ export function MyComplaintsPage({
     <div className="space-y-6 pb-16 font-sans">
       <PageHeader
         title="Khiếu nại của tôi"
-        subtitle="Báo sự cố cần TripOps can thiệp, về chuyến đi hoặc về nền tảng. Bạn trao đổi trực tiếp với Admin TripOps."
+        subtitle="Báo sự cố cần TripOps can thiệp, về chuyến đi hoặc về nền tảng. Admin TripOps xem xét và phản hồi kết quả tại đây."
         actions={
           <Button
             type="button"
@@ -151,13 +147,6 @@ export function MyComplaintsPage({
         }
       />
 
-      <div className="flex items-start gap-2 rounded-[6px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <Info className="w-4 h-4 shrink-0 mt-0.5" />
-        <p>
-          <strong>Khiếu nại</strong> là yêu cầu xử lý sự cố (sai dịch vụ, cần hoàn tiền…), chỉ bạn và Admin thấy.
-          Khiếu nại về chuyến đi gửi được trong <strong>1 ngày</strong> sau khi tour kết thúc. Muốn chia sẻ cảm nhận thì dùng mục <strong>Đánh giá</strong>.
-        </p>
-      </div>
 
       <div role="tablist" aria-label="Trạng thái khiếu nại" className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2">
         {TABS.map((t) => (
@@ -205,7 +194,6 @@ export function MyComplaintsPage({
                   </>
                 )}
                 <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Gửi {formatDate(c.createdAt)}</span>
-                <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" />{c.messageCount} phản hồi</span>
               </div>
             </button>
           ))}
@@ -294,7 +282,7 @@ function CreateComplaintDialog({
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-[#B91C1C]" /> Gửi khiếu nại</DialogTitle>
-          <DialogDescription>Admin TripOps sẽ trao đổi với bạn trong khiếu nại này và liên hệ các bên liên quan để xử lý.</DialogDescription>
+          <DialogDescription>Admin TripOps sẽ xem xét, liên hệ các bên liên quan nếu cần và phản hồi kết quả cho bạn.</DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -318,15 +306,21 @@ function CreateComplaintDialog({
                   </p>
                 ) : (
                   <>
-                    <select id="complaint-booking" value={bookingId} onChange={(e) => setBookingId(Number(e.target.value))} className={selectClass}>
-                      {!options.some((o) => o.canComplain) && <option value="">— Không còn chuyến đi trong hạn khiếu nại —</option>}
-                      {options.map((o) => (
-                        <option key={o.bookingId} value={o.bookingId} disabled={!o.canComplain}>
-                          {o.bookingCode} – {o.tourName ?? "Tour"}{o.canComplain ? "" : " (đã hết hạn khiếu nại)"}
-                        </option>
-                      ))}
-                    </select>
-                    {booking && <p className="text-[11px] text-slate-500">Hạn khiếu nại: {formatDateTime(booking.deadline)} · Agency: {booking.agencyName ?? "—"}</p>}
+                    <BookingPicker
+                      id="complaint-booking"
+                      value={bookingId}
+                      onChange={setBookingId}
+                      placeholder={options.some((o) => o.canComplain) ? "Chọn chuyến đi" : "Không còn chuyến đi trong hạn khiếu nại"}
+                      options={options.map((o) => ({
+                        id: o.bookingId,
+                        code: o.bookingCode,
+                        title: o.tourName ?? "Tour",
+                        details: `Khởi hành ${formatDate(o.startDate)}${o.agencyName ? ` · ${o.agencyName}` : ""}`,
+                        disabled: !o.canComplain,
+                        badge: o.canComplain ? undefined : "Hết hạn",
+                      }))}
+                    />
+                    {booking && <p className="text-[11px] text-slate-500">Hạn khiếu nại: {formatDateTime(booking.deadline)}</p>}
                     {initialExpired && (
                       <p className="text-[11px] text-amber-800">Booking {initialExpired.bookingCode} đã quá hạn khiếu nại (1 ngày sau khi tour kết thúc, đến {formatDateTime(initialExpired.deadline)}).</p>
                     )}

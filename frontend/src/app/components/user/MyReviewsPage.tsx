@@ -35,7 +35,7 @@ export function MyReviewsPage({ onComplain }: { onComplain?: (bookingId: number)
             className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-medium flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Viết đánh giá mới</span>
+            <span>Viết đánh giá </span>
           </Button>
         }
       />
@@ -43,8 +43,8 @@ export function MyReviewsPage({ onComplain }: { onComplain?: (bookingId: number)
       <div className="flex items-start gap-2 rounded-[6px] border border-[#BAE6FD] bg-[#F0F9FF] p-3 text-xs text-[#075985]">
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
         <p>
-          <strong>Đánh giá</strong> là chia sẻ cảm nhận, hiển thị công khai (hạn 7 ngày sau khi tour kết thúc).
-          Nếu chuyến đi có sự cố cần TripOps xử lý, hãy dùng <strong>Gửi khiếu nại</strong> trong mục Khiếu nại (hạn 1 ngày).
+          <strong>Đánh giá</strong> là chia sẻ cảm nhận.
+          Nếu chuyến đi có sự cố cần TripOps xử lý, hãy dùng <strong>Gửi khiếu nại</strong> trong mục Khiếu nại.
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export function MyReviewsPage({ onComplain }: { onComplain?: (bookingId: number)
           icon={Star}
           title="Bạn chưa có đánh giá nào"
           description="Sau khi tour hoàn thành, bạn có 7 ngày để chấm sao và nhận xét chuyến đi."
-          actionText="Viết đánh giá mới"
+          actionText="Viết đánh giá"
           onAction={() => setWriting(true)}
         />
       )}

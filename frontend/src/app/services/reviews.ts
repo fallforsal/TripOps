@@ -101,15 +101,6 @@ export interface ComplaintBookingOption {
   canComplain: boolean;
 }
 
-export interface ComplaintMessage {
-  id: number;
-  senderRole: "customer" | "admin";
-  senderName: string;
-  content: string;
-  attachments: string[];
-  createdAt: string;
-}
-
 export interface ComplaintSummary {
   id: number;
   type: ComplaintType;
@@ -123,7 +114,6 @@ export interface ComplaintSummary {
   agencyName?: string | null;
   customerId: string;
   customerName: string;
-  messageCount: number;
   createdAt: string;
   updatedAt?: string | null;
   resolvedAt?: string | null;
@@ -151,7 +141,6 @@ export interface ComplaintDetail {
   createdAt: string;
   updatedAt?: string | null;
   resolvedAt?: string | null;
-  messages: ComplaintMessage[];
 }
 
 export interface AgencyComplaintStat {
@@ -195,17 +184,17 @@ export const reasonLabel = (type: ComplaintType, code: string) =>
   (type === "Trip" ? TRIP_REASONS : PLATFORM_REASONS)[code] ?? code;
 
 export const COMPLAINT_STATUS_LABEL: Record<ComplaintStatus, string> = {
-  Pending: "Chờ Admin phản hồi",
-  InReview: "Đang xử lý",
-  Resolved: "Đã giải quyết",
-  Rejected: "Đã khép lại",
+  Pending: "Chờ Admin xem xét",
+  InReview: "Chờ Admin xem xét",
+  Resolved: "Được chấp nhận",
+  Rejected: "Không được chấp nhận",
 };
 
 export const COMPLAINT_STATUS_STYLE: Record<ComplaintStatus, string> = {
   Pending: "bg-amber-50 text-amber-800 border-amber-200",
   InReview: "bg-sky-50 text-sky-800 border-sky-200",
   Resolved: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  Rejected: "bg-slate-100 text-slate-700 border-slate-200",
+  Rejected: "bg-rose-50 text-rose-800 border-rose-200",
 };
 
 export const isComplaintOpen = (status: ComplaintStatus) => status === "Pending" || status === "InReview";
@@ -227,8 +216,6 @@ export const createComplaint = (input: {
   body: complaintForm({ Type: input.type, BookingId: input.type === "Trip" ? input.bookingId : null, ReasonCode: input.reasonCode,
     Title: input.title.trim(), Description: input.description.trim() }, input.files),
 });
-export const sendMyComplaintMessage = (id: number, content: string, files: File[]) =>
-  http<ComplaintDetail>(`/me/complaints/${id}/messages`, { method: "POST", body: complaintForm({ Content: content.trim() }, files) });
 
 export const listAdminComplaints = (filter?: { status?: string; type?: string }) => {
   const params = new URLSearchParams();
@@ -238,8 +225,6 @@ export const listAdminComplaints = (filter?: { status?: string; type?: string })
   return http<ComplaintSummary[]>(`/admin/complaints${qs ? `?${qs}` : ""}`);
 };
 export const getAdminComplaint = (id: number) => http<ComplaintDetail>(`/admin/complaints/${id}`);
-export const sendAdminComplaintMessage = (id: number, content: string, files: File[]) =>
-  http<ComplaintDetail>(`/admin/complaints/${id}/messages`, { method: "POST", body: complaintForm({ Content: content.trim() }, files) });
 export const resolveComplaint = (id: number, outcome: "Resolved" | "Rejected", note: string) =>
   http<ComplaintDetail>(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note: note.trim() }) });
 export const listAgencyComplaintStats = () => http<AgencyComplaintStat[]>("/admin/complaints/agency-stats");

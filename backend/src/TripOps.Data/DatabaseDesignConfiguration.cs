@@ -615,18 +615,6 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.DeletedAt).HasColumnName("deleted_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.ComplainantId, e.CreatedAt });
         });
-        modelBuilder.Entity<ComplaintMessage>(entity =>
-        {
-            entity.ToTable("complaint_messages");
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.ComplaintId).HasColumnName("complaint_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.SenderId).HasColumnName("sender_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.SenderRole).HasColumnName("sender_role").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
-            entity.Property(e => e.Content).HasColumnName("content").HasColumnType("nvarchar(max)").IsRequired();
-            entity.Property(e => e.AttachmentUrls).HasColumnName("attachment_urls").HasColumnType("nvarchar(max)");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-            entity.HasIndex(e => e.ComplaintId);
-        });
         modelBuilder.Entity<ChatConversation>(entity =>
         {
             entity.ToTable("chat_conversations");
@@ -859,8 +847,6 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<Complaint>().HasOne(e => e.Booking).WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Complaint>().HasOne(e => e.Complainant).WithMany().HasForeignKey(e => e.ComplainantId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Complaint>().HasOne(e => e.Target).WithMany().HasForeignKey(e => e.TargetId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<ComplaintMessage>().HasOne(e => e.Complaint).WithMany(c => c.Messages).HasForeignKey(e => e.ComplaintId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<ComplaintMessage>().HasOne(e => e.Sender).WithMany().HasForeignKey(e => e.SenderId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Feedback>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Feedback>().HasOne(e => e.Booking).WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Feedback>().HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);

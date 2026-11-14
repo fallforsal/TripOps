@@ -54,8 +54,6 @@ public sealed partial class BookingFlowTests
         return form;
     }
 
-    private static MultipartFormDataContent MessageBody(string content) => new() { { new StringContent(content), "Content" } };
-
     [Fact]
     public void Agency_score_pulls_few_reviews_toward_the_platform_average()
     {
@@ -82,8 +80,8 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await customer.PostAsJsonAsync("/api/v1/me/feedbacks", new CreateFeedbackRequest(booking.Id, 5, null))).StatusCode);
-        Assert.Empty((await customer.GetFromJsonAsync<List<ReviewableBookingDto>>("/api/v1/me/feedbacks/reviewable-bookings"))!
-            .Where(b => b.BookingId == booking.Id));
+        Assert.DoesNotContain((await customer.GetFromJsonAsync<List<ReviewableBookingDto>>("/api/v1/me/feedbacks/reviewable-bookings"))!,
+            b => b.BookingId == booking.Id);
 
         using (var other = await app.Client("customer2@example.test"))
             Assert.Equal(HttpStatusCode.NotFound,
@@ -135,7 +133,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Trip_complaint_is_a_customer_admin_conversation_that_holds_the_agency_payout_until_resolved()
+    public async Task Admin_accepts_or_rejects_a_trip_complaint_with_a_response_and_the_payout_is_held_until_then()
     {
         var clock = new TestClock { Fixed = Now() };
         using var app = ReviewApp(clock);
@@ -165,18 +163,16 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.GetAsync("/api/v1/admin/complaints")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.GetAsync($"/api/v1/me/complaints/{complaint.Id}")).StatusCode);
 
-        var answered = await Read<ComplaintDto>(await admin.PostAsync($"/api/v1/admin/complaints/{complaint.Id}/messages",
-            MessageBody("TripOps đã liên hệ Agency để đối chiếu, anh/chị gửi thêm hóa đơn phòng giúp nhé.")));
-        Assert.Equal("InReview", answered.Status);
-        var reply = await Read<ComplaintDto>(await customer.PostAsync($"/api/v1/me/complaints/{complaint.Id}/messages", MessageBody("Đã gửi hóa đơn.")));
-        Assert.Equal(new[] { "admin", "customer" }, reply.Messages.Select(m => m.SenderRole));
-        Assert.Equal("Admin TripOps", reply.Messages[0].SenderName);
-
+        // Admin xem (có SĐT/email khách để liên hệ ngoài hệ thống), ghi phản hồi rồi chấp nhận.
+        var forAdmin = await admin.GetFromJsonAsync<ComplaintDto>($"/api/v1/admin/complaints/{complaint.Id}");
+        Assert.Equal("Customer One", forAdmin!.CustomerName);
         var resolved = await Read<ComplaintDto>(await admin.PostAsJsonAsync($"/api/v1/admin/complaints/{complaint.Id}/resolve",
             new ResolveComplaintRequest("Resolved", "Agency xác nhận đổi phòng; hoàn 500.000đ cho khách.")));
         Assert.Equal("Resolved", resolved.Status);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await customer.PostAsync($"/api/v1/me/complaints/{complaint.Id}/messages", MessageBody("Cảm ơn!"))).StatusCode);
+        var seen = await customer.GetFromJsonAsync<ComplaintDto>($"/api/v1/me/complaints/{complaint.Id}");
+        Assert.Equal("Agency xác nhận đổi phòng; hoàn 500.000đ cho khách.", seen!.AdminNotes);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/complaints/{complaint.Id}/resolve",
+            new ResolveComplaintRequest("Rejected", "Đổi ý sau khi đã kết luận."))).StatusCode);
         Assert.Equal(0, (await Settlement(admin, booking.Id)).OpenComplaints);
 
         var stats = await admin.GetFromJsonAsync<List<AgencyComplaintStatDto>>("/api/v1/admin/complaints/agency-stats");
@@ -235,11 +231,7 @@ public sealed partial class BookingFlowTests
         using var other = await app.Client("customer2@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync(url)).StatusCode);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsync($"/api/v1/me/complaints/{complaint.Id}/messages",
-            new MultipartFormDataContent
-            {
-                { new StringContent("Ảnh giả"), "Content" },
-                { new ByteArrayContent("not-an-image"u8.ToArray()) { Headers = { ContentType = new MediaTypeHeaderValue("image/png") } }, "Images", "fake.png" },
-            })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsync("/api/v1/me/complaints",
+            ComplaintBody("Platform", null, "app_error", "Ảnh không hợp lệ", "Tệp gửi lên không phải ảnh thật.", ("not-an-image"u8.ToArray(), "image/png")))).StatusCode);
     }
 }

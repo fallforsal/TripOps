@@ -14,19 +14,15 @@ namespace TripOps.Service.Reviews;
 public sealed record ComplaintBookingOptionDto(int BookingId, string BookingCode, string? TourName, string? AgencyName,
     DateTime StartDate, DateTime CompletedAt, DateTime Deadline, bool CanComplain);
 
-public sealed record ComplaintMessageDto(int Id, string SenderRole, string SenderName, string Content,
-    IReadOnlyList<string> Attachments, DateTime CreatedAt);
-
 public sealed record ComplaintSummaryDto(int Id, string Type, string ReasonCode, string Title, string Status,
     int? BookingId, string? BookingCode, string? TourName, string? AgencyId, string? AgencyName,
-    string CustomerId, string CustomerName, int MessageCount, DateTime CreatedAt, DateTime? UpdatedAt, DateTime? ResolvedAt);
+    string CustomerId, string CustomerName, DateTime CreatedAt, DateTime? UpdatedAt, DateTime? ResolvedAt);
 
 public sealed record ComplaintDto(int Id, string Type, string ReasonCode, string Title, string Description,
     IReadOnlyList<string> Evidence, string Status,
     int? BookingId, string? BookingCode, string? TourName, DateTime? StartDate, string? AgencyId, string? AgencyName,
     string CustomerId, string CustomerName, string? CustomerPhone, string? CustomerEmail,
-    string? AdminNotes, DateTime CreatedAt, DateTime? UpdatedAt, DateTime? ResolvedAt,
-    IReadOnlyList<ComplaintMessageDto> Messages);
+    string? AdminNotes, DateTime CreatedAt, DateTime? UpdatedAt, DateTime? ResolvedAt);
 
 /// <summary>Theo dõi Agency hay bị khiếu nại (chỉ Admin thấy). Upheld = khiếu nại Admin kết luận đúng (Resolved).</summary>
 public sealed record AgencyComplaintStatDto(string AgencyId, string AgencyName, int Total, int Open, int Upheld, int Dismissed);
@@ -41,8 +37,9 @@ public sealed record UploadedImage(byte[] Bytes, string Mime);
 
 /// <summary>
 /// Khiếu nại: khách gửi về CHUYẾN ĐI (gắn booking đã hoàn thành, trong 1 ngày) hoặc về NỀN TẢNG (không gắn booking, không giới hạn).
-/// Khách và Admin trao đổi trực tiếp trong khiếu nại; Agency không thấy và không trả lời trên hệ thống —
-/// Admin tự liên hệ Agency để đối chiếu rồi kết luận. Khiếu nại chuyến đi đang mở chặn việc tự chuyển tiền cho Agency.
+/// Admin xem khiếu nại, ghi phản hồi rồi chấp nhận (Resolved) hoặc không chấp nhận (Rejected). Không có nhắn tin qua lại trong khiếu nại:
+/// cần hỏi thêm thì Admin gọi điện hoặc dùng chat. Agency không thấy khiếu nại trên hệ thống.
+/// Khiếu nại chuyến đi đang chờ xử lý chặn việc tự chuyển tiền cho Agency.
 /// </summary>
 public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, CloudinaryStorage storage)
 {
@@ -146,20 +143,11 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
             UserId = customerId,
             BookingId = bookingId,
             Message = bookingCode is null
-                ? "TripOps đã nhận khiếu nại của bạn về nền tảng. Admin sẽ phản hồi trong khiếu nại."
-                : $"TripOps đã nhận khiếu nại của bạn về booking {bookingCode}. Admin sẽ phản hồi trong khiếu nại."
+                ? "TripOps đã nhận khiếu nại của bạn về nền tảng. Admin sẽ xem xét và phản hồi trong mục Khiếu nại của tôi."
+                : $"TripOps đã nhận khiếu nại của bạn về booking {bookingCode}. Admin sẽ xem xét và phản hồi trong mục Khiếu nại của tôi."
         });
         await db.SaveChangesAsync(ct);
         return await MineDetail(customerId, complaint.Id, ct);
-    }
-
-    public async Task<ComplaintDto> CustomerMessage(string customerId, int id, string content, IReadOnlyList<UploadedImage> images, CancellationToken ct)
-    {
-        var complaint = await db.Complaints.SingleOrDefaultAsync(c => c.Id == id && c.ComplainantId == customerId, ct)
-            ?? throw new BookingException(404, "Không tìm thấy khiếu nại.");
-        await AddMessage(complaint, customerId, "customer", content, images, ct);
-        await db.SaveChangesAsync(ct);
-        return await MineDetail(customerId, id, ct);
     }
 
     // ------------------------------------------------------------ Admin
@@ -180,23 +168,6 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
     public async Task<ComplaintDto> AdminDetail(int id, CancellationToken ct) =>
         Detail(await Query().SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new BookingException(404, "Không tìm thấy khiếu nại."));
 
-    public async Task<ComplaintDto> AdminMessage(string adminId, int id, string content, IReadOnlyList<UploadedImage> images, CancellationToken ct)
-    {
-        var complaint = await db.Complaints.Include(c => c.Booking).SingleOrDefaultAsync(c => c.Id == id, ct)
-            ?? throw new BookingException(404, "Không tìm thấy khiếu nại.");
-        await AddMessage(complaint, adminId, "admin", content, images, ct);
-        if (complaint.Status is null or ComplaintStatus.Pending) complaint.Status = ComplaintStatus.InReview;
-        complaint.AdminId ??= adminId;
-        db.WorkflowNotifications.Add(new WorkflowNotification
-        {
-            UserId = complaint.ComplainantId,
-            BookingId = complaint.BookingId,
-            Message = $"Admin TripOps đã phản hồi khiếu nại \"{complaint.Title}\" của bạn."
-        });
-        await db.SaveChangesAsync(ct);
-        return await AdminDetail(id, ct);
-    }
-
     public async Task<ComplaintDto> Resolve(string adminId, int id, ResolveComplaintRequest request, CancellationToken ct)
     {
         var complaint = await db.Complaints.SingleOrDefaultAsync(c => c.Id == id, ct)
@@ -213,8 +184,8 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
             UserId = complaint.ComplainantId,
             BookingId = complaint.BookingId,
             Message = complaint.Status == ComplaintStatus.Resolved
-                ? $"Khiếu nại \"{complaint.Title}\" đã được giải quyết. Xem kết luận của Admin trong mục Khiếu nại của tôi."
-                : $"Khiếu nại \"{complaint.Title}\" đã được Admin xem xét và khép lại. Xem lý do trong mục Khiếu nại của tôi."
+                ? $"Khiếu nại \"{complaint.Title}\" đã được chấp nhận. Xem phản hồi của Admin trong mục Khiếu nại của tôi."
+                : $"Khiếu nại \"{complaint.Title}\" không được chấp nhận. Xem phản hồi của Admin trong mục Khiếu nại của tôi."
         });
         await db.SaveChangesAsync(ct);
         return await AdminDetail(id, ct);
@@ -242,28 +213,7 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
         .Include(c => c.Booking).ThenInclude(b => b!.Tour)
         .Include(c => c.Target).ThenInclude(u => u!.BusinessProfile)
         .Include(c => c.Complainant)
-        .Include(c => c.Messages).ThenInclude(m => m.Sender)
         .AsSplitQuery();
-
-    private async Task AddMessage(Complaint complaint, string senderId, string role, string content, IReadOnlyList<UploadedImage> images, CancellationToken ct)
-    {
-        if (!IsOpen(complaint)) throw new BookingException(409, "Khiếu nại đã được kết luận, không thể gửi thêm tin nhắn.");
-        ValidateImages(images);
-        var text = (content ?? "").Trim();
-        if (text.Length is < 1 or > 4000) throw new BookingException(422, "Nội dung tin nhắn cần 1–4000 ký tự.");
-        var urls = await Upload(complaint.ComplainantId, images, ct);
-        var now = clock.UtcNow;
-        db.ComplaintMessages.Add(new ComplaintMessage
-        {
-            ComplaintId = complaint.Id,
-            SenderId = senderId,
-            SenderRole = role,
-            Content = text,
-            AttachmentUrls = urls.Count == 0 ? null : JsonSerializer.Serialize(urls),
-            CreatedAt = now,
-        });
-        complaint.UpdatedAt = now;
-    }
 
     private static void ValidateImages(IReadOnlyList<UploadedImage> images)
     {
@@ -273,7 +223,7 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
             throw new BookingException(422, "Chỉ nhận ảnh JPEG, PNG hoặc WebP.");
     }
 
-    // Ảnh bằng chứng lưu riêng tư theo thư mục của khách (cả ảnh Admin gửi trong cùng khiếu nại).
+    // Ảnh bằng chứng lưu riêng tư theo thư mục của khách.
     private async Task<List<string>> Upload(string ownerId, IReadOnlyList<UploadedImage> images, CancellationToken ct)
     {
         var urls = new List<string>(images.Count);
@@ -292,14 +242,12 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
 
     private static ComplaintSummaryDto Summary(Complaint c) => new(c.Id, c.Type, c.ReasonCode, c.Title, (c.Status ?? ComplaintStatus.Pending).ToString(),
         c.BookingId, c.Booking?.BookingCode, c.Booking?.Tour?.Name, c.TargetId, c.TargetId is null ? null : AgencyName(c),
-        c.ComplainantId, c.Complainant?.Name ?? "", c.Messages.Count, Utc(c.CreatedAt), UtcOrNull(c.UpdatedAt), UtcOrNull(c.ResolvedAt));
+        c.ComplainantId, c.Complainant?.Name ?? "", Utc(c.CreatedAt), UtcOrNull(c.UpdatedAt), UtcOrNull(c.ResolvedAt));
 
     private ComplaintDto Detail(Complaint c) => new(c.Id, c.Type, c.ReasonCode, c.Title, c.Description, Urls(c.EvidenceUrls),
         (c.Status ?? ComplaintStatus.Pending).ToString(),
         c.BookingId, c.Booking?.BookingCode, c.Booking?.Tour?.Name, c.Booking is null ? null : DateTime.SpecifyKind(c.Booking.StartDate, DateTimeKind.Utc),
         c.TargetId, c.TargetId is null ? null : AgencyName(c),
         c.ComplainantId, c.Complainant?.Name ?? "", c.Complainant?.Phone, c.Complainant?.Email,
-        c.AdminNotes, Utc(c.CreatedAt), UtcOrNull(c.UpdatedAt), UtcOrNull(c.ResolvedAt),
-        c.Messages.OrderBy(m => m.CreatedAt).ThenBy(m => m.Id).Select(m => new ComplaintMessageDto(m.Id, m.SenderRole,
-            m.SenderRole == "admin" ? "Admin TripOps" : m.Sender?.Name ?? "Khách hàng", m.Content, Urls(m.AttachmentUrls), Utc(m.CreatedAt))).ToList());
+        c.AdminNotes, Utc(c.CreatedAt), UtcOrNull(c.UpdatedAt), UtcOrNull(c.ResolvedAt));
 }

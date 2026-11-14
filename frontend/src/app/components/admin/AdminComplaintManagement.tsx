@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, BarChart3, Building2, Loader2, Mail, MessageSquareWarning, Phone } from "lucide-react";
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { Button } from "@/app/components/ui/button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { ComplaintConversation } from "@/app/components/reviews/ComplaintConversation";
+import { ComplaintContent } from "@/app/components/reviews/ComplaintContent";
 import {
   COMPLAINT_STATUS_LABEL,
   COMPLAINT_STATUS_STYLE,
@@ -16,7 +17,6 @@ import {
   listAgencyComplaintStats,
   reasonLabel,
   resolveComplaint,
-  sendAdminComplaintMessage,
   type AgencyComplaintStat,
   type ComplaintDetail,
   type ComplaintStatus,
@@ -26,15 +26,14 @@ import {
 
 const STATUS_FILTERS: { id: "" | ComplaintStatus; label: string }[] = [
   { id: "", label: "Tất cả" },
-  { id: "Pending", label: "Chờ phản hồi" },
-  { id: "InReview", label: "Đang xử lý" },
-  { id: "Resolved", label: "Đã giải quyết" },
-  { id: "Rejected", label: "Đã khép lại" },
+  { id: "Pending", label: "Chờ xem xét" },
+  { id: "Resolved", label: "Đã chấp nhận" },
+  { id: "Rejected", label: "Không chấp nhận" },
 ];
 
 /**
- * Admin xử lý khiếu nại: trao đổi trực tiếp với khách trong khiếu nại, tự liên hệ Agency ngoài hệ thống để đối chiếu,
- * rồi kết luận. Khiếu nại chuyến đi đang mở giữ tiền quyết toán của Agency cho tới khi kết luận.
+ * Admin xử lý khiếu nại: xem nội dung + bằng chứng, nếu cần thì gọi điện / chat với khách hoặc liên hệ Agency để đối chiếu,
+ * rồi chấp nhận hoặc không chấp nhận kèm phản hồi. Khiếu nại chuyến đi đang chờ xử lý giữ tiền quyết toán của Agency.
  */
 export function AdminComplaintManagement() {
   const [items, setItems] = useState<ComplaintSummary[]>([]);
@@ -65,7 +64,7 @@ export function AdminComplaintManagement() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Khiếu nại</h1>
-        <p className="text-sm text-slate-500">Trao đổi với khách và kết luận. Agency không thấy khiếu nại — liên hệ Agency trực tiếp khi cần đối chiếu.</p>
+        <p className="text-sm text-slate-500">Xem khiếu nại, rồi chấp nhận hoặc không chấp nhận kèm phản hồi cho khách. Cần hỏi thêm thì gọi điện hoặc chat. Agency không thấy khiếu nại.</p>
       </div>
       <Tabs defaultValue="list" className="space-y-4">
         <TabsList>
@@ -111,7 +110,7 @@ export function AdminComplaintManagement() {
                     <tr key={c.id} className="cursor-pointer hover:bg-slate-50 align-top" onClick={() => open(c.id)}>
                       <td className="py-2.5 px-3">
                         <p className="font-semibold text-slate-900">#{c.id} {c.title}</p>
-                        <p className="text-[11px] text-slate-500">{reasonLabel(c.type, c.reasonCode)} · {c.messageCount} tin nhắn</p>
+                        <p className="text-[11px] text-slate-500">{reasonLabel(c.type, c.reasonCode)}</p>
                       </td>
                       <td className="py-2.5 px-3">{c.type === "Trip" ? "Chuyến đi" : "Nền tảng"}</td>
                       <td className="py-2.5 px-3">{c.customerName}</td>
@@ -133,7 +132,7 @@ export function AdminComplaintManagement() {
         <TabsContent value="agencies">
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
             <p className="text-xs text-slate-500">
-              Khiếu nại về chuyến đi theo từng Agency. “Được xác nhận” là khiếu nại Admin kết luận giải quyết cho khách.
+              Khiếu nại về chuyến đi theo từng Agency. “Được chấp nhận” là khiếu nại Admin xác nhận khách đúng.
               Số liệu này chỉ để theo dõi nội bộ, <strong>không trừ vào số sao</strong> của Agency.
             </p>
             {stats.length === 0 ? <p className="text-sm text-slate-500">Chưa có khiếu nại chuyến đi nào.</p> : (
@@ -143,8 +142,8 @@ export function AdminComplaintManagement() {
                     <th className="py-2 px-2">Agency</th>
                     <th className="py-2 px-2 text-right">Tổng</th>
                     <th className="py-2 px-2 text-right">Đang mở</th>
-                    <th className="py-2 px-2 text-right">Được xác nhận</th>
-                    <th className="py-2 px-2 text-right">Bị bác bỏ</th>
+                    <th className="py-2 px-2 text-right">Được chấp nhận</th>
+                    <th className="py-2 px-2 text-right">Không chấp nhận</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -178,7 +177,7 @@ function ComplaintDetailView({ complaint, onChange, onBack }: {
 
   const resolve = async () => {
     if (!resolving) return;
-    if (note.trim().length < 5) return setError("Kết luận cần ít nhất 5 ký tự.");
+    if (note.trim().length < 5) return setError("Phản hồi cần ít nhất 5 ký tự.");
     setSaving(true);
     setError("");
     try { onChange(await resolveComplaint(complaint.id, resolving, note)); setResolving(null); setNote(""); }
@@ -206,6 +205,7 @@ function ComplaintDetailView({ complaint, onChange, onBack }: {
             <p className="text-slate-900">{complaint.customerName}</p>
             {complaint.customerPhone && <p className="flex items-center gap-1.5"><Phone className="w-3 h-3" />{complaint.customerPhone}</p>}
             {complaint.customerEmail && <p className="flex items-center gap-1.5"><Mail className="w-3 h-3" />{complaint.customerEmail}</p>}
+            <ChatWithButton userId={complaint.customerId} className="mt-1">Chat với khách</ChatWithButton>
           </div>
           {complaint.type === "Trip" && (
             <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
@@ -218,16 +218,12 @@ function ComplaintDetailView({ complaint, onChange, onBack }: {
           )}
         </div>
 
-        <ComplaintConversation
-          complaint={complaint}
-          viewer="admin"
-          onSend={async (content, files) => onChange(await sendAdminComplaintMessage(complaint.id, content, files))}
-        />
+        <ComplaintContent complaint={complaint} viewer="admin" />
 
         {isOpen && (
           <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
-            <Button type="button" variant="outline" onClick={() => setResolving("Rejected")}>Khép lại (không chấp nhận)</Button>
-            <Button type="button" onClick={() => setResolving("Resolved")} className="bg-emerald-700 hover:bg-emerald-800 text-white">Kết luận: giải quyết cho khách</Button>
+            <Button type="button" variant="outline" onClick={() => setResolving("Rejected")} className="border-rose-200 text-rose-700 hover:bg-rose-50">Không chấp nhận</Button>
+            <Button type="button" onClick={() => setResolving("Resolved")} className="bg-emerald-700 hover:bg-emerald-800 text-white">Chấp nhận khiếu nại</Button>
           </div>
         )}
       </div>
@@ -235,10 +231,10 @@ function ComplaintDetailView({ complaint, onChange, onBack }: {
       <Dialog open={resolving !== null} onOpenChange={(o) => !o && setResolving(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{resolving === "Resolved" ? "Giải quyết khiếu nại" : "Khép lại khiếu nại"}</DialogTitle>
+            <DialogTitle>{resolving === "Resolved" ? "Chấp nhận khiếu nại" : "Không chấp nhận khiếu nại"}</DialogTitle>
             <DialogDescription>
-              Kết luận được gửi cho khách và không thể sửa sau khi lưu.
-              {complaint.type === "Trip" && " Sau khi kết luận, khoản quyết toán của Agency không còn bị khiếu nại này chặn."}
+              Phản hồi được gửi cho khách và không thể sửa sau khi lưu.
+              {complaint.type === "Trip" && " Sau khi phản hồi, khoản quyết toán của Agency không còn bị khiếu nại này chặn."}
             </DialogDescription>
           </DialogHeader>
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000}
@@ -247,7 +243,7 @@ function ComplaintDetailView({ complaint, onChange, onBack }: {
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setResolving(null)}>Hủy</Button>
             <Button type="button" onClick={resolve} disabled={saving} className="bg-[#075985] hover:bg-[#0C4A6E] text-white gap-1.5">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Lưu kết luận
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Gửi phản hồi
             </Button>
           </div>
         </DialogContent>

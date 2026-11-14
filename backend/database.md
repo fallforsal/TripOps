@@ -825,28 +825,14 @@ Table complaints {
 
   // Trọng tài Admin xử lý
   admin_id varchar(36) [note: 'FK tới users.id - Admin sàn giải quyết khiếu nại']
-  admin_notes text [note: 'Kết luận và phán quyết xử lý của Admin']
+  admin_notes text [note: 'Phản hồi của Admin gửi khách: lý do chấp nhận / không chấp nhận và cách xử lý']
   status varchar(30) [default: 'PENDING', note: 'PENDING (Chờ cty giải trình), IN_REVIEW (Admin đang xử lý), RESOLVED (Đã giải quyết), REJECTED (Bác bỏ)']
   resolved_at timestamp
 
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   deleted_at timestamp [note: 'Soft delete nếu cần']
-  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị. Agency không xem/trả lời khiếu nại trên hệ thống: Admin trao đổi với khách qua complaint_messages và tự liên hệ Agency để đối chiếu. Khiếu nại Trip đang mở (PENDING/IN_REVIEW) chặn tự chuyển tiền quyết toán.'
-}
-
-Table complaint_messages {
-  id int [pk, increment]
-  complaint_id int [not null, note: 'FK tới complaints.id']
-  sender_id varchar(36) [not null, note: 'FK tới users.id - Khách hoặc Admin gửi tin']
-  sender_role varchar(20) [not null, note: 'customer | admin']
-  content text [not null, note: 'Nội dung trao đổi giữa khách và Admin']
-  attachment_urls json [note: 'Ảnh đính kèm (riêng tư, chỉ khách đó và Admin xem)']
-  created_at timestamp [default: `now()`]
-
-  indexes {
-    complaint_id
-  }
+  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị. Agency không xem/trả lời khiếu nại trên hệ thống. Admin xem khiếu nại, ghi phản hồi vào admin_notes rồi chấp nhận (RESOLVED) hoặc không chấp nhận (REJECTED); cần trao đổi thêm thì gọi điện hoặc dùng chat. Khiếu nại Trip đang mở (PENDING/IN_REVIEW) chặn tự chuyển tiền quyết toán.'
 }
 
 // ============================================================================
@@ -1134,8 +1120,6 @@ Ref: complaints.booking_id > bookings.id
 Ref: complaints.customer_id > users.id
 Ref: complaints.agency_id > users.id
 Ref: complaints.admin_id > users.id
-Ref: complaint_messages.complaint_id > complaints.id
-Ref: complaint_messages.sender_id > users.id
 
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id
