@@ -659,9 +659,7 @@ export function AgencyBookingDetailPage({
   // ----------------------------------------------------
   // BOOKING INCIDENTS (booking_incidents - no severity field)
   // ----------------------------------------------------
-  const [incidents, setIncidents] = useState<BookingIncident[]>(() => {
-    return booking.incidents || [];
-  });
+  const incidents = booking.incidents || []; // Always reflect latest server booking data.
 
   // ----------------------------------------------------
   // ATTRACTION ASSIGNMENT MODAL STATES
