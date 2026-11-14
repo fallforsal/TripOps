@@ -8,7 +8,8 @@ using TripOps.Service.Bookings;
 
 namespace TripOps.Api.Controllers;
 
-public sealed class IncidentWithImagesForm
+/// <summary>Single incident submission contract: multipart fields with optional evidence photos.</summary>
+public sealed class IncidentReportForm
 {
     [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(100)]
     public string IncidentType { get; set; } = string.Empty;
@@ -207,23 +208,26 @@ public sealed class GuideBookingsController(BookingService bookings) : Controlle
     public async Task<IActionResult> Attendance(int id, AttendanceCheckinRequest request, CancellationToken ct) =>
         Ok(await bookings.RecordAttendance(Actor, id, request, ct));
 
-    [HttpPost("{id:int}/incidents-with-images")]
+    [HttpPost("{id:int}/incidents")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(22 * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
-    [EndpointSummary("Report incident with 1–5 JPEG/PNG/WebP photos, 5 MB each, 20 MB total")]
+    [EndpointSummary("Report incident, with 0–5 optional JPEG/PNG/WebP photos (max 5 MB per image, 20 MB total)")]
     [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportIncidentWithImages(
-        int id, [FromForm] IncidentWithImagesForm form, CancellationToken ct)
+    public async Task<IActionResult> ReportIncident(
+        int id, [FromForm] IncidentReportForm form, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(form.IncidentType) ||
-            string.IsNullOrWhiteSpace(form.Title) || string.IsNullOrWhiteSpace(form.Description) ||
-            form.IncidentType.Length > 100 || form.Title.Length > 255 ||
-            form.Description.Length > 2000)
+        if (!IncidentTypeRules.IsAllowed(form.IncidentType))
+            throw new BookingException(422, "Loại sự cố không hợp lệ.");
+        if (string.IsNullOrWhiteSpace(form.Title) || string.IsNullOrWhiteSpace(form.Description) ||
+            form.Title.Length > 255 || form.Description.Length > 2000)
             throw new BookingException(422, "Thông tin báo cáo sự cố không hợp lệ.");
+
         var files = form.Images ?? [];
-        GuideCheckinPhotoRules.ValidateFiles(files
-            .Select(file => (file.Length, file.ContentType)).ToArray());
+        if (files.Count > 0)
+            GuideCheckinPhotoRules.ValidateFiles(files
+                .Select(file => (file.Length, file.ContentType)).ToArray());
+
         var evidence = new List<IncidentEvidenceFile>(files.Count);
         foreach (var file in files)
         {
@@ -236,13 +240,7 @@ public sealed class GuideBookingsController(BookingService bookings) : Controlle
             evidence.Add(new IncidentEvidenceFile(bytes, file.ContentType));
         }
         return Ok(await bookings.ReportIncident(Actor, id,
-            new ReportIncidentRequest(form.IncidentType, form.Title, form.Description, null),
+            new ReportIncidentRequest(form.IncidentType, form.Title, form.Description),
             ct, evidence));
     }
-
-    [HttpPost("{id:int}/incidents")]
-    [EndpointSummary("Report an operational incident during the trip without photos")]
-    [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportIncident(int id, ReportIncidentRequest request, CancellationToken ct) =>
-        Ok(await bookings.ReportIncident(Actor, id, request, ct));
 }
