@@ -324,11 +324,11 @@ export function fromApiBooking(
     incidents: (dto.incidents || []).map((incident) => {
       // Agency booking detail consumes booking.incidents, not guideIncidents.
       const rawType = (incident.incidentType ||
-        /^\\[([^\\]]+)\\]/.exec(incident.title)?.[1] || "OTHER").toUpperCase();
+        /^\[([^\]]+)\]/.exec(incident.title)?.[1] || "OTHER").toUpperCase();
       const incidentType = ([
         "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER",
       ].includes(rawType) ? rawType : "OTHER") as import("../types/index.ts").IncidentCategory;
-      const title = incident.title.replace(/^\\[[^\\]]+\\]\\s*/, "");
+      const title = incident.title.replace(/^\[[^\]]+\]\s*/, "");
       const agencyId = incident.agencyId || dto.agencyId || "";
       return {
         id: String(incident.id),
