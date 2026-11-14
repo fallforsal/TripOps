@@ -433,7 +433,6 @@ export interface IncidentDto {
   bookingId: number;
   title: string;
   description: string;
-  resolutionNotes?: string;
   status: string;
   createdAt: string;
 }
@@ -687,11 +686,16 @@ export async function reportIncident(
   incidentType: string,
   title: string,
   description: string,
-  severity?: string,
+  images: File[] = [],
 ): Promise<IncidentDto> {
+  const form = new FormData();
+  form.append("IncidentType", incidentType);
+  form.append("Title", title);
+  form.append("Description", description);
+  for (const image of images) form.append("Images", image);
   return await http<IncidentDto>(`/guide/bookings/${bookingId}/incidents`, {
     method: "POST",
-    body: JSON.stringify({ incidentType, title, description, severity }),
+    body: form,
   });
 }
 
