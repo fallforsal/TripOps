@@ -368,7 +368,7 @@ public sealed partial class BookingFlowTests
             Assert.NotNull(assignment.AssignedAt);
             var incidentSnapshot = await db.BookingIncidents.AsNoTracking().SingleAsync(i => i.Id == incident.Id);
             Assert.Equal("agency1", incidentSnapshot.AgencyId);
-            Assert.Equal("Thời tiết", incidentSnapshot.IncidentType);
+            Assert.Equal("WEATHER", incidentSnapshot.IncidentType);
         }
     }
 
