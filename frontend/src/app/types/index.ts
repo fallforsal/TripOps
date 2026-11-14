@@ -715,7 +715,7 @@ export interface IncidentReport {
   guideId: string;
   guideName: string;
   title: string;
-  category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other";
+  category: "HEALTH" | "VEHICLE" | "WEATHER" | "CUSTOMER" | "SECURITY" | "SERVICE_PROVIDER" | "SCHEDULE" | "OTHER";
   description?: string;
   images?: string[];
   reportedAt: string;
