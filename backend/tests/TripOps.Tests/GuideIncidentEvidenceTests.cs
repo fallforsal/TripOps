@@ -27,7 +27,7 @@ public sealed partial class BookingFlowTests
         using var otherAgency = await app.Client("agency2@example.test");
 
         using var form = IncidentForm(2);
-        var response = await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents-with-images", form);
+        var response = await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents", form);
         response.EnsureSuccessStatusCode();
         var incident = (await response.Content.ReadFromJsonAsync<IncidentDto>())!;
         Assert.Equal("Reported", incident.Status);
@@ -83,20 +83,83 @@ public sealed partial class BookingFlowTests
         using var guide = await app.Client("guide1@example.test");
         using (var wrongCount = IncidentForm(6))
             Assert.Equal(HttpStatusCode.UnprocessableEntity,
-                (await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents-with-images", wrongCount)).StatusCode);
+                (await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents", wrongCount)).StatusCode);
         using (var wrongType = IncidentForm(1, "text/plain"))
             Assert.Equal(HttpStatusCode.UnprocessableEntity,
-                (await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents-with-images", wrongType)).StatusCode);
+                (await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents", wrongType)).StatusCode);
 
         using var scope = app.Services.CreateScope();
         Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<TripOpsDbContext>()
             .BookingIncidents.CountAsync(i => i.BookingId == id));
     }
 
-    private static MultipartFormDataContent IncidentForm(int count, string mime = "image/png")
+    [Fact]
+    public async Task IncidentEvidence_OneEndpointSupportsTextOnlyAndEverySupportedCategory()
+    {
+        using var app = new App();
+        await app.Initialize();
+        var id = await MakeCheckinPhotoBooking(app);
+        using var guide = await app.Client("guide1@example.test");
+        using var agency = await app.Client("agency1@example.test");
+        var endpoint = $"/api/v1/guide/bookings/{id}/incidents";
+
+        Assert.Equal(new[] {
+            "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER",
+            "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER"
+        }, IncidentTypeRules.Allowed);
+        foreach (var category in IncidentTypeRules.Allowed)
+        {
+            using var request = IncidentForm(0, category: category);
+            var response = await guide.PostAsync(endpoint, request);
+            response.EnsureSuccessStatusCode();
+            var incident = (await response.Content.ReadFromJsonAsync<IncidentDto>())!;
+            Assert.Equal(category, incident.IncidentType);
+            Assert.Empty(incident.EvidenceUrls!);
+            Assert.DoesNotContain("Mức độ:", incident.Description);
+        }
+
+        var agencyDetail = (await agency.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/agency/bookings/{id}"))!;
+        Assert.Equal(8, agencyDetail.Incidents!.Count);
+
+        // The legacy extra endpoint must not remain available.
+        using var oldForm = IncidentForm(1);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await guide.PostAsync(
+                $"/api/v1/guide/bookings/{id}/incidents-with-images", oldForm)).StatusCode);
+
+        // The consolidated endpoint intentionally has one multipart-only contract.
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType,
+            (await guide.PostAsJsonAsync(endpoint, new {
+                incidentType = "OTHER",
+                title = "No multipart",
+                description = "Legacy JSON payload"
+            })).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("TRANSPORT")]
+    [InlineData("INVALID")]
+    [InlineData("VEHICLE_WRONG")]
+    public async Task IncidentEvidence_RejectsUnsupportedIncidentCategories(string category)
+    {
+        using var app = new App();
+        await app.Initialize();
+        var id = await MakeCheckinPhotoBooking(app);
+        using var guide = await app.Client("guide1@example.test");
+        using var form = IncidentForm(0, category: category);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents", form))
+                .StatusCode);
+        using var scope = app.Services.CreateScope();
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<TripOpsDbContext>()
+            .BookingIncidents.CountAsync(i => i.BookingId == id));
+    }
+
+    private static MultipartFormDataContent IncidentForm(int count, string mime = "image/png", string category = "VEHICLE")
     {
         var form = new MultipartFormDataContent();
-        form.Add(new StringContent("VEHICLE"), "IncidentType");
+        form.Add(new StringContent(category), "IncidentType");
         form.Add(new StringContent("Xe bị hỏng"), "Title");
         form.Add(new StringContent("Xe dừng bên đường để sửa"), "Description");
         for (var i = 0; i < count; i++)
