@@ -38,13 +38,19 @@ void main() {
     expect(find.text('Chọn loại sự cố'), findsOneWidget);
     expect(find.text('Mức độ ảnh hưởng'), findsNothing);
 
-    await tester.ensureVisible(find.byKey(const ValueKey('incident-submit')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('incident-submit')), 180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('incident-submit')));
     await tester.pumpAndSettle();
     expect(find.text('Vui lòng chọn loại sự cố'), findsOneWidget);
 
-    await tester.ensureVisible(find.byKey(const ValueKey('incident-type-dropdown')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('incident-type-dropdown')), -180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('incident-type-dropdown')));
     await tester.pumpAndSettle();
