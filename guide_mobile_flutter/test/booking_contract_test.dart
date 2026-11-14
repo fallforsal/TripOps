@@ -113,4 +113,31 @@ void main() {
   });
 
 
+  test('incident evidence photos are restored from server BookingDto', () {
+    final detail = BookingDetail.fromJson({
+      'id': 51,
+      'status': 'InProgress',
+      'startDate': '2026-11-14',
+      'endDate': '2026-11-15',
+      'incidents': [{
+        'id': 8,
+        'bookingId': 51,
+        'incidentType': 'VEHICLE',
+        'title': '[VEHICLE] Xe hỏng',
+        'description': 'Đang liên hệ xe dự phòng',
+        'status': 'Reported',
+        'evidenceUrls': [
+          '/api/v1/files/guide-incidents/guide1/first.jpg',
+          'https://example.test/signed/second.jpg',
+        ],
+      }],
+    });
+    expect(detail.incidents.single.incidentType, 'VEHICLE');
+    expect(detail.incidents.single.photoUrls.length, 2);
+    expect(detail.incidents.single.description, 'Đang liên hệ xe dự phòng');
+    expect(TourIncident.fromJson({
+      'title': 'Sự cố cũ', 'description': 'Không có ảnh', 'status': 'Reported',
+    }).photoUrls, isEmpty);
+  });
+
 }
