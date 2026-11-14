@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Api.Infrastructure;
 using TripOps.Service;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -54,6 +55,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             var account = await context.HttpContext.RequestServices.GetRequiredService<AccountService>().Current(
                 context.Principal!.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value, context.HttpContext.RequestAborted);
             if (AccountService.RoleName(account.Role) != context.Principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value) context.RejectPrincipal();
+            // Đã đổi/đặt lại mật khẩu sau khi phiên này đăng nhập → đăng xuất (phiên cũ chưa có claim coi như "0").
+            else if (TripOps.Service.Accounts.PasswordService.SessionStamp(account) !=
+                     (context.Principal.FindFirst(TripOps.Api.Controllers.AccountsController.PasswordStampClaim)?.Value ?? "0"))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
         } catch (AccountException) { context.RejectPrincipal(); }
     };
 });
@@ -64,6 +72,9 @@ builder.Services.AddRateLimiter(options => {
     options.RejectionStatusCode = 429;
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Quên/đổi mật khẩu: giới hạn theo IP (OTP còn tự khóa sau 5 lần sai).
+    options.AddPolicy("password", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     // Tra cứu trạng thái payOS: giới hạn theo IP + đơn để polling của FE không làm quá tải payOS.
     options.AddPolicy("payment-sync", context => RateLimitPartition.GetFixedWindowLimiter(
         $"{context.Connection.RemoteIpAddress}:{context.Request.RouteValues["id"]}",

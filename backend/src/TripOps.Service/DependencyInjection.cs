@@ -49,6 +49,8 @@ public static class DependencyInjection
         // Đánh giá tour (sao Agency tính bằng công thức) và khiếu nại khách ↔ Admin.
         services.AddScoped<Reviews.FeedbackService>();
         services.AddScoped<Reviews.ComplaintService>();
+        // Email chào mừng, quên mật khẩu bằng OTP, đổi mật khẩu.
+        services.AddScoped<Accounts.PasswordService>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();

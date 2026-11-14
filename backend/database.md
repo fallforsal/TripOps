@@ -36,6 +36,22 @@ Table users {
   province_name varchar(100) [note: 'Tên tỉnh/thành tại thời điểm lưu']
   ward_code varchar(10) [note: 'Mã phường/xã thuộc tỉnh đã chọn']
   ward_name varchar(150) [note: 'Tên phường/xã tại thời điểm lưu']
+  password_changed_at timestamp [note: 'Lần đổi/đặt lại mật khẩu gần nhất; phiên đăng nhập cũ hơn mốc này bị đăng xuất']
+}
+
+// Mã OTP quên mật khẩu (gửi qua email). Chỉ lưu mã băm SHA-256.
+Table password_reset_codes {
+  id int [pk, increment]
+  user_id varchar(36) [not null, note: 'FK tới users.id']
+  code_hash varchar(64) [not null, note: 'SHA-256 của mã OTP 6 số']
+  expires_at timestamp [not null, note: 'Hết hạn sau 10 phút']
+  failed_attempts int [not null, note: 'Số lần nhập sai; từ 5 lần thì mã bị khóa']
+  used_at timestamp [note: 'Thời điểm đã dùng để đặt lại mật khẩu, hoặc bị thay bằng mã mới']
+  created_at timestamp [not null, note: 'Thời điểm gửi; dùng để giới hạn gửi lại 60 giây và 5 lần/giờ']
+
+  indexes {
+    (user_id, created_at)
+  }
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.
@@ -1120,6 +1136,7 @@ Ref: complaints.booking_id > bookings.id
 Ref: complaints.customer_id > users.id
 Ref: complaints.agency_id > users.id
 Ref: complaints.admin_id > users.id
+Ref: password_reset_codes.user_id > users.id
 
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id

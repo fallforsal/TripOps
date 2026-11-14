@@ -42,6 +42,20 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.ProvinceName).HasColumnName("province_name").HasColumnType("nvarchar(100)").HasMaxLength(100);
             entity.Property(e => e.WardCode).HasColumnName("ward_code").HasColumnType("nvarchar(10)").HasMaxLength(10);
             entity.Property(e => e.WardName).HasColumnName("ward_name").HasColumnType("nvarchar(150)").HasMaxLength(150);
+            entity.Property(e => e.PasswordChangedAt).HasColumnName("password_changed_at").HasColumnType("datetime2");
+        });
+        modelBuilder.Entity<PasswordResetCode>(entity =>
+        {
+            entity.ToTable("password_reset_codes");
+            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
+            entity.Property(e => e.UserId).HasColumnName("user_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
+            entity.Property(e => e.CodeHash).HasColumnName("code_hash").HasColumnType("nvarchar(64)").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at").HasColumnType("datetime2").IsRequired();
+            entity.Property(e => e.FailedAttempts).HasColumnName("failed_attempts").HasColumnType("int").IsRequired();
+            entity.Property(e => e.UsedAt).HasColumnName("used_at").HasColumnType("datetime2");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<GuideProfile>(entity =>
         {
