@@ -345,7 +345,8 @@ export function fromApiBooking(
           incident.status === "Acknowledged" || incident.status === "InProgress"
             ? "IN_PROGRESS" : "REPORTED") as import("../types/index.ts").IncidentStatus,
         reportedAt: incident.createdAt,
-        resolutionNote: incident.resolutionNotes || undefined,
+        // resolutionNotes in the legacy API currently contains encoded severity,
+        // not a real resolution note, so do not display it as a fix.
       };
     }),
     guideIncidents: (dto.incidents || []).map((i) => ({
