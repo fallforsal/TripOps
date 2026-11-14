@@ -10,16 +10,26 @@ using static TripOps.Service.Accounts.AccountService;
 namespace TripOps.Api.Controllers;
 [ApiController, Route("api/v1/auth")]
 [Tags("Authentication")]
-public sealed class AccountsController(AccountService accounts) : ControllerBase
+public sealed class AccountsController(AccountService accounts, PasswordService passwords) : ControllerBase
 {
-    private async Task SignIn(User user) => await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+    /// <summary>Claim ghi mốc đổi mật khẩu của tài khoản lúc đăng nhập; đổi mật khẩu thì các phiên cũ không còn khớp và bị đăng xuất.</summary>
+    public const string PasswordStampClaim = "pwd";
+
+    internal static Task SignIn(HttpContext http, User user) => http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
         new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Role, AccountService.RoleName(user.Role)) }, CookieAuthenticationDefaults.AuthenticationScheme)));
+            new Claim(ClaimTypes.Role, AccountService.RoleName(user.Role)),
+            new Claim(PasswordStampClaim, PasswordService.SessionStamp(user)) }, CookieAuthenticationDefaults.AuthenticationScheme)));
+    private Task SignIn(User user) => SignIn(HttpContext, user);
     [HttpPost("register"), EnableRateLimiting("auth")]
     [EndpointSummary("Register an account and start a cookie session")]
     [ProducesResponseType<AccountDto>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Register(RegisterRequest request, CancellationToken ct)
-    { var user = await accounts.Register(request, ct); await SignIn(user); return StatusCode(201, accounts.Dto(user)); }
+    {
+        var user = await accounts.Register(request, ct);
+        await SignIn(user);
+        await passwords.SendWelcome(user, ct); // lỗi gửi email chỉ ghi log, không ảnh hưởng đăng ký
+        return StatusCode(201, accounts.Dto(user));
+    }
     [HttpPost("login"), EnableRateLimiting("auth")]
     [EndpointSummary("Sign in; the browser stores the HttpOnly session cookie")]
     [ProducesResponseType<AccountDto>(StatusCodes.Status200OK)]
@@ -33,6 +43,39 @@ public sealed class AccountsController(AccountService accounts) : ControllerBase
     [EndpointSummary("Clear the current browser's session cookie")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout() { await HttpContext.SignOutAsync(); return NoContent(); }
+
+    [HttpPost("password/forgot"), EnableRateLimiting("password")]
+    [EndpointSummary("Send a 6-digit password reset code by email (same response whether or not the email has an account)")]
+    [ProducesResponseType<ForgotPasswordResponse>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken ct) =>
+        Ok(await passwords.Forgot(request, ct));
+
+    [HttpPost("password/verify"), EnableRateLimiting("password")]
+    [EndpointSummary("Check a password reset code before choosing the new password (5 wrong tries lock the code)")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> VerifyResetCode(VerifyResetCodeRequest request, CancellationToken ct)
+    { await passwords.Verify(request, ct); return NoContent(); }
+
+    [HttpPost("password/reset"), EnableRateLimiting("password")]
+    [EndpointSummary("Set a new password with the emailed code; signs out every existing session")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct)
+    { await passwords.Reset(request, ct); await HttpContext.SignOutAsync(); return NoContent(); }
+}
+
+[ApiController, Authorize, Route("api/v1/me/password")]
+[Tags("Authentication")]
+public sealed class MyPasswordController(PasswordService passwords) : ControllerBase
+{
+    [HttpPut, EnableRateLimiting("password")]
+    [EndpointSummary("Change password with the current password; other devices are signed out, this one stays signed in")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Change(ChangePasswordRequest request, CancellationToken ct)
+    {
+        var user = await passwords.Change(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, ct);
+        await AccountsController.SignIn(HttpContext, user);
+        return NoContent();
+    }
 }
 [ApiController, Authorize, Route("api/v1/me/profile")]
 [Tags("Authentication")]

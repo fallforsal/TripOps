@@ -2,9 +2,10 @@ import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
 import { User } from "@/app/types";
 import { login } from "@/app/services/authService";
-import { Compass, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Info, CheckCircle2 } from "lucide-react";
+import { Compass, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Info } from "lucide-react";
 import { TRIPOPS_LOGO } from "@/app/constants/logo";
 import { Button } from "@/app/components/ui/button";
+import { ForgotPasswordFlow } from "@/app/components/auth/ForgotPasswordFlow";
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -27,7 +28,6 @@ export function LoginScreen({
   // Forgot password view state
   const [isForgotPw, setIsForgotPw] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,12 +46,6 @@ export function LoginScreen({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleForgotSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail.trim()) return;
-    setError('Khôi phục mật khẩu chưa được cấu hình.');
   };
 
   const demoAccounts = [
@@ -103,71 +97,16 @@ export function LoginScreen({
         {/* Card */}
         <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
           {isForgotPw ? (
-            <div className="space-y-4">
-              {forgotSuccess ? (
-                <div className="space-y-4 text-center py-4">
-                  <div className="w-12 h-12 bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] flex items-center justify-center mx-auto text-[#15803D]">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-[#0F172A]">
-                      Yêu cầu đã được ghi nhận (Mô phỏng)
-                    </h3>
-                    <p className="text-xs text-[#475569] leading-relaxed">
-                      Trong môi trường thử nghiệm, mật khẩu tạm thời cho email <strong>{forgotEmail}</strong> đã được thiết lập mặc định là <code>demo123</code>.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setEmail(forgotEmail);
-                      setPassword("demo123");
-                      setIsForgotPw(false);
-                      setForgotSuccess(false);
-                    }}
-                    className="w-full bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 rounded-[6px]"
-                  >
-                    Quay lại đăng nhập với thông tin này
-                  </Button>
-                </div>
-              ) : (
-                <form onSubmit={handleForgotSubmit} className="space-y-4 text-xs">
-                  <p className="text-xs text-[#475569] leading-relaxed">
-                    Nhập địa chỉ email đã đăng ký. Hệ thống sẽ hướng dẫn đặt lại mật khẩu cho bạn.
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-[#0F172A]">Email tài khoản:</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="your.email@example.com"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsForgotPw(false)}
-                      className="text-xs text-[#475569] hover:text-[#0F172A] flex items-center gap-1"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Quay lại</span>
-                    </button>
-
-                    <Button
-                      type="submit"
-                      className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold"
-                    >
-                      Gửi yêu cầu
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
+            <ForgotPasswordFlow
+              initialEmail={forgotEmail}
+              onCancel={() => setIsForgotPw(false)}
+              onDone={(doneEmail) => {
+                setEmail(doneEmail);
+                setPassword("");
+                setError("");
+                setIsForgotPw(false);
+              }}
+            />
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               {error && <NotificationMessage message={error} /> }

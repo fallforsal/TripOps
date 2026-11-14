@@ -51,8 +51,8 @@ public sealed class DatabaseDesignSchemaTests
             documented.Add((tableName, name));
             columnCount++;
         }
-        Assert.Equal(46, tableCount);
-        Assert.Equal(665, columnCount);
+        Assert.Equal(47, tableCount);
+        Assert.Equal(678, columnCount);
         Assert.Equal(tableCount, tables.Count);
         var missing = tables.Values.SelectMany(t => t.Columns.Select(c => (t.Name, c.Name))).Where(c => !documented.Contains(c)).ToArray();
         Assert.True(missing.Length == 0, "Undocumented columns: " + string.Join(", ", missing.Select(c => c.ToString())));

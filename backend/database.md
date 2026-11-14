@@ -36,6 +36,22 @@ Table users {
   province_name varchar(100) [note: 'Tên tỉnh/thành tại thời điểm lưu']
   ward_code varchar(10) [note: 'Mã phường/xã thuộc tỉnh đã chọn']
   ward_name varchar(150) [note: 'Tên phường/xã tại thời điểm lưu']
+  password_changed_at timestamp [note: 'Lần đổi/đặt lại mật khẩu gần nhất; phiên đăng nhập cũ hơn mốc này bị đăng xuất']
+}
+
+// Mã OTP quên mật khẩu (gửi qua email). Chỉ lưu mã băm SHA-256.
+Table password_reset_codes {
+  id int [pk, increment]
+  user_id varchar(36) [not null, note: 'FK tới users.id']
+  code_hash varchar(64) [not null, note: 'SHA-256 của mã OTP 6 số']
+  expires_at timestamp [not null, note: 'Hết hạn sau 10 phút']
+  failed_attempts int [not null, note: 'Số lần nhập sai; từ 5 lần thì mã bị khóa']
+  used_at timestamp [note: 'Thời điểm đã dùng để đặt lại mật khẩu, hoặc bị thay bằng mã mới']
+  created_at timestamp [not null, note: 'Thời điểm gửi; dùng để giới hạn gửi lại 60 giây và 5 lần/giờ']
+
+  indexes {
+    (user_id, created_at)
+  }
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.
@@ -784,7 +800,7 @@ Table feedbacks {
   overall_comment text [note: 'Nhận xét về lịch trình, cảnh quan, ẩm thực...']
 
   // Đánh giá công ty du lịch chủ trì
-  agency_rating int [not null, note: 'Điểm số 1 - 5 sao về chất lượng phục vụ của cty']
+  agency_rating int [not null, note: 'Khách không chấm riêng: BE lưu bằng overall_rating. Sao Agency tính bằng công thức Bayes từ overall_rating của mọi tour thuộc Agency']
   agency_comment text [note: 'Nhận xét về thái độ phục vụ, điều phối tour']
 
   images json [note: 'Ảnh chụp thực tế do khách đính kèm review']
@@ -808,9 +824,11 @@ Table feedbacks {
 // ============================================================================
 Table complaints {
   id int [pk, increment]
-  booking_id int [not null, note: 'FK tới bookings.id']
+  booking_id int [note: 'FK tới bookings.id - Bắt buộc với khiếu nại chuyến đi (Trip), NULL với khiếu nại nền tảng (Platform)']
   customer_id varchar(36) [not null, note: 'FK tới users.id - Khách hàng khiếu nại']
-  agency_id varchar(36) [not null, note: 'FK tới users.id - Công ty chủ trì bị khiếu nại']
+  agency_id varchar(36) [note: 'FK tới users.id - Công ty chủ trì của booking (Trip); NULL với khiếu nại nền tảng']
+  complaint_type varchar(20) [not null, default: 'Trip', note: 'Trip (về chuyến đi, trong 1 ngày sau khi tour hoàn thành) | Platform (về nền tảng TripOps)']
+  reason_code varchar(50) [not null, default: 'other', note: 'Trip: accommodation_food, schedule_change, guide_attitude, service_quality, pricing_billing, other; Platform: payment_refund, account, app_error, other']
 
   // Thông tin khiếu nại từ khách
   subject varchar(255) [not null, note: 'Tiêu đề khiếu nại (VD: Sai hạng phòng khách sạn so với cam kết)']
@@ -823,14 +841,14 @@ Table complaints {
 
   // Trọng tài Admin xử lý
   admin_id varchar(36) [note: 'FK tới users.id - Admin sàn giải quyết khiếu nại']
-  admin_notes text [note: 'Kết luận và phán quyết xử lý của Admin']
+  admin_notes text [note: 'Phản hồi của Admin gửi khách: lý do chấp nhận / không chấp nhận và cách xử lý']
   status varchar(30) [default: 'PENDING', note: 'PENDING (Chờ cty giải trình), IN_REVIEW (Admin đang xử lý), RESOLVED (Đã giải quyết), REJECTED (Bác bỏ)']
   resolved_at timestamp
 
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   deleted_at timestamp [note: 'Soft delete nếu cần']
-  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị.'
+  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị. Agency không xem/trả lời khiếu nại trên hệ thống. Admin xem khiếu nại, ghi phản hồi vào admin_notes rồi chấp nhận (RESOLVED) hoặc không chấp nhận (REJECTED); cần trao đổi thêm thì gọi điện hoặc dùng chat. Khiếu nại Trip đang mở (PENDING/IN_REVIEW) chặn tự chuyển tiền quyết toán.'
 }
 
 // ============================================================================
@@ -1118,6 +1136,7 @@ Ref: complaints.booking_id > bookings.id
 Ref: complaints.customer_id > users.id
 Ref: complaints.agency_id > users.id
 Ref: complaints.admin_id > users.id
+Ref: password_reset_codes.user_id > users.id
 
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id

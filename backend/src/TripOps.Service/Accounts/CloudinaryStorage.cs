@@ -23,6 +23,10 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IH
     public Task<string> UploadGuideCheckinImage(string guideId, byte[] bytes, string mime, CancellationToken ct)
         => UploadImage(guideId, bytes, mime, "guide-checkins", authenticated: true, ct, allowWebp: true);
 
+    /// <summary>Ảnh bằng chứng khiếu nại: riêng tư (chỉ khách đó và Admin xem), thư mục theo id khách.</summary>
+    public Task<string> UploadComplaintImage(string customerId, byte[] bytes, string mime, CancellationToken ct)
+        => UploadImage(customerId, bytes, mime, "complaints", authenticated: true, ct, allowWebp: true);
+
     public async Task<string> UploadGuideImage(string guideId, byte[] bytes, string mime, CancellationToken ct)
     {
         if (bytes.Length is <= 0 or > 2 * 1024 * 1024) throw new AccountException(400, "Ảnh chân dung tối đa 2 MB.");

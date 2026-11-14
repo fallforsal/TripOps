@@ -1,302 +1,130 @@
-import { useState, useMemo, useEffect } from "react";
-import {
-  ShieldAlert,
-  Plus,
-  Calendar,
-  Building2,
-  FileText,
-  Clock,
-  Send,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
-  MessageSquare,
-  ExternalLink,
-} from "lucide-react";
-import { CustomerComplaint, Booking, User } from "@/app/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Building2, Calendar, Loader2, Plus, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/app/components/customer/PageHeader";
-import { StatusBadge } from "@/app/components/customer/StatusBadge";
 import { EmptyState } from "@/app/components/customer/EmptyState";
 import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { EvidencePicker } from "@/app/components/reviews/EvidencePicker";
+import { BookingPicker } from "@/app/components/reviews/BookingPicker";
+import { ComplaintContent } from "@/app/components/reviews/ComplaintContent";
+import {
+  COMPLAINT_STATUS_LABEL,
+  COMPLAINT_STATUS_STYLE,
+  PLATFORM_REASONS,
+  TRIP_REASONS,
+  createComplaint,
+  formatDate,
+  formatDateTime,
+  getMyComplaint,
+  isComplaintOpen,
+  listComplaintBookingOptions,
+  listMyComplaints,
+  reasonLabel,
+  type ComplaintBookingOption,
+  type ComplaintDetail,
+  type ComplaintSummary,
+  type ComplaintType,
+} from "@/app/services/reviews";
 
-interface MyComplaintsPageProps {
-  complaints: CustomerComplaint[];
-  userBookings: Booking[];
-  currentUser: User | null;
-  initialSelectedBooking?: Booking | null;
-  onAddComplaint: (newComplaint: Omit<CustomerComplaint, "id" | "createdAt" | "status">) => void;
-  onAddComplaintMessage?: (complaintId: string, content: string) => void;
-  onViewBookingDetail?: (booking: Booking) => void;
+type Tab = "all" | "open" | "closed";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "all", label: "Tất cả" },
+  { id: "open", label: "Chờ xem xét" },
+  { id: "closed", label: "Đã có phản hồi" },
+];
+
+function TypeBadge({ type }: { type: ComplaintType }) {
+  return type === "Trip" ? (
+    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[4px] border bg-[#F0F9FF] text-[#075985] border-[#BAE6FD]">Chuyến đi</span>
+  ) : (
+    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[4px] border bg-violet-50 text-violet-800 border-violet-200">Nền tảng TripOps</span>
+  );
 }
 
-export function MyComplaintsPage({
-  complaints,
-  userBookings,
-  currentUser,
-  initialSelectedBooking,
-  onAddComplaint,
-  onAddComplaintMessage,
-  onViewBookingDetail,
-}: MyComplaintsPageProps) {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const statusTabs = [
-    { id: "all", label: "Tất cả" },
-    { id: "pending", label: "Chờ xử lý" },
-    { id: "processing", label: "Đang xử lý" },
-    { id: "resolved", label: "Đã giải quyết" },
-    { id: "rejected", label: "Đã từ chối" },
-  ];
-  const filteredComplaints = complaints.filter(c => statusFilter === "all" || c.status === statusFilter);
-  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(Boolean(initialSelectedBooking));
-  const [selectedBookingId, setSelectedBookingId] = useState(
-    initialSelectedBooking?.id || (userBookings[0]?.id ?? "")
+function StatusPill({ status }: { status: ComplaintSummary["status"] }) {
+  return (
+    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${COMPLAINT_STATUS_STYLE[status]}`}>
+      {COMPLAINT_STATUS_LABEL[status]}
+    </span>
   );
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<CustomerComplaint["category"]>("service_quality");
-  const [description, setDescription] = useState("");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
-  const [replyText, setReplyText] = useState("");
-  useEffect(() => {
-    if (initialSelectedBooking?.id) {
-      setSelectedBookingId(initialSelectedBooking.id);
-      setShowCreateModal(true);
-    }
-  }, [initialSelectedBooking]);
+}
 
-  const selectedComplaint = complaints.find((c) => c.id === selectedComplaintId);
+/**
+ * Khiếu nại của tôi. Khách trao đổi trực tiếp với Admin; Agency không xem khiếu nại trên hệ thống.
+ * Khiếu nại chuyến đi: chỉ booking đã hoàn thành, trong 1 ngày sau khi tour kết thúc. Khiếu nại nền tảng: không giới hạn.
+ */
+export function MyComplaintsPage({
+  initialBookingId,
+  onViewBookingDetail,
+}: {
+  initialBookingId?: number | null;
+  onViewBookingDetail?: (bookingId: number) => void;
+}) {
+  const [items, setItems] = useState<ComplaintSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<Tab>("all");
+  const [detail, setDetail] = useState<ComplaintDetail | null>(null);
+  const [creating, setCreating] = useState(Boolean(initialBookingId));
 
-  const selectedBooking = useMemo(() => {
-    return userBookings.find((b) => b.id === selectedBookingId);
-  }, [userBookings, selectedBookingId]);
+  const load = useCallback(() => {
+    setLoading(true);
+    listMyComplaints()
+      .then((list) => { setItems(list); setError(""); })
+      .catch((e) => setError(e instanceof Error ? e.message : "Không tải được khiếu nại."))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(load, [load]);
+  useEffect(() => { if (initialBookingId) setCreating(true); }, [initialBookingId]);
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !description.trim() || !selectedBooking) return;
+  const filtered = useMemo(
+    () => items.filter((c) => tab === "all" || (tab === "open") === isComplaintOpen(c.status)),
+    [items, tab],
+  );
 
-    onAddComplaint({
-      bookingId: selectedBooking.id,
-      bookingCode: selectedBooking.tour?.tourCode || selectedBooking.id,
-      tourName: selectedBooking.tour?.name || "Chương trình tour đoàn",
-      departureDate: selectedBooking.tourStartDate,
-      agencyName: selectedBooking.companyName || selectedBooking.tour?.companyName || "Travel Agency",
-      userId: currentUser?.id || "user-1",
-      customerName: currentUser?.name || selectedBooking.userName,
-      customerPhone: currentUser?.phone || selectedBooking.contactPhone,
-      title: title.trim(),
-      category,
-      description: description.trim(),
-      evidenceUrls: evidenceUrl.trim() ? [evidenceUrl.trim()] : [],
-      messages: [
-        {
-          id: `cmsg-${Date.now()}`,
-          senderName: currentUser?.name || "Khách hàng",
-          senderRole: "customer",
-          content: description.trim(),
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 16),
-        },
-      ],
-    });
-
-    setShowCreateModal(false);
-    setTitle("");
-    setDescription("");
-    setEvidenceUrl("");
+  const openDetail = async (id: number) => {
+    try { setDetail(await getMyComplaint(id)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Không mở được khiếu nại."); }
   };
 
-  const handleSendReply = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replyText.trim() || !selectedComplaint || !onAddComplaintMessage) return;
-
-    onAddComplaintMessage(selectedComplaint.id, replyText.trim());
-    setReplyText("");
-  };
-
-  // Detail View (7.13)
-  if (selectedComplaint) {
-    const relatedBooking = userBookings.find((b) => b.id === selectedComplaint.bookingId);
-
+  if (detail) {
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 font-sans">
         <PageHeader
-          title={`Chi tiết khiếu nại #${selectedComplaint.id}`}
-          subtitle={`Booking: ${selectedComplaint.bookingCode} • ${selectedComplaint.tourName}`}
-          onBack={() => setSelectedComplaintId(null)}
+          title={detail.title}
+          subtitle={`Khiếu nại #${detail.id} · gửi ${formatDateTime(detail.createdAt)}`}
+          onBack={() => { setDetail(null); load(); }}
           backText="Quay lại danh sách khiếu nại"
-          actions={
-            <StatusBadge type="complaint" status={selectedComplaint.status} />
-          }
+          actions={<StatusPill status={detail.status} />}
         />
-
-        {/* Complaint Overview Card */}
-        <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#F1F5F9] pb-3">
-            <div>
-              <span className="text-xs font-semibold text-[#075985] uppercase tracking-wide">
-                Tiêu đề khiếu nại:
-              </span>
-              <h2 className="text-lg font-bold text-[#0F172A] mt-0.5">
-                {selectedComplaint.title}
-              </h2>
-            </div>
-
-            <span className="text-xs text-[#475569]">
-              Ngày gửi: {new Date(selectedComplaint.createdAt).toLocaleDateString("vi-VN")}
-            </span>
+        <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <TypeBadge type={detail.type} />
+            <span className="text-xs text-[#475569]">{reasonLabel(detail.type, detail.reasonCode)}</span>
           </div>
-
-          {/* Related Booking Summary */}
-          <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div>
-              <span className="text-[#475569] block">Đơn vị lữ hành phụ trách:</span>
-              <strong className="text-[#0F172A] font-semibold">{selectedComplaint.agencyName}</strong>
-            </div>
-            <div>
-              <span className="text-[#475569] block">Ngày khởi hành tour:</span>
-              <strong className="text-[#0F172A] font-semibold">{selectedComplaint.departureDate}</strong>
-            </div>
-            <div>
-              <span className="text-[#475569] block">Mã đơn đặt tour:</span>
-              <span className="font-mono text-[#075985] font-semibold">{selectedComplaint.bookingCode}</span>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1.5 text-xs text-[#0F172A]">
-            <span className="font-semibold text-[#475569]">Nội dung sự việc:</span>
-            <div className="p-3 bg-white border border-[#CBD5E1] rounded-[4px] leading-relaxed">
-              {selectedComplaint.description}
-            </div>
-          </div>
-
-          {/* Evidence if any */}
-          {selectedComplaint.evidenceUrls && selectedComplaint.evidenceUrls.length > 0 && (
-            <div className="space-y-1.5 text-xs">
-              <span className="font-semibold text-[#475569]">Hình ảnh / Bằng chứng đính kèm:</span>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {selectedComplaint.evidenceUrls.map((url, i) => (
-                  <a
-                    key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block w-24 h-24 rounded-[4px] overflow-hidden border border-[#CBD5E1] hover:border-[#075985] transition-colors"
-                  >
-                    <img src={url} alt="Bằng chứng" className="w-full h-full object-cover" />
-                  </a>
-                ))}
+          {detail.type === "Trip" && (
+            <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-[#475569] block">Booking</span>
+                {onViewBookingDetail && detail.bookingId ? (
+                  <button type="button" onClick={() => onViewBookingDetail(detail.bookingId!)} className="font-mono font-semibold text-[#075985] hover:underline">
+                    {detail.bookingCode}
+                  </button>
+                ) : <span className="font-mono font-semibold text-[#075985]">{detail.bookingCode}</span>}
+              </div>
+              <div>
+                <span className="text-[#475569] block">Tour</span>
+                <strong className="text-[#0F172A] font-semibold">{detail.tourName}</strong>
+              </div>
+              <div>
+                <span className="text-[#475569] block">Agency</span>
+                <strong className="text-[#0F172A] font-semibold">{detail.agencyName}</strong>
               </div>
             </div>
           )}
-
-          {/* Resolution Result if resolved */}
-          {selectedComplaint.status === "resolved" && selectedComplaint.resolutionNote && (
-            <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] space-y-1 text-xs text-[#15803D]">
-              <p className="font-bold flex items-center gap-1.5 text-sm">
-                <CheckCircle2 className="w-4 h-4" />
-                Kết quả giải quyết thỏa đáng:
-              </p>
-              <p className="leading-relaxed text-[#14532D]">
-                {selectedComplaint.resolutionNote}
-              </p>
-              {selectedComplaint.resolvedAt && (
-                <span className="text-[11px] text-[#15803D] block pt-1">
-                  Đã chốt ngày: {new Date(selectedComplaint.resolvedAt).toLocaleDateString("vi-VN")}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Message Exchange / Progress Timeline */}
-        <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#F1F5F9] pb-3">
-            <MessageSquare className="w-4 h-4 text-[#075985]" />
-            <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">
-              Trao đổi phản hồi giữa Khách hàng, Agency &amp; Quản trị sàn
-            </h3>
-          </div>
-
-          <div className="space-y-3">
-            {selectedComplaint.messages && selectedComplaint.messages.length > 0 ? (
-              selectedComplaint.messages.map((msg) => {
-                const isCustomer = msg.senderRole === "customer";
-                const isAdmin = msg.senderRole === "admin";
-                return (
-                  <div
-                    key={msg.id}
-                    className={`p-3.5 rounded-[6px] text-xs space-y-1 ${
-                      isCustomer
-                        ? "bg-[#F0F9FF] border border-[#BAE6FD] ml-4 sm:ml-8"
-                        : isAdmin
-                        ? "bg-[#FFFBEB] border border-[#FDE68A] mr-4 sm:mr-8"
-                        : "bg-[#F8FAFC] border border-[#CBD5E1] mr-4 sm:mr-8"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-semibold">
-                      <span className={isCustomer ? "text-[#075985]" : isAdmin ? "text-[#B45309]" : "text-[#0F172A]"}>
-                        {msg.senderName} {isAdmin ? "(Admin TripOps)" : !isCustomer ? "(Travel Agency)" : "(Khách hàng)"}
-                      </span>
-                      <span className="text-[11px] text-[#94A3B8] font-normal">
-                        {msg.timestamp}
-                      </span>
-                    </div>
-                    <p className="text-[#334155] leading-relaxed">
-                      {msg.content}
-                    </p>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-[#475569] italic">
-                Chưa có trao đổi nào thêm. Yêu cầu đang được lưu trữ trên hệ thống kiểm duyệt.
-              </p>
-            )}
-          </div>
-
-          {/* Send Response form if active */}
-          {selectedComplaint.status !== "resolved" && onAddComplaintMessage && (
-            <form onSubmit={handleSendReply} className="pt-3 border-t border-[#F1F5F9] flex gap-2">
-              <input
-                type="text"
-                placeholder="Nhập nội dung phản hồi tiếp theo..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="flex-1 h-9 px-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-              <Button
-                type="submit"
-                className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Gửi phản hồi</span>
-              </Button>
-            </form>
-          )}
-        </div>
-
-        {/* Footer actions */}
-        <div className="flex items-center justify-between pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSelectedComplaintId(null)}
-            className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
-          >
-            Quay lại danh sách khiếu nại
-          </Button>
-
-          {relatedBooking && onViewBookingDetail && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onViewBookingDetail(relatedBooking)}
-              className="border-[#075985] text-[#075985] hover:bg-[#F0F9FF] text-xs h-9 px-4 rounded-[6px] flex items-center gap-1.5"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Xem hồ sơ booking gốc</span>
-            </Button>
-          )}
+          <ComplaintContent complaint={detail} />
         </div>
       </div>
     );
@@ -305,264 +133,240 @@ export function MyComplaintsPage({
   return (
     <div className="space-y-6 pb-16 font-sans">
       <PageHeader
-        title="Khiếu nại chuyến đi của tôi"
-        subtitle="Quản lý các phản ánh chất lượng dịch vụ, khách sạn, xe hoặc hướng dẫn viên gắn với đơn đặt tour"
+        title="Khiếu nại của tôi"
+        subtitle="Báo sự cố cần TripOps can thiệp, về chuyến đi hoặc về nền tảng. Admin TripOps xem xét và phản hồi kết quả tại đây."
         actions={
-          userBookings.length > 0 ? (
-            <Button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-medium flex items-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Gửi khiếu nại mới</span>
-            </Button>
-          ) : null
+          <Button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-medium flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Gửi khiếu nại</span>
+          </Button>
         }
       />
 
+
       <div role="tablist" aria-label="Trạng thái khiếu nại" className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2">
-        {statusTabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={statusFilter === tab.id} onClick={() => setStatusFilter(tab.id)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${statusFilter === tab.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
-          {tab.label} <span className="ml-1.5 opacity-80">({complaints.filter(c => tab.id === "all" || c.status === tab.id).length})</span>
-        </button>)}
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            {t.label}
+            <span className="ml-1.5 opacity-80">({items.filter((c) => t.id === "all" || (t.id === "open") === isComplaintOpen(c.status)).length})</span>
+          </button>
+        ))}
       </div>
 
-      {/* Complaints List */}
-      {filteredComplaints.length > 0 ? (
-        <div className="space-y-4">
-          {filteredComplaints.map((comp) => (
-            <div
-              key={comp.id}
-              className="bg-white border border-[#CBD5E1] rounded-[6px] p-5 hover:border-[#075985] transition-colors space-y-3"
+      {loading ? (
+        <div className="py-10 flex justify-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /></div>
+      ) : error ? (
+        <p role="alert" className="text-sm text-rose-700">{error}</p>
+      ) : filtered.length > 0 ? (
+        <div className="space-y-3">
+          {filtered.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => openDetail(c.id)}
+              className="w-full text-left bg-white border border-[#CBD5E1] rounded-[6px] p-4 hover:border-[#075985] transition-colors space-y-2"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#F1F5F9]">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono font-bold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded-[4px] border border-[#BAE6FD]">
-                    {comp.id}
-                  </span>
-                  <span className="text-xs text-[#475569] flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-[#075985]" />
-                    <span>Agency: <strong>{comp.agencyName}</strong></span>
-                  </span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <TypeBadge type={c.type} />
+                  <span className="text-xs text-[#475569]">{reasonLabel(c.type, c.reasonCode)}</span>
                 </div>
-
-                <StatusBadge type="complaint" status={comp.status} size="sm" />
+                <StatusPill status={c.status} />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <div className="md:col-span-8 space-y-1.5">
-                  <h3
-                    onClick={() => setSelectedComplaintId(comp.id)}
-                    className="text-base font-bold text-[#0F172A] hover:text-[#075985] cursor-pointer transition-colors"
-                  >
-                    {comp.title}
-                  </h3>
-
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5 text-[#075985]" />
-                      <span>Tour: {comp.tourName}</span>
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-[#075985]" />
-                      <span>Khởi hành: {comp.departureDate}</span>
-                    </span>
-
-                    <span className="text-[#94A3B8]">
-                      Gửi: {new Date(comp.createdAt).toLocaleDateString("vi-VN")}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-[#475569] line-clamp-2 bg-[#F8FAFC] p-2 rounded-[4px] border border-[#F1F5F9]">
-                    {comp.description}
-                  </p>
-                </div>
-
-                <div className="md:col-span-4 flex items-center md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setSelectedComplaintId(comp.id)}
-                    className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-8 px-3 rounded-[6px]"
-                  >
-                    Xem chi tiết xử lý
-                  </Button>
-                </div>
+              <h3 className="text-base font-bold text-[#0F172A]">{c.title}</h3>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-[#475569]">
+                {c.type === "Trip" && (
+                  <>
+                    <span className="font-mono text-[#075985]">{c.bookingCode}</span>
+                    {c.tourName && <span>{c.tourName}</span>}
+                    {c.agencyName && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{c.agencyName}</span>}
+                  </>
+                )}
+                <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Gửi {formatDate(c.createdAt)}</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       ) : (
         <EmptyState
           icon={ShieldAlert}
-          title={statusFilter === "all" ? "Không có khiếu nại nào" : "Chưa có khiếu nại trong trạng thái này"}
-          description={statusFilter === "all" ? "Bạn có thể gửi phản ánh về chuyến đi để được hỗ trợ giải quyết." : "Chọn Tất cả để xem toàn bộ khiếu nại của bạn."}
-          actionText={statusFilter !== "all" ? "Xem tất cả" : userBookings.length > 0 ? "Gửi khiếu nại mới" : undefined}
-          onAction={() => statusFilter !== "all" ? setStatusFilter("all") : setShowCreateModal(true)}
+          title={tab === "all" ? "Bạn chưa gửi khiếu nại nào" : "Không có khiếu nại trong mục này"}
+          description="Nếu chuyến đi hoặc nền tảng có sự cố cần xử lý, hãy gửi khiếu nại để Admin TripOps hỗ trợ."
+          actionText={tab === "all" ? "Gửi khiếu nại" : "Xem tất cả"}
+          onAction={() => (tab === "all" ? setCreating(true) : setTab("all"))}
         />
       )}
 
-      {/* Create Complaint Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#CBD5E1] rounded-[6px] max-w-xl w-full p-6 space-y-4 shadow-sm animate-in fade-in-50 duration-100">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-              <h3 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-[#B91C1C]" />
-                Gửi khiếu nại phản ánh chuyến đi
-              </h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-[#94A3B8] hover:text-[#0F172A] p-1"
-              >
-                ✕
-              </button>
+      <CreateComplaintDialog
+        open={creating}
+        onOpenChange={setCreating}
+        initialBookingId={initialBookingId ?? null}
+        onCreated={(created) => { setCreating(false); load(); setDetail(created); }}
+      />
+    </div>
+  );
+}
+
+function CreateComplaintDialog({
+  open,
+  onOpenChange,
+  initialBookingId,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialBookingId: number | null;
+  onCreated: (complaint: ComplaintDetail) => void;
+}) {
+  const [options, setOptions] = useState<ComplaintBookingOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [type, setType] = useState<ComplaintType>("Trip");
+  const [bookingId, setBookingId] = useState<number | "">("");
+  const [reason, setReason] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setType("Trip"); setReason(""); setTitle(""); setDescription(""); setFiles([]); setError("");
+    setLoading(true);
+    listComplaintBookingOptions()
+      .then((list) => {
+        setOptions(list);
+        const preferred = list.find((o) => o.bookingId === initialBookingId && o.canComplain) ?? list.find((o) => o.canComplain);
+        setBookingId(preferred?.bookingId ?? "");
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Không tải được danh sách chuyến đi."))
+      .finally(() => setLoading(false));
+  }, [open, initialBookingId]);
+
+  const reasons = type === "Trip" ? TRIP_REASONS : PLATFORM_REASONS;
+  const booking = options.find((o) => o.bookingId === bookingId);
+  const initialExpired = initialBookingId ? options.find((o) => o.bookingId === initialBookingId && !o.canComplain) : undefined;
+  const noEligibleTrip = type === "Trip" && !options.some((o) => o.canComplain);
+
+  const submit = async () => {
+    if (type === "Trip" && !booking) return setError("Vui lòng chọn chuyến đi cần khiếu nại.");
+    if (!reason) return setError("Vui lòng chọn vấn đề gặp phải.");
+    if (title.trim().length < 5) return setError("Tiêu đề cần ít nhất 5 ký tự.");
+    if (description.trim().length < 10) return setError("Mô tả cần ít nhất 10 ký tự.");
+    setSaving(true);
+    setError("");
+    try {
+      onCreated(await createComplaint({ type, bookingId: booking?.bookingId, reasonCode: reason, title, description, files }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không gửi được khiếu nại.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectClass = "w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-[#075985]";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-[#B91C1C]" /> Gửi khiếu nại</DialogTitle>
+          <DialogDescription>Admin TripOps sẽ xem xét, liên hệ các bên liên quan nếu cần và phản hồi kết quả cho bạn.</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 flex justify-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /></div>
+        ) : (
+          <div className="space-y-4 text-sm">
+            <div className="space-y-1.5">
+              <label htmlFor="complaint-type" className="text-xs font-semibold text-[#0F172A]">Khiếu nại về <span className="text-rose-600">*</span></label>
+              <select id="complaint-type" value={type} onChange={(e) => { setType(e.target.value as ComplaintType); setReason(""); }} className={selectClass}>
+                <option value="Trip">Chuyến đi (tour đã hoàn thành)</option>
+                <option value="Platform">Nền tảng TripOps (thanh toán, tài khoản, lỗi website…)</option>
+              </select>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
-              {/* Select Booking */}
+            {type === "Trip" && (
               <div className="space-y-1.5">
-                <label className="font-semibold text-[#0F172A]">
-                  Chọn đơn đặt tour cần khiếu nại <span className="text-[#B91C1C]">*</span>
-                </label>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto border border-[#CBD5E1] rounded-[6px] p-1.5 bg-slate-50/50 divide-y divide-slate-100">
-                  {userBookings.map((b) => {
-                    const isSelected = selectedBookingId === b.id;
-                    return (
-                      <div
-                        key={b.id}
-                        onClick={() => setSelectedBookingId(b.id)}
-                        className={`p-2.5 rounded-[4px] cursor-pointer transition-colors ${
-                          isSelected
-                            ? "bg-[#F0F9FF] border border-[#BAE6FD] text-[#075985]"
-                            : "bg-white hover:bg-slate-50 text-slate-800"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-xs">
-                            #{b.id} – {b.tour?.name || "Tour du lịch"}
-                          </span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                            Khởi hành: {b.tourStartDate || "Thỏa thuận"}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3">
-                          <span>Đơn vị: {b.companyName || b.tour?.companyName || "Travel Agency"}</span>
-                          <span>•</span>
-                          <span>{b.numberOfGuests} khách</span>
-                          <span>•</span>
-                          <span>{(b.totalPrice || 0).toLocaleString("vi-VN")} đ</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <label htmlFor="complaint-booking" className="text-xs font-semibold text-[#0F172A]">Chuyến đi <span className="text-rose-600">*</span></label>
+                {options.length === 0 ? (
+                  <p className="text-xs text-slate-600 rounded-[6px] border border-slate-200 bg-slate-50 p-2.5">
+                    Bạn chưa có chuyến đi nào đã hoàn thành. Khiếu nại về chuyến đi chỉ gửi được sau khi tour kết thúc.
+                  </p>
+                ) : (
+                  <>
+                    <BookingPicker
+                      id="complaint-booking"
+                      value={bookingId}
+                      onChange={setBookingId}
+                      placeholder={options.some((o) => o.canComplain) ? "Chọn chuyến đi" : "Không còn chuyến đi trong hạn khiếu nại"}
+                      options={options.map((o) => ({
+                        id: o.bookingId,
+                        code: o.bookingCode,
+                        title: o.tourName ?? "Tour",
+                        details: `Khởi hành ${formatDate(o.startDate)}${o.agencyName ? ` · ${o.agencyName}` : ""}`,
+                        disabled: !o.canComplain,
+                        badge: o.canComplain ? undefined : "Hết hạn",
+                      }))}
+                    />
+                    {booking && <p className="text-[11px] text-slate-500">Hạn khiếu nại: {formatDateTime(booking.deadline)}</p>}
+                    {initialExpired && (
+                      <p className="text-[11px] text-amber-800">Booking {initialExpired.bookingCode} đã quá hạn khiếu nại (1 ngày sau khi tour kết thúc, đến {formatDateTime(initialExpired.deadline)}).</p>
+                    )}
+                  </>
+                )}
               </div>
+            )}
 
-              {/* Prefilled booking preview */}
-              {selectedBooking && (
-                <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[4px] grid grid-cols-2 gap-2 text-[11px]">
-                  <div>
-                    <span className="text-[#475569] block">Agency phụ trách:</span>
-                    <strong className="text-[#0F172A] font-semibold">
-                      {selectedBooking.companyName || selectedBooking.tour?.companyName}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-[#475569] block">Số khách tham gia:</span>
-                    <strong className="text-[#0F172A] font-semibold">
-                      {selectedBooking.numberOfGuests} khách
-                    </strong>
-                  </div>
-                </div>
-              )}
+            <div className="space-y-1.5">
+              <label htmlFor="complaint-reason" className="text-xs font-semibold text-[#0F172A]">Vấn đề gặp phải <span className="text-rose-600">*</span></label>
+              <select id="complaint-reason" value={reason} onChange={(e) => setReason(e.target.value)} className={selectClass}>
+                <option value="">— Chọn vấn đề —</option>
+                {Object.entries(reasons).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+              </select>
+            </div>
 
-              {/* Category */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[#0F172A]">
-                  Phân loại vấn đề <span className="text-[#B91C1C]">*</span>
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as any)}
-                  className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                >
-                  <option value="accommodation_food">Khách sạn lưu trú & Bữa ăn không đúng cam kết</option>
-                  <option value="schedule_change">Thay đổi lịch trình / Xe đón trễ giờ</option>
-                  <option value="guide_attitude">Thái độ hoặc chất lượng hướng dẫn viên</option>
-                  <option value="service_quality">Chất lượng dịch vụ tham quan</option>
-                  <option value="pricing_billing">Chi phí / Yêu cầu thanh toán không hợp lệ</option>
-                  <option value="other">Vấn đề khác</option>
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <label htmlFor="complaint-title" className="text-xs font-semibold text-[#0F172A]">Tiêu đề <span className="text-rose-600">*</span></label>
+              <Input id="complaint-title" value={title} maxLength={255} onChange={(e) => setTitle(e.target.value)}
+                placeholder={type === "Trip" ? "VD: Phòng khách sạn đêm 2 không đúng hạng 4 sao" : "VD: Đã duyệt hoàn tiền nhưng chưa nhận được"} />
+            </div>
 
-              {/* Title */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[#0F172A]">
-                  Tóm tắt nội dung khiếu nại <span className="text-[#B91C1C]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="VD: Phòng khách sạn đêm 2 bị đổi sang khu phụ không đạt 4 sao..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <label htmlFor="complaint-description" className="text-xs font-semibold text-[#0F172A]">Mô tả chi tiết <span className="text-rose-600">*</span></label>
+              <Textarea id="complaint-description" value={description} maxLength={4000} rows={5} onChange={(e) => setDescription(e.target.value)}
+                placeholder="Thời gian, địa điểm, sự việc xảy ra và bạn mong muốn được xử lý thế nào..." />
+            </div>
 
-              {/* Description */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[#0F172A]">
-                  Mô tả chi tiết sự việc <span className="text-[#B91C1C]">*</span>
-                </label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Ghi rõ thời gian, địa điểm, sự việc diễn ra và yêu cầu bồi hoàn/xử lý của đoàn..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full p-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-[#0F172A]">Ảnh bằng chứng (không bắt buộc)</p>
+              <EvidencePicker files={files} onChange={setFiles} onError={setError} disabled={saving} />
+            </div>
 
-              {/* Evidence URL */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[#0F172A]">
-                  Đường dẫn ảnh bằng chứng (nếu có):
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={evidenceUrl}
-                  onChange={(e) => setEvidenceUrl(e.target.value)}
-                  className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                />
-              </div>
+            {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCreateModal(false)}
-                  className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
-                >
-                  Hủy bỏ
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-[#B91C1C] hover:bg-[#991B1B] text-white text-xs h-9 px-5 rounded-[6px] font-semibold"
-                >
-                  Gửi khiếu nại
-                </Button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
+              <Button type="button" onClick={submit} disabled={saving || noEligibleTrip}
+                className="bg-[#075985] hover:bg-[#0C4A6E] text-white gap-1.5">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Gửi khiếu nại
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

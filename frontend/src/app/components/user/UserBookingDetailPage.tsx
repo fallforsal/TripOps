@@ -56,6 +56,7 @@ import {
 import { CancelTourModal } from "./CancelTourModal";
 import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
 import { ContractCard } from "@/app/components/common/ContractCard";
+import { TourReviewDialog } from "@/app/components/reviews/TourReviewDialog";
 import type { ContractDto, RefundAccountInput, SignSessionStartDto } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
@@ -74,7 +75,6 @@ interface UserBookingDetailPageProps {
   /** Yêu cầu backend kiểm tra lại trạng thái thanh toán payOS. */
   onCheckPayment?: (bookingId: string) => void;
   onNavigateToComplaint?: (booking: Booking) => void;
-  onNavigateToReview?: (booking: Booking) => void;
   /** Khách bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
   onUpdateRefundAccount?: (bookingId: string, input: RefundAccountInput) => Promise<boolean>;
   /** Khách tải bản hợp đồng đã ký (bắt buộc trước thanh toán đầu tiên). */
@@ -154,7 +154,6 @@ export function UserBookingDetailPage({
   paymentCheck,
   onCheckPayment,
   onNavigateToComplaint,
-  onNavigateToReview,
   onSubmitRefundRequest,
   onUpdateRefundAccount,
   onUploadSignedContract,
@@ -164,6 +163,7 @@ export function UserBookingDetailPage({
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequest | null>(null);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
@@ -323,10 +323,10 @@ export function UserBookingDetailPage({
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
-              {booking.status === "completed" && onNavigateToReview && (
+              {booking.status === "completed" && (
                 <Button
                   variant="outline"
-                  onClick={() => onNavigateToReview(booking)}
+                  onClick={() => setReviewOpen(true)}
                   className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-[#075985] bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] font-semibold rounded-[6px] text-xs transition-colors"
                 >
                   <Star className="w-3.5 h-3.5 fill-[#B45309] text-[#B45309]" />
@@ -334,7 +334,8 @@ export function UserBookingDetailPage({
                 </Button>
               )}
 
-              {!isClosedBooking && onNavigateToComplaint && (
+              {/* Khiếu nại chuyến đi chỉ gửi sau khi tour kết thúc (hạn 1 ngày, kiểm tra ở form). */}
+              {booking.status === "completed" && onNavigateToComplaint && (
                 <Button
                   variant="outline"
                   onClick={() => onNavigateToComplaint(booking)}
@@ -1805,6 +1806,14 @@ export function UserBookingDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Đánh giá chuyến đi: mở ngay tại chi tiết booking */}
+      <TourReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        bookingId={Number(booking.id)}
+        onComplain={onNavigateToComplaint ? () => onNavigateToComplaint(booking) : undefined}
+      />
 
       {/* CANCEL MODAL */}
       {showCancelModal && (

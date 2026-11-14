@@ -90,6 +90,8 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
             ?? throw new AccountException(404, "Không tìm thấy tài khoản HDV thuộc Agency của bạn. Hồ sơ mẫu chưa có trong database không thể đổi mật khẩu.");
         guide.PasswordHash = hasher.HashPassword(guide, request.NewPassword);
         guide.UpdatedAt = DateTime.UtcNow;
+        // HDV đang đăng nhập bằng mật khẩu cũ sẽ bị đăng xuất.
+        guide.PasswordChangedAt = new DateTime(guide.UpdatedAt.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
         await db.SaveChangesAsync(ct);
     }
     public async Task<ProfileDto> Submit(string id, ProfileRequest request, byte[]? image, string? mime, CancellationToken ct)
