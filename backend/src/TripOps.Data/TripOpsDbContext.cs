@@ -62,6 +62,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<WorkflowNotification> WorkflowNotifications => Set<WorkflowNotification>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Complaint> Complaints => Set<Complaint>();
+    public DbSet<ComplaintMessage> ComplaintMessages => Set<ComplaintMessage>();
 
     // 7. Chat & Subscription Extensions
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
@@ -140,6 +141,7 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<ChatConversation>().ToTable("chat_conversations");
         modelBuilder.Entity<ChatMessage>().ToTable("chat_messages");
         modelBuilder.Entity<Complaint>().ToTable("complaints");
+        modelBuilder.Entity<ComplaintMessage>().ToTable("complaint_messages");
         modelBuilder.Entity<Feedback>().ToTable("feedbacks");
         modelBuilder.Entity<PaymentRequest>().ToTable("payment_requests");
         modelBuilder.Entity<PaymentTransaction>().ToTable("payment_transactions");

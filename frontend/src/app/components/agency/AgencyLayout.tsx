@@ -16,6 +16,7 @@ import {
   Compass,
   BookUser,
   HandCoins,
+  Star,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
@@ -47,6 +48,7 @@ export function AgencyLayout({
     { id: "tours", label: "Quản lý Tour", icon: Package },
     { id: "bookings", label: "Đặt tour & Khách", icon: Calendar },
     { id: "finance", label: "Thu chi & Hoàn tiền", icon: HandCoins },
+    { id: "reviews", label: "Đánh giá từ khách", icon: Star },
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
     { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },

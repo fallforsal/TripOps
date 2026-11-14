@@ -98,6 +98,9 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<Feedback>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Feedback>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Complaint>().Property(e => e.Status).HasDefaultValue(ComplaintStatus.Pending);
+        modelBuilder.Entity<Complaint>().Property(e => e.Type).HasDefaultValue(ComplaintTypes.Trip);
+        modelBuilder.Entity<Complaint>().Property(e => e.ReasonCode).HasDefaultValue("other");
+        modelBuilder.Entity<ComplaintMessage>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Complaint>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<Complaint>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<ChatConversation>().Property(e => e.Status).HasDefaultValue("active");

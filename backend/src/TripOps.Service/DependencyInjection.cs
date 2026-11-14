@@ -46,6 +46,9 @@ public static class DependencyInjection
         services.AddHostedService<Settlements.SettlementWorker>();
         // Agency chủ trì xem (chỉ đọc) lịch sử hoàn tiền của khách — UC-068/UC-069.
         services.AddScoped<Refunds.AgencyRefundsService>();
+        // Đánh giá tour (sao Agency tính bằng công thức) và khiếu nại khách ↔ Admin.
+        services.AddScoped<Reviews.FeedbackService>();
+        services.AddScoped<Reviews.ComplaintService>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();
         services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();

@@ -21,9 +21,12 @@ public virtual User Agency { get; set; } = null!;
 }
 
 public class Complaint : BaseEntity<int> {
-public int BookingId { get; set; }
+// Khiếu nại "Trip" gắn với một booking (và Agency chủ trì); khiếu nại "Platform" về TripOps thì không có booking/Agency.
+public int? BookingId { get; set; }
 public string ComplainantId { get; set; } = string.Empty;
-public string TargetId { get; set; } = string.Empty;
+public string? TargetId { get; set; }
+public string Type { get; set; } = ComplaintTypes.Trip;
+public string ReasonCode { get; set; } = "other";
 public string Title { get; set; } = string.Empty;
 public string Description { get; set; } = string.Empty;
 public string? EvidenceUrls { get; set; }
@@ -36,8 +39,28 @@ public DateTime? ResolvedAt { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? DeletedAt { get; set; }
-public virtual Booking Booking { get; set; } = null!;
+public virtual Booking? Booking { get; set; }
 public virtual User Complainant { get; set; } = null!;
-public virtual User Target { get; set; } = null!;
+public virtual User? Target { get; set; }
 public virtual User? Admin { get; set; }
+public virtual ICollection<ComplaintMessage> Messages { get; set; } = new List<ComplaintMessage>();
+}
+
+public static class ComplaintTypes
+{
+    public const string Trip = "Trip";
+    public const string Platform = "Platform";
+}
+
+/// <summary>Trao đổi giữa khách và Admin trong một khiếu nại. Agency không tham gia trên hệ thống.</summary>
+public class ComplaintMessage : BaseEntity<int> {
+public int ComplaintId { get; set; }
+public string SenderId { get; set; } = string.Empty;
+/// <summary>"customer" hoặc "admin".</summary>
+public string SenderRole { get; set; } = "customer";
+public string Content { get; set; } = string.Empty;
+public string? AttachmentUrls { get; set; }
+public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+public virtual Complaint Complaint { get; set; } = null!;
+public virtual User Sender { get; set; } = null!;
 }

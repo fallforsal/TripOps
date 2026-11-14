@@ -142,7 +142,6 @@ import {
   BookingIncident,
   RefundRequest,
   RefundReasonType,
-  CustomerComplaint,
 } from "@/app/types";
 import {
   mockTours,
@@ -197,9 +196,8 @@ function Application() {
   const [customTourRequests, setCustomTourRequests] = useState<
     CustomTourRequest[]
   >([]);
-  const [complaints, setComplaints] = useState<CustomerComplaint[]>([]);
-  const [complaintInitialBooking, setComplaintInitialBooking] =
-    useState<Booking | null>(null);
+  // Booking được chọn sẵn khi mở "Gửi khiếu nại" từ chi tiết booking hoặc từ đánh giá 1–2 sao.
+  const [complaintBookingId, setComplaintBookingId] = useState<number | null>(null);
   const [systemBankAccount, setSystemBankAccount] = useState<SystemBankAccount>(
     defaultSystemBankAccount,
   );
@@ -351,14 +349,6 @@ function Application() {
     window.addEventListener("unhandledrejection", error);
     return () => window.removeEventListener("unhandledrejection", error);
   }, []);
-  const handleAddComplaint = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
-  const handleAddComplaintMessage = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setUsers((previous) => [
@@ -571,7 +561,7 @@ function Application() {
       setCurrentPage(page);
       setSelectedTour(null);
       setSelectedUserBooking(null);
-      setComplaintInitialBooking(null);
+      setComplaintBookingId(null);
       const params = new URLSearchParams();
       if (page === "book-tours") {
         const search = criteria || emptyTourSearch;
@@ -1868,12 +1858,8 @@ function Application() {
                 void checkPayment(id);
               }}
               onNavigateToComplaint={(b) => {
-                setComplaintInitialBooking(b);
+                setComplaintBookingId(Number(b.id));
                 setCurrentPage("my-complaints");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              onNavigateToReview={() => {
-                setCurrentPage("my-reviews");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             />
@@ -1898,20 +1884,22 @@ function Application() {
           />
         ) : currentPage === "my-complaints" ? (
           <MyComplaintsPage
-            complaints={complaints.filter(
-              (c) => !currentUser || c.userId === currentUser.id,
-            )}
-            userBookings={userBookings}
-            currentUser={currentUser}
-            initialSelectedBooking={complaintInitialBooking}
-            onAddComplaint={handleAddComplaint}
-            onAddComplaintMessage={handleAddComplaintMessage}
-            onViewBookingDetail={handleViewUserBookingDetail}
+            initialBookingId={complaintBookingId}
+            onViewBookingDetail={(id) => {
+              const booking = userBookings.find((b) => Number(b.id) === id);
+              if (booking) void handleViewUserBookingDetail(booking);
+            }}
           />
         ) : currentPage === "messages" ? (
           <MessagesPage />
         ) : currentPage === "my-reviews" ? (
-          <MyReviewsPage />
+          <MyReviewsPage
+            onComplain={(id) => {
+              setComplaintBookingId(id);
+              setCurrentPage("my-complaints");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
         ) : currentPage === "user-profile" ? (
           <UserProfile />
         ) : currentPage === "contact" ? (

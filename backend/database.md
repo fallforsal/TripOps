@@ -784,7 +784,7 @@ Table feedbacks {
   overall_comment text [note: 'Nhận xét về lịch trình, cảnh quan, ẩm thực...']
 
   // Đánh giá công ty du lịch chủ trì
-  agency_rating int [not null, note: 'Điểm số 1 - 5 sao về chất lượng phục vụ của cty']
+  agency_rating int [not null, note: 'Khách không chấm riêng: BE lưu bằng overall_rating. Sao Agency tính bằng công thức Bayes từ overall_rating của mọi tour thuộc Agency']
   agency_comment text [note: 'Nhận xét về thái độ phục vụ, điều phối tour']
 
   images json [note: 'Ảnh chụp thực tế do khách đính kèm review']
@@ -808,9 +808,11 @@ Table feedbacks {
 // ============================================================================
 Table complaints {
   id int [pk, increment]
-  booking_id int [not null, note: 'FK tới bookings.id']
+  booking_id int [note: 'FK tới bookings.id - Bắt buộc với khiếu nại chuyến đi (Trip), NULL với khiếu nại nền tảng (Platform)']
   customer_id varchar(36) [not null, note: 'FK tới users.id - Khách hàng khiếu nại']
-  agency_id varchar(36) [not null, note: 'FK tới users.id - Công ty chủ trì bị khiếu nại']
+  agency_id varchar(36) [note: 'FK tới users.id - Công ty chủ trì của booking (Trip); NULL với khiếu nại nền tảng']
+  complaint_type varchar(20) [not null, default: 'Trip', note: 'Trip (về chuyến đi, trong 1 ngày sau khi tour hoàn thành) | Platform (về nền tảng TripOps)']
+  reason_code varchar(50) [not null, default: 'other', note: 'Trip: accommodation_food, schedule_change, guide_attitude, service_quality, pricing_billing, other; Platform: payment_refund, account, app_error, other']
 
   // Thông tin khiếu nại từ khách
   subject varchar(255) [not null, note: 'Tiêu đề khiếu nại (VD: Sai hạng phòng khách sạn so với cam kết)']
@@ -830,7 +832,21 @@ Table complaints {
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   deleted_at timestamp [note: 'Soft delete nếu cần']
-  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị.'
+  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị. Agency không xem/trả lời khiếu nại trên hệ thống: Admin trao đổi với khách qua complaint_messages và tự liên hệ Agency để đối chiếu. Khiếu nại Trip đang mở (PENDING/IN_REVIEW) chặn tự chuyển tiền quyết toán.'
+}
+
+Table complaint_messages {
+  id int [pk, increment]
+  complaint_id int [not null, note: 'FK tới complaints.id']
+  sender_id varchar(36) [not null, note: 'FK tới users.id - Khách hoặc Admin gửi tin']
+  sender_role varchar(20) [not null, note: 'customer | admin']
+  content text [not null, note: 'Nội dung trao đổi giữa khách và Admin']
+  attachment_urls json [note: 'Ảnh đính kèm (riêng tư, chỉ khách đó và Admin xem)']
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    complaint_id
+  }
 }
 
 // ============================================================================
@@ -1118,6 +1134,8 @@ Ref: complaints.booking_id > bookings.id
 Ref: complaints.customer_id > users.id
 Ref: complaints.agency_id > users.id
 Ref: complaints.admin_id > users.id
+Ref: complaint_messages.complaint_id > complaints.id
+Ref: complaint_messages.sender_id > users.id
 
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id
