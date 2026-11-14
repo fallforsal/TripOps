@@ -771,7 +771,7 @@ export interface BookingAttractionCheckin {
   createdAt?: string;
 }
 
-export type IncidentCategory = "HEALTH" | "VEHICLE" | "WEATHER" | "CUSTOMER" | "SECURITY" | "SCHEDULE" | "OTHER";
+export type IncidentCategory = "HEALTH" | "VEHICLE" | "WEATHER" | "CUSTOMER" | "SECURITY" | "SERVICE_PROVIDER" | "SCHEDULE" | "OTHER";
 export type IncidentStatus = "REPORTED" | "IN_PROGRESS" | "RESOLVED";
 
 export interface BookingIncident {
