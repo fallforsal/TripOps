@@ -529,7 +529,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             NextLocationCheckInId: GuideLocationCheckinRules.NextUncheckedStopId(b.Timelines));
 
     private IncidentDto Incident(BookingIncident item, string? reporterName) => new(
-        item.Id, item.BookingId, item.Title, item.Description, Severity(item.Description),
+        item.Id, item.BookingId, item.Title, CleanLegacyIncidentDescription(item.Description),
         item.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(),
         item.CreatedAt ?? DateTime.UnixEpoch, item.IncidentType, item.AgencyId,
         reporterName, GuideCheckinPhotoRules.Decode(item.EvidenceUrls)
@@ -545,6 +545,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
-    private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null
-        : System.Text.RegularExpressions.Regex.Match(description, @"(?:^|\n)Mức độ: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
+    // Old records appended a pseudo-severity line to free-text descriptions.
+    // Hide only that generated suffix in API responses; do not rewrite historical rows.
+    private static string CleanLegacyIncidentDescription(string description) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            description, @"(?:\r?\n)Mức độ:\s*(?:Low|Medium|High|Critical)\s*$",
+            "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).TrimEnd();
 }
