@@ -76,12 +76,11 @@ class GuideRepository {
   Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
 
   Future<void> incident(int id, {required String type, required String title,
-    required String description, String? severity}) async {
+    required String description}) async {
     await api.postMap('guide/bookings/$id/incidents', {
       'incidentType': type,
       'title': title,
       'description': description,
-      'severity': severity,
     });
   }
 }

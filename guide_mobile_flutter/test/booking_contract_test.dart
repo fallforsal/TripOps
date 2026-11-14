@@ -48,8 +48,8 @@ void main() {
       ],
       'incidents': [
         {'id': 2, 'bookingId': 17, 'title': 'Kẹt xe',
-         'description': 'Đoàn chậm 20 phút\nMức độ: Low',
-         'resolutionNotes': 'Low', 'status': 'Reported',
+         'description': 'Đoàn chậm 20 phút',
+         'status': 'Reported',
          'createdAt': '2026-11-10T06:00:00Z'},
       ],
     });

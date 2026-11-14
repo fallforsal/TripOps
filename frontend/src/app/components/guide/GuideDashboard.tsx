@@ -150,9 +150,6 @@ export function GuideDashboard({
   const [incidentCategory, setIncidentCategory] = useState<
     "medical" | "vehicle" | "weather" | "service" | "other"
   >("medical");
-  const [incidentSeverity, setIncidentSeverity] = useState<
-    "low" | "medium" | "high" | "critical"
-  >("medium");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentLocation, setIncidentLocation] = useState("");
 
@@ -168,7 +165,6 @@ export function GuideDashboard({
         guideName: currentSchedule?.booking.guideName ?? "",
         title: "Chậm phương tiện",
         category: "vehicle",
-        severity: "medium",
         description:
           "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
         reportedAt: "09:30",
@@ -323,7 +319,6 @@ export function GuideDashboard({
   const handleOpenIncidentForLocation = (locationName: string) => {
     setIncidentLocation(locationName);
     setIncidentDescription("");
-    setIncidentSeverity("medium");
     setShowIncidentModal(true);
   };
 
@@ -416,7 +411,6 @@ export function GuideDashboard({
       guideName: currentSchedule.booking.guideName ?? "",
       title: incidentDescription.trim().slice(0, 100),
       category: incidentCategory,
-      severity: incidentSeverity,
       description: incidentDescription.trim(),
       location: incidentLocation.trim() || "Tại điểm tham quan",
       reportedAt: new Date().toLocaleTimeString("vi-VN", {
@@ -434,8 +428,7 @@ export function GuideDashboard({
         guideName: newInc.guideName,
         title: newInc.title,
         category: incidentCategory,
-        severity: incidentSeverity,
-        description: incidentDescription.trim(),
+          description: incidentDescription.trim(),
         location: incidentLocation.trim(),
         status: "reported",
       });
@@ -1371,21 +1364,6 @@ export function GuideDashboard({
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                    inc.severity === "critical"
-                                      ? "bg-rose-600 text-white animate-pulse"
-                                      : inc.severity === "high"
-                                        ? "bg-rose-100 text-rose-800"
-                                        : "bg-amber-100 text-amber-800"
-                                  }`}
-                                >
-                                  {inc.severity === "critical"
-                                    ? "🚨 Khẩn cấp"
-                                    : inc.severity === "high"
-                                      ? "Mức cao"
-                                      : "Trung bình"}
-                                </span>
                                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
                                   {inc.category === "medical"
                                     ? "Y tế"
@@ -1603,7 +1581,7 @@ export function GuideDashboard({
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-rose-700 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-600" />
-              Báo cáo sự cố khẩn cấp
+              Báo cáo sự cố
             </DialogTitle>
             <DialogDescription className="text-[11px] text-slate-500">
               Gửi thông tin về trung tâm điều hành lữ hành

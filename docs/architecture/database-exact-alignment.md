@@ -57,7 +57,7 @@ Như vậy bộ bảng, bộ cột và nullable khớp thiết kế; các kiểu
 - PhoneNumber của hành khách không còn là cột riêng: dữ liệu liên hệ hiện có được giữ dưới dòng `Điện thoại: ...` trong `note`; API tương thích đọc lại dòng này.
 - Điểm danh vẫn lưu CheckedBy/CheckedAt.
 - BookingAssignedGuide không còn cột Status ngoài thiết kế; các hàng trong bảng đại diện việc phân công hiện có.
-- ResolutionNotes không còn là cột riêng của sự cố. Mức độ do giao diện hiện tại gửi được ghi dưới dòng `Mức độ: ...` trong description; IncidentType có cột riêng theo thiết kế.
+- ResolutionNotes không còn là cột riêng của sự cố. Incident Report không nhận hoặc ghi nhận mức độ nghiêm trọng; các bản ghi cũ có hậu tố `Mức độ: ...` được làm sạch khi trả về API. IncidentType có cột riêng theo thiết kế.
 
 ### Các bảng còn lại
 

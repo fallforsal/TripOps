@@ -18,7 +18,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
   final title = TextEditingController();
   final description = TextEditingController();
   final type = TextEditingController(text: 'OTHER');
-  String severity = 'Medium';
   bool busy = false;
   String? error;
 
@@ -34,7 +33,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     try {
       await widget.guides.incident(widget.detail.id,
         type: type.text.trim(), title: title.text.trim(),
-        description: description.text.trim(), severity: severity);
+        description: description.text.trim());
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Backend đã tiếp nhận báo cáo sự cố.')));
@@ -127,26 +126,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
                 ? 'Nhập tiêu đề' : null,
           ),
           space(4),
-          const Text('Mức độ ảnh hưởng', style: TextStyle(
-            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
-          )),
-          space(7),
-          DropdownButtonFormField<String>(
-            initialValue: severity,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.priority_high_rounded),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Low', child: Text('Thấp')),
-              DropdownMenuItem(value: 'Medium', child: Text('Trung bình')),
-              DropdownMenuItem(value: 'High', child: Text('Cao')),
-              DropdownMenuItem(value: 'Critical', child: Text('Khẩn cấp')),
-            ],
-            onChanged: busy ? null : (v) {
-              if (v != null) setState(() => severity = v);
-            },
-          ),
-          space(17),
           const Text('Mô tả chi tiết', style: TextStyle(
             fontWeight: FontWeight.w700, color: ink, fontSize: 12,
           )),

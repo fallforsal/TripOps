@@ -44,7 +44,7 @@ Do not enable cleartext in the release manifest. iOS ATS restrictions likewise r
 - `POST /api/v1/guide/bookings/{id}/start` and `/complete`.
 - `POST /api/v1/guide/bookings/{id}/attendance` (`participantId`, `status`).
 - `POST /api/v1/guide/bookings/{id}/locations/{locationId}/check-in` (`status`, `note`).
-- `POST /api/v1/guide/bookings/{id}/incidents` (`incidentType`, `title`, `description`, `severity`).
+- `POST /api/v1/guide/bookings/{id}/incidents` (`incidentType`, `title`, `description`).
 
 The server issues an eight-hour HttpOnly **TripOps.Session cookie**, not JWT. Dio + a persistent CookieJar handle it; no Bearer token is invented. Session cookies remain in the app's private support directory. Logging must never expose cookies, credentials or passenger identity.
 

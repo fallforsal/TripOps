@@ -683,11 +683,10 @@ export async function reportIncident(
   incidentType: string,
   title: string,
   description: string,
-  severity?: string,
 ): Promise<IncidentDto> {
   return await http<IncidentDto>(`/guide/bookings/${bookingId}/incidents`, {
     method: "POST",
-    body: JSON.stringify({ incidentType, title, description, severity }),
+    body: JSON.stringify({ incidentType, title, description }),
   });
 }
 

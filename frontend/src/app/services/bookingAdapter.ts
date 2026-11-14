@@ -341,11 +341,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(
-        i.resolutionNotes?.toLowerCase() || "",
-      )
-        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
-        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"
