@@ -41,6 +41,10 @@ public sealed partial class BookingFlowTests
         Assert.Single(agencyDetail.Incidents!);
         Assert.Equal(2, agencyDetail.Incidents![0].EvidenceUrls!.Count);
         Assert.False(string.IsNullOrWhiteSpace(agencyDetail.Incidents[0].ReportedByName));
+        var customerDetail = (await customer.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/bookings/{id}"))!;
+        Assert.Empty(customerDetail.Incidents![0].EvidenceUrls!);
+
 
         var root = app.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
         var files = new List<string>();
