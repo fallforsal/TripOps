@@ -79,12 +79,7 @@ class GuideRepository {
     required String description, List<CheckinPhoto> images = const []}) async {
     final validation = CheckinPhoto.validate(images);
     if (validation != null) throw ApiFailure(validation);
-    if (images.isEmpty) {
-      await api.postMap('guide/bookings/$id/incidents', {
-        'incidentType': type, 'title': title, 'description': description,
-      });
-      return;
-    }
+    // The single incident API accepts multipart/form-data even without photos.
     final form = FormData();
     form.fields.addAll([
       MapEntry('IncidentType', type),
@@ -97,6 +92,6 @@ class GuideRepository {
         contentType: DioMediaType.parse(photo.mime),
       )));
     }
-    await api.postForm('guide/bookings/$id/incidents-with-images', form);
+    await api.postForm('guide/bookings/$id/incidents', form);
   }
 }
