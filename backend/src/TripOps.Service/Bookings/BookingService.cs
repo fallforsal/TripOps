@@ -223,10 +223,14 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
                 AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
-            dto=dto with {Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
-                var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
-                return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
-            }).ToArray()};
+            dto=dto with {
+                // Incident photos are private operational evidence, not customer-facing assets.
+                Incidents=dto.Incidents?.Select(i => i with { EvidenceUrls = [] }).ToArray(),
+                Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
+                    var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
+                    return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
+                }).ToArray()
+            };
         }
         return dto;
     }
