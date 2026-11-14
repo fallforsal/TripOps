@@ -326,7 +326,7 @@ export function fromApiBooking(
       const rawType = (incident.incidentType ||
         /^\[([^\]]+)\]/.exec(incident.title)?.[1] || "OTHER").toUpperCase();
       const incidentType = ([
-        "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER",
+        "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER",
       ].includes(rawType) ? rawType : "OTHER") as import("../types/index.ts").IncidentCategory;
       const title = incident.title.replace(/^\[[^\]]+\]\s*/, "");
       const agencyId = incident.agencyId || dto.agencyId || "";
