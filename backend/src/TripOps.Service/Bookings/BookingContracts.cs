@@ -283,6 +283,10 @@ public sealed record IncidentDto(
     string Description,
     string? ResolutionNotes,
     string Status,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? IncidentType = null,
+    string? AgencyId = null,
+    string? ReportedByName = null,
+    IReadOnlyList<string>? EvidenceUrls = null);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
