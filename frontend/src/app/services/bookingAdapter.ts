@@ -345,8 +345,6 @@ export function fromApiBooking(
           incident.status === "Acknowledged" || incident.status === "InProgress"
             ? "IN_PROGRESS" : "REPORTED") as import("../types/index.ts").IncidentStatus,
         reportedAt: incident.createdAt,
-        // resolutionNotes in the legacy API currently contains encoded severity,
-        // not a real resolution note, so do not display it as a fix.
       };
     }),
     guideIncidents: (dto.incidents || []).map((i) => ({
@@ -369,11 +367,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(
-        i.resolutionNotes?.toLowerCase() || "",
-      )
-        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
-        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"
