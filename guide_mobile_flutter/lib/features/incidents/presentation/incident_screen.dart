@@ -81,7 +81,18 @@ class _IncidentScreenState extends State<IncidentScreen> {
   }
 
   Future<void> submit() async {
-    if (busy || picking || !(form.currentState?.validate() ?? false)) return;
+    if (busy || picking) return;
+    // ListView can dispose form fields outside the viewport; validate the
+    // backing state too, so an unselected dropdown never reaches the API.
+    if (selectedIncidentType == null) {
+      setState(() => error = 'Vui lòng chọn loại sự cố');
+      return;
+    }
+    if (title.text.trim().isEmpty || description.text.trim().isEmpty) {
+      setState(() => error = 'Vui lòng nhập tiêu đề và mô tả sự cố');
+      return;
+    }
+    if (!(form.currentState?.validate() ?? false)) return;
     final failure = CheckinPhoto.validate(photos);
     if (failure != null) {
       setState(() => error = failure);
@@ -198,7 +209,10 @@ class _IncidentScreenState extends State<IncidentScreen> {
             ).toList(),
             onChanged: busy || picking
                 ? null
-                : (value) => setState(() => selectedIncidentType = value),
+                : (value) => setState(() {
+                    selectedIncidentType = value;
+                    error = null;
+                  }),
             validator: (value) => value == null
                 ? 'Vui lòng chọn loại sự cố' : null,
           ),
