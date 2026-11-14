@@ -716,7 +716,6 @@ export interface IncidentReport {
   guideName: string;
   title: string;
   category: "vehicle" | "weather" | "medical" | "schedule" | "service" | "other";
-  severity: "low" | "medium" | "high" | "critical";
   description?: string;
   images?: string[];
   reportedAt: string;
