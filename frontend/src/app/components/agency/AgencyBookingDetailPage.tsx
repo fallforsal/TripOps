@@ -2074,6 +2074,7 @@ export function AgencyBookingDetailPage({
                           WEATHER: { label: "Thời tiết & Thiên tai", icon: "⛈️", style: "bg-sky-50 text-sky-800 border-sky-200" },
                           CUSTOMER: { label: "Khách hàng & Thành viên", icon: "👥", style: "bg-[#F0F9FF] text-purple-800 border-[#F97316]/30" },
                           SECURITY: { label: "An ninh & Trật tự", icon: "🛡️", style: "bg-indigo-50 text-indigo-800 border-indigo-200" },
+                          SERVICE_PROVIDER: { label: "Dịch vụ & Nhà cung cấp", icon: "🏨", style: "bg-purple-50 text-purple-800 border-purple-200" },
                           SCHEDULE: { label: "Lịch trình & Thời gian", icon: "⏰", style: "bg-orange-50 text-orange-800 border-orange-200" },
                           OTHER: { label: "Sự cố khác", icon: "📋", style: "bg-gray-50 text-gray-800 border-gray-200" },
                         };
