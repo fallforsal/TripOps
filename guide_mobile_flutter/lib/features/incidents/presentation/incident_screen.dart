@@ -10,6 +10,7 @@ import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../../location_checkin/domain/checkin_photo.dart';
+import '../domain/incident_categories.dart';
 
 class IncidentScreen extends StatefulWidget {
   const IncidentScreen({super.key, required this.detail, required this.guides});
@@ -24,7 +25,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
   final form = GlobalKey<FormState>();
   final title = TextEditingController();
   final description = TextEditingController();
-  final type = TextEditingController(text: 'OTHER');
+  String? selectedIncidentType;
   final picker = ImagePicker();
   final List<CheckinPhoto> photos = [];
   final Map<String, Future<Uint8List>> downloads = {};
@@ -36,7 +37,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
   void dispose() {
     title.dispose();
     description.dispose();
-    type.dispose();
     super.dispose();
   }
 
@@ -90,7 +90,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     setState(() { busy = true; error = null; });
     try {
       await widget.guides.incident(widget.detail.id,
-        type: type.text.trim(),
+        type: selectedIncidentType!,
         title: title.text.trim(),
         description: description.text.trim(),
         images: List.of(photos),
@@ -183,14 +183,24 @@ class _IncidentScreenState extends State<IncidentScreen> {
           const Text('Loại sự cố', style: TextStyle(
             fontWeight: FontWeight.w700, color: ink, fontSize: 12)),
           space(7),
-          TextFormField(
-            controller: type,
-            maxLength: 100,
+          DropdownButtonFormField<String>(
+            key: const ValueKey('incident-type-dropdown'),
+            initialValue: selectedIncidentType,
+            isExpanded: true,
             decoration: const InputDecoration(
-              hintText: 'Ví dụ: TRANSPORT, HEALTH, OTHER',
+              hintText: 'Chọn loại sự cố',
               prefixIcon: Icon(Icons.category_outlined)),
-            validator: (value) => value == null || value.trim().isEmpty
-                ? 'Nhập loại sự cố' : null,
+            items: incidentCategories.map((category) =>
+              DropdownMenuItem<String>(
+                value: category.code,
+                child: Text(category.label, overflow: TextOverflow.ellipsis),
+              ),
+            ).toList(),
+            onChanged: busy || picking
+                ? null
+                : (value) => setState(() => selectedIncidentType = value),
+            validator: (value) => value == null
+                ? 'Vui lòng chọn loại sự cố' : null,
           ),
           space(4),
           const Text('Tiêu đề', style: TextStyle(
