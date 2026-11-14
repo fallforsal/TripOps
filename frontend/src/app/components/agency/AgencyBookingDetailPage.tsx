@@ -660,6 +660,21 @@ export function AgencyBookingDetailPage({
   // BOOKING INCIDENTS (booking_incidents - no severity field)
   // ----------------------------------------------------
   const incidents = booking.incidents || []; // Always reflect latest server booking data.
+  const [refreshingIncidents, setRefreshingIncidents] = useState(false);
+  const refreshIncidentHistory = async () => {
+    if (refreshingIncidents) return;
+    setRefreshingIncidents(true);
+    try {
+      const dto = await http<import("@/app/services/wf05Bookings").BookingDto>(
+        `/agency/bookings/${booking.id}`,
+      );
+      onBookingChanged?.(dto);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không thể làm mới sự cố.");
+    } finally {
+      setRefreshingIncidents(false);
+    }
+  };
 
   // ----------------------------------------------------
   // ATTRACTION ASSIGNMENT MODAL STATES
@@ -2027,6 +2042,17 @@ export function AgencyBookingDetailPage({
                         </p>
                       </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      disabled={refreshingIncidents}
+                      onClick={() => void refreshIncidentHistory()}
+                      className="gap-1.5 text-xs"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingIncidents ? "animate-spin" : ""}`} />
+                      {refreshingIncidents ? "Đang tải…" : "Làm mới nhật ký"}
+                    </Button>
                   </div>
 
                   {incidents.length === 0 ? (
