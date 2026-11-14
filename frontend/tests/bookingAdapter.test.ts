@@ -326,3 +326,19 @@ test("Agency booking detail receives incidents with category, reporter and evide
   assert.equal(incident.status, "REPORTED");
   assert.equal(incident.evidenceUrls?.length, 1);
 });
+
+test("SERVICE_PROVIDER incident remains a first-class Agency booking category", () => {
+  const booking = fromApiBooking({
+    ...dto,
+    incidents: [{
+      id: 92, bookingId: dto.id,
+      incidentType: "SERVICE_PROVIDER",
+      title: "[SERVICE_PROVIDER] Khách sạn không có phòng",
+      description: "Khách sạn thay đổi số phòng",
+      status: "Reported",
+      createdAt: "2026-11-14T06:00:00Z",
+    }],
+  });
+  assert.equal(booking.incidents?.[0].incidentType, "SERVICE_PROVIDER");
+  assert.equal(booking.incidents?.[0].title, "Khách sạn không có phòng");
+});
