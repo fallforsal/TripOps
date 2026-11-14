@@ -282,13 +282,16 @@ Trên iOS phải thêm `NSCameraUsageDescription` và
 
 ## Incident Report (Hướng dẫn viên → Agency)
 
-- HDV nhập **loại sự cố**, **tiêu đề**, **mô tả**; không chọn mức độ nghiêm trọng.
-- Có thể gửi không ảnh bằng endpoint JSON cũ
-  `POST /api/v1/guide/bookings/{id}/incidents` (không truyền severity).
-- Nếu đính kèm **1–5 ảnh JPEG/PNG/WebP**, mobile sử dụng:
-  `POST /api/v1/guide/bookings/{id}/incidents-with-images`
-  với `multipart/form-data`: các trường `IncidentType`, `Title`,
-  `Description` và các file `Images` (lặp field cho từng ảnh).
+- HDV chọn **loại sự cố** từ dropdown 8 giá trị thống nhất với backend và Agency:
+  `HEALTH`, `VEHICLE`, `WEATHER`, `CUSTOMER`, `SECURITY`,
+  `SERVICE_PROVIDER`, `SCHEDULE`, `OTHER`. Không còn ô nhập tự do
+  hoặc trường mức độ nghiêm trọng.
+- Chỉ **một endpoint** `POST /api/v1/guide/bookings/{id}/incidents`
+  nhận `multipart/form-data`, bất kể có ảnh hay không. Các field:
+  `IncidentType` (một trong 8 mã trên), `Title`, `Description`,
+  và `Images` (tùy chọn, lặp field cho từng ảnh).
+- Endpoint `/incidents-with-images` và payload JSON cho `/incidents`
+  đã được thay bằng hợp đồng multipart duy nhất. Các client cũ cần cập nhật.
 - Hạn mức **5 MiB mỗi ảnh, 20 MiB tổng**, tối đa 5 ảnh.
   App và server đều xác thực; chọn camera hoặc thư viện, có thể bỏ ảnh.
 - Backend lưu JSON nhiều URL trong cột `booking_incidents.evidence_urls`
