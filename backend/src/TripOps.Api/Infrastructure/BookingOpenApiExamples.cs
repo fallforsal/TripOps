@@ -47,7 +47,7 @@ internal static class BookingOpenApiExamples
                 Request("checkinParticipant", "Điểm danh khách có mặt tại điểm đón", new AttendanceCheckinRequest(1, "CheckedIn"));
                 break;
             case ("GuideBookings", "ReportIncident"):
-                Request("trafficIncident", "Báo cáo sự cố xe đến muộn do kẹt xe", new ReportIncidentRequest("Giao thông", "Xe trễ giờ đón", "Ùn tắc giao thông cục bộ tại đường dẫn cao tốc, chậm 20 phút", "Low"));
+                Request("trafficIncident", "Báo cáo sự cố xe đến muộn do kẹt xe", new ReportIncidentRequest("Giao thông", "Xe trễ giờ đón", "Ùn tắc giao thông cục bộ tại đường dẫn cao tốc, chậm 20 phút"));
                 break;
         }
 
