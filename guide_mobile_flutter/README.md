@@ -279,3 +279,31 @@ gắn vào booking (cần lifecycle cleanup định kỳ khi đưa vào producti
 **Lần đầu cài image_picker:** chạy `flutter pub get` và build lại ứng dụng.
 Trên iOS phải thêm `NSCameraUsageDescription` và
 `NSPhotoLibraryUsageDescription` vào Info.plist theo hướng dẫn package.
+
+## Incident Report (Hướng dẫn viên → Agency)
+
+- HDV nhập **loại sự cố**, **tiêu đề**, **mô tả**; không chọn mức độ nghiêm trọng.
+- Có thể gửi không ảnh bằng endpoint JSON cũ
+  `POST /api/v1/guide/bookings/{id}/incidents` (không truyền severity).
+- Nếu đính kèm **1–5 ảnh JPEG/PNG/WebP**, mobile sử dụng:
+  `POST /api/v1/guide/bookings/{id}/incidents-with-images`
+  với `multipart/form-data`: các trường `IncidentType`, `Title`,
+  `Description` và các file `Images` (lặp field cho từng ảnh).
+- Hạn mức **5 MiB mỗi ảnh, 20 MiB tổng**, tối đa 5 ảnh.
+  App và server đều xác thực; chọn camera hoặc thư viện, có thể bỏ ảnh.
+- Backend lưu JSON nhiều URL trong cột `booking_incidents.evidence_urls`
+  vốn có sẵn, nên không cần migration. Storage dùng
+  Cloudinary authenticated hoặc local Development
+  `App_Data/uploads/guide-incidents/<guideId>/`.
+- Backend chi tiết booking trả `incidents[].incidentType`,
+  `incidents[].agencyId`, `incidents[].reportedByName`,
+  `incidents[].evidenceUrls`; HDV và Agency có quyền đọc ảnh.
+  API local: `GET /api/v1/files/guide-incidents/{owner}/{name}`
+  kiểm tra quyền reporter/Agency phụ trách/Agency chủ trì.
+  Khách không nhận URL ảnh minh chứng riêng tư.
+- Web Agency: `Đặt tour & Khách → Chi tiết Booking →
+  Lịch trình → Nhật ký sự cố Tour`. Booking được tải lại khi mở chi tiết
+  để nhìn thấy báo cáo mới do HDV vừa gửi.
+- Một incident chỉ được lưu sau khi upload ảnh thành công. Nếu storage
+  upload thành công một phần rồi DB lỗi, cần quy trình dọn file mồ côi
+  khi triển khai production.
