@@ -29,6 +29,9 @@ import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessPro
 import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 
+import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
+import { toast } from "@/app/lib/notifications";
+
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
   currentUser: User;
@@ -114,6 +117,21 @@ export function AgencyDashboard({
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
+
+  // Refresh stale booking details when Agency enters a booking after a Guide's report.
+  useEffect(() => {
+    if (activeSection !== "bookings" || !selectedBookingId) return;
+    const id = Number(selectedBookingId);
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    let cancelled = false;
+    void getAgencyBookingDetail(id)
+      .then((dto) => { if (!cancelled) onBookingChanged?.(dto); })
+      .catch((error) => {
+        if (!cancelled) toast.error(error instanceof Error
+          ? error.message : "Không tải được dữ liệu booking mới nhất.");
+      });
+    return () => { cancelled = true; };
+  }, [activeSection, selectedBookingId]);
 
   const companyTours = tours.filter(
     (t) =>
