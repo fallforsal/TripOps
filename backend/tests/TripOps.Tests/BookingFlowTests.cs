@@ -341,12 +341,17 @@ public sealed partial class BookingFlowTests
         Assert.NotNull(attended);
         Assert.Equal("CheckedIn", attended.AttendanceStatus);
 
-        // 8. Guide báo cáo sự cố
-        var incidentRes = await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{bookingId}/incidents", new ReportIncidentRequest("Thời tiết", "Mưa lớn", "Lịch trình lùi 30 phút", "Low"));
+        // 8. Guide báo cáo sự cố qua một API multipart, không đính kèm ảnh.
+        using var incidentForm = new MultipartFormDataContent();
+        incidentForm.Add(new StringContent("WEATHER"), "IncidentType");
+        incidentForm.Add(new StringContent("Mưa lớn"), "Title");
+        incidentForm.Add(new StringContent("Lịch trình lùi 30 phút"), "Description");
+        var incidentRes = await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/incidents", incidentForm);
         Assert.Equal(HttpStatusCode.OK, incidentRes.StatusCode);
         var incident = await incidentRes.Content.ReadFromJsonAsync<IncidentDto>();
         Assert.NotNull(incident);
-        Assert.Contains("Thời tiết", incident.Title);
+        Assert.Equal("WEATHER", incident.IncidentType);
+        Assert.Contains("Mưa lớn", incident.Title);
 
         var reloaded = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal("CheckedIn", reloaded!.Participants.Single(p => p.Id == participantId).AttendanceStatus);
