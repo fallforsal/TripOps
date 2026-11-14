@@ -50,8 +50,7 @@ public sealed record AttendanceCheckinRequest(
 public sealed record ReportIncidentRequest(
     [Required, StringLength(100)] string IncidentType,
     [Required, StringLength(255)] string Title,
-    [Required, StringLength(2000)] string Description,
-    [StringLength(50)] string? Severity);
+    [Required, StringLength(2000)] string Description);
 
 public sealed record BookingDto(
     int Id,
