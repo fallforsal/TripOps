@@ -280,7 +280,6 @@ public sealed record IncidentDto(
     int BookingId,
     string Title,
     string Description,
-    string? ResolutionNotes,
     string Status,
     DateTime CreatedAt,
     string? IncidentType = null,
