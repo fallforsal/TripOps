@@ -81,7 +81,7 @@ export function TourReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>Đánh giá chuyến đi</DialogTitle>
           <DialogDescription>

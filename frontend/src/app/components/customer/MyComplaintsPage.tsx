@@ -279,7 +279,7 @@ function CreateComplaintDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-[#B91C1C]" /> Gửi khiếu nại</DialogTitle>
           <DialogDescription>Admin TripOps sẽ xem xét, liên hệ các bên liên quan nếu cần và phản hồi kết quả cho bạn.</DialogDescription>

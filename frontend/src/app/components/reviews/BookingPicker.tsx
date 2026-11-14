@@ -44,7 +44,7 @@ export function BookingPicker({
   }, [open]);
 
   return (
-    <div ref={root} className="relative">
+    <div ref={root} className="relative w-full min-w-0">
       <button
         id={id}
         type="button"
@@ -52,7 +52,7 @@ export function BookingPicker({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         title={selected ? `${selected.title} · ${selected.code}` : undefined}
-        className="w-full h-[52px] flex items-center gap-2 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-left focus:outline-none focus:ring-2 focus:ring-[#075985]"
+        className="w-full min-w-0 overflow-hidden h-[52px] flex items-center gap-2 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-left focus:outline-none focus:ring-2 focus:ring-[#075985]"
       >
         {selected ? (
           <span className="flex-1 min-w-0">
@@ -83,8 +83,8 @@ export function BookingPicker({
                   <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#075985]" />
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-medium text-[#0F172A] leading-snug">{o.title}</span>
-                    <span className="block text-[11px] text-[#64748B] leading-snug">
-                      <span className="font-mono">{o.code}</span>{o.details ? ` · ${o.details}` : ""}
+                    <span className="block text-[11px] text-[#64748B] leading-snug break-words">
+                      <span className="font-mono break-all">{o.code}</span>{o.details ? ` · ${o.details}` : ""}
                     </span>
                   </span>
                   {o.badge && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{o.badge}</span>}
