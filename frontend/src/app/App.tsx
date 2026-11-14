@@ -1444,7 +1444,6 @@ function Application() {
       incident.location
         ? `Địa điểm: ${incident.location}\n${incident.description}`
         : incident.description || "Không có mô tả",
-      incident.severity || "medium",
     );
     const booking = fromApiBooking(
       await getGuideBookingDetail(Number(schedule.booking.id)),
