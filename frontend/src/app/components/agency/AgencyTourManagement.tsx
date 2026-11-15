@@ -1692,6 +1692,34 @@ export function TourFormPage(props: TourFormPageProps) {
     conditions: "",
   });
 
+  // Hiệu ứng nháy sáng (flash animation) cho thẻ dịch vụ vừa được thêm vào
+  const [recentlyAddedCardKey, setRecentlyAddedCardKey] = useState<string | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerCardFlash = (cardKey: string) => {
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current);
+    }
+    setRecentlyAddedCardKey(null);
+    setTimeout(() => {
+      setRecentlyAddedCardKey(cardKey);
+      flashTimerRef.current = setTimeout(() => {
+        setRecentlyAddedCardKey((prev) => (prev === cardKey ? null : prev));
+      }, 2000);
+    }, 10);
+  };
+
+  const isDirectoryOrCustomItem = (item: any): boolean =>
+    Boolean(
+      item?.isCustom ||
+      item?.supplierSource === "AGENCY_SUPPLIER" ||
+      item?.agencySupplierId ||
+      item?.providerName === "Nhà cung cấp của agency" ||
+      item?.serviceId?.startsWith("custom-") ||
+      item?.serviceId?.startsWith("agency-supplier-") ||
+      item?.id?.startsWith("custom-") ||
+      item?.id?.startsWith("agency-supplier-"),
+    );
+
   const removeVietnameseTones = (str: string) => {
     return str
       .normalize("NFD")
@@ -1728,31 +1756,48 @@ export function TourFormPage(props: TourFormPageProps) {
     image?: string,
     stars?: number,
     address?: string,
+    isCustom?: boolean,
+    priceOverride?: number,
   ): Service => {
-    if (serviceId) {
-      const found = mockServices.find((s) => s.id === serviceId);
-      if (found) return found;
+    if (!isCustom) {
+      if (serviceId) {
+        const found = mockServices.find((s) => s.id === serviceId);
+        if (found) return found;
+      }
+      const cleanSearch = removeVietnameseTones(name || "");
+      const foundByName = mockServices.find((s) => {
+        if (s.category !== "hotel") return false;
+        const cleanS = removeVietnameseTones(s.name);
+        return (
+          cleanS === cleanSearch ||
+          cleanS.includes(cleanSearch) ||
+          cleanSearch.includes(cleanS)
+        );
+      });
+      if (foundByName) return foundByName;
     }
-    const cleanSearch = removeVietnameseTones(name || "");
-    const foundByName = mockServices.find((s) => {
-      if (s.category !== "hotel") return false;
-      const cleanS = removeVietnameseTones(s.name);
-      return (
-        cleanS === cleanSearch ||
-        cleanS.includes(cleanSearch) ||
-        cleanSearch.includes(cleanS)
-      );
-    });
-    if (foundByName) return foundByName;
 
-    const basePrice = stars === 5 ? 2800000 : stars === 4 ? 1500000 : 1000000;
-    const pFrom = Math.round((basePrice * 0.8) / 10000) * 10000;
-    const pTo = Math.round((basePrice * 1.2) / 10000) * 10000;
+    const basePrice =
+      priceOverride && priceOverride > 0
+        ? priceOverride
+        : stars === 5
+          ? 2800000
+          : stars === 4
+            ? 1500000
+            : 1000000;
+    const pFrom = isCustom
+      ? basePrice
+      : Math.round((basePrice * 0.8) / 10000) * 10000;
+    const pTo = isCustom
+      ? basePrice
+      : Math.round((basePrice * 1.2) / 10000) * 10000;
 
     return {
       id: serviceId || `serv-${Date.now()}`,
-      providerId: "provider-1",
-      providerName: "Tổ hợp Dịch vụ Du lịch Đối tác",
+      providerId: isCustom ? "external-provider" : "provider-1",
+      providerName: isCustom
+        ? "Nhà cung cấp của agency"
+        : "Tổ hợp Dịch vụ Du lịch Đối tác",
       name: name || "Khách sạn nghỉ dưỡng",
       category: "hotel",
       subCategory: "Khách sạn & Resort",
@@ -1761,16 +1806,19 @@ export function TourFormPage(props: TourFormPageProps) {
       price: basePrice,
       priceFrom: pFrom,
       priceTo: pTo,
-      pricePerPerson: Math.round((pFrom + pTo) / 4),
+      pricePerPerson: isCustom ? basePrice : Math.round((pFrom + pTo) / 4),
       location: address || "Đà Lạt, Lâm Đồng",
-      image:
-        image ||
-        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-      images: [
-        image ||
-        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-        "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
-      ],
+      image: isCustom
+        ? ""
+        : image ||
+          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+      images: isCustom
+        ? []
+        : [
+            image ||
+              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+            "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
+          ],
       thumbnailIndex: 0,
       rating: 4.8,
       status: "approved",
@@ -1786,38 +1834,53 @@ export function TourFormPage(props: TourFormPageProps) {
     };
   };
 
-  // Thêm khách sạn từ kho đối tác nền tảng vào tour
+  // Thêm khách sạn từ kho đối tác nền tảng hoặc danh bạ vào tour
   const handleAddHotelFromService = (hotelId: string, serv: Service) => {
+    const targetHotel = hotels.find((h) => h.id === hotelId);
+    if (targetHotel) {
+      const standardValid =
+        targetHotel.supplierSource === "AGENCY_SUPPLIER" || targetHotel.isCustom
+          ? !targetHotel.serviceId &&
+            !!(targetHotel.supplier?.address || targetHotel.supplier?.area) &&
+            Number(targetHotel.supplier?.referencePrice) > 0
+          : !!targetHotel.serviceId && /^\d+$/.test(targetHotel.serviceId);
+      const isStandardMatching =
+        (targetHotel.serviceId && targetHotel.serviceId === serv.id) ||
+        (targetHotel.agencySupplierId &&
+          targetHotel.agencySupplierId === (serv as any).agencySupplierId);
+      const isAltMatching = (targetHotel.alternativeHotels || []).some(
+        (alt) =>
+          (alt.serviceId && alt.serviceId === serv.id) ||
+          (alt.agencySupplierId &&
+            alt.agencySupplierId === (serv as any).agencySupplierId),
+      );
+      if ((isStandardMatching && standardValid) || isAltMatching) {
+        toast.warning(
+          `Khách sạn "${serv.name}" đã có trong danh sách lựa chọn của tour!`,
+        );
+        return;
+      }
+    }
+
+    const newAltId = `alt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    let addedCardKey = `hotel-${hotelId}-${newAltId}`;
+
     setHotels((prev) =>
       prev.map((h) => {
         if (h.id === hotelId) {
-          const standardValid = h.supplierSource === "AGENCY_SUPPLIER" || h.isCustom
-            ? !h.serviceId && !!(h.supplier?.address || h.supplier?.area) && Number(h.supplier?.referencePrice) > 0
-            : !!h.serviceId && /^\d+$/.test(h.serviceId);
-          const isStandardMatching =
-            (h.serviceId && h.serviceId === serv.id) ||
-            (h.agencySupplierId && h.agencySupplierId === (serv as any).agencySupplierId);
-          const isAltMatching = (h.alternativeHotels || []).some(
-            (alt) =>
-              (alt.serviceId && alt.serviceId === serv.id) ||
-              (alt.agencySupplierId && alt.agencySupplierId === (serv as any).agencySupplierId),
-          );
-          if ((isStandardMatching && standardValid) || isAltMatching) {
-            toast.warning(
-              `Khách sạn "${serv.name}" đã có trong danh sách lựa chọn của tour!`,
-            );
-            return h;
-          }
+          const standardValid =
+            h.supplierSource === "AGENCY_SUPPLIER" || h.isCustom
+              ? !h.serviceId &&
+                !!(h.supplier?.address || h.supplier?.area) &&
+                Number(h.supplier?.referencePrice) > 0
+              : !!h.serviceId && /^\d+$/.test(h.serviceId);
 
-          const isCustomServ = Boolean(
-            (serv as any).isCustom ||
-            serv.id?.startsWith("custom-") ||
-            serv.providerName === "Nhà cung cấp của agency",
-          );
+          const isCustomServ = isDirectoryOrCustomItem(serv);
           const isStandardEmpty =
             !h.name || h.name === "Khách sạn / Resort mới" || !standardValid;
 
           if (isStandardEmpty) {
+            addedCardKey = `hotel-${hotelId}-standard`;
             return {
               ...h,
               name: serv.name,
@@ -1825,31 +1888,51 @@ export function TourFormPage(props: TourFormPageProps) {
               address: serv.location || "",
               description: serv.description || serv.location || "",
               pricePerNight: serv.pricePerPerson || serv.price || 1500000,
-              image: serv.image,
+              image: isCustomServ ? "" : serv.image,
               serviceId: isCustomServ ? undefined : serv.id,
-              supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
+              supplierSource: isCustomServ
+                ? "AGENCY_SUPPLIER"
+                : "PLATFORM_PARTNER",
               agencySupplierId: (serv as any).agencySupplierId,
-              supplier: (serv as any).supplier || (isCustomServ ? { address: serv.location, referencePrice: serv.price, conditions: serv.description } : undefined),
+              supplier:
+                (serv as any).supplier ||
+                (isCustomServ
+                  ? {
+                      address: serv.location,
+                      referencePrice: serv.price,
+                      conditions: serv.description,
+                    }
+                  : undefined),
               destination: h.destination || serv.province || destination,
               isCustom: isCustomServ,
               providerName: serv.providerName,
             };
           }
 
-          const basePrice = h.pricePerNight || 1500000;
           const servPrice = serv.pricePerPerson || serv.price || 1500000;
           const newAlt: TourAlternativeHotel = {
-            id: `alt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: newAltId,
             name: serv.name,
             stars: serv.stars || 4,
             address: serv.location || "",
             description: serv.description || "",
-            priceDifference: servPrice - basePrice,
-            image: serv.image,
+            priceDifference: 0,
+            pricePerNight: servPrice,
+            image: isCustomServ ? "" : serv.image,
             serviceId: isCustomServ ? undefined : serv.id,
-            supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
+            supplierSource: isCustomServ
+              ? "AGENCY_SUPPLIER"
+              : "PLATFORM_PARTNER",
             agencySupplierId: (serv as any).agencySupplierId,
-            supplier: (serv as any).supplier || (isCustomServ ? { address: serv.location, referencePrice: serv.price, conditions: serv.description } : undefined),
+            supplier:
+              (serv as any).supplier ||
+              (isCustomServ
+                ? {
+                    address: serv.location,
+                    referencePrice: serv.price,
+                    conditions: serv.description,
+                  }
+                : undefined),
             providerName: serv.providerName,
             isCustom: isCustomServ,
           };
@@ -1862,6 +1945,8 @@ export function TourFormPage(props: TourFormPageProps) {
         return h;
       }),
     );
+
+    triggerCardFlash(addedCardKey);
   };
 
   // Đổi khách sạn thay thế làm khách sạn tiêu chuẩn (Mặc định)
@@ -2075,33 +2160,44 @@ export function TourFormPage(props: TourFormPageProps) {
     desc?: string,
     serviceId?: string,
     image?: string,
+    isCustom?: boolean,
+    priceOverride?: number,
   ): Service => {
-    if (serviceId) {
-      const found = mockServices.find((s) => s.id === serviceId);
-      if (found) return found;
-    }
-    if (name) {
-      const cleanSearch = removeVietnameseTones(name);
-      const foundByName = mockServices.find((s) => {
-        if (s.category !== "fnb") return false;
-        const cleanS = removeVietnameseTones(s.name);
-        return (
-          cleanS === cleanSearch ||
-          cleanS.includes(cleanSearch) ||
-          cleanSearch.includes(cleanS)
-        );
-      });
-      if (foundByName) return foundByName;
+    if (!isCustom) {
+      if (serviceId) {
+        const found = mockServices.find((s) => s.id === serviceId);
+        if (found) return found;
+      }
+      if (name) {
+        const cleanSearch = removeVietnameseTones(name);
+        const foundByName = mockServices.find((s) => {
+          if (s.category !== "fnb") return false;
+          const cleanS = removeVietnameseTones(s.name);
+          return (
+            cleanS === cleanSearch ||
+            cleanS.includes(cleanSearch) ||
+            cleanSearch.includes(cleanS)
+          );
+        });
+        if (foundByName) return foundByName;
+      }
     }
 
-    const basePrice = 160000;
-    const pFrom = Math.round((basePrice * 0.8) / 10000) * 10000;
-    const pTo = Math.round((basePrice * 1.2) / 10000) * 10000;
+    const basePrice =
+      priceOverride && priceOverride > 0 ? priceOverride : 160000;
+    const pFrom = isCustom
+      ? basePrice
+      : Math.round((basePrice * 0.8) / 10000) * 10000;
+    const pTo = isCustom
+      ? basePrice
+      : Math.round((basePrice * 1.2) / 10000) * 10000;
 
     return {
       id: serviceId || `fnb-${Date.now()}`,
-      providerId: "provider-1",
-      providerName: "Tổ hợp Dịch vụ Du lịch Đối tác",
+      providerId: isCustom ? "external-provider" : "provider-1",
+      providerName: isCustom
+        ? "Nhà cung cấp của agency"
+        : "Tổ hợp Dịch vụ Du lịch Đối tác",
       name: name || "Nhà hàng đặc sản",
       category: "fnb",
       subCategory: "Nhà hàng & Ẩm thực",
@@ -2111,15 +2207,18 @@ export function TourFormPage(props: TourFormPageProps) {
       price: basePrice,
       priceFrom: pFrom,
       priceTo: pTo,
-      pricePerPerson: Math.round((pFrom + pTo) / 4),
+      pricePerPerson: isCustom ? basePrice : Math.round((pFrom + pTo) / 4),
       location: "Trung tâm thành phố",
-      image:
-        image ||
-        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
-      images: [
-        image ||
-        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
-      ],
+      image: isCustom
+        ? ""
+        : image ||
+          "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
+      images: isCustom
+        ? []
+        : [
+            image ||
+              "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
+          ],
       rating: 4.8,
       status: "approved",
     };
@@ -2134,11 +2233,7 @@ export function TourFormPage(props: TourFormPageProps) {
     const meal = day.meals?.[mIdx];
     if (!meal) return;
 
-    const isCustomServ = Boolean(
-      (serv as any).isCustom ||
-      serv.id?.startsWith("custom-") ||
-      serv.providerName === "Nhà cung cấp của agency",
-    );
+    const isCustomServ = isDirectoryOrCustomItem(serv);
     const isStandardEmpty =
       !meal.serviceName ||
       meal.serviceName === "Nhà hàng địa phương" ||
@@ -2148,7 +2243,9 @@ export function TourFormPage(props: TourFormPageProps) {
           !(meal.supplier.address || meal.supplier.area) || Number(meal.supplier.referencePrice) <= 0
         : !meal.serviceId || !/^\d+$/.test(meal.serviceId));
 
-    const refPrice = getMealRefPricePerPerson(serv);
+    const refPrice = isCustomServ
+      ? serv.pricePerPerson || serv.price || 150000
+      : getMealRefPricePerPerson(serv);
     const supplier = (serv as Service & { supplier?: TourMeal["supplier"] }).supplier || {
       address: serviceAddress(serv),
       area: serv.province,
@@ -2164,21 +2261,22 @@ export function TourFormPage(props: TourFormPageProps) {
         supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
         agencySupplierId: (serv as any).agencySupplierId,
         supplier,
-        image: serv.image,
+        image: isCustomServ ? "" : serv.image,
         providerName: serv.providerName,
         isCustom: isCustomServ,
       });
+      triggerCardFlash(`meal-${dIdx}-${mIdx}-standard`);
     } else {
-      const baseMealPrice = meal.pricePerPerson || 150000;
+      const newAltId = `alt-meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const newAlt: TourAlternativeMeal = {
-        id: `alt-meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: newAltId,
         restaurantName: serv.name,
         description: serv.description || "Thực đơn lựa chọn đổi món",
-        priceDifference: Math.max(0, refPrice - baseMealPrice),
+        priceDifference: 0,
         price: refPrice,
         priceFrom: serv.priceFrom,
         priceTo: serv.priceTo,
-        image: serv.image,
+        image: isCustomServ ? "" : serv.image,
         serviceId: isCustomServ ? undefined : serv.id,
         supplierSource: isCustomServ ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
         agencySupplierId: (serv as any).agencySupplierId,
@@ -2187,6 +2285,7 @@ export function TourFormPage(props: TourFormPageProps) {
         isCustom: isCustomServ,
       };
       addAlternativeMeal(dIdx, mIdx, newAlt);
+      triggerCardFlash(`meal-${dIdx}-${mIdx}-${newAltId}`);
     }
   };
 
@@ -2390,10 +2489,13 @@ export function TourFormPage(props: TourFormPageProps) {
     prefill?: Partial<TourAlternativeHotel>,
   ) => {
     const newAlt: TourAlternativeHotel = {
-      id: `alt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ...prefill,
+      id:
+        prefill?.id ||
+        `alt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: prefill?.name || "Khách sạn / Resort nâng cấp",
       stars: prefill?.stars ?? 4,
-      priceDifference: prefill?.priceDifference ?? 400000,
+      priceDifference: prefill?.priceDifference ?? 0,
       description:
         prefill?.description ||
         "Không gian nghỉ dưỡng cao cấp, tiện nghi sang trọng",
@@ -2543,9 +2645,12 @@ export function TourFormPage(props: TourFormPageProps) {
     if (!currentMeals[mealIdx]) return;
     const targetMeal = currentMeals[mealIdx];
     const newAlt: TourAlternativeMeal = {
-      id: `alt-meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ...prefill,
+      id:
+        prefill?.id ||
+        `alt-meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       restaurantName: prefill?.restaurantName || "Nhà hàng đổi món / nâng cấp",
-      priceDifference: prefill?.priceDifference ?? 50000,
+      priceDifference: prefill?.priceDifference ?? 0,
       description:
         prefill?.description || "Thực đơn phong phú, không gian ấm cúng",
       address: prefill?.address || "",
@@ -4277,8 +4382,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                           pricePerPerson:
                                             customHotelInputs.price || (props.customerMode ? 0 : 1200000),
                                           status: "approved",
-                                          image:
-                                            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+                                          image: "",
+                                          isCustom: true,
                                           description: `Khách sạn tự do ngoài hệ thống: ${customHotelInputs.name.trim()}`,
                                           agencySupplierId: saved?.id || selectedHotelSupplierId,
                                           supplier: { address: customHotelInputs.address.trim(), area: hotel.destination || destination, referencePrice: customHotelInputs.price, contactPhone: customHotelInputs.contactPhone, conditions: customHotelInputs.conditions },
@@ -4394,6 +4499,38 @@ export function TourFormPage(props: TourFormPageProps) {
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                    <style>{`
+                                      @keyframes tripops-card-flash {
+                                        0% {
+                                          transform: scale(1);
+                                          box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+                                        }
+                                        22% {
+                                          transform: scale(1.024);
+                                          box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.48), 0 12px 28px -6px rgba(245, 158, 11, 0.38);
+                                          background-color: #fef3c7;
+                                          border-color: #f59e0b;
+                                        }
+                                        48% {
+                                          transform: scale(0.996);
+                                          box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
+                                        }
+                                        72% {
+                                          transform: scale(1.014);
+                                          box-shadow: 0 0 0 5px rgba(14, 165, 233, 0.4), 0 10px 22px -4px rgba(14, 165, 233, 0.3);
+                                          background-color: #e0f2fe;
+                                          border-color: #0284c7;
+                                        }
+                                        100% {
+                                          transform: scale(1);
+                                          box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+                                        }
+                                      }
+                                      .tripops-card-flash-anim {
+                                        animation: tripops-card-flash 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+                                        z-index: 10;
+                                      }
+                                    `}</style>
                                     {/* THẺ 1: KHÁCH SẠN TIÊU CHUẨN */}
                                     {hasStandard &&
                                       (() => {
@@ -4402,28 +4539,42 @@ export function TourFormPage(props: TourFormPageProps) {
                                             "standard",
                                           );
                                         const isCustomHotel =
-                                          (hotel as any).isCustom ||
-                                          hotel.providerName ===
-                                          "Nhà cung cấp của agency" ||
-                                          hotel.serviceId?.startsWith(
-                                            "custom-",
-                                          );
+                                          isDirectoryOrCustomItem(hotel);
+                                        const isJustAdded =
+                                          recentlyAddedCardKey ===
+                                          `hotel-${hotel.id}-standard`;
+                                        const customRefPrice =
+                                          hotel.pricePerNight ||
+                                          Number(
+                                            hotel.supplier?.referencePrice,
+                                          ) ||
+                                          0;
                                         const servObj = getServiceForCard(
                                           hotel.name,
                                           hotel.serviceId,
                                           hotel.image,
                                           hotel.stars,
                                           hotel.address,
+                                          isCustomHotel,
+                                          customRefPrice,
                                         );
+                                        const thumbUrl = isCustomHotel
+                                          ? ""
+                                          : servObj.image || hotel.image || "";
 
                                         return (
                                           <div
-                                            className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isCardSelected
+                                            className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
+                                              isJustAdded
+                                                ? "tripops-card-flash-anim "
+                                                : ""
+                                            }${
+                                              isCardSelected
                                                 ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                 : isCustomHotel
                                                   ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
                                                   : "border-emerald-300 bg-white hover:border-emerald-400 shadow-2xs"
-                                              }`}
+                                            }`}
                                           >
                                             {/* Header thẻ: Checkbox & Badge tiêu chuẩn */}
                                             <div className="flex items-center justify-between gap-2">
@@ -4437,14 +4588,14 @@ export function TourFormPage(props: TourFormPageProps) {
                                                       (prev) =>
                                                         isCardSelected
                                                           ? prev.filter(
-                                                            (k) =>
-                                                              k !==
-                                                              "standard",
-                                                          )
+                                                              (k) =>
+                                                                k !==
+                                                                "standard",
+                                                            )
                                                           : [
-                                                            ...prev,
-                                                            "standard",
-                                                          ],
+                                                              ...prev,
+                                                              "standard",
+                                                            ],
                                                     );
                                                   }}
                                                   className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
@@ -4470,15 +4621,22 @@ export function TourFormPage(props: TourFormPageProps) {
                                             {/* Body thẻ */}
                                             <div className="flex gap-3">
                                               <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                                <img
-                                                  src={
-                                                    servObj.image ||
-                                                    hotel.image ||
-                                                    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"
-                                                  }
-                                                  alt={hotel.name}
-                                                  className="w-full h-full object-cover"
-                                                />
+                                                {isCustomHotel || !thumbUrl ? (
+                                                  <div className="w-full h-full bg-gradient-to-br from-purple-100 via-indigo-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                    <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                      <Building2 className="w-5 h-5" />
+                                                    </div>
+                                                    <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                      Danh bạ
+                                                    </span>
+                                                  </div>
+                                                ) : (
+                                                  <img
+                                                    src={thumbUrl}
+                                                    alt={hotel.name}
+                                                    className="w-full h-full object-cover"
+                                                  />
+                                                )}
                                                 {hotel.stars && (
                                                   <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-amber-400 font-bold text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                                     {hotel.stars}★
@@ -4487,16 +4645,17 @@ export function TourFormPage(props: TourFormPageProps) {
                                               </div>
                                               <div className="flex-1 min-w-0">
                                                 <span
-                                                  className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomHotel
+                                                  className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
+                                                    isCustomHotel
                                                       ? "text-purple-700 bg-purple-100"
                                                       : "text-indigo-700 bg-indigo-100"
-                                                    }`}
+                                                  }`}
                                                 >
                                                   {isCustomHotel
                                                     ? "Nhà cung cấp của agency"
                                                     : hotel.providerName ||
-                                                    servObj.providerName ||
-                                                    "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                      servObj.providerName ||
+                                                      "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                 </span>
                                                 <h5
                                                   className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -4520,7 +4679,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   {formatVND(
                                                     getHotelRefPricePerPerson(
                                                       servObj,
-                                                      hotel.pricePerNight,
+                                                      customRefPrice ||
+                                                        hotel.pricePerNight,
                                                     ),
                                                   )}
                                                   <span className="text-[10px] font-normal text-gray-400">
@@ -4572,33 +4732,42 @@ export function TourFormPage(props: TourFormPageProps) {
                                       const isCardSelected =
                                         selectedHotelKeys.includes(alt.id);
                                       const isCustomHotel =
-                                        alt.isCustom ||
-                                        alt.providerName ===
-                                        "Nhà cung cấp của agency" ||
-                                        alt.serviceId?.startsWith("custom-");
+                                        isDirectoryOrCustomItem(alt);
+                                      const isJustAdded =
+                                        recentlyAddedCardKey ===
+                                        `hotel-${hotel.id}-${alt.id}`;
+                                      const customAltPrice =
+                                        alt.pricePerNight ||
+                                        (alt as any).price ||
+                                        Number(alt.supplier?.referencePrice) ||
+                                        0;
                                       const servObj = getServiceForCard(
                                         alt.name,
                                         alt.serviceId,
                                         alt.image,
                                         alt.stars,
                                         alt.address,
+                                        isCustomHotel,
+                                        customAltPrice,
                                       );
-                                      const refPricePerNight =
-                                        alt.pricePerNight ||
-                                        (alt as any).price ||
-                                        servObj.pricePerPerson ||
-                                        servObj.price ||
-                                        1500000;
+                                      const thumbUrl = isCustomHotel
+                                        ? ""
+                                        : servObj.image || alt.image || "";
 
                                       return (
                                         <div
                                           key={alt.id || aIdx}
-                                          className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isCardSelected
+                                          className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
+                                            isJustAdded
+                                              ? "tripops-card-flash-anim "
+                                              : ""
+                                          }${
+                                            isCardSelected
                                               ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                               : isCustomHotel
                                                 ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
                                                 : "border-amber-200 bg-white hover:border-amber-300 shadow-2xs"
-                                            }`}
+                                          }`}
                                         >
                                           {/* Header thẻ: Checkbox, Badge Option & Nút Đặt làm mặc định */}
                                           <div className="flex items-center justify-between gap-2">
@@ -4612,18 +4781,19 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     (prev) =>
                                                       isCardSelected
                                                         ? prev.filter(
-                                                          (k) => k !== alt.id,
-                                                        )
+                                                            (k) => k !== alt.id,
+                                                          )
                                                         : [...prev, alt.id],
                                                   );
                                                 }}
                                                 className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                               />
                                               <span
-                                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${isCustomHotel
+                                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
+                                                  isCustomHotel
                                                     ? "bg-purple-100 text-purple-900 border-purple-300"
                                                     : "bg-amber-100 text-amber-900 border-amber-300"
-                                                  }`}
+                                                }`}
                                               >
                                                 ✨ Phương án thay thế (Option{" "}
                                                 {aIdx + 2})
@@ -4650,15 +4820,22 @@ export function TourFormPage(props: TourFormPageProps) {
                                           {/* Body thẻ */}
                                           <div className="flex gap-3">
                                             <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                              <img
-                                                src={
-                                                  servObj.image ||
-                                                  alt.image ||
-                                                  "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800"
-                                                }
-                                                alt={alt.name}
-                                                className="w-full h-full object-cover"
-                                              />
+                                              {isCustomHotel || !thumbUrl ? (
+                                                <div className="w-full h-full bg-gradient-to-br from-purple-100 via-indigo-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                  <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                    <Building2 className="w-5 h-5" />
+                                                  </div>
+                                                  <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                    Danh bạ
+                                                  </span>
+                                                </div>
+                                              ) : (
+                                                <img
+                                                  src={thumbUrl}
+                                                  alt={alt.name}
+                                                  className="w-full h-full object-cover"
+                                                />
+                                              )}
                                               {alt.stars && (
                                                 <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-amber-400 font-bold text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                                   {alt.stars}★
@@ -4667,16 +4844,17 @@ export function TourFormPage(props: TourFormPageProps) {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <span
-                                                className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomHotel
+                                                className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
+                                                  isCustomHotel
                                                     ? "text-purple-700 bg-purple-100"
                                                     : "text-indigo-700 bg-indigo-100"
-                                                  }`}
+                                                }`}
                                               >
                                                 {isCustomHotel
                                                   ? "Nhà cung cấp của agency"
                                                   : alt.providerName ||
-                                                  servObj.providerName ||
-                                                  "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                    servObj.providerName ||
+                                                    "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                               </span>
                                               <h5
                                                 className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -4700,8 +4878,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 {formatVND(
                                                   getHotelRefPricePerPerson(
                                                     servObj,
-                                                    alt.pricePerNight ||
-                                                    (alt as any).price,
+                                                    customAltPrice ||
+                                                      alt.pricePerNight ||
+                                                      (alt as any).price,
                                                   ),
                                                 )}
                                                 <span className="text-[10px] font-normal text-gray-400">
@@ -5991,8 +6170,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   "Trung tâm",
                                                                 status:
                                                                   "approved",
-                                                                image:
-                                                                  "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
+                                                                image: "",
+                                                                isCustom: true,
                                                                 description:
                                                                   input.description.trim() ||
                                                                   "Thực đơn món ngon tự chọn",
@@ -6147,6 +6326,38 @@ export function TourFormPage(props: TourFormPageProps) {
                                                       </div>
                                                     ) : (
                                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                                        <style>{`
+                                                          @keyframes tripops-card-flash {
+                                                            0% {
+                                                              transform: scale(1);
+                                                              box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+                                                            }
+                                                            22% {
+                                                              transform: scale(1.024);
+                                                              box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.48), 0 12px 28px -6px rgba(245, 158, 11, 0.38);
+                                                              background-color: #fef3c7;
+                                                              border-color: #f59e0b;
+                                                            }
+                                                            48% {
+                                                              transform: scale(0.996);
+                                                              box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
+                                                            }
+                                                            72% {
+                                                              transform: scale(1.014);
+                                                              box-shadow: 0 0 0 5px rgba(14, 165, 233, 0.4), 0 10px 22px -4px rgba(14, 165, 233, 0.3);
+                                                              background-color: #e0f2fe;
+                                                              border-color: #0284c7;
+                                                            }
+                                                            100% {
+                                                              transform: scale(1);
+                                                              box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+                                                            }
+                                                          }
+                                                          .tripops-card-flash-anim {
+                                                            animation: tripops-card-flash 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+                                                            z-index: 10;
+                                                          }
+                                                        `}</style>
                                                         {/* THẺ 1: THỰC ĐƠN TIÊU CHUẨN */}
                                                         {hasStandard &&
                                                           (() => {
@@ -6155,28 +6366,48 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 "standard",
                                                               );
                                                             const isCustomMeal =
-                                                              meal.isCustom ||
-                                                              meal.providerName ===
-                                                              "Nhà cung cấp của agency" ||
-                                                              meal.serviceId?.startsWith(
-                                                                "custom-",
+                                                              isDirectoryOrCustomItem(
+                                                                meal,
                                                               );
+                                                            const isJustAdded =
+                                                              recentlyAddedCardKey ===
+                                                              `meal-${dIdx}-${mIdx}-standard`;
+                                                            const customMealPrice =
+                                                              meal.pricePerPerson ||
+                                                              Number(
+                                                                meal.supplier
+                                                                  ?.referencePrice,
+                                                              ) ||
+                                                              0;
                                                             const servObj =
                                                               getServiceForMeal(
                                                                 meal.serviceName,
                                                                 meal.description,
                                                                 meal.serviceId,
                                                                 meal.image,
+                                                                isCustomMeal,
+                                                                customMealPrice,
                                                               );
+                                                            const thumbUrl =
+                                                              isCustomMeal
+                                                                ? ""
+                                                                : servObj.image ||
+                                                                  meal.image ||
+                                                                  "";
 
                                                             return (
                                                               <div
-                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isCardSelected
+                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
+                                                                  isJustAdded
+                                                                    ? "tripops-card-flash-anim "
+                                                                    : ""
+                                                                }${
+                                                                  isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
                                                                       ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
                                                                       : "border-emerald-300 bg-white hover:border-emerald-400 shadow-2xs"
-                                                                  }`}
+                                                                }`}
                                                               >
                                                                 {/* Header thẻ */}
                                                                 <div className="flex items-center justify-between gap-2">
@@ -6196,7 +6427,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           ) => {
                                                                             const cur =
                                                                               prev[
-                                                                              mealKey
+                                                                                mealKey
                                                                               ] ||
                                                                               [];
                                                                             return {
@@ -6204,16 +6435,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               [mealKey]:
                                                                                 isCardSelected
                                                                                   ? cur.filter(
-                                                                                    (
-                                                                                      k,
-                                                                                    ) =>
-                                                                                      k !==
-                                                                                      "standard",
-                                                                                  )
+                                                                                      (
+                                                                                        k,
+                                                                                      ) =>
+                                                                                        k !==
+                                                                                        "standard",
+                                                                                    )
                                                                                   : [
-                                                                                    ...cur,
-                                                                                    "standard",
-                                                                                  ],
+                                                                                      ...cur,
+                                                                                      "standard",
+                                                                                    ],
                                                                             };
                                                                           },
                                                                         );
@@ -6249,30 +6480,41 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 {/* Body thẻ */}
                                                                 <div className="flex gap-3">
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                                                    <img
-                                                                      src={
-                                                                        servObj.image ||
-                                                                        meal.image ||
-                                                                        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800"
-                                                                      }
-                                                                      alt={
-                                                                        meal.serviceName
-                                                                      }
-                                                                      className="w-full h-full object-cover"
-                                                                    />
+                                                                    {isCustomMeal ||
+                                                                    !thumbUrl ? (
+                                                                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                                          <Utensils className="w-5 h-5" />
+                                                                        </div>
+                                                                        <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                                          Danh bạ
+                                                                        </span>
+                                                                      </div>
+                                                                    ) : (
+                                                                      <img
+                                                                        src={
+                                                                          thumbUrl
+                                                                        }
+                                                                        alt={
+                                                                          meal.serviceName
+                                                                        }
+                                                                        className="w-full h-full object-cover"
+                                                                      />
+                                                                    )}
                                                                   </div>
                                                                   <div className="flex-1 min-w-0">
                                                                     <span
-                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomMeal
+                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
+                                                                        isCustomMeal
                                                                           ? "text-purple-700 bg-purple-100"
                                                                           : "text-emerald-700 bg-emerald-100"
-                                                                        }`}
+                                                                      }`}
                                                                     >
                                                                       {isCustomMeal
                                                                         ? "Nhà cung cấp của agency"
                                                                         : meal.providerName ||
-                                                                        servObj.providerName ||
-                                                                        "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                                          servObj.providerName ||
+                                                                          "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                                     </span>
                                                                     <h5
                                                                       className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -6288,7 +6530,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       {formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
-                                                                          meal.pricePerPerson,
+                                                                          customMealPrice ||
+                                                                            meal.pricePerPerson,
                                                                         ),
                                                                       )}
                                                                       <span className="text-[10px] font-normal text-gray-400">
@@ -6347,36 +6590,51 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 alt.id,
                                                               );
                                                             const isCustomMeal =
-                                                              alt.isCustom ||
-                                                              alt.providerName ===
-                                                              "Nhà cung cấp của agency" ||
-                                                              alt.serviceId?.startsWith(
-                                                                "custom-",
+                                                              isDirectoryOrCustomItem(
+                                                                alt,
                                                               );
+                                                            const isJustAdded =
+                                                              recentlyAddedCardKey ===
+                                                              `meal-${dIdx}-${mIdx}-${alt.id}`;
+                                                            const customAltMealPrice =
+                                                              alt.price ||
+                                                              Number(
+                                                                alt.supplier
+                                                                  ?.referencePrice,
+                                                              ) ||
+                                                              0;
                                                             const servObj =
                                                               getServiceForMeal(
                                                                 alt.restaurantName,
                                                                 alt.description,
                                                                 alt.serviceId,
                                                                 alt.image,
+                                                                isCustomMeal,
+                                                                customAltMealPrice,
                                                               );
-                                                            const refMealPrice =
-                                                              alt.price ||
-                                                              servObj.pricePerPerson ||
-                                                              servObj.price ||
-                                                              180000;
+                                                            const thumbUrl =
+                                                              isCustomMeal
+                                                                ? ""
+                                                                : servObj.image ||
+                                                                  alt.image ||
+                                                                  "";
 
                                                             return (
                                                               <div
                                                                 key={
                                                                   alt.id || aIdx
                                                                 }
-                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isCardSelected
+                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
+                                                                  isJustAdded
+                                                                    ? "tripops-card-flash-anim "
+                                                                    : ""
+                                                                }${
+                                                                  isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
                                                                       ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
                                                                       : "border-amber-200 bg-white hover:border-amber-300 shadow-2xs"
-                                                                  }`}
+                                                                }`}
                                                               >
                                                                 {/* Header thẻ */}
                                                                 <div className="flex items-center justify-between gap-2">
@@ -6396,7 +6654,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           ) => {
                                                                             const cur =
                                                                               prev[
-                                                                              mealKey
+                                                                                mealKey
                                                                               ] ||
                                                                               [];
                                                                             return {
@@ -6404,16 +6662,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               [mealKey]:
                                                                                 isCardSelected
                                                                                   ? cur.filter(
-                                                                                    (
-                                                                                      k,
-                                                                                    ) =>
-                                                                                      k !==
-                                                                                      alt.id,
-                                                                                  )
+                                                                                      (
+                                                                                        k,
+                                                                                      ) =>
+                                                                                        k !==
+                                                                                        alt.id,
+                                                                                    )
                                                                                   : [
-                                                                                    ...cur,
-                                                                                    alt.id,
-                                                                                  ],
+                                                                                      ...cur,
+                                                                                      alt.id,
+                                                                                    ],
                                                                             };
                                                                           },
                                                                         );
@@ -6421,10 +6679,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       className="w-4 h-4 rounded text-emerald-600 border-gray-300 cursor-pointer"
                                                                     />
                                                                     <span
-                                                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${isCustomMeal
+                                                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
+                                                                        isCustomMeal
                                                                           ? "bg-purple-100 text-purple-900 border-purple-300"
                                                                           : "bg-amber-100 text-amber-900 border-amber-300"
-                                                                        }`}
+                                                                      }`}
                                                                     >
                                                                       ✨ Lựa
                                                                       chọn đổi
@@ -6457,30 +6716,41 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 {/* Body thẻ */}
                                                                 <div className="flex gap-3">
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
-                                                                    <img
-                                                                      src={
-                                                                        servObj.image ||
-                                                                        alt.image ||
-                                                                        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800"
-                                                                      }
-                                                                      alt={
-                                                                        alt.restaurantName
-                                                                      }
-                                                                      className="w-full h-full object-cover"
-                                                                    />
+                                                                    {isCustomMeal ||
+                                                                    !thumbUrl ? (
+                                                                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                                          <Utensils className="w-5 h-5" />
+                                                                        </div>
+                                                                        <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                                          Danh bạ
+                                                                        </span>
+                                                                      </div>
+                                                                    ) : (
+                                                                      <img
+                                                                        src={
+                                                                          thumbUrl
+                                                                        }
+                                                                        alt={
+                                                                          alt.restaurantName
+                                                                        }
+                                                                        className="w-full h-full object-cover"
+                                                                      />
+                                                                    )}
                                                                   </div>
                                                                   <div className="flex-1 min-w-0">
                                                                     <span
-                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomMeal
+                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
+                                                                        isCustomMeal
                                                                           ? "text-purple-700 bg-purple-100"
                                                                           : "text-emerald-700 bg-emerald-100"
-                                                                        }`}
+                                                                      }`}
                                                                     >
                                                                       {isCustomMeal
                                                                         ? "Nhà cung cấp của agency"
                                                                         : alt.providerName ||
-                                                                        servObj.providerName ||
-                                                                        "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                                          servObj.providerName ||
+                                                                          "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                                     </span>
                                                                     <h5
                                                                       className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -6496,8 +6766,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       {formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
-                                                                          alt.price ||
-                                                                          alt.priceDifference,
+                                                                          customAltMealPrice ||
+                                                                            meal.pricePerPerson,
                                                                         ),
                                                                       )}
                                                                       <span className="text-[10px] font-normal text-gray-400">
