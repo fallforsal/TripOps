@@ -10,7 +10,7 @@ public sealed partial class DesignRequestService
         Require(input.Action is "archive" or "unarchive" or "close" or "reopen","Thao tác không hợp lệ.");
         await using var tx=await db.Database.BeginTransactionAsync(ct);
         var request=await db.TourDesignRequests.SingleOrDefaultAsync(r=>r.Id==id,ct)??throw new TourException(404,"Không tìm thấy yêu cầu.");
-        var member=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==actor && (a.IsHost && request.AgencyId==actor || !a.IsHost && (a.Status=="accepted" || a.Status=="pending")),ct)
+        var member=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==actor && (a.IsHost && request.AgencyId==actor || !a.IsHost),ct)
             ?? throw new TourException(404,"Bạn không có quyền truy cập yêu cầu.");
         if(input.Action is "archive" or "unarchive") {
             member.ArchivedAt=input.Action=="archive"?DateTime.UtcNow:null;

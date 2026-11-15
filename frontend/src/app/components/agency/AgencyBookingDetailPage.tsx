@@ -11,8 +11,8 @@ import { BookingFinancialChangesPanel } from "./BookingFinancialChangesPanel";
 import { BookingSurchargeDialog } from "./BookingSurchargeDialog";
 import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
 import { BookingServicePicker, type BookingReplacement } from "./BookingServicePicker";
-import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { BirthDateInput } from "@/app/components/ui/BirthDateInput";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { http } from "@/app/lib/http";
 import { useBookingSupplierState } from "@/app/hooks/useBookingSupplierState";
 import {
@@ -453,18 +453,42 @@ export function AgencyBookingDetailPage({
   // ----------------------------------------------------
   // ALL COMPANY GUIDES FOR QUICK INLINE ATTRACTION ASSIGNMENT
   // ----------------------------------------------------
+  type GuideAvailability = { id: string; name: string; phone?: string; avatar?: string; isAvailable: boolean; unavailableReason?: string };
+  const [guideAvailability, setGuideAvailability] = useState<GuideAvailability[] | null>(null);
+  const [guideAvailabilityLoading, setGuideAvailabilityLoading] = useState(true);
+  const guideAvailabilityRequest = useRef(0);
+  const loadGuideAvailability = useCallback(async () => {
+    const request = ++guideAvailabilityRequest.current;
+    setGuideAvailabilityLoading(true);
+    try {
+      const rows = await http<GuideAvailability[]>(`/agency/bookings/available-guides?bookingId=${booking.id}`);
+      if (request === guideAvailabilityRequest.current) setGuideAvailability(rows);
+    } catch {
+      if (request === guideAvailabilityRequest.current) setGuideAvailability(null);
+    } finally {
+      if (request === guideAvailabilityRequest.current) setGuideAvailabilityLoading(false);
+    }
+  }, [booking.id]);
+  useEffect(() => { void loadGuideAvailability(); }, [loadGuideAvailability]);
+  const guideUnavailableReason = (guideId: string) => {
+    if (guideAvailabilityLoading) return "Đang kiểm tra lịch…";
+    if (!guideAvailability) return "Chưa kiểm tra được lịch. Mở lại danh sách để thử lại.";
+    const state = guideAvailability.find(g => g.id === guideId);
+    return !state ? "HDV không còn hoạt động." : !state.isAvailable ? state.unavailableReason || "HDV không khả dụng." : undefined;
+  };
+
   const companyAllGuides = useMemo(() => {
     const myAgencyId = companyId || currentAgency?.agencyId || booking.companyId || "company-1";
 
     const guideMap = new Map<string, { guideId: string; guideName: string; guidePhone?: string; guideAvatar?: string }>();
 
     // 1. Guides already assigned to this booking
-    assignedGuides.forEach((ag) => {
+    assignedGuides.filter((ag) => ag.companyId === myAgencyId).forEach((ag) => {
       guideMap.set(ag.guideId, {
         guideId: ag.guideId,
         guideName: ag.guideName,
         guidePhone: ag.guidePhone,
-        guideAvatar: ag.guideAvatar,
+        guideAvatar: ag.guideAvatar || guides.find(g => g.id === ag.guideId)?.avatar,
       });
     });
 
@@ -482,89 +506,53 @@ export function AgencyBookingDetailPage({
       }
     });
 
-    // Fallback: if empty, add from mockUsers
-    if (guideMap.size === 0) {
-      mockUsers.filter((u) => u.role === "guide" && (!u.companyId || u.companyId === myAgencyId)).forEach((g) => {
-        guideMap.set(g.id, {
-          guideId: g.id,
-          guideName: g.name,
-          guidePhone: g.phone,
-          guideAvatar: g.avatar,
-        });
-      });
-    }
-
+    guideAvailability?.forEach(g => {
+      const existing = guideMap.get(g.id);
+      guideMap.set(g.id, {guideId:g.id,guideName:g.name,guidePhone:g.phone,guideAvatar:g.avatar || existing?.guideAvatar});
+    });
     return Array.from(guideMap.values());
-  }, [assignedGuides, guides, companyId, currentAgency, booking]);
+  }, [assignedGuides, guides, companyId, currentAgency, booking, guideAvailability]);
 
   // ----------------------------------------------------
   // INLINE TOGGLE GUIDE ASSIGNMENT FOR SPECIFIC ATTRACTION
   // ----------------------------------------------------
-  const handleToggleGuideForAttraction = (
+  const guideRoutingLock = useRef(false);
+  const [guideRoutingBusy, setGuideRoutingBusy] = useState(false);
+  const handleToggleGuideForAttraction = async (
     attractionId: string,
-    attractionName: string,
-    dayNumber: number,
+    _attractionName: string,
+    _dayNumber: number,
     guide: { guideId: string; guideName: string; guidePhone?: string; guideAvatar?: string }
   ) => {
-    const myAgencyId = companyId || currentAgency?.agencyId || booking.companyId || "company-1";
-    const myAgencyName = companyName || currentAgency?.agencyName || booking.companyName || "Công ty điều phối";
-
-    const existingCheckin = attractionCheckins.find(
-      (c) =>
-        (c.bookingTimelineAttractionId === attractionId || (c.locationName === attractionName && c.dayNumber === dayNumber)) &&
-        c.guideId === guide.guideId
-    );
-
-    let updatedCheckins: BookingAttractionCheckin[];
-
-    if (existingCheckin) {
-      // Remove this guide's checkin for this attraction
-      updatedCheckins = attractionCheckins.filter((c) => c.id !== existingCheckin.id);
-    } else {
-      // Add new checkin record
-      const newCheckin: BookingAttractionCheckin = {
-        id: `bac-${booking.id}-${dayNumber}-${attractionId}-${guide.guideId}-${Date.now()}`,
-        bookingId: booking.id,
-        bookingTimelineAttractionId: attractionId,
-        locationName: attractionName,
-        dayNumber: dayNumber,
-        scheduledTime: "08:30",
-        agencyId: myAgencyId,
-        agencyName: myAgencyName,
-        guideId: guide.guideId,
-        guideName: guide.guideName,
-        guidePhone: guide.guidePhone,
-        guideAvatar: guide.guideAvatar,
-        attendanceStatus: "PENDING",
-        createdAt: new Date().toISOString(),
-      };
-      updatedCheckins = [...attractionCheckins, newCheckin];
-
-      // Ensure guide is registered in assignedGuides
-      if (!assignedGuides.some((ag) => ag.guideId === guide.guideId)) {
-        const newAssignedGuide: BookingAssignedGuide = {
-          id: `bag-${booking.id}-${guide.guideId}`,
-          guideId: guide.guideId,
-          guideName: guide.guideName,
-          guidePhone: guide.guidePhone,
-          guideAvatar: guide.guideAvatar,
-          companyId: myAgencyId,
-          companyName: myAgencyName,
-          role: "stage_guide",
-          notes: `HDV phân công bổ sung tại điểm ${attractionName}`,
-          assignedAt: new Date().toISOString().split("T")[0],
-        };
-        const updatedAssigned = [...assignedGuides, newAssignedGuide];
-        setAssignedGuides(updatedAssigned);
-        if (onUpdateAssignedGuides) {
-          onUpdateAssignedGuides(booking.id, updatedAssigned);
-        }
-      }
+    if (guideRoutingLock.current) return;
+    const locationId = Number(attractionId);
+    if (!Number.isInteger(locationId) || locationId <= 0) {
+      toast.error("Không xác định được điểm tham quan. Vui lòng tải lại booking.");
+      return;
     }
-
-    setAttractionCheckins(updatedCheckins);
-    if (onUpdateAttractionCheckins) {
-      onUpdateAttractionCheckins(booking.id, updatedCheckins);
+    const myAgencyId = companyId || currentAgency?.agencyId || booking.companyId;
+    const current = attractionCheckins.filter(c => c.bookingTimelineAttractionId === attractionId && c.agencyId === myAgencyId);
+    const selected = current.some(c => c.guideId === guide.guideId);
+    const guideIds = selected ? current.filter(c => c.guideId !== guide.guideId).map(c => c.guideId)
+      : [...current.map(c => c.guideId), guide.guideId];
+    guideRoutingLock.current = true;
+    setGuideRoutingBusy(true);
+    try {
+      const dto = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/guide-routing`, {
+        method: "PUT", body: JSON.stringify({ locations: [{ locationId, guideIds }] }),
+      });
+      const updated = fromApiBooking(dto, [booking.tour]);
+      setAssignedGuides(updated.assignedGuides || []);
+      setAttractionCheckins(updated.attractionCheckins || []);
+      onBookingChanged?.(dto);
+      toast.success(selected ? "Đã gỡ HDV khỏi điểm tham quan." : "Đã phân công HDV cho điểm tham quan.");
+      void loadGuideAvailability();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể lưu phân công HDV.");
+      void loadGuideAvailability();
+    } finally {
+      guideRoutingLock.current = false;
+      setGuideRoutingBusy(false);
     }
   };
 
@@ -1479,30 +1467,6 @@ export function AgencyBookingDetailPage({
               </>
             )}
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedGuideToAdd(guides[0]?.id || "");
-                setSelectedGuideRole(assignedGuides.length === 0 ? "lead_guide" : "support_guide");
-                setSelectedGuideNotes("");
-                setAssignModalOpen(true);
-              }}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 gap-1.5 text-sm"
-            >
-              <UserCheck className="w-4 h-4 text-[#075985]" />
-              Giao HDV ({assignedGuides.length})
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleOpenAssignAttractionsModal}
-              className="border-purple-300 text-[#EA580C] hover:bg-[#F0F9FF] gap-1.5 text-sm font-semibold shadow-2xs"
-              title="Phân công Hướng dẫn viên theo từng Điểm đến và Chặng tham quan (booking_attraction_checkins)"
-            >
-              <Navigation className="w-4 h-4 text-[#F97316]" />
-              Phân công lộ trình HDV
-            </Button>
-
             {isCurrentCompanyLead&&<Button
               variant="outline"
               onClick={() => setContractModalOpen(true)}
@@ -2193,6 +2157,7 @@ export function AgencyBookingDetailPage({
                   return {
                     guideId: gid,
                     guideName: sample?.guideName || gid,
+                    guideAvatar: sample?.guideAvatar,
                     count: attractionCheckins.filter((c) => c.guideId === gid).length,
                   };
                 });
@@ -2234,7 +2199,8 @@ export function AgencyBookingDetailPage({
                                 : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                             }`}
                           >
-                            <span>👤 {g.guideName}</span>
+                            {g.guideAvatar ? <img src={g.guideAvatar} alt={g.guideName} className="h-5 w-5 rounded-full object-cover" /> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-800">{g.guideName.charAt(0)}</span>}
+                            <span>{g.guideName}</span>
                             <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
                               trackerGuideFilter === g.guideId ? "bg-purple-700 text-white" : "bg-gray-100 text-gray-600"
                             }`}>
@@ -2354,7 +2320,7 @@ export function AgencyBookingDetailPage({
                                         <div className="flex items-center gap-2 flex-wrap pt-0.5">
                                           {locCheckins.length === 0 ? (
                                             isMyLoc ? (
-                                              <Popover>
+                                              <Popover onOpenChange={open => { if (open) void loadGuideAvailability(); }}>
                                                 <PopoverTrigger asChild>
                                                   <button
                                                     type="button"
@@ -2386,11 +2352,12 @@ export function AgencyBookingDetailPage({
                                                   <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
                                                     {companyAllGuides.map((g) => {
                                                       const isAssigned = locCheckins.some((c) => c.guideId === g.guideId);
+                                                      const blockedReason = isAssigned ? undefined : guideUnavailableReason(g.guideId);
                                                       return (
-                                                        <div
+                                                        <button type="button" disabled={guideRoutingBusy || !!blockedReason} title={blockedReason} aria-pressed={isAssigned}
                                                           key={g.guideId}
                                                           onClick={() => handleToggleGuideForAttraction(loc.id || loc.name, loc.name, day.day, g)}
-                                                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${
+                                                          className={`w-full text-left disabled:opacity-50 flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${
                                                             isAssigned
                                                               ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
                                                               : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
@@ -2411,6 +2378,7 @@ export function AgencyBookingDetailPage({
                                                             <div className="min-w-0">
                                                               <p className="text-xs text-gray-900 truncate">{g.guideName}</p>
                                                               <p className="text-[10px] text-gray-500 truncate">{g.guidePhone || "HDV Công ty"}</p>
+                                                              {blockedReason && <p className="text-[10px] text-amber-700">{blockedReason}</p>}
                                                             </div>
                                                           </div>
 
@@ -2423,7 +2391,7 @@ export function AgencyBookingDetailPage({
                                                           >
                                                             {isAssigned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                                           </div>
-                                                        </div>
+                                                        </button>
                                                       );
                                                     })}
                                                   </div>
@@ -2528,6 +2496,7 @@ export function AgencyBookingDetailPage({
                                                     {isMyLoc && isPending && (
                                                       <button
                                                         type="button"
+                                                        disabled={guideRoutingBusy}
                                                         onClick={(e) => {
                                                           e.stopPropagation();
                                                           handleToggleGuideForAttraction(
@@ -2549,7 +2518,7 @@ export function AgencyBookingDetailPage({
 
                                               {/* Nút thêm HDV dẫn cùng điểm này */}
                                               {isMyLoc && (
-                                                <Popover>
+                                                <Popover onOpenChange={open => { if (open) void loadGuideAvailability(); }}>
                                                   <PopoverTrigger asChild>
                                                     <button
                                                       type="button"
@@ -2582,11 +2551,12 @@ export function AgencyBookingDetailPage({
                                                     <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
                                                       {companyAllGuides.map((g) => {
                                                         const isAssigned = locCheckins.some((c) => c.guideId === g.guideId);
+                                                      const blockedReason = isAssigned ? undefined : guideUnavailableReason(g.guideId);
                                                         return (
-                                                          <div
+                                                          <button type="button" disabled={guideRoutingBusy || !!blockedReason} title={blockedReason} aria-pressed={isAssigned}
                                                             key={g.guideId}
                                                             onClick={() => handleToggleGuideForAttraction(loc.id || loc.name, loc.name, day.day, g)}
-                                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${
+                                                            className={`w-full text-left disabled:opacity-50 flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${
                                                               isAssigned
                                                                 ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
                                                                 : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
@@ -2607,6 +2577,7 @@ export function AgencyBookingDetailPage({
                                                               <div className="min-w-0">
                                                                 <p className="text-xs font-bold text-gray-900 truncate">{g.guideName}</p>
                                                                 <p className="text-[10px] text-gray-500 truncate">{g.guidePhone || "HDV Công ty"}</p>
+                                                              {blockedReason && <p className="text-[10px] text-amber-700">{blockedReason}</p>}
                                                               </div>
                                                             </div>
 
@@ -2619,7 +2590,7 @@ export function AgencyBookingDetailPage({
                                                             >
                                                               {isAssigned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                                             </div>
-                                                          </div>
+                                                          </button>
                                                         );
                                                       })}
                                                     </div>
@@ -3731,7 +3702,7 @@ export function AgencyBookingDetailPage({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5 font-semibold">Họ và tên *<Input maxLength={150} value={passengerName} onChange={e => setPassengerName(e.target.value)} placeholder="VD: Nguyễn Văn An" /></label>
               <label className="space-y-1.5 font-semibold">CCCD / Hộ chiếu<Input maxLength={50} value={passengerIdNumber} onChange={e => setPassengerIdNumber(e.target.value)} placeholder="Không bắt buộc với trẻ nhỏ" /></label>
-              <div className="space-y-1.5"><label className="font-semibold">Ngày sinh *</label><VietnameseDatePicker value={passengerDob} onChange={passengerModalMode === "add" ? handlePassengerDobChange : setPassengerDob} /></div>
+              <div className="space-y-1.5"><label htmlFor="passenger-birth-date" className="font-semibold">Ngày sinh *</label><BirthDateInput key={`${passengerModalMode}-${passengerModalOpen}`} id="passenger-birth-date" value={passengerDob} onChange={passengerModalMode === "add" ? handlePassengerDobChange : setPassengerDob} /></div>
               <label className="space-y-1.5 font-semibold">Giới tính<select value={passengerGender} onChange={e => setPassengerGender(e.target.value as "male" | "female")} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3"><option value="male">Nam</option><option value="female">Nữ</option></select></label>
               <label className="space-y-1.5 font-semibold sm:col-span-2">Số điện thoại (tùy chọn)<Input type="tel" inputMode="tel" maxLength={30} value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} placeholder="VD: 0901234567 hoặc +84901234567" aria-invalid={!isValidPassengerPhone(passengerPhone)} /></label>
               <label className="space-y-1.5 font-semibold">Nguyện vọng xếp phòng<Textarea rows={2} maxLength={2000} value={passengerRoommateNote} onChange={e => setPassengerRoommateNote(e.target.value)} placeholder="VD: Ở cùng Nguyễn Văn An, ưu tiên hai giường đơn…" /></label>

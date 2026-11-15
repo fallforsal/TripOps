@@ -17,6 +17,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
+import { AgencyDiscoveryPicker } from "@/app/components/common/AgencyDiscoveryPicker";
 
 interface CustomTourRequestPageProps {
   sourceTour?: import("@/app/types").Tour;
@@ -30,27 +31,6 @@ interface CustomTourRequestPageProps {
 
 const TODAY = new Date().toISOString().split("T")[0];
 const formatDateDisplay = (value: string) => value.split("-").reverse().join("/");
-
-function CompanyLogo({ src, name }: { src?: string; name: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <div className="w-11 h-11 shrink-0 rounded-[6px] border border-[#CBD5E1] bg-white overflow-hidden">
-      {src && !failed ? (
-        <img
-          src={src}
-          alt={`Logo ${name}`}
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="w-full h-full object-contain"
-        />
-      ) : (
-        <span className="w-full h-full flex items-center justify-center bg-[#F0F9FF] text-xs font-bold text-[#075985]">
-          {name.trim().slice(0, 2).toUpperCase()}
-        </span>
-      )}
-    </div>
-  );
-}
 
 export function CustomTourRequestPage({
   companies,
@@ -73,7 +53,7 @@ export function CustomTourRequestPage({
     budgetPerPerson: "",
     hotelStars: "4",
     additionalInfo: "",
-    targetCompanyId: sourceTour?.companyId || companies[0]?.id || "",
+    targetCompanyId: sourceTour?.companyId || "",
   });
 
   const [initialChanges, setInitialChanges] = useState<CustomTourRequest["initialChanges"]>();
@@ -81,11 +61,10 @@ export function CustomTourRequestPage({
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [chosenAgency, setChosenAgency] = useState<TourCompany | null>(null);
   useEffect(() => {
     if (sourceTour?.companyId) { setForm((previous) => ({ ...previous, targetCompanyId: sourceTour.companyId! })); return; }
-    setForm((previous) => companies.some((c) => c.id === previous.targetCompanyId)
-      ? previous : { ...previous, targetCompanyId: companies[0]?.id ?? "" });
-  }, [companies, sourceTour?.companyId]);
+  }, [sourceTour?.companyId]);
 
   // Auto-format currency VND helper
   const formatCurrencyVND = (digits: string): string => {
@@ -135,7 +114,7 @@ export function CustomTourRequestPage({
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
-  const selectedCompany = companies.find((c) => c.id === form.targetCompanyId);
+  const selectedCompany = chosenAgency?.id === form.targetCompanyId ? chosenAgency : companies.find((c) => c.id === form.targetCompanyId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +135,7 @@ export function CustomTourRequestPage({
       setErrorMsg("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
       return;
     }
-    if (!form.targetCompanyId || !companies.some((c) => c.id === form.targetCompanyId)) {
+    if (!form.targetCompanyId || !selectedCompany) {
       setErrorMsg("Vui lòng chọn Agency nhận yêu cầu."); return;
     }
     if (form.returnDate < form.departureDate || form.departureDate < TODAY) {
@@ -281,32 +260,11 @@ export function CustomTourRequestPage({
             </h2>
           </div>
 
-          <p className="text-xs text-[#475569]">
-            Chọn công ty du lịch uy tín trong hệ thống TripOps để thẩm định và thiết kế tour cho đoàn của bạn:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {companies.filter((c) => !sourceTour?.companyId || c.id === sourceTour.companyId).map((c) => {
-              const isSelected = form.targetCompanyId === c.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, targetCompanyId: c.id }))}
-                  className={`flex items-center gap-3 text-left p-3.5 rounded-[6px] border transition-colors ${isSelected
-                      ? "border-[#075985] bg-[#F0F9FF]"
-                      : "border-[#CBD5E1] bg-white hover:border-[#075985]"
-                    }`}
-                >
-                  <CompanyLogo src={c.logo} name={c.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-xs text-[#0F172A]">{c.name}</p>
-                    <p className="text-[11px] text-[#475569] mt-1 line-clamp-2">{c.address}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <label className="block space-y-1.5 text-xs font-semibold text-slate-700">Điểm đến mong muốn <span className="text-red-600">*</span>
+            <input type="text" value={form.destinations} onChange={set("destinations")} placeholder="VD: Đà Lạt – Nha Trang, Hà Giang..." required className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal" />
+          </label>
+          {sourceTour && <p className="text-xs text-slate-500">Yêu cầu từ tour có sẵn sẽ gửi đến Agency tổ chức tour này.</p>}
+          <AgencyDiscoveryPicker value={form.targetCompanyId} onSelect={agency => { setChosenAgency(agency); setForm(p => ({ ...p, targetCompanyId: agency.id })); }} destination={form.destinations} initialProvinceCodes={sourceTour?.provinceCodes} onlyAgencyId={sourceTour?.companyId} disabled={submitting} />
         </div>
 
         {/* Step 2: Thông tin đoàn & Liên hệ */}
@@ -390,20 +348,6 @@ export function CustomTourRequestPage({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#0F172A]">
-                Điểm đến mong muốn <span className="text-[#B91C1C]">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.destinations}
-                onChange={set("destinations")}
-                placeholder="VD: Đà Lạt – Nha Trang, Hà Giang..."
-                required
-                className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#0F172A]">
                 Ngày khởi hành dự kiến

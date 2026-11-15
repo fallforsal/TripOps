@@ -56,22 +56,15 @@ public sealed partial class TourService
         // Child content and age-price tables belong to the Agency that created them.
         var original=previousConfiguration??input.Configuration with {Timelines=[],PricingTiers=[],AgencyPricing=[]};
         configuration=await CollaborationConfiguration(request,MergeDesign(original,input.Configuration,actor,actor),ct,sourceVersion);
+        // A copied design keeps contributed content, but grants no new version access.
+        // The lead must explicitly invite partners into this version.
+        if(input.CreateNewVersion && sourceVersion.HasValue)
+            configuration=configuration with {CoHosts=configuration.CoHosts?.Select(h=>h.Role=="lead"?h:h with {Status="uninvited",InvitedAt=null,RespondedAt=null}).ToArray()};
         await Validate(configuration,input.Complete,ct,actor,requestId);
         Apply(tour, configuration);
         tour.Status = input.Complete ? TourStatus.Completed : TourStatus.Draft;
         tour.Visibility = TourVisibility.Hidden;
         var result = await Save(tour, actor, input.Reason?.Trim() is { Length: > 0 } note ? note : "Lưu phương án thiết kế", ct);
-        if(input.CreateNewVersion && sourceVersion.HasValue) {
-            var targetRow=await db.TourVersions.SingleAsync(v=>v.TourId==tour.Id && v.VersionNumber==tour.Version,ct);
-            var sourceRows=await db.TourVersionAgencies.AsNoTracking().Where(a=>a.TourVersion.TourId==tour.Id && a.TourVersion.VersionNumber==sourceVersion).ToListAsync(ct);
-            var existing=await db.TourVersionAgencies.Where(a=>a.TourVersionId==targetRow.Id).ToListAsync(ct);
-            foreach(var row in sourceRows) {
-                var next=existing.SingleOrDefault(a=>a.AgencyId==row.AgencyId);
-                if(next==null){next=new TourVersionAgency{TourVersionId=targetRow.Id,AgencyId=row.AgencyId};db.TourVersionAgencies.Add(next);}
-                next.IsHost=row.IsHost;next.Status=row.Status;next.StageArea=row.StageArea;next.SuggestedBudget=row.SuggestedBudget;next.CommunicationNotes=row.CommunicationNotes;next.AssignedAt=row.AssignedAt;next.RespondedAt=row.RespondedAt;
-            }
-            await db.SaveChangesAsync(ct);
-        }
         await tx.CommitAsync(ct);
         return result;
     }

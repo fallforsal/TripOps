@@ -24,3 +24,12 @@ test("accepted or revoked partners do not count as pending and closed requests d
     assert.equal(countPendingCoHostInvites([{id:"1",targetCompanyId:"A",status:"reviewing",coHosts:[lead,{...partner,status}]}],[],"B"),0);
   assert.equal(countPendingCoHostInvites([{id:"1",targetCompanyId:"A",status:"closed",coHosts:[lead,partner]}],[],"B"),0);
 });
+
+test("removed and copied-uninvited memberships stay historical rather than active or pending",()=>{
+  for(const status of ["removed","uninvited","revoked","rejected"] as const) {
+    const hosts=normalizeDesignHosts([lead,{...partner,status}],"A");
+    assert.equal(hosts.length,2);
+    assert.equal(hasDesignPartners(hosts),false);
+    assert.equal(countPendingCoHostInvites([{id:"1",targetCompanyId:"A",status:"reviewing",coHosts:hosts}],[],"B"),0);
+  }
+});

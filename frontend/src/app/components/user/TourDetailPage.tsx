@@ -114,12 +114,10 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
     return <AgencyLogo name={owner?.companyName||name||tour.companyName} logo={owner?.companyLogo||((!id||id===tour.companyId)?tour.companyLogo:undefined)}/>;
   };
   const [viewingMealService, setViewingMealService] = useState<Service | null>(null);
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(
-    new Set(tour.itinerary.slice(0, 1).map((d) => d.id)),
-  );
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
 
   const toggle = (id: string) => {
-    setExpandedDays((prev) => {
+    setCollapsedDays((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -201,10 +199,12 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
         <h3 className="text-lg font-bold text-red-600 mb-4">LỊCH TRÌNH CHI TIẾT:</h3>
         <div className="space-y-3">
           {tour.itinerary.map((day) => {
-            const isOpen = expandedDays.has(day.id);
+            const isOpen = !collapsedDays.has(day.id);
             return (
               <div key={day.id} className="border border-gray-200 rounded-xl overflow-hidden">
                 <button
+                  type="button"
+                  aria-expanded={isOpen}
                   onClick={() => toggle(day.id)}
                   className="w-full flex items-center justify-between gap-3 px-4 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
                 >
@@ -2505,7 +2505,7 @@ export function TourDetailPage({
                 ))}
               </div>
               <div className="p-5">
-                {activeTab === "program" && <ProgramTab tour={tour} services={services} />}
+                {activeTab === "program" && <ProgramTab key={`${tour.id}-${tour.version ?? 1}`} tour={tour} services={services} />}
                 {activeTab === "regulations" && <RegulationsTab tour={tour} />}
                 {activeTab === "pricing" && <PricingTab tour={tour} />}
                 {activeTab === "custom" && !isCustomTour && (
@@ -2676,13 +2676,6 @@ export function TourDetailPage({
                       </div>}
                     </div>
 
-                    {companyPhone && <a
-                      href={`tel:${companyPhone.replace(/\s+/g, "")}`}
-                      className="w-full flex items-center justify-center gap-2 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Phone className="w-4 h-4 text-emerald-600" />
-                      Gọi tư vấn
-                    </a>}
                     {!previewOnly && <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{kind:"tour",id:Number(tour.id),version:tour.is_request?tour.version:undefined,title:tour.name,thumbnailUrl:tour.image}} className="w-full">Tin nhắn</ChatWithButton>}
                   </div>
                 );

@@ -15,10 +15,10 @@ export interface VietnamProvinceItem {
 }
 
 /**
- * Danh mục chuẩn 63 Tỉnh / Thành phố Việt Nam với mã ổn định (canonical code).
+ * Danh mục 34 tỉnh/thành sau sắp xếp 2025; giữ ánh xạ mã cũ cho dữ liệu lịch sử.
  * Dùng thống nhất giữa Frontend và Backend cho trường `provinceCodes` của Tour.
  */
-export const VIETNAM_PROVINCES: readonly VietnamProvinceItem[] = [
+const LEGACY_PROVINCES: readonly VietnamProvinceItem[] = [
   // MIỀN BẮC
   {
     code: "HA_NOI",
@@ -408,6 +408,51 @@ export const VIETNAM_PROVINCES: readonly VietnamProvinceItem[] = [
   },
 ];
 
+export const PROVINCE_ALIASES: Readonly<Record<string, string>> = {
+  "HA_GIANG": "TUYEN_QUANG",
+  "YEN_BAI": "LAO_CAI",
+  "BAC_KAN": "THAI_NGUYEN",
+  "VINH_PHUC": "PHU_THO",
+  "HOA_BINH": "PHU_THO",
+  "BAC_GIANG": "BAC_NINH",
+  "HAI_DUONG": "HAI_PHONG",
+  "THAI_BINH": "HUNG_YEN",
+  "HA_NAM": "NINH_BINH",
+  "NAM_DINH": "NINH_BINH",
+  "QUANG_BINH": "QUANG_TRI",
+  "THUA_THIEN_HUE": "HUE",
+  "QUANG_NAM": "DA_NANG",
+  "KON_TUM": "QUANG_NGAI",
+  "BINH_DINH": "GIA_LAI",
+  "NINH_THUAN": "KHANH_HOA",
+  "PHU_YEN": "DAK_LAK",
+  "DAK_NONG": "LAM_DONG",
+  "BINH_THUAN": "LAM_DONG",
+  "BINH_PHUOC": "DONG_NAI",
+  "BINH_DUONG": "TP_HCM",
+  "BA_RIA_VUNG_TAU": "TP_HCM",
+  "LONG_AN": "TAY_NINH",
+  "TIEN_GIANG": "DONG_THAP",
+  "BEN_TRE": "VINH_LONG",
+  "TRA_VINH": "VINH_LONG",
+  "KIEN_GIANG": "AN_GIANG",
+  "SOC_TRANG": "CAN_THO",
+  "HAU_GIANG": "CAN_THO",
+  "BAC_LIEU": "CA_MAU"
+};
+export const currentProvinceCode = (code: string): string => {
+  const key = code.trim().toUpperCase(); return PROVINCE_ALIASES[key] ?? key;
+};
+export const VIETNAM_PROVINCES: readonly VietnamProvinceItem[] = Array.from(
+  LEGACY_PROVINCES.reduce((map, legacy) => {
+    const code = currentProvinceCode(legacy.code);
+    const existing = map.get(code);
+    const canonical = LEGACY_PROVINCES.find(p => p.code === code) ?? { ...legacy, code, name: "TP. Huế" };
+    map.set(code, { ...canonical, name: code === "DONG_NAI" ? "TP. Đồng Nai" : canonical.name, popularDestinations: [...new Set([...(existing?.popularDestinations ?? []), ...legacy.popularDestinations, legacy.name, legacy.code])] });
+    return map;
+  }, new Map<string, VietnamProvinceItem>()).values(),
+);
+
 const PROVINCE_BY_CODE = new Map<string, VietnamProvinceItem>(
   VIETNAM_PROVINCES.map((p) => [p.code, p]),
 );
@@ -424,7 +469,7 @@ function normalizeSearchToken(value: string): string {
 
 export function getProvinceByCode(code: string): VietnamProvinceItem | undefined {
   if (!code) return undefined;
-  return PROVINCE_BY_CODE.get(code.trim().toUpperCase());
+  return PROVINCE_BY_CODE.get(currentProvinceCode(code));
 }
 
 export function getProvinceName(code: string): string {
@@ -437,7 +482,7 @@ export function formatProvinceLabels(codes?: readonly string[] | null): string[]
   const seen = new Set<string>();
   const labels: string[] = [];
   for (const raw of codes) {
-    const normalized = raw.trim().toUpperCase();
+    const normalized = currentProvinceCode(raw);
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     labels.push(getProvinceName(normalized));
@@ -504,7 +549,7 @@ export function suggestProvincesFromDestinationText(
 ): VietnamProvinceItem[] {
   const norm = normalizeSearchToken(destinationText);
   if (!norm || norm.length < 2) return [];
-  const selectedSet = new Set(alreadySelectedCodes.map((c) => c.trim().toUpperCase()));
+  const selectedSet = new Set(alreadySelectedCodes.map(currentProvinceCode));
   const suggestions: VietnamProvinceItem[] = [];
 
   for (const province of VIETNAM_PROVINCES) {

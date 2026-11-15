@@ -117,8 +117,8 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [HttpGet("available-guides")]
     [EndpointSummary("List active tour guides available for booking assignment")]
     [ProducesResponseType<IReadOnlyList<AvailableGuideDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> AvailableGuides(CancellationToken ct) =>
-        Ok(await bookings.AvailableGuides(Actor,ct));
+    public async Task<IActionResult> AvailableGuides(CancellationToken ct, [FromQuery] int? bookingId = null) =>
+        Ok(await bookings.AvailableGuides(Actor,ct,bookingId));
 
     [HttpGet]
     [EndpointSummary("List bookings for tours owned by the authenticated agency")]

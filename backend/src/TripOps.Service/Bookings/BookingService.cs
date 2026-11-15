@@ -385,8 +385,22 @@ public sealed partial class BookingService(BookingRepository repository, Account
     }
 
     // WF06: Guide xem danh sách tour được giao
-    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
+    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct, int? bookingId = null)
+    {
+        Booking? booking = null;
+        if (bookingId.HasValue) {
+            booking = await repository.Find(bookingId.Value,ct) ?? throw new BookingException(404,"Không tìm thấy booking.");
+            if (!BookingAlliance.IsMember(booking,agencyId)) throw new BookingException(403,"Agency không thuộc booking.");
+        }
+        var result = new List<AvailableGuideDto>();
+        foreach (var guide in await repository.AvailableGuides(agencyId,ct)) {
+            var conflict = booking is not null && await repository.GuideHasConflict(guide.Id,booking.Id,booking.StartDate,EndDate(booking),ct);
+            var suspended = guide.GuideProfile?.SuspendedAt is not null;
+            result.Add(new(guide.Id,guide.Name,guide.Phone,guide.Avatar,!conflict && !suspended,
+                suspended ? "HDV đang bị tạm ngưng." : conflict ? "Trùng lịch với booking khác." : null));
+        }
+        return result;
+    }
 
     // Tour media is stored as JSON arrays. Prefer the explicit thumbnail, then
     // use the first valid gallery image (older tours may lack ThumbnailUrls).
@@ -487,7 +501,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             b.Participants.OrderBy(p => p.ParticipantIndex).Select(Participant).ToList(),
             b.AssignedGuides.Select(ag => new AssignedGuideDto(
                 ag.Id, ag.GuideId, ag.Guide?.Name ?? "", ag.Guide?.Phone,
-                ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId)).ToList(),
+                ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId, ag.Guide?.Avatar)).ToList(),
             b.CreatedAt ?? DateTime.UnixEpoch, b.UpdatedAt,
             b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => new IncidentDto(
                 i.Id, i.BookingId, i.Title, i.Description, Severity(i.Description), i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(), i.CreatedAt ?? DateTime.UnixEpoch)).ToList(),

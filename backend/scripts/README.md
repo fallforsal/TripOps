@@ -1,5 +1,9 @@
 # Chia sẻ dữ liệu dịch vụ cho team
 
+## Bộ dữ liệu 19 tỉnh/thành miền Trung – miền Tây
+
+Xem [REGIONAL-DEMO-2026.md](REGIONAL-DEMO-2026.md) để biết phạm vi, nguồn tham khảo, tài khoản đăng nhập và cách seed bổ sung không xóa dữ liệu cũ. Bộ mẫu dùng địa bàn sau sáp nhập và có lịch sử booking hoàn thành, đánh giá Agency, Provider, HDV, Customer và danh bạ riêng.
+
 ## Thêm 5 HDV mẫu cho Agency
 
 Chạy khi BE đã hoạt động, có Agency `agency@tripops.test`:

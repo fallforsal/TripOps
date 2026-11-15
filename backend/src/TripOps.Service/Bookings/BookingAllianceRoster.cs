@@ -40,7 +40,7 @@ public sealed partial class BookingQuotationService
                 financial?refunds.Where(x=>x.AgencyId==a.AgencyId&&x.RefundRequest!.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved).Sum(x=>x.RefundRequest!.OriginalPaidAmount):0,
                 financial?a.PlatformFee??0:0);
         }).ToArray();
-        return dto with {BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note))).ToArray()};
+        return dto with {BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note,GuideAvatar:c.Guide?.Avatar))).ToArray()};
     }
 
     private void NotifyAgencies(Booking b,string message,string[]? affected=null)

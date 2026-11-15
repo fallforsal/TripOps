@@ -284,7 +284,7 @@ export function fromApiBooking(
     tourStartDate: dto.startDate
       ? dto.startDate.split("T")[0]
       : new Date().toISOString().split("T")[0],
-    attractionCheckins:dto.attractionCheckins?.map(c=>({id:String(c.id),bookingId:String(dto.id),locationName:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.name||"",dayNumber:dto.snapshotDays?.find(d=>d.locations.some(l=>l.id===c.locationId))?.dayNumber||1,bookingTimelineAttractionId:String(c.locationId),agencyId:c.agencyId,agencyName:dto.bookingAgencies?.find(a=>a.agencyId===c.agencyId)?.agencyName,guideId:c.guideId,guideName:c.guideName,attendanceStatus:(c.status==="CheckedIn"?"CHECKED_IN":c.status==="Skipped"?"SKIPPED":"PENDING") as "CHECKED_IN"|"SKIPPED"|"PENDING",checkedAt:c.checkedAt,notes:c.note,createdAt:dto.createdAt})),
+    attractionCheckins:dto.attractionCheckins?.map(c=>({id:String(c.id),bookingId:String(dto.id),locationName:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.name||"",dayNumber:dto.snapshotDays?.find(d=>d.locations.some(l=>l.id===c.locationId))?.dayNumber||1,bookingTimelineAttractionId:String(c.locationId),agencyId:c.agencyId,agencyName:dto.bookingAgencies?.find(a=>a.agencyId===c.agencyId)?.agencyName,guideId:c.guideId,guideName:c.guideName,guideAvatar:c.guideAvatar || dto.assignedGuides?.find(g=>g.guideId===c.guideId)?.guideAvatar,attendanceStatus:(c.status==="CheckedIn"?"CHECKED_IN":c.status==="Skipped"?"SKIPPED":"PENDING") as "CHECKED_IN"|"SKIPPED"|"PENDING",checkedAt:c.checkedAt,notes:c.note,createdAt:dto.createdAt})),
     bookingAgencies:dto.bookingAgencies?.map(a=>({...a,id:String(a.id),bookingId:String(dto.id),settlementStatus:a.settlementStatus.toLowerCase() as "unpaid"|"ready"|"paid"})),
     coHosts:bookedCoHosts,
     isCoHosted:isBookedAlliance,
@@ -293,11 +293,13 @@ export function fromApiBooking(
     guideId: assignedLeadGuide?.guideId,
     guideName: assignedLeadGuide?.guideName,
     guidePhone: assignedLeadGuide?.guidePhone,
+    guideAvatar: assignedLeadGuide?.guideAvatar,
     assignedGuides: (dto.assignedGuides || []).map((ag) => ({
       id: String(ag.id),
       guideId: ag.guideId,
       guideName: ag.guideName,
       guidePhone: ag.guidePhone,
+      guideAvatar: ag.guideAvatar,
       companyId: ag.agencyId || dto.agencyId || "",
       companyName: dto.bookingAgencies?.find(a=>a.agencyId===ag.agencyId)?.agencyName || dto.agencyName || "",
       role: guideRole(ag.role),

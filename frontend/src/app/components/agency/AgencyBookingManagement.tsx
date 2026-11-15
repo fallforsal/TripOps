@@ -307,7 +307,7 @@ export function AgencyBookingManagement({
                   const pst = paymentStatusMap[booking.paymentStatus ?? "unpaid"] ?? {
                     label: "Chưa xác định", color: "text-gray-700", badgeBg: "bg-gray-100 border-gray-200",
                   };
-                  const assignedGuide = guides.find((g) => g.id === booking.guideId);
+                  const hasAssignedGuides = !!booking.assignedGuides?.length || !!booking.guideId || !!booking.attractionCheckins?.length;
                   const hasCustom = booking.hasLocationCustomization || (booking.customHotelChanges && booking.customHotelChanges.length > 0);
 
                   return (
@@ -411,32 +411,8 @@ export function AgencyBookingManagement({
 
                       {/* HDV */}
                       <td className="px-4 py-4 align-top whitespace-nowrap">
-                        {assignedGuide ? (
-                          <div className="flex items-center gap-2">
-                            {assignedGuide.avatar ? (
-                              <img
-                                src={assignedGuide.avatar}
-                                alt={assignedGuide.name}
-                                className="w-7 h-7 rounded-full object-cover border"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-[#E0F2FE] text-[#075985] flex items-center justify-center text-xs font-bold">
-                                {assignedGuide.name.charAt(0)}
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-xs font-semibold text-gray-800">{assignedGuide.name}</p>
-                              <p className="text-[10px] text-gray-400">{assignedGuide.phone || "HDV chính"}</p>
-                            </div>
-                          </div>
-                        ) : booking.status === "confirmed" ? (
-                          <button
-                            onClick={() => setAssignTarget(booking.id)}
-                            className="text-xs font-medium text-[#075985] hover:text-blue-800 hover:underline flex items-center gap-1 bg-[#F0F9FF] px-2 py-1 rounded border border-[#CBD5E1]"
-                          >
-                            <UserCheck className="w-3.5 h-3.5" />
-                            + Gán HDV
-                          </button>
+                        {hasAssignedGuides ? (
+                          <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Đã phân công</span>
                         ) : (
                           <span className="text-xs text-gray-400 italic">Chưa phân công</span>
                         )}

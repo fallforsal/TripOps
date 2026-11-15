@@ -1,6 +1,7 @@
 import { toTourApiTime } from "@/app/lib/tourClockTime";
 import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import type {
+  AgencyEvidence,
   DailyItinerary,
   Tour,
   TourHotel,
@@ -127,6 +128,7 @@ export type CandidateAgency = {
   avatar: string | null;
   matchedProvinceCodes: string[];
   matchedTourCount: number;
+  evidence?: AgencyEvidence;
 };
 export type ApiVersion = {
   version: number;

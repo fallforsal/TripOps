@@ -15,7 +15,7 @@ public sealed class CustomerDesignRequestsController(DesignRequestService reques
     [HttpGet("agencies"), AllowAnonymous]
     [EndpointSummary("List approved Agencies available for a custom tour request")]
     [ProducesResponseType<IReadOnlyList<AgencyChoiceDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Agencies(CancellationToken ct) => Ok(await requests.Agencies(ct));
+    public async Task<IActionResult> Agencies(CancellationToken ct, string? provinceCode = null) => Ok(await requests.Agencies(ct, provinceCode));
     [HttpPost]
     [EndpointSummary("Customer submits a custom tour design request to one Agency")]
     [ProducesResponseType<DesignRequestDto>(StatusCodes.Status201Created)]

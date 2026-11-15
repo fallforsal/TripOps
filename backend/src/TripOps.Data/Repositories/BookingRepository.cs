@@ -9,6 +9,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
     public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
         .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);
+    public Task<int> LockBooking(int bookingId, CancellationToken ct) => db.Bookings.IgnoreQueryFilters().Where(b => b.Id == bookingId)
+        .ExecuteUpdateAsync(s => s.SetProperty(b => b.UpdatedAt, b => b.UpdatedAt), ct);
     public async Task<bool> GuideHasConflict(string guideId, int bookingId, DateTime start, DateTime end, CancellationToken ct)
     {
         var trips = await db.Bookings.AsNoTracking().IgnoreQueryFilters().Include(b => b.Timelines).Include(b => b.Tour)
@@ -140,7 +142,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);
 
     public Task<List<User>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        db.Users.AsNoTracking()
+        db.Users.AsNoTracking().Include(u => u.GuideProfile)
             .Where(u => u.Role == UserRole.TourGuide && u.Status == UserStatus.Active && u.AgencyId == agencyId)
             .OrderBy(u => u.Name).ToListAsync(ct);
 

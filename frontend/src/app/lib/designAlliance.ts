@@ -4,11 +4,11 @@ import type { TourCoHost } from "../types/index";
 export function normalizeDesignHosts(hosts: TourCoHost[] | undefined, leadId: string): TourCoHost[] {
   const seen=new Set<string>();
   return (hosts || []).filter(host=>{
-    if(!host.companyId || seen.has(host.companyId) || host.role==="lead" && host.companyId!==leadId || host.status==="rejected")return false;
+    if(!host.companyId || seen.has(host.companyId) || host.role==="lead" && host.companyId!==leadId)return false;
     seen.add(host.companyId);return true;
   }).map(host=>({...host,role:host.companyId===leadId?"lead" as const:"partner" as const}));
 }
-export const hasDesignPartners=(hosts:TourCoHost[] | undefined) => !!hosts?.some(host=>host.role==="partner" && host.status!=="rejected");
+export const hasDesignPartners=(hosts:TourCoHost[] | undefined) => !!hosts?.some(host=>host.role==="partner" && (host.status==="accepted" || host.status==="pending"));
 
 type Request = {id:string;targetCompanyId:string;archivedAt?:string;status:string;coHosts?:TourCoHost[]};
 type Tour = {id:string;companyId?:string;customRequestId?:string;coHosts?:TourCoHost[]};
@@ -23,3 +23,8 @@ export function countPendingCoHostInvites(requests:Request[],tours:Tour[],compan
   }
   return ids.size;
 }
+
+export const designPartnerStatusLabel = (status: TourCoHost["status"]) => ({
+  pending:"Chờ phản hồi", accepted:"Đã tham gia", rejected:"Đã từ chối", revoked:"Đã bị chủ trì gỡ",
+  removed:"Đã bị chủ trì gỡ", uninvited:"Chưa mời vào phiên bản này",
+}[status]);

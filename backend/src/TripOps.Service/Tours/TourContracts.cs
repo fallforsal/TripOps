@@ -86,7 +86,7 @@ public sealed record CandidateAgencyDto(
     string? Phone,
     string? Avatar,
     string[] MatchedProvinceCodes,
-    int MatchedTourCount);
+    int MatchedTourCount, AgencyEvidenceDto? Evidence = null);
 public sealed record TourPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 public sealed record TourVersionDto(int Version, string? ChangeNote, string? CreatedBy, decimal? Price,
     DateTime CreatedAt, string? SnapshotData);

@@ -8,7 +8,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage)
+public sealed partial class DesignRequestService(TripOpsDbContext db, AccountService accounts, TourService tours, CloudinaryStorage storage, AgencyDiscoveryService discovery)
 {
     private static void Require(bool ok, string message) { if (!ok) throw new TourException(422, message); }
     private async Task Customer(string actor, CancellationToken ct)
@@ -16,30 +16,14 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
         if ((await accounts.Current(actor, ct)).Role != UserRole.Customer)
             throw new TourException(403, "Cần tài khoản khách hàng.");
     }
-    //public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct) =>
-    //    await db.Users.AsNoTracking().Where(u => u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active &&
-    //        u.BusinessProfile != null && u.BusinessProfile.Status == BusinessProfileStatus.Approved)
-    //        .OrderBy(u => u.BusinessProfile!.BusinessName).Select(u => new AgencyChoiceDto(u.Id,
-    //            u.BusinessProfile!.BusinessName ?? u.Name ?? "Agency", u.BusinessProfile.BusinessAddress ?? "", u.Phone ?? "", u.Email))
-    //        .ToListAsync(ct);
-
-    public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct)
+    public async Task<IReadOnlyList<AgencyChoiceDto>> Agencies(CancellationToken ct, string? provinceCode = null)
     {
-        var rows = await db.Users.AsNoTracking()
-            .Where(u => u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active &&
-                u.BusinessProfile != null && u.BusinessProfile.Status == BusinessProfileStatus.Approved)
-            .OrderBy(u => u.BusinessProfile!.BusinessName)
-            .Select(u => new {
-                u.Id,
-                Name = u.BusinessProfile!.BusinessName ?? u.Name ?? "Agency",
-                Address = u.BusinessProfile!.BusinessAddress ?? "",
-                Phone = u.Phone ?? "",
-                u.Email,
-                u.BusinessProfile!.LogoUrl
-            })
-            .ToListAsync(ct);
+        var rows = await discovery.List(provinceCode, ct);
         return rows.Select(r => new AgencyChoiceDto(r.Id, r.Name, r.Address, r.Phone, r.Email,
-            r.LogoUrl is null ? null : storage.DeliveryUrl(r.LogoUrl))).ToArray();
+            r.LogoUrl is null ? null : storage.DeliveryUrl(r.LogoUrl), r.Description,
+            r.Evidence with { Examples = r.Evidence.Examples.Select(t => t with {
+                ThumbnailUrl = t.ThumbnailUrl is null ? null : storage.DeliveryUrl(t.ThumbnailUrl)
+            }).ToArray() })).ToArray();
     }
 
     public async Task<DesignRequestDto> Create(string actor, CreateDesignRequestInput input, CancellationToken ct)
@@ -88,7 +72,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
     {
         if (agencyView) await tours.Agency(actor, ct); else await Customer(actor, ct);
         var requests = await db.TourDesignRequests.AsNoTracking()
-            .Where(r => agencyView ? r.AgencyId == actor || db.TourDesignRequestAgencies.Any(a => a.TourDesignRequestId == r.Id && a.AgencyId == actor && !a.IsHost && (a.Status == "pending" || a.Status == "accepted")) : r.CustomerId == actor)
+            .Where(r => agencyView ? r.AgencyId == actor || db.TourDesignRequestAgencies.Any(a => a.TourDesignRequestId == r.Id && a.AgencyId == actor && !a.IsHost) : r.CustomerId == actor)
             .OrderByDescending(r => r.CreatedAt).Take(200).ToListAsync(ct);
         var agencyIds = requests.Select(r => r.AgencyId).Where(id => id != null).Distinct().ToArray();
         var agencies = await db.Users.AsNoTracking().Include(u => u.BusinessProfile)
@@ -107,14 +91,24 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             }
             var booking=await db.Bookings.AsNoTracking().Where(b=>b.DesignRequestId==request.Id && b.Status!=BookingStatus.Cancelled && b.Status!=BookingStatus.Rejected).OrderByDescending(b=>b.Id).Select(b=>(int?)b.Id).FirstOrDefaultAsync(ct);
             var membership=agencyView?await db.TourDesignRequestAgencies.AsNoTracking().SingleOrDefaultAsync(a=>a.TourDesignRequestId==request.Id && a.AgencyId==actor,ct):null;
-            var versions=agencyView?await db.TourVersionAgencies.AsNoTracking().Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && (request.AgencyId==actor || a.AgencyId==actor && (a.Status=="accepted" || a.Status=="pending"))).Select(a=>a.TourVersion.VersionNumber).Distinct().OrderByDescending(n=>n).ToArrayAsync(ct):null;
+            var versions=agencyView?await db.TourVersionAgencies.AsNoTracking().Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && (request.AgencyId==actor || a.AgencyId==actor && a.Status!="uninvited")).Select(a=>a.TourVersion.VersionNumber).Distinct().OrderByDescending(n=>n).ToArrayAsync(ct):null;
             if(agencyView && request.AgencyId!=actor && mapped.DesignedTourId.HasValue && versions!.Length==0)continue;
-            var selectedVersion=agencyView && request.AgencyId!=actor ? versions!.Cast<int?>().FirstOrDefault() : mapped.CurrentVersion;
-            var hosts=await tours.CoHosts(request.Id,ct,selectedVersion);
+            var selectedVersion=mapped.CurrentVersion;
+            if(agencyView && request.AgencyId!=actor) {
+                selectedVersion=await db.TourVersionAgencies.AsNoTracking()
+                    .Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && a.AgencyId==actor && (a.Status=="accepted" || a.Status=="pending"))
+                    .OrderByDescending(a=>a.TourVersion.VersionNumber).Select(a=>(int?)a.TourVersion.VersionNumber).FirstOrDefaultAsync(ct)
+                    ?? versions!.Cast<int?>().FirstOrDefault();
+            }
+            var hosts=await tours.CoHosts(request.Id,ct,selectedVersion,agencyView);
+            var invitations=agencyView?await db.TourVersionAgencies.AsNoTracking()
+                .Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && !a.IsHost && a.Status!="uninvited" && (request.AgencyId==actor || a.AgencyId==actor))
+                .OrderByDescending(a=>a.TourVersion.VersionNumber)
+                .Select(a=>new DesignInvitationDto(a.AgencyId,a.TourVersion.VersionNumber,a.Status=="excluded" || a.Status=="cancelled" || db.TourDesignRequestAgencies.Any(g=>g.TourDesignRequestId==request.Id && g.AgencyId==a.AgencyId && g.Status=="cancelled")?"removed":a.Status,a.StageArea,a.AssignedAt,a.RespondedAt)).ToArrayAsync(ct):null;
             var status=booking.HasValue?"booked":request.Status==CustomRequestStatus.Booked?"closed":mapped.Status;
             mapped=mapped with {Status=status,BookingId=booking,ArchivedAt=membership?.ArchivedAt,ClosedAt=request.ClosedAt,
                 CloseReason=request.CloseReason??(request.Status==CustomRequestStatus.Booked && !booking.HasValue?"Booking đã hủy hoặc bị từ chối. Agency có thể mở lại yêu cầu.":null),
-                CoHosts=agencyView?hosts:null,CurrentVersion=agencyView?selectedVersion:mapped.SharedVersion,CollaborationVersions=versions,HasCollaborations=await db.TourVersionAgencies.AnyAsync(a=>a.TourVersion.Tour.DesignRequestId==request.Id && !a.IsHost && a.Status!="excluded",ct)};
+                CoHosts=agencyView?hosts:null,CurrentVersion=agencyView?selectedVersion:mapped.SharedVersion,CollaborationVersions=versions,CollaborationInvitations=invitations,HasCollaborations=await db.TourVersionAgencies.AnyAsync(a=>a.TourVersion.Tour.DesignRequestId==request.Id && !a.IsHost && a.Status!="uninvited",ct)};
             if(agencyView && request.AgencyId!=actor && !hosts.Any(h=>h.CompanyId==actor && h.Status=="accepted"))
                 mapped=mapped with {ContactEmail="",ContactPhone="",ContactName="Khách đoàn",AdditionalInfo=null,CoHosts=hosts.Where(h=>h.Role=="lead" || h.CompanyId==actor).ToArray()};
             result.Add(mapped);

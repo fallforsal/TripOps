@@ -13,12 +13,14 @@ test("one letter lists provinces whose name starts with it", () => {
   const h = names("H");
   assert.ok(h.length > 0);
   for (const name of h) assert.match(name.replace(/^TP\.\s*/, ""), /^H/);
-  assert.ok(h.includes("TP. Hà Nội") && h.includes("Hà Giang"));
+  assert.ok(h.includes("TP. Hà Nội") && h.includes("Hà Tĩnh"));
+  assert.ok(!h.includes("Hà Giang")); // Địa bàn cũ nay thuộc Tuyên Quang.
 });
 
 test("typing with accents narrows to that spelling", () => {
   const ha = names("Hà");
-  assert.deepEqual(ha.slice(0, 4), ["TP. Hà Nội", "Hà Giang", "Hà Nam", "Hà Tĩnh"]);
+  assert.deepEqual(ha.slice(0, 2), ["TP. Hà Nội", "Hà Tĩnh"]);
+  assert.ok(names("Hà Giang").includes("Tuyên Quang"));
   assert.ok(!ha.includes("TP. Hải Phòng"));
   assert.ok(names("ha").includes("TP. Hải Phòng")); // không dấu thì khớp rộng hơn
 });

@@ -93,7 +93,7 @@ public sealed record BookingDto(
     bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
-    IReadOnlyList<string>? PhotoUrls = null);
+    IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null);
 
 public sealed record BookingAgencyDto(int Id,string AgencyId,string AgencyName,bool IsHost,decimal OriginalAmount,decimal FinalAmount,decimal NetPayout,
     string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0,
@@ -230,7 +230,7 @@ public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime?
 public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);
 public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null,DateTime? DateFrom=null,DateTime? DateTo=null);
 
-public sealed record AvailableGuideDto(string Id, string Name, string? Phone);
+public sealed record AvailableGuideDto(string Id, string Name, string? Phone, string? Avatar = null, bool IsAvailable = true, string? UnavailableReason = null);
 
 public sealed record BookingListItem(
     int Id,
@@ -274,7 +274,7 @@ public sealed record AssignedGuideDto(
     string Status,
     string? Notes,
     DateTime? AssignedAt = null,
-    string? AgencyId = null);
+    string? AgencyId = null, string? GuideAvatar = null);
 
 public sealed record IncidentDto(
     int Id,

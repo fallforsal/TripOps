@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<TripOps.Data.Repositories.TourRepository>();
         services.AddScoped<TripOps.Data.Repositories.BookingRepository>();
         services.AddScoped<Tours.TourService>();
+        services.AddScoped<Tours.AgencyDiscoveryService>();
         services.AddScoped<Tours.DesignRequestService>();
         services.AddScoped<Notifications.WorkflowNotificationService>();
         services.AddScoped<Bookings.BookingQuotationService>();

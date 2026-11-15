@@ -56,6 +56,7 @@ export interface ParticipantDto {
 }
 
 export interface AssignedGuideDto {
+  guideAvatar?: string;
   id: number;
   guideId: string;
   guideName: string;
@@ -77,7 +78,7 @@ export interface BookingDto {
   isPartnerView?: boolean;
   agencyDirectory?:{agencyId:string;agencyName:string}[];
   bookingAgencies?:BookingAgencyDto[];
-  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;status:string;checkedAt?:string;note?:string}[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string}[];
   id: number;
   bookingCode: string;
   customerId: string;
