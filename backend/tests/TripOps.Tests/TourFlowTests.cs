@@ -52,10 +52,10 @@ public sealed partial class TourFlowTests
         {
             builder.UseEnvironment("Development");
             if (withCloudinary) builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
+                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
             }));
             else builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
+                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
             }));
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();

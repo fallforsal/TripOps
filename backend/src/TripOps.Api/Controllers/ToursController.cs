@@ -190,6 +190,22 @@ public sealed class ItineraryDraftsController(TourService tours) : ControllerBas
         var tour = await tours.AiCreate(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, ct);
         return Created($"/api/v1/agency/tours/{tour.Id}", tour);
     }
+
+    [HttpPost("preview")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai-chat")]
+    [EndpointSummary("Let AI draft a tour outline for review without saving it")]
+    [ProducesResponseType<TourConfiguration>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Preview(AiDraftRequest request, CancellationToken ct) =>
+        Ok(await tours.AiPreview(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, ct));
+
+    [HttpPost("save")]
+    [EndpointSummary("Save a reviewed AI outline as a hidden AI-generated draft")]
+    [ProducesResponseType<TourDto>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> Save(TourConfiguration configuration, CancellationToken ct)
+    {
+        var tour = await tours.AiSave(User.FindFirstValue(ClaimTypes.NameIdentifier)!, configuration, ct);
+        return Created($"/api/v1/agency/tours/{tour.Id}", tour);
+    }
 }
 
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/services")]

@@ -11,6 +11,7 @@ import { DeferredImageUploads } from "@/app/lib/deferredImageUploads";
 import { orderTimeline, moveTimeline, appendTimeline } from "@/app/lib/tourTimelineOrder";
 import { useServiceCatalogue } from "@/app/contexts/ServiceCatalogue";
 import { agencySuppliers, createAgencySupplier, updateAgencySupplier, type AgencySupplier } from "@/app/services/wf02Tours";
+import { editTourIdFromHash } from "@/app/services/aiTourDraft";
 import { useState, useRef, useEffect } from "react";
 import {
   Tour,
@@ -167,6 +168,25 @@ export function AgencyTourManagement({
     "newest" | "status" | "price-asc" | "price-desc" | "rating" | "bookings"
   >("newest");
   const [selectedTourIds, setSelectedTourIds] = useState<string[]>([]);
+
+  // UC-038: cửa sổ AI lưu tour nháp rồi chuyển tới #/agency/tours?edit=<id>; mở trang sửa khi danh sách đã có tour đó.
+  const [pendingEditId, setPendingEditId] = useState<string | null>(() => editTourIdFromHash());
+  useEffect(() => {
+    const onHash = () => setPendingEditId(editTourIdFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  useEffect(() => {
+    if (!pendingEditId) return;
+    const target = tours.find((t) => String(t.id) === pendingEditId);
+    if (!target) return;
+    setViewingTour(null);
+    setShowCreateModal(false);
+    setEditingTour(target);
+    setPendingEditId(null);
+    // Bỏ ?edit= để tải lại trang hoặc bấm Back không mở lại trang sửa.
+    window.history.replaceState(null, "", "#/agency/tours");
+  }, [pendingEditId, tours]);
 
   const isApproved = company.status === "approved";
 

@@ -2,6 +2,7 @@ import { ChatTourPage } from "@/app/components/chat/ChatTourPage";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
+import { TOURS_CHANGED_EVENT } from "@/app/services/aiTourDraft";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
   cancelDesignRequest, actOnDesignRequest, saveDesignTour, customerRequestPlans } from "@/app/services/customTourRequests";
 import { toast } from "@/app/lib/notifications";
@@ -223,6 +224,13 @@ function Application() {
     for (const tour of privateItems) byId.set(tour.id, tour);
     setTours([...byId.values()]);
   }
+  // Cửa sổ AI vừa lưu tour nháp (UC-038): tải lại danh sách để trang Quản lý tour mở được tour mới.
+  useEffect(() => {
+    const onChanged = () => { refreshTours().catch((e) => setApiError(e.message)); };
+    window.addEventListener(TOURS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(TOURS_CHANGED_EVENT, onChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
   const handleCompanyDuplicateTour = async (tourId: string, name: string) => {
     await duplicateAgencyTour(tourId, name);
     await refreshTours();

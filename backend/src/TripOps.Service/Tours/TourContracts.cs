@@ -66,8 +66,25 @@ public sealed record UpdateTourRequest([Range(1, int.MaxValue)] int Revision,
     [Required] TourConfiguration Configuration, [Required, StringLength(2000)] string ChangeNote);
 public sealed record TourCommand([Range(1, int.MaxValue)] int Revision, [StringLength(2000)] string? Reason = null);
 public sealed record DuplicateTourRequest([Required, StringLength(255)] string Name);
+/// <param name="GroupSize">Số khách dự kiến của đoàn; dùng để AI chọn khách sạn, nhà hàng đủ sức chứa.</param>
 public sealed record AiDraftRequest([Required, StringLength(255)] string Destination,
-    [Range(1, 365)] int DurationDays, [StringLength(2000)] string? Style = null);
+    [Range(1, 365)] int DurationDays, [StringLength(2000)] string? Style = null, [Range(1, 1000)] int? GroupSize = null);
+
+/// <summary>
+/// UC-038: khách sạn/nhà hàng AI được phép chọn khi soạn tour, theo thứ tự ưu tiên:
+/// "A" = danh bạ nhà cung cấp của chính Agency, "P" = dịch vụ Provider đã duyệt trên TripOps.
+/// Key ("A12", "P34") là mã AI dùng để chọn; backend chỉ nhận key có trong danh sách này.
+/// </summary>
+public sealed record AiServiceCandidate(string Key, string Source, int Id, string Type, string Name, string? Area,
+    int? StarRating = null, int? Capacity = null, decimal? PriceFrom = null, decimal? PriceTo = null, string? Address = null);
+
+/// <summary>Lựa chọn của AI cho một đêm lưu trú hoặc một bữa ăn: một key trong danh sách, hoặc gợi ý bên ngoài.</summary>
+public sealed record AiServiceChoice(int Day, string? MealType, string? Key, string? ExternalName, string? ExternalArea,
+    int? StarRating = null, string? Note = null);
+public sealed record AiServicePlan(IReadOnlyList<AiServiceChoice> Stays, IReadOnlyList<AiServiceChoice> Meals)
+{
+    public static readonly AiServicePlan Empty = new([], []);
+}
 
 public sealed record TourDto(int Id, string AgencyId, string? Code, string Status, string Visibility,
     bool IsRequest, bool IsAiGenerated, int Version, TourConfiguration Configuration,
@@ -102,11 +119,15 @@ public sealed class TourException(int status, string message) : Exception(messag
 public interface IItineraryDraftGenerator
 {
     Task<TourConfiguration> Generate(AiDraftRequest request, CancellationToken ct);
+
+    /// <summary>Bước 2: chọn chỗ ở, ăn uống cho khung tour từ danh sách ứng viên (ưu tiên A → P → bên ngoài).</summary>
+    Task<AiServicePlan> PlanServices(TourConfiguration outline, AiDraftRequest request, IReadOnlyList<AiServiceCandidate> candidates, CancellationToken ct)
+        => Task.FromResult(AiServicePlan.Empty);
 }
 public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerator
 {
     public Task<TourConfiguration> Generate(AiDraftRequest request, CancellationToken ct) =>
-        throw new TourException(503, "AI itinerary generation is not configured.");
+        throw new TourException(503, "Tính năng soạn tour bằng AI chưa được cấu hình. Bạn vẫn có thể tạo tour thủ công.");
 }
 
 public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
