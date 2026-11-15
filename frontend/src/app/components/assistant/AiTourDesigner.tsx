@@ -75,6 +75,12 @@ export function AiTourDesignForm({
   );
 }
 
+const FOLLOW_UPS = [
+  "Gợi ý chỗ ở cho tour này",
+  "Gợi ý ăn uống cho tour này",
+  "Lịch trình này có gì cần chỉnh?",
+];
+
 /** Thẻ tóm tắt khung tour AI vừa soạn, kèm "Mở để chỉnh sửa" và "Tạo lại". */
 export function AiTourDraftCard({
   draft,
@@ -83,6 +89,7 @@ export function AiTourDraftCard({
   savedTourId,
   onOpen,
   onRegenerate,
+  onAsk,
 }: {
   draft: TourConfiguration;
   busy: boolean;
@@ -90,6 +97,8 @@ export function AiTourDraftCard({
   savedTourId?: number;
   onOpen: () => void;
   onRegenerate: () => void;
+  /** Hỏi tiếp trợ lý về chính khung tour này (chỗ ở, ăn uống...). */
+  onAsk: (question: string) => void;
 }) {
   const days = [...(draft.timelines || [])].sort((a, b) => a.dayNumber - b.dayNumber);
   const highlights = (draft.highlights || "").split("\n").filter(Boolean).slice(0, 3);
@@ -132,6 +141,11 @@ export function AiTourDraftCard({
         <button type="button" onClick={onRegenerate} disabled={busy || saving}>
           <RefreshCw size={14} aria-hidden="true" /> Tạo lại
         </button>
+      </div>
+      <div className="ai-suggestions" aria-label="Hỏi thêm về khung tour này">
+        {FOLLOW_UPS.map((question) => (
+          <button key={question} type="button" onClick={() => onAsk(question)} disabled={busy || saving}>{question}</button>
+        ))}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { MapPin, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ApiError } from "@/app/lib/http";
-import { askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
+import { askAgencyAssistant, askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
 import type { TourConfiguration } from "@/app/services/wf02Tours";
 import { openAiDraftEditor, previewAiTour, saveAiTour, type AiTourDraftRequest } from "@/app/services/aiTourDraft";
 import { AiTourDesignForm, AiTourDraftCard } from "./AiTourDesigner";
@@ -31,12 +31,21 @@ const SUGGESTIONS = [
 
 const DESIGN_TOUR = "Lên thiết kế tour";
 const AGENCY_WELCOME =
-  "Xin chào! Mình là Trợ lý TripOps. Mình có thể soạn khung tour mới cho bạn từ điểm đến và số ngày, hoặc giải thích quy trình đặt tour, thanh toán, chính sách hủy.";
-const AGENCY_SUGGESTIONS = [DESIGN_TOUR, "Chính sách hủy tour thế nào?", "Đặt tour và đặt cọc ra sao?"];
+  "Xin chào! Mình là Trợ lý TripOps dành cho Agency. Mình có thể soạn khung tour mới từ điểm đến và số ngày, góp ý chỗ ở, ăn uống, lịch trình cho tour, hoặc giải thích chính sách thanh toán, hủy tour trên TripOps.";
+const AGENCY_SUGGESTIONS = [DESIGN_TOUR, "Cách định giá tour theo độ tuổi?", "Chính sách hủy tour thế nào?"];
 /** Agency gõ tay "thiết kế tour", "tạo tour"... cũng mở form thay vì hỏi chatbot. */
 const DESIGN_INTENT = /(thiết kế|tạo|soạn|lên)\s+(1\s+|một\s+)?(khung\s+)?tour/i;
 
 const MAX_LENGTH = 1000;
+
+/** Khung tour AI soạn gần nhất trong cửa sổ (để trợ lý Agency góp ý cho đúng tour đó). */
+function latestDraft(turns: Turn[]): TourConfiguration | null {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const design = turns[i].design;
+    if (design?.kind === "draft") return design.draft;
+  }
+  return null;
+}
 const money = (value: number) => `${Math.round(value).toLocaleString("vi-VN")}đ`;
 
 function errorText(error: unknown) {
@@ -227,9 +236,12 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     // Model có suy luận + gọi công cụ có thể mất vài chục giây.
     const timer = setTimeout(() => controller.abort(), 150000);
     try {
-      // Lượt soạn tour không gửi vào chatbot.
+      // Lượt soạn tour (form, thẻ khung tour) không gửi dạng tin nhắn.
       const chat = history.filter((t) => !t.local).map(({ role, content }) => ({ role, content }));
-      const answer = await askGuestAssistant(chat, controller.signal);
+      // Agency hỏi trợ lý dành cho Agency, kèm khung tour mới nhất trong cửa sổ để góp ý đúng tour đó.
+      const answer = isAgency
+        ? await askAgencyAssistant(chat, latestDraft(history), controller.signal)
+        : await askGuestAssistant(chat, controller.signal);
       if (request.current !== controller) return;
       retry.current = null;
       setTurns((old) => [...old, { id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured }]);
@@ -266,7 +278,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
           <span className="ai-floating-avatar" aria-hidden="true"><Sparkles size={17} /></span>
           <div>
             <strong>Trợ lý TripOps</strong>
-            <small>{isAgency ? "Soạn khung tour và giải đáp chính sách" : "Tư vấn tour và chính sách"}</small>
+            <small>{isAgency ? "Soạn tour, góp ý chỗ ở, ăn uống cho Agency" : "Tư vấn tour và chính sách"}</small>
           </div>
         </div>
         <div className="ai-floating-actions">
@@ -310,6 +322,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
                 savedTourId={turn.design.savedTourId}
                 onOpen={() => void openDraft(turn)}
                 onRegenerate={() => { if (turn.design?.kind === "draft") void designTour(turn.design.request); }}
+                onAsk={(question) => void send(question)}
               />
             )}
           </div>
@@ -337,14 +350,14 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
             onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder={isAgency ? "Gõ \"Lên thiết kế tour\" hoặc hỏi về chính sách…" : "Hỏi về tour, giá, chính sách…"}
+            placeholder={isAgency ? "Hỏi về chỗ ở, ăn uống, lịch trình hoặc gõ \"Lên thiết kế tour\"…" : "Hỏi về tour, giá, chính sách…"}
             aria-label="Câu hỏi cho trợ lý AI"
           />
           <button type="submit" disabled={sending || !draft.trim()} aria-label="Gửi câu hỏi" title="Gửi">
             <Send size={17} />
           </button>
         </div>
-        <small>AI có thể nhầm, hãy xem kỹ thông tin tour trước khi đặt. Không nhập số điện thoại, CCCD hay số tài khoản.</small>
+        <small>{isAgency ? "AI có thể nhầm, hãy kiểm tra lại lịch trình và dịch vụ trước khi đăng tour." : "AI có thể nhầm, hãy xem kỹ thông tin tour trước khi đặt."} Không nhập số điện thoại, CCCD hay số tài khoản.</small>
       </form>
     </section>
   );

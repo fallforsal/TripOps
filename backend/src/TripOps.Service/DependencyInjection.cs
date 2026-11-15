@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddHttpClient<Ai.OpenAiChatClient>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddScoped<Ai.PublicTourFinder>();
         services.AddScoped<Ai.GuestAssistantService>();
+        services.AddScoped<Ai.AgencyAssistantService>();
         return services;
     }
 }

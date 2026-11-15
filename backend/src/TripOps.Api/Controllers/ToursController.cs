@@ -192,6 +192,7 @@ public sealed class ItineraryDraftsController(TourService tours) : ControllerBas
     }
 
     [HttpPost("preview")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai-chat")]
     [EndpointSummary("Let AI draft a tour outline for review without saving it")]
     [ProducesResponseType<TourConfiguration>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Preview(AiDraftRequest request, CancellationToken ct) =>
