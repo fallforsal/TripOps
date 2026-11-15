@@ -607,11 +607,22 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         return await Create(actor, Configuration(tour) with { Name = request.Name, Code = null }, ct);
     }
     public async Task<TourDto> AiCreate(string actor, AiDraftRequest request, CancellationToken ct)
+        => await CreateDraft(actor, await AiPreview(actor, request, ct), true, ct);
+
+    /// <summary>UC-038: AI soạn khung tour để Agency xem trước. Chưa lưu gì; kết quả đã qua kiểm tra như bản nháp tạo tay.</summary>
+    public async Task<TourConfiguration> AiPreview(string actor, AiDraftRequest request, CancellationToken ct)
     {
         await Agency(actor, ct); ValidateObject(request);
-        var config = await generator.Generate(request, ct);
-        return await CreateDraft(actor, config, true, ct);
+        Require(request.DurationDays <= Ai.OpenAiItineraryDraftGenerator.MaxDays,
+            $"AI chỉ soạn được tour tối đa {Ai.OpenAiItineraryDraftGenerator.MaxDays} ngày. Tour dài hơn vui lòng tạo thủ công.");
+        var config = SingleAgencyConfiguration(await generator.Generate(request, ct), actor);
+        await Validate(config, false, ct, actor);
+        return config;
     }
+
+    /// <summary>UC-038: Agency chọn "Mở để chỉnh sửa" → lưu bản xem trước thành tour nháp, ẩn, đánh dấu do AI soạn.</summary>
+    public async Task<TourDto> AiSave(string actor, TourConfiguration config, CancellationToken ct)
+        => await CreateDraft(actor, config with { Code = null }, true, ct);
 
     private static TourServiceReference Reference(Data.Entities.Service service) => new(service.Id, service.ProviderId,
         State(service.Category), service.Name, service.Price,

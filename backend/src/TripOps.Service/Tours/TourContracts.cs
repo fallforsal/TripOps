@@ -106,7 +106,7 @@ public interface IItineraryDraftGenerator
 public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerator
 {
     public Task<TourConfiguration> Generate(AiDraftRequest request, CancellationToken ct) =>
-        throw new TourException(503, "AI itinerary generation is not configured.");
+        throw new TourException(503, "Tính năng soạn tour bằng AI chưa được cấu hình. Bạn vẫn có thể tạo tour thủ công.");
 }
 
 public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);

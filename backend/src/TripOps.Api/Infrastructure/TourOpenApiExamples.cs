@@ -56,6 +56,11 @@ internal static class TourOpenApiExamples
                 Response(new CandidateAgencyDto[] { new("agency-001", "TripOps Travel", "agency@tripops.test", "0901234567", null, ["DA_NANG", "QUANG_NAM"], 2) }); break;
             case ("ItineraryDrafts", "Create"):
                 Request("optionalAiDraft", "Trả 503 khi chưa cấu hình AI", new AiDraftRequest("Đà Nẵng, Hội An", 3, "Nghỉ dưỡng gia đình")); break;
+            case ("ItineraryDrafts", "Preview"):
+                Request("aiOutline", "AI soạn khung tour, chưa lưu; tối đa 14 ngày, trả 503 khi chưa cấu hình AI",
+                    new AiDraftRequest("Đà Lạt", 3, "Đoàn công ty 40 người, có team building, ăn đặc sản")); break;
+            case ("ItineraryDrafts", "Save"):
+                Request("saveAiOutline", "Gửi lại cấu hình nhận từ /preview (có thể đã sửa) để lưu thành bản nháp ẩn", ThreeDayTour()); break;
             case ("Tours", "Get"):
                 Response(new PublicTourDto(42, "TOUR-EXAMPLE-DANANG", 5, ThreeDayTour())); break;
             case ("Tours", "List"):

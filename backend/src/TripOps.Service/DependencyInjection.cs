@@ -53,7 +53,10 @@ public static class DependencyInjection
         services.AddScoped<Accounts.PasswordService>();
         services.AddScoped<Services.ServiceModerationService>();
         services.AddScoped<Services.ProviderServiceService>();
-        services.AddSingleton<Tours.IItineraryDraftGenerator, Tours.UnconfiguredItineraryDraftGenerator>();
+        // UC-038: có khóa OpenAI thì AI soạn khung tour; chưa có thì API trả 503 và Agency vẫn tạo tour thủ công.
+        services.AddScoped<Tours.IItineraryDraftGenerator>(sp => sp.GetRequiredService<Ai.AiAssistantOptions>().Configured
+            ? ActivatorUtilities.CreateInstance<Ai.OpenAiItineraryDraftGenerator>(sp)
+            : new Tours.UnconfiguredItineraryDraftGenerator());
         services.AddHttpClient<Accounts.CloudinaryStorage>(client => client.Timeout = TimeSpan.FromSeconds(20));
         // Chatbot khách vãng lai: khóa OpenAI đọc từ user-secrets/biến môi trường (OpenAI:ApiKey); không có khóa thì dùng trả lời dự phòng.
         services.AddSingleton(sp => Ai.AiAssistantOptions.From(sp.GetRequiredService<IConfiguration>()));
