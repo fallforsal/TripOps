@@ -110,8 +110,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 if (tier is not null) { price = tier.PricePerGuest ?? 0; tierName = tier.Name; }
             }
 
-            price = Money(price + extra);
-            if(price<0)throw new BookingException(422,"Giá khách sau phụ thu không hợp lệ.");
+            // Chênh lệch dịch vụ tự chọn chỉ áp cho vé tính tiền; vé miễn phí (em bé) giữ 0đ.
+            // Chênh lệch âm không làm giá vé xuống dưới 0.
+            price = price > 0 ? Money(Math.Max(0, price + extra)) : 0;
             totalAmount += price;
 
             participants.Add(new BookingParticipant
@@ -153,7 +154,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
             DesignRequestId = tour.DesignRequestId,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
-            OriginalTotalPrice = totalAmount - extra*participants.Count,
+            // Giá lúc khách đặt (đã gồm tùy chọn dịch vụ). Chỉ Agency điều chỉnh sau đó mới tạo chênh lệch.
+            OriginalTotalPrice = totalAmount,
             HasCustomization = hotelSelections.Count>0 || mealSelections.Count>0,
             Status = BookingStatus.Pending,
             PaymentStatus = PaymentStatus.Unpaid,

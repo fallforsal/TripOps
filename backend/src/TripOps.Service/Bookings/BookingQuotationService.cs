@@ -328,10 +328,11 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         foreach (var person in booking.Participants)
         {
             var tier = tour.PricingTiers.FirstOrDefault(t => t.Name == person.TierName);
-            person.Price = (tier?.PricePerGuest ?? tour.BasePrice ?? 0) + extra;
+            var basePrice = tier?.PricePerGuest ?? tour.BasePrice ?? 0;
+            person.Price = basePrice > 0 ? Money(Math.Max(0, basePrice + extra)) : 0;
         }
         booking.TotalAmount = booking.Participants.Sum(p => p.Price);
-        booking.OriginalTotalPrice = booking.TotalAmount - extra * booking.Participants.Count;
+        booking.OriginalTotalPrice = booking.TotalAmount;
         booking.HasCustomization = hotelChoices.Length > 0 || mealChoices.Length > 0 ||
             input.Participants is not null || input.StartDate.HasValue;
         if (input.SpecialRequests is not null)

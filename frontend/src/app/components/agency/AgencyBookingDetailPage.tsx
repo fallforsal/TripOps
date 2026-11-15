@@ -289,6 +289,16 @@ export function AgencyBookingDetailPage({
   const [newPriceInput, setNewPriceInput] = useState("");
   const [priceNoteInput, setPriceNoteInput] = useState("");
   const [priceAdjustmentsModalOpen, setPriceAdjustmentsModalOpen] = useState(false);
+  // "Giá gốc / Đã điều chỉnh" chỉ hiển thị khi Agency thực sự điều chỉnh giá (có nhật ký),
+  // không hiển thị cho phần chênh lệch do khách tự chọn dịch vụ lúc đặt tour.
+  const hasAgencyPriceAdjustment =
+    (booking.priceAdjustments?.length ?? 0) > 0 &&
+    !!booking.originalTotalPrice &&
+    booking.originalTotalPrice !== booking.totalPrice;
+  // Form đổi giá: nhập số tiền tăng/giảm; backend vẫn nhận giá tổng mới = giá hiện tại + chênh lệch.
+  const priceDelta = Number(newPriceInput);
+  const priceDeltaValid = newPriceInput.trim() !== "" && Number.isSafeInteger(priceDelta) && priceDelta !== 0;
+  const nextTotalPrice = booking.totalPrice + (priceDeltaValid ? priceDelta : 0);
 
   // Assigned Guides State (supporting multiple guides per tour & ownership)
   const [assignedGuides, setAssignedGuides] = useState<BookingAssignedGuide[]>(() => {
@@ -1484,7 +1494,7 @@ export function AgencyBookingDetailPage({
         <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : bookingCancellationReason(booking.bookingNotes, booking.cancellationReason)}</p>
       </div>}
 
-      {!isClosedBooking && <BookingFinancialChangesPanel bookingId={booking.id} expectedTotal={booking.totalPrice} isHost={isCurrentCompanyLead} canAmend={canAmend} agencies={agenciesList} onChanged={onBookingChanged} refreshKey={booking.totalPrice} />}
+      {!isClosedBooking && (isCoHostedTour || (booking.bookingAgencies?.length ?? 0) > 1) && <BookingFinancialChangesPanel bookingId={booking.id} expectedTotal={booking.totalPrice} isHost={isCurrentCompanyLead} canAmend={canAmend} agencies={agenciesList} onChanged={onBookingChanged} refreshKey={booking.totalPrice} />}
       <BookingStagePassengers booking={booking} rows={passengersList} isHost={isCurrentCompanyLead} viewerAgencyId={companyId} canAmend={canAmend}
         onAdd={handleOpenAddPassenger} onEdit={handleOpenEditPassenger} onChanged={dto=>{
           setPassengersList(fromApiBooking(dto,[booking.tour]).passengers||[]);onBookingChanged?.(dto);
@@ -3068,7 +3078,7 @@ export function AgencyBookingDetailPage({
                 <div className="flex flex-wrap justify-end gap-1">
                   {hasBeenApproved ? <Button size="sm" variant="ghost" disabled={!canAddSurcharge} onClick={() => setSurchargeOpen(true)} className="h-7 gap-1 px-2 text-xs text-sky-800"><Plus className="h-3.5 w-3.5" /> Thêm phụ thu</Button> : <>
                   <Button size="sm" variant="ghost" disabled={!canChangePrice || !onUpdateBookingPrice}
-                    onClick={() => { setNewPriceInput(String(booking.totalPrice)); setPriceNoteInput(""); setPriceModalOpen(true); }}
+                    onClick={() => { setNewPriceInput(""); setPriceNoteInput(""); setPriceModalOpen(true); }}
                     className="h-7 px-2 text-xs text-sky-800 gap-1" title={canChangePrice ? "Điều chỉnh giá trước khi duyệt" : "Giá tour đã khóa sau khi duyệt"}>
                     <Edit3 className="h-3.5 w-3.5" /> Đổi giá
                   </Button>
@@ -3085,11 +3095,11 @@ export function AgencyBookingDetailPage({
                   </Button>
                 </div>
 
-                {booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
+                {hasAgencyPriceAdjustment && (
                   <div className="flex items-center gap-2 text-[11px]">
-                    <span className="text-gray-400 line-through">Giá gốc: {formatVND(booking.originalTotalPrice)}</span>
+                    <span className="text-gray-400 line-through">Giá gốc: {formatVND(booking.originalTotalPrice!)}</span>
                     <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
-                      Đã điều chỉnh ({booking.totalPrice > booking.originalTotalPrice ? "+" : ""}{formatVND(booking.totalPrice - booking.originalTotalPrice)})
+                      Đã điều chỉnh ({booking.totalPrice > booking.originalTotalPrice! ? "+" : ""}{formatVND(booking.totalPrice - booking.originalTotalPrice!)})
                     </span>
                   </div>
                 )}
@@ -3563,33 +3573,34 @@ export function AgencyBookingDetailPage({
             <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 space-y-1">
               <p className="text-gray-600">Đơn booking: <strong>#{booking.id}</strong> ({booking.userName})</p>
               <p className="text-gray-600">Giá hiện tại: <strong className="text-[#075985]">{formatVND(booking.totalPrice)}</strong></p>
-              {booking.originalTotalPrice && (
-                <p className="text-gray-400 text-[11px]">Giá gốc ban đầu: {formatVND(booking.originalTotalPrice)}</p>
+              {hasAgencyPriceAdjustment && (
+                <p className="text-gray-400 text-[11px]">Giá gốc ban đầu: {formatVND(booking.originalTotalPrice!)}</p>
               )}
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="booking-new-total" className="text-xs font-semibold text-gray-700">
-                Giá tổng thể mới (VNĐ) <span className="text-red-500">*</span>
+              <Label htmlFor="booking-price-delta" className="text-xs font-semibold text-gray-700">
+                Số tiền tăng / giảm (VNĐ) <span className="text-red-500">*</span>
               </Label>
               <VietnameseMoneyInput
-                id="booking-new-total"
+                id="booking-price-delta"
+                signed
                 value={newPriceInput}
                 onValueChange={setNewPriceInput}
-                placeholder={booking.totalPrice.toLocaleString("vi-VN")}
+                placeholder="VD: +200.000 hoặc -500.000"
                 className="mt-1 text-xs font-bold text-[#075985]"
               />
-              <p className="pt-1 text-[11px] text-gray-500">Chỉ được sửa giá trước lần duyệt đầu tiên. Sau khi duyệt, khoản phát sinh được tạo thành phụ thu riêng.</p>
-              {parseInt(newPriceInput) > 0 && (
+              <p className="pt-1 text-[11px] text-gray-500">Nhập số dương để tăng, số âm để giảm. Chỉ được sửa giá trước lần duyệt đầu tiên. Sau khi duyệt, khoản phát sinh được tạo thành phụ thu riêng.</p>
+              {priceDeltaValid && (
                 <p className="text-[11px] text-gray-500 pt-0.5">
-                  Tương đương: <strong>{formatVND(parseInt(newPriceInput))}</strong>
-                  {parseInt(newPriceInput) !== booking.totalPrice && (
-                    <span className="ml-2 font-bold text-amber-700">
-                      ({parseInt(newPriceInput) > booking.totalPrice ? "+" : ""}
-                      {formatVND(parseInt(newPriceInput) - booking.totalPrice)})
-                    </span>
-                  )}
+                  Giá tổng thể mới: <strong className={nextTotalPrice > 0 ? "text-[#075985]" : "text-red-600"}>{formatVND(nextTotalPrice)}</strong>
+                  <span className={`ml-2 font-bold ${priceDelta > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                    ({priceDelta > 0 ? "+" : "−"}{formatVND(Math.abs(priceDelta))})
+                  </span>
                 </p>
+              )}
+              {priceDeltaValid && nextTotalPrice <= 0 && (
+                <p className="text-[11px] font-semibold text-red-600">Giá tổng thể sau điều chỉnh phải lớn hơn 0đ.</p>
               )}
             </div>
 
@@ -3611,13 +3622,13 @@ export function AgencyBookingDetailPage({
                 Hủy bỏ
               </Button>
               <Button
-                disabled={priceSaving || !canChangePrice || !Number.isSafeInteger(Number(newPriceInput)) || Number(newPriceInput) <= 0 || Number(newPriceInput) === booking.totalPrice || priceNoteInput.trim().length < 3}
+                disabled={priceSaving || !canChangePrice || !priceDeltaValid || !Number.isSafeInteger(nextTotalPrice) || nextTotalPrice <= 0 || priceNoteInput.trim().length < 3}
                 className="bg-[#075985] hover:bg-[#F97316] text-white font-bold"
                 onClick={async () => {
                   if (!onUpdateBookingPrice) return;
                   setPriceSaving(true);
                   try {
-                    const ok = await onUpdateBookingPrice(booking.id, Number(newPriceInput), priceNoteInput.trim());
+                    const ok = await onUpdateBookingPrice(booking.id, booking.totalPrice + priceDelta, priceNoteInput.trim());
                     if (ok !== false) setPriceModalOpen(false);
                   } finally { setPriceSaving(false); }
                 }}

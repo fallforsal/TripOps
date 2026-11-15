@@ -276,8 +276,12 @@ export function BookingFormPage({
       );
       return sum + (option?.priceDifference || 0);
     }, 0);
+  // Chênh lệch dịch vụ tự chọn chỉ áp cho vé tính tiền (vé miễn phí giữ 0đ) và
+  // không làm giá vé âm — khớp với cách backend tính khi tạo booking.
+  const priceWithExtra = (base: number) =>
+    base > 0 ? Math.max(0, base + extraPerGuest) : 0;
   const totalPrice = passengers.reduce(
-    (s, p) => s + p.price + extraPerGuest,
+    (s, p) => s + priceWithExtra(p.price),
     0,
   );
   const depositAmount = 0;
@@ -852,8 +856,7 @@ export function BookingFormPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {tour.priceTable ? (
-                      tour.priceTable.map((row, i) => (
+                    {(tour.priceTable ?? [{ ageGroup: "Người lớn", ageGroupLabel: "Người lớn", ageRange: undefined, price: tour.price }]).map((row, i) => (
                         <tr key={i}>
                           <td className="py-2.5">
                             <p className="font-medium text-gray-800">
@@ -866,25 +869,46 @@ export function BookingFormPage({
                             )}
                           </td>
                           <td className="py-2.5 text-right font-semibold text-[#075985]">
-                            {row.price === 0
-                              ? "Miễn phí"
-                              : formatVND(row.price)}
+                            {row.price === 0 ? (
+                              "Miễn phí"
+                            ) : extraPerGuest !== 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span>{formatVND(priceWithExtra(row.price))}</span>
+                                <span className="text-xs font-normal text-gray-400 line-through">
+                                  {formatVND(row.price)}
+                                </span>
+                              </div>
+                            ) : (
+                              formatVND(row.price)
+                            )}
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-2.5 font-medium text-gray-800">
-                          Người lớn
-                        </td>
-                        <td className="py-2.5 text-right font-semibold text-[#075985]">
-                          {formatVND(tour.price)}
-                        </td>
-                      </tr>
-                    )}
+                      ))}
                   </tbody>
                 </table>
               </div>
+              {extraPerGuest !== 0 && (
+                <div
+                  className={`mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${
+                    extraPerGuest > 0
+                      ? "border-amber-200 bg-amber-50 text-amber-900"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  }`}
+                >
+                  <span>
+                    {extraPerGuest > 0
+                      ? "Phụ thu dịch vụ tự chọn (khách sạn / bữa ăn)"
+                      : "Giảm giá dịch vụ tự chọn (khách sạn / bữa ăn)"}
+                    <span className="block text-[11px] opacity-80">
+                      Áp dụng cho mỗi vé tính tiền; vé miễn phí không bị tính.
+                    </span>
+                  </span>
+                  <strong className="whitespace-nowrap">
+                    {extraPerGuest > 0 ? "+" : "−"}
+                    {formatVND(Math.abs(extraPerGuest))}/khách
+                  </strong>
+                </div>
+              )}
             </div>
 
             {/* Contact info */}
@@ -1351,7 +1375,7 @@ export function BookingFormPage({
                             <span className="font-bold text-[#075985]">
                               {p.price === 0
                                 ? "Miễn phí (0đ)"
-                                : formatVND(p.price + extraPerGuest)}
+                                : formatVND(priceWithExtra(p.price))}
                             </span>
                           </div>
                         </div>
@@ -1588,7 +1612,7 @@ export function BookingFormPage({
                             <td className="px-3 py-3">{noteCell(p.dietaryNote)}</td>
                             <td className="px-3 py-3">{noteCell(p.notes)}</td>
                             <td className="px-3 py-3 text-right font-semibold text-[#075985] whitespace-nowrap">
-                              {p.price === 0 ? "Miễn phí" : formatVND(p.price + extraPerGuest)}
+                              {p.price === 0 ? "Miễn phí" : formatVND(priceWithExtra(p.price))}
                             </td>
                           </tr>
                         );

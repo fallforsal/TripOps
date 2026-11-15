@@ -1428,7 +1428,7 @@ export function UserBookingDetailPage({
                     </div>
                   </div>
 
-                  {booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
+                  {(booking.priceAdjustments?.length ?? 0) > 0 && booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
                     <div className="flex items-center gap-2 text-[11px] pt-0.5">
                       <span className="text-gray-400 line-through">Giá ban đầu: {formatVND(booking.originalTotalPrice)}</span>
                       <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">

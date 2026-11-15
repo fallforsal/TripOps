@@ -1957,10 +1957,15 @@ export function TourFormPage(props: TourFormPageProps) {
           const alts = [...(h.alternativeHotels || [])];
           if (targetAltIndex < 0 || targetAltIndex >= alts.length) return h;
           const chosenAlt = alts[targetAltIndex];
-          const oldBasePrice = h.pricePerNight || 1500000;
+          const oldBasePrice =
+            h.pricePerNight ||
+            Number(h.supplier?.referencePrice) ||
+            1500000;
           const newBasePrice =
+            chosenAlt.pricePerNight ||
             (chosenAlt as any).price ||
-            oldBasePrice + (chosenAlt.priceDifference || 0);
+            Number(chosenAlt.supplier?.referencePrice) ||
+            oldBasePrice;
 
           const oldStandardAsAlt: TourAlternativeHotel = {
             id: `alt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1970,24 +1975,16 @@ export function TourFormPage(props: TourFormPageProps) {
             description: h.description || "",
             image: h.image,
             serviceId: h.serviceId,
-            supplierSource: h.supplierSource, agencySupplierId: h.agencySupplierId, supplier: h.supplier,
-            priceDifference: oldBasePrice - newBasePrice,
+            supplierSource: h.supplierSource,
+            agencySupplierId: h.agencySupplierId,
+            supplier: h.supplier,
+            pricePerNight: oldBasePrice,
+            priceDifference: 0,
             providerName: h.providerName,
             isCustom: (h as any).isCustom,
           };
 
           alts.splice(targetAltIndex, 1, oldStandardAsAlt);
-          const updatedAlts = alts.map((alt) => {
-            const thisAltOriginalPrice =
-              (alt as any).price ||
-              (alt.id === oldStandardAsAlt.id
-                ? oldBasePrice
-                : oldBasePrice + (alt.priceDifference || 0));
-            return {
-              ...alt,
-              priceDifference: thisAltOriginalPrice - newBasePrice,
-            };
-          });
 
           return {
             ...h,
@@ -1997,11 +1994,13 @@ export function TourFormPage(props: TourFormPageProps) {
             description: chosenAlt.description || "",
             image: chosenAlt.image,
             serviceId: chosenAlt.serviceId,
-            supplierSource: chosenAlt.supplierSource, agencySupplierId: chosenAlt.agencySupplierId, supplier: chosenAlt.supplier,
+            supplierSource: chosenAlt.supplierSource,
+            agencySupplierId: chosenAlt.agencySupplierId,
+            supplier: chosenAlt.supplier,
             pricePerNight: newBasePrice,
             providerName: chosenAlt.providerName,
             isCustom: chosenAlt.isCustom,
-            alternativeHotels: updatedAlts,
+            alternativeHotels: alts,
           };
         }
         return h;
@@ -2302,49 +2301,47 @@ export function TourFormPage(props: TourFormPageProps) {
     if (targetAltIndex < 0 || targetAltIndex >= alts.length) return;
 
     const chosenAlt = alts[targetAltIndex];
-    const oldBasePrice = meal.pricePerPerson || 150000;
+    const oldBasePrice =
+      meal.pricePerPerson ||
+      Number(meal.supplier?.referencePrice) ||
+      150000;
     const newBasePrice =
-      chosenAlt.price || oldBasePrice + (chosenAlt.priceDifference || 0);
+      chosenAlt.price ||
+      Number(chosenAlt.supplier?.referencePrice) ||
+      oldBasePrice;
 
     const oldStandardAsAlt: TourAlternativeMeal = {
       id: `alt-meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       restaurantName: meal.serviceName || "Nhà hàng theo tour",
-      priceDifference: oldBasePrice - newBasePrice,
+      priceDifference: 0,
       description: meal.description || "",
       image: meal.image,
       serviceId: meal.serviceId,
-      supplierSource: meal.supplierSource, agencySupplierId: meal.agencySupplierId, supplier: meal.supplier,
+      supplierSource: meal.supplierSource,
+      agencySupplierId: meal.agencySupplierId,
+      supplier: meal.supplier,
       providerName: meal.providerName,
       price: oldBasePrice,
       isCustom: meal.isCustom,
     };
 
     alts.splice(targetAltIndex, 1, oldStandardAsAlt);
-    const updatedAlts = alts.map((alt) => {
-      const thisAltPrice =
-        alt.price ||
-        (alt.id === oldStandardAsAlt.id
-          ? oldBasePrice
-          : newBasePrice + (alt.priceDifference || 0));
-      return {
-        ...alt,
-        priceDifference: thisAltPrice - newBasePrice,
-      };
-    });
 
     updateMealField(dIdx, mIdx, {
       serviceName: chosenAlt.restaurantName,
       description: chosenAlt.description || "",
       pricePerPerson: newBasePrice,
       serviceId: chosenAlt.serviceId,
-      supplierSource: chosenAlt.supplierSource, agencySupplierId: chosenAlt.agencySupplierId, supplier: chosenAlt.supplier,
+      supplierSource: chosenAlt.supplierSource,
+      agencySupplierId: chosenAlt.agencySupplierId,
+      supplier: chosenAlt.supplier,
       image: chosenAlt.image,
       providerName: chosenAlt.providerName,
       isCustom: chosenAlt.isCustom,
     });
 
     const updated = [...itinerary];
-    updated[dIdx].meals![mIdx].alternativeMeals = updatedAlts;
+    updated[dIdx].meals![mIdx].alternativeMeals = alts;
     setItinerary(updated);
   };
 
@@ -4332,7 +4329,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     </div>
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    {!props.customerMode && <Input type="number" min={0} placeholder="Giá tham khảo/đêm" value={customHotelInputs.price} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, price: Number(e.target.value) })} />}
+                                    {!props.customerMode && <VietnameseMoneyInput placeholder="Giá tham khảo/đêm" value={String(customHotelInputs.price || 0)} onValueChange={(raw) => setCustomHotelInputs({ ...customHotelInputs, price: Number(raw) || 0 })} className="h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />}
                                     <Input placeholder="Điện thoại liên hệ" value={customHotelInputs.contactPhone} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, contactPhone: e.target.value })} />
                                     <Input placeholder="Điều kiện tham khảo" value={customHotelInputs.conditions} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, conditions: e.target.value })} />
                                   </div>
@@ -4894,17 +4891,15 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   <span className="text-[11px] font-semibold text-gray-700 flex-shrink-0">
                                                     Chênh lệch:
                                                   </span>
-                                                  <input
-                                                    type="number"
-                                                    value={
-                                                      alt.priceDifference ?? 0
-                                                    }
+                                                  <VietnameseMoneyInput
+                                                    signed
+                                                    value={String(
+                                                      alt.priceDifference ?? 0,
+                                                    )}
                                                     disabled={isHotelLocked}
-                                                    onChange={(e) => {
+                                                    onValueChange={(raw) => {
                                                       const val =
-                                                        parseInt(
-                                                          e.target.value,
-                                                        ) || 0;
+                                                        parseInt(raw, 10) || 0;
                                                       updateAlternativeHotel(
                                                         hotel.id || "",
                                                         alt.id,
@@ -4913,7 +4908,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                         },
                                                       );
                                                     }}
-                                                    className="w-24 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#075985] flex-shrink-0"
+                                                    className="w-24 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#075985] flex-shrink-0 tabular-nums"
                                                     placeholder="0"
                                                   />
                                                   <span className="text-[10px] text-gray-500 flex-shrink-0">
@@ -6061,19 +6056,18 @@ export function TourFormPage(props: TourFormPageProps) {
                                                             />
                                                           </div>
 {!props.customerMode &&                                                           <div className="sm:col-span-3">
-                                                            <Input
-                                                              type="number"
+                                                            <VietnameseMoneyInput
                                                               placeholder="Giá/người (VNĐ)"
-                                                              value={
+                                                              value={String(
                                                                 customMealInputs[
                                                                   mealKey
-                                                                ]?.price || 150000
-                                                              }
-                                                              onChange={(e) => {
+                                                                ]?.price ?? 150000,
+                                                              )}
+                                                              onValueChange={(raw) => {
                                                                 const val =
                                                                   parseInt(
-                                                                    e.target
-                                                                      .value,
+                                                                    raw,
+                                                                    10,
                                                                   ) || 0;
                                                                 setCustomMealInputs(
                                                                   (prev) => ({
@@ -6099,7 +6093,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   }),
                                                                 );
                                                               }}
-                                                              className="text-xs h-8 bg-white border-purple-300"
+                                                              className="w-full px-3 rounded-md border text-xs h-8 bg-white border-purple-300 font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
                                                             />
                                                           </div>}
                                                         </div>
@@ -6785,23 +6779,22 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           Chênh
                                                                           lệch:
                                                                         </span>
-                                                                        <input
-                                                                          type="number"
-                                                                          value={
+                                                                        <VietnameseMoneyInput
+                                                                          signed
+                                                                          value={String(
                                                                             alt.priceDifference ??
-                                                                            0
-                                                                          }
+                                                                              0,
+                                                                          )}
                                                                           disabled={
                                                                             isMealLocked
                                                                           }
-                                                                          onChange={(
-                                                                            e,
+                                                                          onValueChange={(
+                                                                            raw,
                                                                           ) => {
                                                                             const val =
                                                                               parseInt(
-                                                                                e
-                                                                                  .target
-                                                                                  .value,
+                                                                                raw,
+                                                                                10,
                                                                               ) ||
                                                                               0;
                                                                             updateAlternativeMeal(
@@ -6814,7 +6807,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               },
                                                                             );
                                                                           }}
-                                                                          className="w-20 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-600 flex-shrink-0"
+                                                                          className="w-24 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-600 flex-shrink-0 tabular-nums"
                                                                           placeholder="0"
                                                                         />
                                                                         <span className="text-[10px] text-gray-500 flex-shrink-0">
@@ -7179,18 +7172,15 @@ export function TourFormPage(props: TourFormPageProps) {
                                     {isMe ? (
                                       <div className="space-y-1">
                                         <div className="relative">
-                                          <Input
-                                            type="number"
-                                            step={50000}
-                                            min={0}
-                                            value={getMyQuoteForRow(row)}
-                                            onChange={(e) =>
+                                          <VietnameseMoneyInput
+                                            value={String(getMyQuoteForRow(row) || 0)}
+                                            onValueChange={(raw) =>
                                               setMyQuoteForRow(
                                                 row,
-                                                parseInt(e.target.value) || 0,
+                                                parseInt(raw, 10) || 0,
                                               )
                                             }
-                                            className="text-xs font-bold text-purple-950 bg-white border-2 border-purple-400 focus:border-purple-600 focus:ring-1 focus:ring-purple-400 pr-10 h-8.5 shadow-2xs"
+                                            className="w-full rounded-md px-3 text-xs font-bold text-purple-950 bg-white border-2 border-purple-400 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-400 pr-10 h-8.5 shadow-2xs tabular-nums"
                                             placeholder="Nhập giá..."
                                           />
                                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-[#EA580C] font-extrabold">
@@ -7541,20 +7531,17 @@ export function TourFormPage(props: TourFormPageProps) {
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              <Input
-                                type="number"
-                                step={50000}
-                                min={0}
-                                value={row.price}
-                                onChange={(e) => {
+                              <VietnameseMoneyInput
+                                value={String(row.price ?? 0)}
+                                onValueChange={(raw) => {
                                   const updated = [...priceTable];
                                   updated[idx].price = Math.max(
                                     0,
-                                    parseInt(e.target.value) || 0,
+                                    parseInt(raw, 10) || 0,
                                   );
                                   setPriceTable(updated);
                                 }}
-                                className="text-xs h-8 text-right font-bold text-[#075985] max-w-[160px]"
+                                className="w-full rounded-md border border-input bg-white px-3 text-xs h-8 text-right font-bold text-[#075985] max-w-[160px] focus:outline-none focus:ring-2 focus:ring-[#075985]/30 tabular-nums"
                               />
                               <span className="text-[11px] text-gray-500 font-medium">
                                 đ
