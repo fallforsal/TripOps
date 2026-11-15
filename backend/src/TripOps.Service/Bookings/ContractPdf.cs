@@ -166,13 +166,13 @@ public static class ContractPdf
                     });
                 });
                 Lettered(col, "b) Bên A hủy tour:", "Bên B được hoàn 100% số tiền đã thanh toán.");
-                Lettered(col, "c) Bên B không thanh toán đủ đúng hạn:", "Bên A có quyền hủy hợp đồng và Bên B mất số tiền đã thanh toán (Bộ luật Dân sự 2015, Điều 328).");
+                Lettered(col, "c) Bên B không thanh toán đủ đúng hạn:", "Bên A có quyền hủy hợp đồng và Bên B mất số tiền đã thanh toán.");
                 Lettered(col, "d)", "Hợp đồng chỉ chấm dứt khi Quản trị viên TripOps duyệt yêu cầu hủy. Tiền hoàn chuyển vào tài khoản Bên B khai báo trong 7 ngày làm việc kể từ khi duyệt.");
 
                 Section(col, "ĐIỀU 5. THAY ĐỔI DỊCH VỤ, BẤT KHẢ KHÁNG, BẢO HIỂM");
                 Numbered(col, [
                     "Bên A đổi dịch vụ (khách sạn, nhà hàng, điểm tham quan) phải báo Bên B và dùng dịch vụ cùng hạng trở lên; chênh lệch tăng giá do Bên A chịu.",
-                    "Thiên tai, dịch bệnh, quyết định của cơ quan nhà nước (Bộ luật Dân sự 2015, Điều 156) khiến tour không thực hiện được: các bên được miễn bồi thường; " +
+                    "Thiên tai, dịch bệnh, quyết định của cơ quan nhà nước khiến tour không thực hiện được: các bên được miễn bồi thường; " +
                         "TripOps quyết định hoàn 100% hoặc dời ngày, chỉ khấu trừ chi phí thực tế có chứng từ.",
                     "Bên A mua bảo hiểm du lịch cho toàn bộ thành viên trong đoàn suốt hành trình."]);
 
