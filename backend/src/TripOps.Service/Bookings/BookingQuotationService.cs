@@ -115,16 +115,18 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             .Include(t => t.Timelines).ThenInclude(d => d.Meals)
             .Include(t => t.Timelines).ThenInclude(d => d.Attractions).AsSplitQuery()
             .SingleAsync(t => t.Id == booking.TourId, ct);
-        decimal Reference(string key, string name, string? destination, int? day, string? mealType)
+        SupplierSnapshotInput? SnapshotOf(string key, string name, string? destination, int? day, string? mealType)
         {
             var raw = key.StartsWith("hotel:")
                 ? tour!.Accommodations.FirstOrDefault(h => h.DestinationName == destination && h.HotelName == name)?.SupplierSnapshot
                 : tour!.Timelines.Where(d => d.DayNumber == day).SelectMany(d => d.Meals)
                     .FirstOrDefault(m => m.MealType == mealType && m.RestaurantName == name)?.SupplierSnapshot;
-            if (raw is null) return 0;
-            try { return JsonSerializer.Deserialize<SupplierSnapshotInput>(raw, Json)?.ReferencePrice ?? 0; }
-            catch (JsonException) { return 0; }
+            if (raw is null) return null;
+            try { return JsonSerializer.Deserialize<SupplierSnapshotInput>(raw, Json); }
+            catch (JsonException) { return null; }
         }
+        decimal Reference(string key, string name, string? destination, int? day, string? mealType) =>
+            SnapshotOf(key, name, destination, day, mealType)?.ReferencePrice ?? 0;
         var lines = new List<CostLine>();
         if (tour != null && booking.DesignRequestId.HasValue) {
             var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == booking.TourVersion, ct);
@@ -137,8 +139,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             var quantity = unit is "person" or "meal" ? BookingAlliance.GuestCount(booking,BookingAlliance.OwnerOfSlot(booking,s.Key)) : unit is "trip" or "item" ? 1 : s.Quantity;
             var price = service?.Price ?? Reference(s.Key, s.Name, s.Destination, s.Day, s.MealType);
             if(unit=="person_night") quantity=s.Quantity*BookingAlliance.GuestCount(booking,BookingAlliance.OwnerOfSlot(booking,s.Key));
+            var snapshot = service is null ? SnapshotOf(s.Key, s.Name, s.Destination, s.Day, s.MealType) : null;
             lines.Add(new CostLine(s.Key, service is null ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
-                s.Name, quantity, unit, price, price, Money(price * quantity)));
+                s.Name, quantity, unit, price, price, Money(price * quantity), Supplier: snapshot));
             if (service is not null)
             {
                 db.WorkflowNotifications.Add(new WorkflowNotification { UserId = service.ProviderId, BookingId = bookingId, Message = "Có yêu cầu xác nhận giá và khả năng cung cấp dịch vụ." });

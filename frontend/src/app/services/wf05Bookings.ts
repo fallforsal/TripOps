@@ -140,7 +140,7 @@ export interface BookingDto {
       time?: string;
       serviceId?: number;
       priceDifference: number;
-      supplier?: { address?: string; contactPhone?: string };
+      supplier?: { address?: string; contactPhone?: string; area?: string; contactName?: string; referencePrice?: number; conditions?: string; contactEmail?: string; notes?: string };
     }[];
   }[];
   snapshotHotels?: {

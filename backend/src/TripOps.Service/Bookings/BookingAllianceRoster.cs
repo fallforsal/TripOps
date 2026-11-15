@@ -40,7 +40,40 @@ public sealed partial class BookingQuotationService
                 financial?refunds.Where(x=>x.AgencyId==a.AgencyId&&x.RefundRequest!.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved).Sum(x=>x.RefundRequest!.OriginalPaidAmount):0,
                 financial?a.PlatformFee??0:0);
         }).ToArray();
-        return dto with {BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note,GuideAvatar:c.Guide?.Avatar))).ToArray()};
+        var hotels = dto.SnapshotHotels;
+        var days = dto.SnapshotDays;
+        if (financial) {
+            var ownerIds = b.BookingAgencies.Select(a => a.AgencyId).Append(b.Tour?.AgencyId ?? "").Where(x => !string.IsNullOrEmpty(x)).Distinct().ToArray();
+            var suppliers = ownerIds.Length == 0 ? [] : await Db.AgencySuppliers.AsNoTracking().Where(s => ownerIds.Contains(s.AgencyId)).ToListAsync(ct);
+            var byId = suppliers.ToDictionary(s => s.Id);
+            BookingSupplierDto? Enrich(BookingSupplierDto? current, string type, string? agencyId, string name, int? supplierId) {
+                var match = (supplierId.HasValue ? byId.GetValueOrDefault(supplierId.Value) : null)
+                    ?? suppliers.FirstOrDefault(s => s.SupplierType == type && s.AgencyId == (agencyId ?? b.Tour?.AgencyId) && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (match is null) return current;
+                return new BookingSupplierDto(
+                    current?.Address ?? match.Address,
+                    current?.ContactPhone ?? match.ContactPhone,
+                    current?.Area ?? match.Area,
+                    current?.ContactName ?? match.ContactName,
+                    current?.ReferencePrice ?? match.ReferencePrice,
+                    current?.Conditions ?? match.Conditions,
+                    current?.ContactEmail ?? match.ContactEmail,
+                    current?.Notes ?? match.Notes);
+            }
+            hotels = hotels?.Select(h => {
+                if (h.ServiceId.HasValue) return h;
+                var sid = config?.Timelines?.SelectMany(d => d.Accommodations ?? []).FirstOrDefault(x => string.Equals(x.DestinationName, h.Destination, StringComparison.OrdinalIgnoreCase) && string.Equals(x.HotelName, h.Name, StringComparison.OrdinalIgnoreCase))?.AgencySupplierId;
+                return h with { Supplier = Enrich(h.Supplier, AgencySupplier.Hotel, h.AgencyId, h.Name, sid) };
+            }).ToArray();
+            days = days?.Select(d => d with {
+                Meals = d.Meals.Select(m => {
+                    if (m.ServiceId.HasValue) return m;
+                    var sid = config?.Timelines?.FirstOrDefault(x => x.DayNumber == d.DayNumber)?.Meals?.FirstOrDefault(x => x.MealType == m.MealType && string.Equals(x.RestaurantName, m.Name, StringComparison.OrdinalIgnoreCase))?.AgencySupplierId;
+                    return m with { Supplier = Enrich(m.Supplier, AgencySupplier.Restaurant, m.AgencyId, m.Name, sid) };
+                }).ToArray()
+            }).ToArray();
+        }
+        return dto with {SnapshotHotels=hotels,SnapshotDays=days,BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note,GuideAvatar:c.Guide?.Avatar))).ToArray()};
     }
 
     private void NotifyAgencies(Booking b,string message,string[]? affected=null)

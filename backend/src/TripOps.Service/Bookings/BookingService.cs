@@ -494,8 +494,12 @@ public sealed partial class BookingService(BookingRepository repository, Account
     }
 
     private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName,
-        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null) =>
-        new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null)
+    {
+        var bookedConfig = string.IsNullOrWhiteSpace(b.TourConfigurationData)
+            ? null
+            : JsonSerializer.Deserialize<TripOps.Service.Tours.TourConfiguration>(b.TourConfigurationData, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        return new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
             b.TourId, tourName, agencyId, agencyName,
             b.StartDate, EndDate(b), TotalGuests(b), b.TotalAmount,
             DisplayDeposit(b), PaidAmount(b), b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(),
@@ -512,17 +516,46 @@ public sealed partial class BookingService(BookingRepository repository, Account
                     a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.PhotoUrl))
                         .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray())).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
-                    SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
+                    SupplierOfMeal(snapshots, bookedConfig, t.DayNumber, m),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
-                SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
+                SupplierOfHotel(snapshots, bookedConfig, h),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
                 a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow),
             CanCheckInLocations: GuideLocationCheckinRules.CanCheckIn(b, UtcNow),
             NextLocationCheckInId: GuideLocationCheckinRules.NextUncheckedStopId(b.Timelines));
+    }
 
-    private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
-        snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
+    private static BookingSupplierDto? ToSupplierDto(TripOps.Service.Tours.SupplierSnapshotInput? s) =>
+        s is null ? null : new BookingSupplierDto(s.Address, s.ContactPhone, s.Area, s.ContactName, s.ReferencePrice, s.Conditions);
+
+    private static BookingSupplierDto? SupplierOfMeal(
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots,
+        TripOps.Service.Tours.TourConfiguration? config,
+        int dayNumber,
+        BookingTimelineMeal m)
+    {
+        var snap = snapshots?.GetValueOrDefault($"meal:{m.Id}");
+        if (snap is not null) return ToSupplierDto(snap);
+        var name = m.CurrentRestaurantName ?? m.OriginalRestaurantName;
+        var configured = config?.Timelines?.FirstOrDefault(d => d.DayNumber == dayNumber)?.Meals?
+            .FirstOrDefault(x => x.MealType == m.MealType && (string.Equals(x.RestaurantName, name, StringComparison.OrdinalIgnoreCase)));
+        return ToSupplierDto(configured?.Supplier);
+    }
+
+    private static BookingSupplierDto? SupplierOfHotel(
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots,
+        TripOps.Service.Tours.TourConfiguration? config,
+        BookingAccommodation h)
+    {
+        var snap = snapshots?.GetValueOrDefault($"hotel:{h.Id}");
+        if (snap is not null) return ToSupplierDto(snap);
+        var name = h.CurrentHotelName ?? h.OriginalHotelName;
+        var configured = config?.Timelines?.SelectMany(d => d.Accommodations ?? [])
+            .FirstOrDefault(x => string.Equals(x.DestinationName, h.Destination, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.HotelName, name, StringComparison.OrdinalIgnoreCase));
+        return ToSupplierDto(configured?.Supplier);
+    }
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, p.PhoneNumber,
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),

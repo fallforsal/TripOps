@@ -214,8 +214,10 @@ export interface TourSupplierSnapshot {
   area?: string;
   contactName?: string;
   contactPhone?: string;
+  contactEmail?: string;
   referencePrice?: number;
   conditions?: string;
+  notes?: string;
 }
 
 export interface DailyItinerary {

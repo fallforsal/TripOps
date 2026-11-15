@@ -337,6 +337,7 @@ export function AgencyBookingDetailPage({
   // Stage list and Co-host Alliance support
   const stagesList: TourCoHost[] = useMemo(() => booking.coHosts ?? booking.tour?.coHosts ?? [], [booking]);
   const isCoHostedTour = booking.isCoHosted ?? (stagesList.length > 1);
+  const isAllianceBooking = isCoHostedTour || (booking.bookingAgencies?.length ?? 0) > 1;
 
   // Agencies List state (representing booking_agencies table)
   // Agencies List state (representing booking_agencies table)
@@ -1882,23 +1883,13 @@ export function AgencyBookingDetailPage({
                       </div>
 
                       <div className="p-3.5 space-y-1.5 text-xs">
-                        <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5"/>Agency bố trí: <strong className="font-medium text-sky-800">{agencyNameFor(acc.agencyId)}</strong></p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-500">Khách sạn được chọn:</span>
-                          <span className="font-bold text-gray-900 text-sm">
-                            {acc.hotelName} {acc.stars ? <span className="font-semibold text-amber-500">({acc.stars}★)</span> : null}
-                          </span>
-                        </div>
+                        {isAllianceBooking && (
+                          <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5"/>Agency bố trí: <strong className="font-medium text-sky-800">{agencyNameFor(acc.agencyId)}</strong></p>
+                        )}
                         {acc.isChanged && acc.originalHotelName && acc.originalHotelName !== acc.hotelName && (
                           <div className="flex items-center justify-between text-gray-400">
                             <span>Lúc đặt:</span>
                             <span className="line-through">{acc.originalHotelName}</span>
-                          </div>
-                        )}
-                        {acc.address && (
-                          <div className="flex items-start justify-between text-gray-600 pt-1 border-t border-gray-100">
-                            <span className="text-gray-400">Địa chỉ / Ghi chú phòng:</span>
-                            <span className="text-right font-medium text-gray-700">{acc.address}</span>
                           </div>
                         )}
                         {acc.note && (
@@ -1909,7 +1900,7 @@ export function AgencyBookingDetailPage({
                         )}
                         <BookingSupplierConfirmation state={currentQuotationState}
                           slot={{ kind: "hotel", itemId: acc.itemId, serviceId: acc.serviceId }}
-                          serviceName={acc.hotelName} stay={{from:acc.dateFrom,to:acc.dateTo}}
+                          serviceName={acc.hotelName} stay={{from:acc.dateFrom,to:acc.dateTo}} stars={acc.stars}
                           supplierSource={acc.supplierSource} supplier={acc.supplier || { address: acc.address }}
                           onOpenService={setViewingServiceId} />
                       </div>
@@ -2321,9 +2312,11 @@ export function AgencyBookingDetailPage({
                                             <h4 className="font-bold text-gray-900 text-sm">{loc.name}</h4>
                                           </div>
 
-                                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${isMyLoc ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                            Phụ trách dẫn chặng: {locAgencyName}
-                                          </span>
+                                          {isAllianceBooking && (
+                                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${isMyLoc ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                              Phụ trách dẫn chặng: {locAgencyName}
+                                            </span>
+                                          )}
                                         </div>
 
                                         {/* Assigned Guides & Check-in Status underneath the attraction */}
@@ -2810,7 +2803,9 @@ export function AgencyBookingDetailPage({
                                               ) : (
                                                 <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
                                               )}
-                                              <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3 w-3"/>Phụ trách dẫn chặng: <strong className="font-medium text-sky-800">{agencyNameFor(loc.createdByCompanyId||booking.companyId)}</strong></p>
+                                              {isAllianceBooking && (
+                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3 w-3"/>Phụ trách dẫn chặng: <strong className="font-medium text-sky-800">{agencyNameFor(loc.createdByCompanyId||booking.companyId)}</strong></p>
+                                              )}
                                             </div>
                                             <div className="flex items-center gap-1.5 flex-shrink-0">
                                               <button
@@ -2941,10 +2936,17 @@ export function AgencyBookingDetailPage({
                                                       : defaultMeal.serviceName || "Nhà hàng theo tour"}
                                                   </span>
                                                 </div>
-                                                <p className="text-[11px] text-gray-500">
-                                                  Lúc đặt: {defaultMeal.originalName || defaultMeal.serviceName || "Nhà hàng địa phương"}
-                                                </p>
-                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3 w-3"/>Agency bố trí: <strong className="font-medium text-sky-800">{agencyNameFor(defaultMeal.createdByCompanyId||booking.companyId)}</strong></p>
+                                                {(() => {
+                                                  const currentMealName = isChanged ? mealChange?.newMealName : defaultMeal.serviceName;
+                                                  return defaultMeal.originalName && defaultMeal.originalName !== currentMealName ? (
+                                                    <p className="text-[11px] text-gray-500">
+                                                      Lúc đặt: {defaultMeal.originalName}
+                                                    </p>
+                                                  ) : null;
+                                                })()}
+                                                {isAllianceBooking && (
+                                                  <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3 w-3"/>Agency bố trí: <strong className="font-medium text-sky-800">{agencyNameFor(defaultMeal.createdByCompanyId||booking.companyId)}</strong></p>
+                                                )}
                                               </div>
                                             </div>
 
