@@ -615,7 +615,14 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         await Agency(actor, ct); ValidateObject(request);
         Require(request.DurationDays <= Ai.OpenAiItineraryDraftGenerator.MaxDays,
             $"AI chỉ soạn được tour tối đa {Ai.OpenAiItineraryDraftGenerator.MaxDays} ngày. Tour dài hơn vui lòng tạo thủ công.");
-        var config = SingleAgencyConfiguration(await generator.Generate(request, ct), actor);
+        var outline = await generator.Generate(request, ct);
+        if (request.GroupSize is { } size) outline = outline with { MaxGuests = size };
+        // Bước 2: chọn chỗ ở, ăn uống. Lỗi ở bước này không làm mất khung tour: Agency vẫn nhận lịch trình và tự chọn dịch vụ.
+        var candidates = await AiServiceCandidates(actor, outline, request.GroupSize, ct);
+        var plan = AiServicePlan.Empty;
+        try { plan = await generator.PlanServices(outline, request, candidates, ct); }
+        catch (TourException) { }
+        var config = SingleAgencyConfiguration(ApplyServicePlan(outline, plan, candidates), actor);
         await Validate(config, false, ct, actor);
         return config;
     }

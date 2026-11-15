@@ -6,10 +6,13 @@ export interface AiTourDraftRequest {
   destination: string;
   durationDays: number;
   style?: string | null;
+  /** Số khách của đoàn, để AI chọn khách sạn, nhà hàng đủ chỗ. */
+  groupSize?: number | null;
 }
 
 /** Giới hạn trùng với backend (OpenAiItineraryDraftGenerator.MaxDays). */
 export const AI_TOUR_MAX_DAYS = 14;
+export const AI_TOUR_MAX_GUESTS = 1000;
 
 /** Sự kiện báo App tải lại danh sách tour sau khi lưu bản nháp từ cửa sổ AI. */
 export const TOURS_CHANGED_EVENT = "tripops:tours-changed";

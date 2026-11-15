@@ -38,6 +38,14 @@ const DESIGN_INTENT = /(thiết kế|tạo|soạn|lên)\s+(1\s+|một\s+)?(khung
 
 const MAX_LENGTH = 1000;
 
+/** Phòng khi model vẫn dùng Markdown: bỏ **đậm** và # tiêu đề vì khung chat chỉ hiển thị chữ thường. */
+function plainText(text: string) {
+  return text
+    .replace(/\*\*|__/g, "")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/^(\s*)[*•]\s+/gm, "$1- ");
+}
+
 /** Khung tour AI soạn gần nhất trong cửa sổ (để trợ lý Agency góp ý cho đúng tour đó). */
 function latestDraft(turns: Turn[]): TourConfiguration | null {
   for (let i = turns.length - 1; i >= 0; i--) {
@@ -99,6 +107,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [designing, setDesigning] = useState(false);
   const [error, setError] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [savingTurn, setSavingTurn] = useState<number | null>(null);
@@ -116,6 +125,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     setDraft("");
     setError("");
     setSending(false);
+    setDesigning(false);
     setSavingTurn(null);
     retry.current = null;
   };
@@ -154,7 +164,12 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
   /** Gửi thông tin cho AI soạn khung tour. Chỉ xem trước, chưa lưu. */
   const designTour = async (input: AiTourDraftRequest, formTurnId?: number) => {
     if (sending) return;
-    const summary = [`Điểm đến: ${input.destination}`, `${input.durationDays} ngày`, input.style].filter(Boolean).join(" · ");
+    const summary = [
+      `Điểm đến: ${input.destination}`,
+      `${input.durationDays} ngày`,
+      input.groupSize ? `${input.groupSize} khách` : null,
+      input.style,
+    ].filter(Boolean).join(" · ");
     // Form đã gửi thì thu lại thành tin nhắn tóm tắt, tránh bấm "Tạo" hai lần.
     setTurns((old) => [
       ...old.map((t) => (t.id === formTurnId ? { ...t, design: undefined } : t)),
@@ -162,6 +177,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     ]);
     setError("");
     setSending(true);
+    setDesigning(true);
     retry.current = () => void designTour(input);
     const controller = new AbortController();
     request.current?.abort();
@@ -175,7 +191,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       setTurns((old) => [...old, {
         id: ++sequence.current,
         role: "assistant",
-        content: "Mình đã soạn xong khung tour. Bạn xem qua, ưng thì mở để chỉnh sửa, chưa ưng thì tạo lại:",
+        content: "Mình đã soạn xong khung tour kèm chỗ ở và ăn uống, ưu tiên nhà cung cấp đã liên kết với bạn, rồi đến dịch vụ trên TripOps. Bạn xem qua, ưng thì mở để chỉnh sửa, chưa ưng thì tạo lại:",
         design: { kind: "draft", request: input, draft: result },
         local: true,
       }]);
@@ -191,6 +207,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       if (request.current === controller) {
         request.current = null;
         setSending(false);
+        setDesigning(false);
       }
     }
   };
@@ -304,7 +321,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
         )}
         {turns.map((turn) => (
           <div key={turn.id} className={`ai-turn ${turn.role}`}>
-            <p className="ai-bubble">{turn.content}</p>
+            <p className="ai-bubble">{plainText(turn.content)}</p>
             {turn.tours && turn.tours.length > 0 && (
               <div className="ai-tour-list">
                 {turn.tours.map((tour) => <TourCard key={tour.id} tour={tour} onOpen={() => openTourCard(tour.id)} />)}
@@ -329,7 +346,11 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
         ))}
         {sending && (
           <div className="ai-turn assistant">
-            <p className="ai-bubble ai-typing" aria-label="Trợ lý đang trả lời"><span /><span /><span /></p>
+            {designing ? (
+              <p className="ai-bubble ai-progress">Đang soạn lịch trình và chọn chỗ ở, ăn uống cho đoàn. Việc này mất khoảng 30–60 giây…</p>
+            ) : (
+              <p className="ai-bubble ai-typing" aria-label="Trợ lý đang trả lời"><span /><span /><span /></p>
+            )}
           </div>
         )}
         {error && (

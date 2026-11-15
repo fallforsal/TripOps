@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -46,7 +47,7 @@ public sealed class AgencyAssistantController(AgencyAssistantService assistant) 
     {
         try
         {
-            return Ok(await assistant.Reply(request, ct));
+            return Ok(await assistant.Reply(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, ct));
         }
         catch (AiAssistantException ex)
         {

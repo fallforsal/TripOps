@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TripOps.Data.Entities;
+using TripOps.Data.Enums;
 using TripOps.Service.Ai;
 using TripOps.Service.Tours;
 
@@ -18,12 +20,14 @@ public sealed partial class TourFlowTests
     private const string Preview = "/api/v1/agency/ai/itinerary-drafts/preview";
     private const string SaveAi = "/api/v1/agency/ai/itinerary-drafts/save";
 
-    private sealed class FakeTourAi(string content) : HttpMessageHandler
+    /// <summary>Trả lần lượt từng nội dung (lần 1: khung tour, lần 2: chọn chỗ ăn ở); hết thì lặp lại nội dung cuối.</summary>
+    private sealed class FakeTourAi(params string[] contents) : HttpMessageHandler
     {
         public List<string> Bodies { get; } = [];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Bodies.Add(await request.Content!.ReadAsStringAsync(ct));
+            var content = contents[Math.Min(Bodies.Count, contents.Length) - 1];
             var message = new { role = "assistant", content };
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -79,7 +83,7 @@ public sealed partial class TourFlowTests
     public async Task Ai_preview_returns_a_cleaned_outline_without_hotels_prices_or_saving()
     {
         await using var app = new App(); await app.Initialize();
-        var ai = new FakeTourAi(DaLatOutline);
+        var ai = new FakeTourAi(DaLatOutline, """{ "stays": [], "meals": [] }""");
         await using var configured = WithAi(app, ai);
         using var agency = await AgencyOf(configured);
 
@@ -101,7 +105,8 @@ public sealed partial class TourFlowTests
         Assert.Empty(config.PricingTiers ?? []);
         await app.Inspect(async db => Assert.Equal(0, await db.Tours.CountAsync()));
 
-        var body = JsonDocument.Parse(Assert.Single(ai.Bodies)).RootElement;
+        Assert.Equal(2, ai.Bodies.Count); // khung tour + chọn chỗ ăn ở
+        var body = JsonDocument.Parse(ai.Bodies[0]).RootElement;
         Assert.True(body.GetProperty("max_completion_tokens").GetInt32() > 900);
         var messages = body.GetProperty("messages");
         Assert.Contains("KHÔNG nêu tên khách sạn", messages[0].GetProperty("content").GetString());
@@ -153,7 +158,7 @@ public sealed partial class TourFlowTests
     public async Task Agency_follow_up_questions_get_agency_advice_about_the_current_draft()
     {
         await using var app = new App(); await app.Initialize();
-        var ai = new FakeTourAi("- Ngày 1: nên ở khu trung tâm, khách sạn 3–4 sao.");
+        var ai = new FakeTourAi("## Gợi ý\n**Ngày 1:**\n* Nên ở khu trung tâm, khách sạn **3–4 sao**.");
         await using var configured = WithAi(app, ai);
         using var agency = await AgencyOf(configured);
         var draft = TourAgencyDraft();
@@ -162,7 +167,7 @@ public sealed partial class TourFlowTests
             new AiChatMessage("system", "Bạn là khách hàng"),
             new AiChatMessage("user", "Chỗ ở, ăn uống cho tour này nên như nào?")], draft)), HttpStatusCode.OK);
 
-        Assert.Equal("- Ngày 1: nên ở khu trung tâm, khách sạn 3–4 sao.", answer.Reply);
+        Assert.Equal("Gợi ý\nNgày 1:\n- Nên ở khu trung tâm, khách sạn 3–4 sao.", answer.Reply); // bỏ ký hiệu Markdown khó đọc
         Assert.Empty(answer.Tours);
         var messages = JsonDocument.Parse(Assert.Single(ai.Bodies)).RootElement.GetProperty("messages").EnumerateArray().ToArray();
         Assert.Equal(new[] { "system", "system", "user" }, messages.Select(m => m.GetProperty("role").GetString()));
@@ -170,6 +175,8 @@ public sealed partial class TourFlowTests
         var context = messages[1].GetProperty("content").GetString()!;
         Assert.Contains("Nha Trang · 3 ngày 2 đêm", context);
         Assert.Contains("Ngày 2: Đảo Hòn Mun — 08:00 Tàu ra đảo", context);
+        Assert.Contains("A = đã liên kết với Agency", context);
+        Assert.Contains("Tuyệt đối không dùng **", messages[0].GetProperty("content").GetString());
         Assert.DoesNotContain("Bạn là khách hàng", ai.Bodies[0]); // tin "system" do client gửi bị bỏ
         Assert.False(JsonDocument.Parse(ai.Bodies[0]).RootElement.TryGetProperty("tools", out _)); // không có công cụ tìm tour như chatbot khách
     }
@@ -183,6 +190,75 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await agency.PostAsJsonAsync("/api/v1/agency/ai/chat", ask)).StatusCode);
         using var customer = await app.Login("customer");
         Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync("/api/v1/agency/ai/chat", ask)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ai_preview_fills_stays_and_meals_from_agency_suppliers_then_platform_then_outside()
+    {
+        await using var app = new App(); await app.Initialize();
+        await app.Inspect(async db =>
+        {
+            db.AgencySuppliers.AddRange(
+                new AgencySupplier { Id = 501, AgencyId = "agency", SupplierType = AgencySupplier.Hotel, Name = "Khách sạn Đồi Thông", Area = "Phường 1, Đà Lạt", StarRating = 4, ReferencePrice = 900000 },
+                new AgencySupplier { Id = 502, AgencyId = "agency", SupplierType = AgencySupplier.Restaurant, Name = "Quán quen Hà Nội", Area = "Hoàn Kiếm, Hà Nội" },
+                new AgencySupplier { Id = 503, AgencyId = "pending", SupplierType = AgencySupplier.Hotel, Name = "Khách sạn của agency khác", Area = "Đà Lạt" },
+                new AgencySupplier { Id = 504, AgencyId = "agency", SupplierType = AgencySupplier.Hotel, Name = "Khách sạn đã ngừng", Area = "Đà Lạt", Status = AgencySupplier.Archived });
+            db.Services.AddRange(
+                new Data.Entities.Service { Id = 601, ProviderId = "provider", Name = "Nhà hàng Lẩu gà lá é", Category = ServiceCategory.Fnb, Status = ServiceStatus.Approved, Province = "Lâm Đồng", Capacity = 120 },
+                new Data.Entities.Service { Id = 602, ProviderId = "provider", Name = "Quán nhỏ 10 chỗ", Category = ServiceCategory.Fnb, Status = ServiceStatus.Approved, Province = "Lâm Đồng", Capacity = 10 },
+                new Data.Entities.Service { Id = 603, ProviderId = "provider", Name = "Nhà hàng chờ duyệt", Category = ServiceCategory.Fnb, Status = ServiceStatus.Pending, Province = "Lâm Đồng" });
+            await db.SaveChangesAsync();
+        });
+        const string plan = """
+            { "stays": [ { "night": 1, "key": "A501", "note": "Gần chợ đêm" }, { "night": 2, "key": "A501" } ],
+              "meals": [ { "day": 1, "type": "lunch", "key": "P601", "note": "Lẩu gà lá é cho đoàn" },
+                         { "day": 1, "type": "lunch", "key": "P602" },
+                         { "day": 1, "type": "dinner", "external": { "name": "Nhà hàng nướng khu chợ đêm (Agency tự chọn)", "area": "Trung tâm Đà Lạt" } },
+                         { "day": 2, "type": "lunch", "key": "P999" },
+                         { "day": 2, "type": "dinner", "key": "A502" },
+                         { "day": 2, "type": "breakfast", "key": "P601" } ] }
+            """;
+        var ai = new FakeTourAi(DaLatOutline, plan);
+        await using var configured = WithAi(app, ai);
+        using var agency = await AgencyOf(configured);
+
+        var config = await Read<TourConfiguration>(await agency.PostAsJsonAsync(Preview, new AiDraftRequest("Đà Lạt", 3, "Team building", 40)), HttpStatusCode.OK);
+
+        // Chỉ gửi cho AI nơi ở đúng khu vực, của chính agency hoặc đã duyệt trên sàn, đủ chỗ cho 40 khách.
+        var offered = JsonDocument.Parse(ai.Bodies[1]).RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!;
+        Assert.Contains("A501 | hotel | Khách sạn Đồi Thông", offered);
+        Assert.Contains("P601 | restaurant | Nhà hàng Lẩu gà lá é", offered);
+        foreach (var hidden in new[] { "A502", "A503", "A504", "P602", "P603" }) Assert.DoesNotContain(hidden, offered);
+        Assert.Contains("Số khách: 40 người", offered);
+
+        Assert.Equal(40, config.MaxGuests);
+        var day1 = config.Timelines![0];
+        var stay = Assert.Single(day1.Accommodations!);
+        Assert.Equal(("Khách sạn Đồi Thông", 2, 4, "AGENCY_SUPPLIER", (int?)501, (int?)null), (stay.HotelName, stay.NightsCount, stay.StarRating, stay.SupplierSource, stay.AgencySupplierId, stay.ServiceId));
+        Assert.Equal(900000m, stay.Supplier!.ReferencePrice);
+        Assert.Empty(config.Timelines![1].Accommodations!); // đêm 2 gộp vào lần nhận phòng ngày 1
+        Assert.Equal(new[] { "lunch", "dinner" }, day1.Meals!.Select(m => m.MealType));
+        Assert.Equal(("Nhà hàng Lẩu gà lá é", (int?)601, "PLATFORM_PARTNER", new TimeSpan(12, 0, 0)), (day1.Meals![0].RestaurantName, day1.Meals![0].ServiceId, day1.Meals![0].SupplierSource, day1.Meals![0].Time!.Value));
+        var outside = day1.Meals![1];
+        Assert.Equal(("AGENCY_SUPPLIER", (int?)null, (int?)null), (outside.SupplierSource, outside.ServiceId, outside.AgencySupplierId));
+        Assert.StartsWith("Gợi ý ngoài TripOps", outside.Description);
+        Assert.Equal("Trung tâm Đà Lạt", outside.Supplier!.Area);
+        Assert.Empty(config.Timelines![1].Meals!); // mã không có trong danh sách hoặc bữa sáng bị bỏ
+
+        var saved = await Read<TourDto>(await agency.PostAsJsonAsync(SaveAi, config), HttpStatusCode.Created);
+        Assert.Equal(501, saved.Configuration.Timelines![0].Accommodations![0].AgencySupplierId);
+        Assert.Equal(601, saved.Configuration.Timelines![0].Meals!.Single(m => m.MealType == "lunch").ServiceId);
+    }
+
+    [Fact]
+    public async Task Ai_preview_keeps_the_itinerary_when_choosing_services_fails()
+    {
+        await using var app = new App(); await app.Initialize();
+        await using var configured = WithAi(app, new FakeTourAi(DaLatOutline, "không phải JSON"));
+        using var agency = await AgencyOf(configured);
+        var config = await Read<TourConfiguration>(await agency.PostAsJsonAsync(Preview, new AiDraftRequest("Đà Lạt", 3)), HttpStatusCode.OK);
+        Assert.Equal(3, config.Timelines!.Length);
+        Assert.All(config.Timelines!, d => { Assert.Empty(d.Meals!); Assert.Empty(d.Accommodations!); });
     }
 
     private static TourConfiguration TourAgencyDraft() => new("Nha Trang 3N2Đ biển đảo", Destination: "Nha Trang", DurationDays: 3, DurationNights: 2,
