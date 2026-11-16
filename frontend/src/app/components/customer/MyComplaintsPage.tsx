@@ -31,8 +31,8 @@ import {
 type Tab = "all" | "open" | "closed";
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "Tất cả" },
-  { id: "open", label: "Chờ xem xét" },
-  { id: "closed", label: "Đã có phản hồi" },
+  { id: "open", label: "Đang xử lý" },
+  { id: "closed", label: "Đã giải quyết" },
 ];
 
 function TypeBadge({ type }: { type: ComplaintType }) {
@@ -52,7 +52,7 @@ function StatusPill({ status }: { status: ComplaintSummary["status"] }) {
 }
 
 /**
- * Khiếu nại của tôi. Khách trao đổi trực tiếp với Admin; Agency không xem khiếu nại trên hệ thống.
+ * Khiếu nại của tôi. Admin xử lý và trao đổi với khách qua chat; Agency xem được khiếu nại về booking của mình (chỉ đọc).
  * Khiếu nại chuyến đi: chỉ booking đã hoàn thành, trong 1 ngày sau khi tour kết thúc. Khiếu nại nền tảng: không giới hạn.
  */
 export function MyComplaintsPage({
@@ -88,6 +88,12 @@ export function MyComplaintsPage({
     try { setDetail(await getMyComplaint(id)); }
     catch (e) { setError(e instanceof Error ? e.message : "Không mở được khiếu nại."); }
   };
+  // Mở thẳng khiếu nại từ thẻ trong chat / thông báo: #/my-complaints?id=12.
+  useEffect(() => {
+    const match = window.location.hash.match(/^#\/?my-complaints\?(?:.*&)?id=(\d+)/);
+    if (match) void openDetail(Number(match[1]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (detail) {
     return (

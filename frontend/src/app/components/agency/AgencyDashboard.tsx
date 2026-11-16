@@ -29,6 +29,7 @@ import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessPro
 import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
+import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -261,6 +262,9 @@ export function AgencyDashboard({
 
       case "reviews":
         return <AgencyReviewsPage />;
+
+      case "complaints":
+        return <AgencyComplaintsPage />;
 
       case "co-hosting":
         return <AgencyDesignCoHosting requests={companyCustomRequests} company={company} onChanged={async () => { await onUpdateCustomRequest?.("", {}); }}/>;

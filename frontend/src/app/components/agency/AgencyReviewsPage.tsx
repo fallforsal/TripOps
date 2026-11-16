@@ -13,7 +13,7 @@ import {
 
 /**
  * Đánh giá từ khách: sao của Agency (tính từ đánh giá mọi tour) và trả lời công khai từng đánh giá.
- * Khiếu nại không hiện ở đây — khách trao đổi với Admin, Admin sẽ liên hệ Agency khi cần đối chiếu.
+ * Khiếu nại về booking xem ở mục Khiếu nại.
  */
 export function AgencyReviewsPage() {
   const [rating, setRating] = useState<AgencyRating | null>(null);
