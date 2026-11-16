@@ -275,6 +275,25 @@ export function fromApiBooking(
     baseTourPrice: dto.baseTourAmount ?? dto.totalAmount,
     surchargeAmount: dto.surchargeAmount ?? 0,
     hasBeenApproved: dto.hasBeenApproved ?? !!dto.contract,
+    locationChanges: (dto.snapshotDays || []).flatMap((d) =>
+      d.locations
+        .filter((l) => l.originalName && l.name && l.originalName !== l.name)
+        .map((l) => ({
+          dayId: String(d.id),
+          dayNumber: d.dayNumber,
+          locationId: String(l.id),
+          originalLocationName: l.originalName!,
+          originalLocations: [l.originalName!],
+          requestedLocations: l.name,
+          note: l.changeReason,
+        })),
+    ),
+    hasLocationCustomization:
+      (dto.snapshotDays || []).some((d) =>
+        d.locations.some(
+          (l) => l.originalName && l.name && l.originalName !== l.name,
+        ),
+      ) || undefined,
     originalTotalPrice: dto.originalTotalPrice,
     priceAdjustments: (dto.priceAdjustments || []).map(a => ({ ...a, id: String(a.id), bookingId: String(dto.id), createdAt: a.createdAt || dto.updatedAt || dto.createdAt })),
     status: normalizedStatus,
@@ -284,7 +303,7 @@ export function fromApiBooking(
     tourStartDate: dto.startDate
       ? dto.startDate.split("T")[0]
       : new Date().toISOString().split("T")[0],
-    attractionCheckins:dto.attractionCheckins?.map(c=>({id:String(c.id),bookingId:String(dto.id),locationName:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.name||"",dayNumber:dto.snapshotDays?.find(d=>d.locations.some(l=>l.id===c.locationId))?.dayNumber||1,bookingTimelineAttractionId:String(c.locationId),agencyId:c.agencyId,agencyName:dto.bookingAgencies?.find(a=>a.agencyId===c.agencyId)?.agencyName,guideId:c.guideId,guideName:c.guideName,attendanceStatus:(c.status==="CheckedIn"?"CHECKED_IN":c.status==="Skipped"?"SKIPPED":"PENDING") as "CHECKED_IN"|"SKIPPED"|"PENDING",checkedAt:c.checkedAt,notes:c.note,createdAt:dto.createdAt})),
+    attractionCheckins:dto.attractionCheckins?.map(c=>{const urls=c.photoUrls?.length?c.photoUrls:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.photoUrls;return {id:String(c.id),bookingId:String(dto.id),locationName:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.name||"",dayNumber:dto.snapshotDays?.find(d=>d.locations.some(l=>l.id===c.locationId))?.dayNumber||1,bookingTimelineAttractionId:String(c.locationId),agencyId:c.agencyId,agencyName:dto.bookingAgencies?.find(a=>a.agencyId===c.agencyId)?.agencyName,guideId:c.guideId,guideName:c.guideName,guideAvatar:c.guideAvatar || dto.assignedGuides?.find(g=>g.guideId===c.guideId)?.guideAvatar,attendanceStatus:(c.status==="CheckedIn"?"CHECKED_IN":c.status==="Skipped"?"SKIPPED":"PENDING") as "CHECKED_IN"|"SKIPPED"|"PENDING",checkedAt:c.checkedAt,photoProofUrl:urls?.[0],photoProofUrls:urls,notes:c.note,createdAt:dto.createdAt};}),
     bookingAgencies:dto.bookingAgencies?.map(a=>({...a,id:String(a.id),bookingId:String(dto.id),settlementStatus:a.settlementStatus.toLowerCase() as "unpaid"|"ready"|"paid"})),
     coHosts:bookedCoHosts,
     isCoHosted:isBookedAlliance,
@@ -293,11 +312,13 @@ export function fromApiBooking(
     guideId: assignedLeadGuide?.guideId,
     guideName: assignedLeadGuide?.guideName,
     guidePhone: assignedLeadGuide?.guidePhone,
+    guideAvatar: assignedLeadGuide?.guideAvatar,
     assignedGuides: (dto.assignedGuides || []).map((ag) => ({
       id: String(ag.id),
       guideId: ag.guideId,
       guideName: ag.guideName,
       guidePhone: ag.guidePhone,
+      guideAvatar: ag.guideAvatar,
       companyId: ag.agencyId || dto.agencyId || "",
       companyName: dto.bookingAgencies?.find(a=>a.agencyId===ag.agencyId)?.agencyName || dto.agencyName || "",
       role: guideRole(ag.role),
@@ -321,32 +342,27 @@ export function fromApiBooking(
     paymentTransactions,
     cancellation: dto.cancellation ?? undefined,
     travelContract: dto.contract ?? undefined,
-    incidents: (dto.incidents || []).map((incident) => {
-      // Agency booking detail consumes booking.incidents, not guideIncidents.
-      const rawType = (incident.incidentType ||
-        /^\[([^\]]+)\]/.exec(incident.title)?.[1] || "OTHER").toUpperCase();
-      const incidentType = ([
-        "HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER",
-      ].includes(rawType) ? rawType : "OTHER") as import("../types/index.ts").IncidentCategory;
-      const title = incident.title.replace(/^\[[^\]]+\]\s*/, "");
-      const agencyId = incident.agencyId || dto.agencyId || "";
-      return {
-        id: String(incident.id),
-        bookingId: String(incident.bookingId),
-        agencyId,
-        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === agencyId)?.agencyName || dto.agencyName,
-        reportedById: "",
-        reportedByName: incident.reportedByName || "Hướng dẫn viên",
-        incidentType,
-        title,
-        description: incident.description,
-        evidenceUrls: incident.evidenceUrls || [],
-        status: (incident.status === "Resolved" ? "RESOLVED" :
-          incident.status === "Acknowledged" || incident.status === "InProgress"
-            ? "IN_PROGRESS" : "REPORTED") as import("../types/index.ts").IncidentStatus,
-        reportedAt: incident.createdAt,
-      };
-    }),
+    incidents: (dto.incidents || []).map((i) => ({
+      id: String(i.id),
+      bookingId: String(dto.id),
+      agencyId: i.agencyId || dto.agencyId || "",
+      agencyName: dto.agencyName || undefined,
+      reportedById: i.reportedById || "",
+      reportedByName: i.reportedByName || "Hướng dẫn viên",
+      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER"].find(
+        (c) => i.title.toUpperCase().startsWith(`[${c}]`),
+      ) || "OTHER") as import("../types/index.ts").IncidentCategory,
+      title: i.title,
+      description: i.description,
+      evidenceUrls: i.evidenceUrls || [],
+      status:
+        i.status === "Resolved"
+          ? "RESOLVED"
+          : i.status === "Acknowledged"
+            ? "IN_PROGRESS"
+            : "REPORTED",
+      reportedAt: i.createdAt,
+    })),
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),
@@ -367,6 +383,11 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
+      severity: ["low", "medium", "high", "critical"].includes(
+        i.resolutionNotes?.toLowerCase() || "",
+      )
+        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
+        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"
@@ -391,6 +412,7 @@ export function fromApiBooking(
       roommateNote: p.roommateNote,
       dietaryNote: p.restaurantNote,
       notes: p.note,
+      statusNote: p.statusNote,
       participantIndex: p.participantIndex,
       agencyId: p.agencyId,
       isPrimary: p.isPrimary,

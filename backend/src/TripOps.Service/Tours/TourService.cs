@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db)
+public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -499,7 +499,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             .ToArray();
         if (codes.Length == 0 || codes.Any(c => !VietnamProvinceCatalog.IsValidCode(c)))
             throw new TourException(400, "Invalid province code filter.");
-        return codes;
+        return VietnamProvinceCatalog.ExpandFilter(codes);
     }
     public async Task<TourPage<TourListItem>> List(string? actor, bool admin, string? status,
         string? search, string? destination, decimal? maxPrice, int? headcount, int page, int pageSize, CancellationToken ct, string? provinceCode = null)
@@ -517,31 +517,9 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     {
         await Agency(actor, ct);
         var codes = ParseProvinceFilter(provinceCode) ?? throw new TourException(400, "Province code is required.");
-        var tours = await repository.PublishedToursByProvinces(codes, excludeSelf ? actor : null, ct);
-        return tours
-            .Where(t => !string.IsNullOrWhiteSpace(t.AgencyId) && t.Agency is not null)
-            .GroupBy(t => t.AgencyId, StringComparer.OrdinalIgnoreCase)
-            .Select(g =>
-            {
-                var agency = g.First().Agency;
-                var matchedCodes = g.SelectMany(t => t.Provinces.Select(p => VietnamProvinceCatalog.NormalizeCode(p.ProvinceCode)))
-                    .Where(c => codes.Contains(c, StringComparer.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                return new CandidateAgencyDto(
-                    agency.Id,
-                    agency.BusinessProfile?.BusinessName ?? agency.Name ?? agency.Email,
-                    agency.Email,
-                    agency.Phone,
-                    agency.Avatar,
-                    matchedCodes,
-                    g.Select(t => t.Id).Distinct().Count());
-            })
-            .OrderByDescending(a => a.MatchedProvinceCodes.Length)
-            .ThenByDescending(a => a.MatchedTourCount)
-            .ThenBy(a => a.BusinessName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var rows = await discovery.List(string.Join(',', codes), ct, excludeSelf ? actor : null, matchesOnly: true);
+        return rows.Select(a => new CandidateAgencyDto(a.Id, a.Name, a.Email, a.Phone, a.LogoUrl,
+            a.Evidence.MatchedProvinceCodes, a.Evidence.MatchedTourCount, a.Evidence)).ToArray();
     }
     public async Task<TourValidationResult> ValidateDraft(string actor, int id, CancellationToken ct)
     {
@@ -607,11 +585,29 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         return await Create(actor, Configuration(tour) with { Name = request.Name, Code = null }, ct);
     }
     public async Task<TourDto> AiCreate(string actor, AiDraftRequest request, CancellationToken ct)
+        => await CreateDraft(actor, await AiPreview(actor, request, ct), true, ct);
+
+    /// <summary>UC-038: AI soạn khung tour để Agency xem trước. Chưa lưu gì; kết quả đã qua kiểm tra như bản nháp tạo tay.</summary>
+    public async Task<TourConfiguration> AiPreview(string actor, AiDraftRequest request, CancellationToken ct)
     {
         await Agency(actor, ct); ValidateObject(request);
-        var config = await generator.Generate(request, ct);
-        return await CreateDraft(actor, config, true, ct);
+        Require(request.DurationDays <= Ai.OpenAiItineraryDraftGenerator.MaxDays,
+            $"AI chỉ soạn được tour tối đa {Ai.OpenAiItineraryDraftGenerator.MaxDays} ngày. Tour dài hơn vui lòng tạo thủ công.");
+        var outline = await generator.Generate(request, ct);
+        if (request.GroupSize is { } size) outline = outline with { MaxGuests = size };
+        // Bước 2: chọn chỗ ở, ăn uống. Lỗi ở bước này không làm mất khung tour: Agency vẫn nhận lịch trình và tự chọn dịch vụ.
+        var candidates = await AiServiceCandidates(actor, outline, request.GroupSize, ct);
+        var plan = AiServicePlan.Empty;
+        try { plan = await generator.PlanServices(outline, request, candidates, ct); }
+        catch (TourException) { }
+        var config = SingleAgencyConfiguration(ApplyServicePlan(outline, plan, candidates), actor);
+        await Validate(config, false, ct, actor);
+        return config;
     }
+
+    /// <summary>UC-038: Agency chọn "Mở để chỉnh sửa" → lưu bản xem trước thành tour nháp, ẩn, đánh dấu do AI soạn.</summary>
+    public async Task<TourDto> AiSave(string actor, TourConfiguration config, CancellationToken ct)
+        => await CreateDraft(actor, config with { Code = null }, true, ct);
 
     private static TourServiceReference Reference(Data.Entities.Service service) => new(service.Id, service.ProviderId,
         State(service.Category), service.Name, service.Price,

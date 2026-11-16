@@ -8,7 +8,22 @@ export type ProviderType =
   | "adventure" // Hoạt động trải nghiệm
   | "support"; // Dịch vụ hỗ trợ
 
+export interface AgencyEvidence {
+  publishedTourCount: number;
+  matchedTourCount: number;
+  completedTrips: number;
+  matchedCompletedTrips: number;
+  unattributedCompletedTrips: number;
+  lastCompletedAt: string | null;
+  ratingAverage: number | null;
+  reviewCount: number;
+  matchedProvinceCodes: string[];
+  areas: { provinceCode: string; completedTrips: number; lastCompletedAt: string | null }[];
+  examples: { id: number; name: string; destination: string | null; thumbnailUrl: string | null }[];
+}
+
 export interface TourCompany {
+  evidence?: AgencyEvidence;
   id: string;
   name: string;
   description?: string;
@@ -199,8 +214,10 @@ export interface TourSupplierSnapshot {
   area?: string;
   contactName?: string;
   contactPhone?: string;
+  contactEmail?: string;
   referencePrice?: number;
   conditions?: string;
+  notes?: string;
 }
 
 export interface DailyItinerary {
@@ -579,7 +596,7 @@ export interface TourCoHost {
   companyPhone?: string;
   companyEmail?: string;
   role: "lead" | "partner"; // 'lead': Công ty chủ trì, 'partner': Công ty đối tác
-  status: "pending" | "accepted" | "rejected" | "revoked"; // Trạng thái lời mời
+  status: "pending" | "accepted" | "rejected" | "revoked" | "removed" | "uninvited"; // Trạng thái lời mời
   rejectionReason?: string;
   assignedDays?: number[]; // Ngày phụ trách trong lịch trình (tự động nhận diện từ các ngày có đóng góp)
   assignedSegments?: string; // Tên chặng (ví dụ: "Chặng Đà Lạt - Nha Trang")
@@ -766,6 +783,7 @@ export interface BookingAttractionCheckin {
   attendanceStatus: AttractionAttendanceStatus;
   checkedAt?: string;
   photoProofUrl?: string;
+  photoProofUrls?: string[];
   notes?: string;
   createdAt?: string;
 }
@@ -947,6 +965,7 @@ export interface CustomTourRequest {
   closeReason?: string;
   bookingId?: string;
   collaborationVersions?: number[];
+  collaborationInvitations?: {companyId:string;version:number;status:TourCoHost["status"];segment?:string;invitedAt:string;respondedAt?:string}[];
   hasCollaborations?: boolean;
   sharedTourThumbnail?: string;
   sharedTourName?: string;

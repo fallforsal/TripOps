@@ -2,6 +2,7 @@ import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton
 import { useState } from "react";
 import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
+  MessageSquareWarning,
   LayoutDashboard,
   Package,
   Calendar,
@@ -72,6 +73,11 @@ export function AdminLayout({
       label: "Xử lý Hoàn tiền",
       icon: RotateCcw,
       badge: pendingRefundsCount > 0 ? pendingRefundsCount : undefined,
+    },
+    {
+      id: "complaints",
+      label: "Khiếu nại",
+      icon: MessageSquareWarning,
     },
     {
       id: "settlements",

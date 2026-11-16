@@ -20,6 +20,7 @@ import { RefundRequest } from "@/app/types";
 import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 import { AdminTourModeration } from "./AdminTourModeration";
 import { AdminSettlementManagement } from "./AdminSettlementManagement";
+import { AdminComplaintManagement } from "./AdminComplaintManagement";
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -183,6 +184,9 @@ export function AdminDashboard({
 
       case "settlements":
         return <AdminSettlementManagement />;
+
+      case "complaints":
+        return <AdminComplaintManagement />;
 
       case "finance":
         return (

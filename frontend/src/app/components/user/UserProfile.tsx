@@ -1,6 +1,7 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
-import { Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
+import { changePassword, newPasswordProblem } from "@/app/services/password";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
 import { ProfileBankAccountCard } from "@/app/components/user/ProfileBankAccountCard";
@@ -13,28 +14,32 @@ export function UserProfile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwMessage, setPwMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwMessage(null);
-
     if (!currentPassword) {
-      setPwMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại" });
+      setPwMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại." });
       return;
     }
-    if (newPassword.length < 6) {
-      setPwMessage({ type: "error", text: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+    const problem = newPasswordProblem(newPassword, confirmPassword);
+    if (problem) {
+      setPwMessage({ type: "error", text: problem });
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setPwMessage({ type: "error", text: "Mật khẩu xác nhận không khớp" });
-      return;
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword, confirmPassword);
+      setPwMessage({ type: "success", text: "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất; thiết bị này vẫn giữ đăng nhập." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPwMessage({ type: "error", text: err instanceof Error ? err.message : "Không đổi được mật khẩu. Vui lòng thử lại." });
+    } finally {
+      setSaving(false);
     }
-
-    setPwMessage({ type: "success", text: "Đổi mật khẩu thành công!" });
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setTimeout(() => setPwMessage(null), 3000);
   };
 
   return (
@@ -59,11 +64,16 @@ export function UserProfile() {
 
         {pwMessage && <NotificationMessage tone={pwMessage.type} message={pwMessage.text} />}
 
-        <form onSubmit={handlePasswordSubmit} className="space-y-3 max-w-md text-xs">
+        <p className="text-xs text-[#64748B]">
+          Mật khẩu mới cần ít nhất 8 ký tự. Sau khi đổi, các thiết bị khác đang đăng nhập sẽ bị đăng xuất và bạn sẽ nhận email thông báo.
+        </p>
+
+        <form onSubmit={(e) => void handlePasswordSubmit(e)} className="space-y-3 max-w-md text-xs">
           <div className="space-y-1.5">
             <label className="font-semibold text-[#0F172A]">Mật khẩu hiện tại:</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -74,6 +84,7 @@ export function UserProfile() {
             <label className="font-semibold text-[#0F172A]">Mật khẩu mới:</label>
             <input
               type="password"
+              autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -84,6 +95,7 @@ export function UserProfile() {
             <label className="font-semibold text-[#0F172A]">Xác nhận mật khẩu mới:</label>
             <input
               type="password"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -93,8 +105,10 @@ export function UserProfile() {
           <div className="pt-2">
             <Button
               type="submit"
-              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold"
+              disabled={saving}
+              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold gap-1.5"
             >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Cập nhật mật khẩu
             </Button>
           </div>

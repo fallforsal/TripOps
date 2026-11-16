@@ -67,7 +67,7 @@ public sealed partial class TourFlowTests
         Assert.NotEqual(booking.Id,second.Id);
     }
     [Fact]
-    public async Task Design_global_termination_preserves_v1_but_requires_new_acceptance_before_selection()
+    public async Task Design_removal_keeps_invitation_history_and_requires_new_acceptance_for_access()
     {
         await using var app=new App();await app.Initialize();
         using var customer=await app.Login("customer");using var lead=await app.Login("agency");using var partner=await app.Login("other");
@@ -78,14 +78,17 @@ public sealed partial class TourFlowTests
         var prices=work.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers.Select(t=>t with {PricePerGuest=100000}).ToArray();
         await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Revision,work.Configuration.Timelines!,prices,Version:1)));
         var before=await Read<TourDto>(await lead.GetAsync(root+"/working-tour?version=1"));
-        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+"/co-hosts/other?terminate=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/other?terminate=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+"/co-hosts/other?version=1")).StatusCode);
         var after=await Read<TourDto>(await lead.GetAsync(root+"/versions/1"));
-        Assert.Contains(after.Configuration.CoHosts!,h=>h.CompanyId=="other");
-        var hosts=await Read<DesignCoHostDto[]>(await lead.GetAsync(root+"/co-hosts?version=1"));Assert.Equal("revoked",hosts.Single(h=>h.CompanyId=="other").Status);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.PostAsJsonAsync(root+"/share",new ShareDesignVersionInput(after.Revision,1))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,(await partner.GetAsync(root+"/working-tour?version=1")).StatusCode);
+        Assert.DoesNotContain(after.Configuration.CoHosts!,h=>h.CompanyId=="other");
+        var hosts=await Read<DesignCoHostDto[]>(await lead.GetAsync(root+"/co-hosts?version=1"));Assert.Equal("removed",hosts.Single(h=>h.CompanyId=="other").Status);
+        Assert.NotNull(hosts.Single(h=>h.CompanyId=="other").RespondedAt);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.GetAsync(root+"/working-tour?version=1")).StatusCode);
         await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other",Version:1)));
         Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept",Version:1))).StatusCode);
+        var rejoined=await Read<TourDto>(await partner.GetAsync(root+"/working-tour?version=1"));
+        await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(rejoined.Revision,rejoined.Configuration.Timelines!,prices,Version:1)));
         var restored=await Read<TourDto>(await lead.GetAsync(root+"/working-tour?version=1"));
         Assert.Equal(before.Configuration.Name,restored.Configuration.Name);Assert.Equal(1,(await Share(lead,request.Id,restored)).SharedVersion);
         await app.Inspect(async db=>Assert.Equal(1,await db.TourVersions.CountAsync(v=>v.TourId==plan.Id)));

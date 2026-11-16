@@ -40,8 +40,10 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
         var now = UtcNow;
         var percent = await FeePercentAt(now, ct);
         var rows = await db.BookingAgencies.Where(a => a.BookingId == booking.Id).ToListAsync(ct);
+        var completedNow = false;
         foreach (var row in rows.Where(r => r.SettlementStatus is null or SettlementStatus.Unpaid))
         {
+            completedNow = true;
             row.SettlementStatus = SettlementStatus.Ready;
             row.TourCompletedAt = now;
             row.FeePercent = percent;
@@ -56,6 +58,15 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
                           $"sẽ được chuyển từ {VietnamText(autoAt)} nếu khách đã trả đủ và không có khiếu nại."
             });
         }
+        // Báo khách thời hạn khiếu nại (ngắn, trước ngày chuyển tiền) và đánh giá.
+        if (completedNow && !string.IsNullOrEmpty(booking.CustomerId))
+            db.WorkflowNotifications.Add(new WorkflowNotification
+            {
+                UserId = booking.CustomerId,
+                BookingId = booking.Id,
+                Message = $"Tour của booking {booking.BookingCode} đã hoàn thành. Nếu có sự cố, bạn có thể gửi khiếu nại đến " +
+                          $"{VietnamText(now.Add(Reviews.ReviewRules.ComplaintWindow))}; đánh giá chuyến đi đến {VietnamText(now.Add(Reviews.ReviewRules.FeedbackWindow))}."
+            });
     }
 
     /// <summary>Tỷ lệ phí sàn đang áp dụng: dòng system_commission_configs mới nhất còn hiệu lực, nếu không có thì cấu hình mặc định.</summary>
@@ -573,8 +584,8 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
     {
         var bookingIds = rows.Select(r => r.BookingId).Distinct().ToList();
         var complaints = (await db.Complaints.AsNoTracking()
-                .Where(c => bookingIds.Contains(c.BookingId) && (c.Status == null || c.Status == ComplaintStatus.Pending || c.Status == ComplaintStatus.InReview))
-                .Select(c => c.BookingId).ToListAsync(ct))
+                .Where(c => c.BookingId != null && bookingIds.Contains(c.BookingId.Value) && (c.Status == null || c.Status == ComplaintStatus.Pending || c.Status == ComplaintStatus.InReview))
+                .Select(c => c.BookingId!.Value).ToListAsync(ct))
             .GroupBy(b => b).ToDictionary(g => g.Key, g => g.Count());
         return rows.Select(row =>
         {

@@ -2,6 +2,7 @@ import { ChatTourPage } from "@/app/components/chat/ChatTourPage";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
 import { completeAgencyTour } from "@/app/services/wf02Tours";
+import { TOURS_CHANGED_EVENT } from "@/app/services/aiTourDraft";
 import { requestAgencies, customerDesignRequests, agencyDesignRequests, submitDesignRequest,
   cancelDesignRequest, actOnDesignRequest, saveDesignTour, customerRequestPlans } from "@/app/services/customTourRequests";
 import { toast } from "@/app/lib/notifications";
@@ -142,7 +143,6 @@ import {
   BookingIncident,
   RefundRequest,
   RefundReasonType,
-  CustomerComplaint,
 } from "@/app/types";
 import {
   mockTours,
@@ -197,9 +197,8 @@ function Application() {
   const [customTourRequests, setCustomTourRequests] = useState<
     CustomTourRequest[]
   >([]);
-  const [complaints, setComplaints] = useState<CustomerComplaint[]>([]);
-  const [complaintInitialBooking, setComplaintInitialBooking] =
-    useState<Booking | null>(null);
+  // Booking được chọn sẵn khi mở "Gửi khiếu nại" từ chi tiết booking hoặc từ đánh giá 1–2 sao.
+  const [complaintBookingId, setComplaintBookingId] = useState<number | null>(null);
   const [systemBankAccount, setSystemBankAccount] = useState<SystemBankAccount>(
     defaultSystemBankAccount,
   );
@@ -225,6 +224,13 @@ function Application() {
     for (const tour of privateItems) byId.set(tour.id, tour);
     setTours([...byId.values()]);
   }
+  // Cửa sổ AI vừa lưu tour nháp (UC-038): tải lại danh sách để trang Quản lý tour mở được tour mới.
+  useEffect(() => {
+    const onChanged = () => { refreshTours().catch((e) => setApiError(e.message)); };
+    window.addEventListener(TOURS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(TOURS_CHANGED_EVENT, onChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
   const handleCompanyDuplicateTour = async (tourId: string, name: string) => {
     await duplicateAgencyTour(tourId, name);
     await refreshTours();
@@ -351,14 +357,6 @@ function Application() {
     window.addEventListener("unhandledrejection", error);
     return () => window.removeEventListener("unhandledrejection", error);
   }, []);
-  const handleAddComplaint = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
-  const handleAddComplaintMessage = (..._args: any[]) => {
-    toast.error("Chức năng này chưa được triển khai API trong đợt hiện tại.");
-  };
-
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setUsers((previous) => [
@@ -571,7 +569,7 @@ function Application() {
       setCurrentPage(page);
       setSelectedTour(null);
       setSelectedUserBooking(null);
-      setComplaintInitialBooking(null);
+      setComplaintBookingId(null);
       const params = new URLSearchParams();
       if (page === "book-tours") {
         const search = criteria || emptyTourSearch;
@@ -690,6 +688,13 @@ function Application() {
           m.serviceId && /^\d+$/.test(m.serviceId)
             ? Number(m.serviceId)
             : undefined,
+      })),
+      locationChoices: (data.locationChanges || []).map((lc) => ({
+        dayNumber: lc.dayNumber,
+        originalLocationName:
+          lc.originalLocationName || lc.originalLocations?.[0] || "",
+        requestedLocationName: lc.requestedLocations,
+        note: lc.note,
       })),
       participants: data.passengers.map((p) => ({
         fullName: p.fullName,
@@ -1867,12 +1872,8 @@ function Application() {
                 void checkPayment(id);
               }}
               onNavigateToComplaint={(b) => {
-                setComplaintInitialBooking(b);
+                setComplaintBookingId(Number(b.id));
                 setCurrentPage("my-complaints");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              onNavigateToReview={() => {
-                setCurrentPage("my-reviews");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             />
@@ -1897,20 +1898,22 @@ function Application() {
           />
         ) : currentPage === "my-complaints" ? (
           <MyComplaintsPage
-            complaints={complaints.filter(
-              (c) => !currentUser || c.userId === currentUser.id,
-            )}
-            userBookings={userBookings}
-            currentUser={currentUser}
-            initialSelectedBooking={complaintInitialBooking}
-            onAddComplaint={handleAddComplaint}
-            onAddComplaintMessage={handleAddComplaintMessage}
-            onViewBookingDetail={handleViewUserBookingDetail}
+            initialBookingId={complaintBookingId}
+            onViewBookingDetail={(id) => {
+              const booking = userBookings.find((b) => Number(b.id) === id);
+              if (booking) void handleViewUserBookingDetail(booking);
+            }}
           />
         ) : currentPage === "messages" ? (
           <MessagesPage />
         ) : currentPage === "my-reviews" ? (
-          <MyReviewsPage />
+          <MyReviewsPage
+            onComplain={(id) => {
+              setComplaintBookingId(id);
+              setCurrentPage("my-complaints");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
         ) : currentPage === "user-profile" ? (
           <UserProfile />
         ) : currentPage === "contact" ? (

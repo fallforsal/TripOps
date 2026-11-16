@@ -1980,7 +1980,7 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("agency_response");
 
-                    b.Property<int>("BookingId")
+                    b.Property<int?>("BookingId")
                         .HasColumnType("int")
                         .HasColumnName("booking_id");
 
@@ -2009,6 +2009,14 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("evidence_urls");
 
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("other")
+                        .HasColumnName("reason_code");
+
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime2")
                         .HasColumnName("resolved_at");
@@ -2021,7 +2029,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("TargetId")
-                        .IsRequired()
                         .HasMaxLength(36)
                         .HasColumnType("nvarchar(36)")
                         .HasColumnName("agency_id");
@@ -2031,6 +2038,14 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("subject");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Trip")
+                        .HasColumnName("complaint_type");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2044,9 +2059,9 @@ namespace TripOps.Data.Migrations
 
                     b.HasIndex("BookingId");
 
-                    b.HasIndex("ComplainantId");
-
                     b.HasIndex("TargetId");
+
+                    b.HasIndex("ComplainantId", "CreatedAt");
 
                     b.ToTable("complaints", (string)null);
                 });
@@ -2263,6 +2278,50 @@ namespace TripOps.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_guide_profiles_experience", "experience_years BETWEEN 0 AND 50");
                         });
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.PasswordResetCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("used_at");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("password_reset_codes", (string)null);
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.PaymentRequest", b =>
@@ -3940,6 +3999,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("organization_name");
 
+                    b.Property<DateTime?>("PasswordChangedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("password_changed_at");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
@@ -4517,8 +4580,7 @@ namespace TripOps.Data.Migrations
                     b.HasOne("TripOps.Data.Entities.Booking", "Booking")
                         .WithMany()
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TripOps.Data.Entities.User", "Complainant")
                         .WithMany()
@@ -4529,8 +4591,7 @@ namespace TripOps.Data.Migrations
                     b.HasOne("TripOps.Data.Entities.User", "Target")
                         .WithMany()
                         .HasForeignKey("TargetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Admin");
 
@@ -4585,6 +4646,17 @@ namespace TripOps.Data.Migrations
                         .WithOne("GuideProfile")
                         .HasForeignKey("TripOps.Data.Entities.GuideProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.PasswordResetCode", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("User");

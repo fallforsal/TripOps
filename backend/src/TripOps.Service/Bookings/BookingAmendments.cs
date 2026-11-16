@@ -27,7 +27,7 @@ public sealed record BookingServiceChange(
 public sealed record BookingLocationChange(
     [Range(1, int.MaxValue)] int ItemId,
     [Required, StringLength(255)] string Name,
-    [Required, StringLength(2000, MinimumLength = 3)] string Reason,
+    [StringLength(2000)] string? Reason,
     decimal ExpectedTotal, decimal PriceDifference = 0);
 public sealed record BookingPriceAdjustmentDto(int Id, string AdjustedBy, decimal PreviousTotalPrice,
     decimal AdjustmentAmount, decimal NewTotalPrice, string Reason, DateTime? CreatedAt,string? BeneficiaryAgencyId=null);
@@ -75,24 +75,27 @@ public sealed partial class BookingQuotationService
                 (c.AttendanceStatus == AttractionCheckinStatus.CheckedIn || c.AttendanceStatus == AttractionCheckinStatus.Skipped), ct),
             "Điểm đã được check-in hoặc bỏ qua không thể đổi.");
         Require(!string.IsNullOrWhiteSpace(input.Name) && input.Name.Trim().Length <= 255, "Cần nhập tên điểm tham quan hợp lệ.");
-        Require(!string.IsNullOrWhiteSpace(input.Reason) && input.Reason.Trim().Length is >= 3 and <= 2000, "Cần nhập lý do thay đổi.");
+        Require(input.Reason is null || input.Reason.Trim().Length <= 2000, "Lý do thay đổi tối đa 2000 ký tự.");
         Require(b.Tour?.AgencyId==actor || input.PriceDifference==0,"Agency đối tác không được thay đổi giá booking.");
         Require(input.PriceDifference == Money(input.PriceDifference), "Chênh lệch giá phải là số nguyên VNĐ.");
         Require(!BookingBilling.HasBeenApproved(b) || input.PriceDifference == 0,
             "Giá tour đã khóa sau khi duyệt. Nếu phát sinh chi phí, hãy tạo phụ thu riêng.");
         var oldName = location.CurrentLocationName ?? location.OriginalLocationName;
+        var reasonText = string.IsNullOrWhiteSpace(input.Reason) ? null : input.Reason.Trim();
         location.CurrentLocationName = input.Name.Trim();
         location.IsCustomized = location.CurrentLocationName != location.OriginalLocationName;
-        location.CustomerNote = input.Reason.Trim();
+        location.CustomerNote = "__AGENCY_CHANGED__";
         location.PriceDifference = (location.PriceDifference ?? 0) + input.PriceDifference;
         if (input.PriceDifference != 0)
-            await ApplyPrice(b, actor, b.TotalAmount + input.PriceDifference, input.Reason.Trim(), ct);
+            await ApplyPrice(b, actor, b.TotalAmount + input.PriceDifference, reasonText ?? $"Agency đổi điểm {oldName} → {location.CurrentLocationName}", ct);
         MarkAmended(b);
         // Keep the active plan in sync; no separate service-change history is created.
         var plan = await Db.BookingQuotations.Where(q => q.BookingId == id).OrderByDescending(q => q.Version).FirstOrDefaultAsync(ct);
         if (plan != null) { plan.PlanSnapshotJson = PlanSnapshot(b); plan.EstimatedSale = b.TotalAmount; }
         Db.WorkflowNotifications.Add(new WorkflowNotification { UserId = b.CustomerId!, BookingId = id,
-            Message = $"Agency đổi điểm {oldName} → {location.CurrentLocationName}. Lý do: {input.Reason.Trim()}" });
+            Message = reasonText is null
+                ? $"Agency đổi điểm {oldName} → {location.CurrentLocationName}."
+                : $"Agency đổi điểm {oldName} → {location.CurrentLocationName}. Lý do: {reasonText}" });
         await Db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
 

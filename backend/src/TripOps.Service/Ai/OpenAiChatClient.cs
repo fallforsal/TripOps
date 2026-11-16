@@ -32,7 +32,9 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
     /// Gọi model chính, lỗi tạm thời (503 quá tải...) thì thử lại 2 lần (chờ 1s, 3s);
     /// vẫn lỗi và có cấu hình OpenAI:FallbackModel thì chuyển sang model dự phòng.
     /// </summary>
-    public async Task<OpenAiTurn> Complete(JsonArray messages, JsonArray? tools, CancellationToken ct)
+    /// <param name="maxTokens">Giới hạn độ dài câu trả lời; chatbot giữ 900, soạn lịch trình tour cần nhiều hơn.</param>
+    /// <param name="timeoutSeconds">Thời gian chờ mỗi lần gọi; để trống thì dùng OpenAI:TimeoutSeconds.</param>
+    public async Task<OpenAiTurn> Complete(JsonArray messages, JsonArray? tools, CancellationToken ct, int maxTokens = 900, int? timeoutSeconds = null)
     {
         if (!options.Configured) throw new OpenAiException("OpenAI chưa được cấu hình.");
         var models = new List<string> { options.Model };
@@ -43,7 +45,7 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(attempt == 1 ? 1 : 3), ct);
-                try { return await Send(model, messages, tools, ct); }
+                try { return await Send(model, messages, tools, maxTokens, timeoutSeconds ?? options.TimeoutSeconds, ct); }
                 catch (OpenAiException ex) when (ex.Status is { } status && Transient.Contains(status)) { last = ex; }
                 // Model không tồn tại/không có quyền: không thử lại model này, chuyển sang model dự phòng (nếu có).
                 catch (OpenAiException ex) when (ex.Status == HttpStatusCode.NotFound && models.Count > 1) { last = ex; break; }
@@ -52,14 +54,14 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
         throw new OpenAiException($"{last?.Message ?? "OpenAI lỗi."} Đã thử các model: {string.Join(", ", models)}.", last?.Status);
     }
 
-    private async Task<OpenAiTurn> Send(string model, JsonArray messages, JsonArray? tools, CancellationToken ct)
+    private async Task<OpenAiTurn> Send(string model, JsonArray messages, JsonArray? tools, int maxTokens, int timeoutSeconds, CancellationToken ct)
     {
         var body = new JsonObject
         {
             ["model"] = model,
             ["messages"] = messages.DeepClone(),
             ["temperature"] = 0.3,
-            ["max_completion_tokens"] = 900,
+            ["max_completion_tokens"] = maxTokens,
         };
         if (options.ReasoningEffort is { } effort) body["reasoning_effort"] = effort;
         if (tools is { Count: > 0 })
@@ -74,7 +76,7 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         HttpResponseMessage response;
         try { response = await http.SendAsync(request, timeout.Token); }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new OpenAiException("OpenAI phản hồi quá lâu."); }

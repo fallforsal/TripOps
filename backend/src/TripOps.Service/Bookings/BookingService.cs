@@ -9,8 +9,6 @@ using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
 
-public sealed record IncidentEvidenceFile(byte[] Bytes, string Mime);
-
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
     TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService,
@@ -26,6 +24,61 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private TripOps.Service.Notifications.EmailSender Email => email;
     /// <summary>Giờ hiện tại (UTC) cho nghiệp vụ thanh toán — test thay được để cố định thời điểm duyệt/quá hạn.</summary>
     private DateTime UtcNow => clock.UtcNow;
+
+    private static string MealCheckinLabel(string? mealType) => (mealType ?? "").ToLowerInvariant() switch
+    {
+        "breakfast" => "Bữa sáng",
+        "lunch" => "Bữa trưa",
+        "dinner" => "Bữa tối",
+        _ => "Bữa ăn"
+    };
+
+    private static TimeSpan DefaultMealTime(string? mealType) => (mealType ?? "").ToLowerInvariant() switch
+    {
+        "breakfast" => new TimeSpan(7, 30, 0),
+        "lunch" => new TimeSpan(12, 0, 0),
+        "dinner" => new TimeSpan(18, 30, 0),
+        _ => new TimeSpan(12, 0, 0)
+    };
+
+    private async Task EnsureMealCheckinStopsAsync(Booking booking, CancellationToken ct)
+    {
+        var changed = false;
+        foreach (var timeline in booking.Timelines)
+        {
+            foreach (var meal in timeline.Meals)
+            {
+                var tag = $"[MEAL:{meal.Id}]";
+                var name = $"{MealCheckinLabel(meal.MealType)}: {meal.CurrentRestaurantName ?? meal.OriginalRestaurantName}";
+                var orig = $"{MealCheckinLabel(meal.MealType)}: {meal.OriginalRestaurantName}";
+                var mealTime = meal.Time ?? (meal.DateService?.Date.Add(DefaultMealTime(meal.MealType))
+                    ?? booking.StartDate.Date.AddDays(Math.Max(0, timeline.DayNumber - 1)).Add(DefaultMealTime(meal.MealType)));
+                var agencyId = meal.AgencyId ?? booking.Tour?.AgencyId;
+
+                var existing = timeline.Attractions.FirstOrDefault(a => a.CustomerNote == tag);
+                if (existing is null)
+                {
+                    timeline.Attractions.Add(new BookingTimelineAttraction
+                    {
+                        BookingTimelineId = timeline.Id,
+                        AgencyId = agencyId,
+                        OriginalLocationName = orig,
+                        CurrentLocationName = name,
+                        Time = mealTime,
+                        CustomerNote = tag,
+                    });
+                    changed = true;
+                }
+                else
+                {
+                    if (existing.CurrentLocationName != name) { existing.CurrentLocationName = name; changed = true; }
+                    if (existing.Time != mealTime) { existing.Time = mealTime; changed = true; }
+                    if (existing.AgencyId != agencyId && agencyId is not null) { existing.AgencyId = agencyId; changed = true; }
+                }
+            }
+        }
+        if (changed) await repository.SaveChangesAsync(ct);
+    }
 
     private static decimal Money(decimal value) => decimal.Round(value, 0, MidpointRounding.AwayFromZero);
 
@@ -112,8 +165,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 if (tier is not null) { price = tier.PricePerGuest ?? 0; tierName = tier.Name; }
             }
 
-            price = Money(price + extra);
-            if(price<0)throw new BookingException(422,"Giá khách sau phụ thu không hợp lệ.");
+            // Chênh lệch dịch vụ tự chọn chỉ áp cho vé tính tiền; vé miễn phí (em bé) giữ 0đ.
+            // Chênh lệch âm không làm giá vé xuống dưới 0.
+            price = price > 0 ? Money(Math.Max(0, price + extra)) : 0;
             totalAmount += price;
 
             participants.Add(new BookingParticipant
@@ -141,6 +195,11 @@ public sealed partial class BookingService(BookingRepository repository, Account
         var code = $"BK{DateTime.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
 
 
+        var locationChoices = (request.LocationChoices ?? [])
+            .Where(l => l.DayNumber >= 1 && !string.IsNullOrWhiteSpace(l.OriginalLocationName) && !string.IsNullOrWhiteSpace(l.RequestedLocationName))
+            .GroupBy(l => (l.DayNumber, Original: l.OriginalLocationName.Trim().ToLowerInvariant()))
+            .ToDictionary(g => g.Key, g => g.First());
+
         var stayOffsets=new Dictionary<TourAccommodation,int>();
         var stayOffset=0;
         foreach(var stay in tour.Accommodations.Where(h=>h.IsDefault==true)) {stayOffsets[stay]=stayOffset;stayOffset+=stay.NightsCount??0;}
@@ -155,8 +214,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
             DesignRequestId = tour.DesignRequestId,
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
-            OriginalTotalPrice = totalAmount - extra*participants.Count,
-            HasCustomization = hotelSelections.Count>0 || mealSelections.Count>0,
+            // Giá lúc khách đặt (đã gồm tùy chọn dịch vụ). Chỉ Agency điều chỉnh sau đó mới tạo chênh lệch.
+            OriginalTotalPrice = totalAmount,
+            HasCustomization = hotelSelections.Count>0 || mealSelections.Count>0 || locationChoices.Count>0,
             Status = BookingStatus.Pending,
             PaymentStatus = PaymentStatus.Unpaid,
             ContactName = request.ContactName.Trim(),
@@ -169,8 +229,19 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 var day = tour.Timelines.SingleOrDefault(d => d.DayNumber == number);
                 return new BookingTimeline {
                     DayNumber = number, Title = day?.Title ?? $"Ngày {number}", Description = day?.Description,
-                    Attractions = (day?.Attractions ?? []).Select(a => new BookingTimelineAttraction {
-                        AgencyId = a.AgencyId ?? tour.AgencyId, OriginalLocationName = a.Name ?? "", CurrentLocationName = a.Name ?? "", Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null }).ToList(),
+                    Attractions = (day?.Attractions ?? []).Select(a => {
+                        var origName = a.Name ?? "";
+                        var hasCustomLoc = locationChoices.TryGetValue((number, origName.Trim().ToLowerInvariant()), out var customLoc);
+                        var chosenName = hasCustomLoc ? customLoc!.RequestedLocationName.Trim() : origName;
+                        var note = hasCustomLoc ? "__CUSTOMER_CHANGED__" : null;
+                        return new BookingTimelineAttraction {
+                            AgencyId = a.AgencyId ?? tour.AgencyId,
+                            OriginalLocationName = origName,
+                            CurrentLocationName = chosenName,
+                            CustomerNote = note,
+                            Time = a.Time.HasValue ? request.StartDate.Date.AddDays(number-1).Add(a.Time.Value.TimeOfDay) : null
+                        };
+                    }).ToList(),
                     Meals = (day?.Meals ?? []).Where(m => m.IsDefault == true).Select(m => new BookingTimelineMeal {
                         AgencyId = m.AgencyId ?? tour.AgencyId, MealType = m.MealType, OriginalRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var bookedMeal) ? bookedMeal.RestaurantName : m.RestaurantName,
                         CurrentRestaurantName = mealSelections.TryGetValue((number,m.MealType),out var chosenMeal) ? chosenMeal.RestaurantName : m.RestaurantName,
@@ -213,8 +284,14 @@ public sealed partial class BookingService(BookingRepository repository, Account
         if (!isOwner && !isAgency && !isGuide && !isAdmin)
             throw new BookingException(403, "Bạn không có quyền xem thông tin đơn đặt này.");
 
+        await EnsureMealCheckinStopsAsync(booking, ct);
+
         var snapshots = await quotations.SelectionSnapshots(id, ct);
         var dto=await quotations.AllianceDetails(booking,ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name, snapshots),isAgency||isAdmin,ct);
+        var checkinPhotos = booking.Timelines.SelectMany(d => d.Attractions).SelectMany(a => a.Checkins)
+            .ToDictionary(c => c.Id, c => (IReadOnlyList<string>)GuideCheckinPhotoRules.Decode(c.PhotoUrl).Select(url => photoStorage.DeliveryUrl(url)!).ToArray());
+        if (dto.AttractionCheckins is { Count: > 0 })
+            dto = dto with { AttractionCheckins = dto.AttractionCheckins.Select(c => checkinPhotos.TryGetValue(c.Id, out var urls) ? c with { PhotoUrls = urls } : c).ToArray() };
         if(isAgency && booking.Tour!.AgencyId!=actorId && !isAdmin)
             return BookingAlliance.PartnerView(booking,dto,actorId);
         if(isGuide && !isAgency && !isAdmin) {
@@ -223,14 +300,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
                 AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
-            dto=dto with {
-                // Incident photos are private operational evidence, not customer-facing assets.
-                Incidents=dto.Incidents?.Select(i => i with { EvidenceUrls = [] }).ToArray(),
-                Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
-                    var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
-                    return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
-                }).ToArray()
-            };
+            dto=dto with {Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
+                var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
+                return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
+            }).ToArray()};
         }
         return dto;
     }
@@ -391,8 +464,22 @@ public sealed partial class BookingService(BookingRepository repository, Account
     }
 
     // WF06: Guide xem danh sách tour được giao
-    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        (await repository.AvailableGuides(agencyId,ct)).Select(g => new AvailableGuideDto(g.Id, g.Name, g.Phone)).ToList();
+    public async Task<IReadOnlyList<AvailableGuideDto>> AvailableGuides(string agencyId, CancellationToken ct, int? bookingId = null)
+    {
+        Booking? booking = null;
+        if (bookingId.HasValue) {
+            booking = await repository.Find(bookingId.Value,ct) ?? throw new BookingException(404,"Không tìm thấy booking.");
+            if (!BookingAlliance.IsMember(booking,agencyId)) throw new BookingException(403,"Agency không thuộc booking.");
+        }
+        var result = new List<AvailableGuideDto>();
+        foreach (var guide in await repository.AvailableGuides(agencyId,ct)) {
+            var conflict = booking is not null && await repository.GuideHasConflict(guide.Id,booking.Id,booking.StartDate,EndDate(booking),ct);
+            var suspended = guide.GuideProfile?.SuspendedAt is not null;
+            result.Add(new(guide.Id,guide.Name,guide.Phone,guide.Avatar,!conflict && !suspended,
+                suspended ? "HDV đang bị tạm ngưng." : conflict ? "Trùng lịch với booking khác." : null));
+        }
+        return result;
+    }
 
     // Tour media is stored as JSON arrays. Prefer the explicit thumbnail, then
     // use the first valid gallery image (older tours may lack ThumbnailUrls).
@@ -423,11 +510,28 @@ public sealed partial class BookingService(BookingRepository repository, Account
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
         var items = rows.Select(b => new BookingListItem(
-            b.Id, b.BookingCode, b.Tour?.Name, b.Customer?.Name, b.ContactPhone,
-            b.StartDate, BookingAlliance.GuestCount(b,b.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId), b.TotalAmount, PaidAmount(b),
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch, TourThumbnail(b.Tour))).ToList();
+            b.Id, b.BookingCode, b.TourName, b.CustomerName, b.ContactPhone,
+            b.StartDate, b.Guests, b.TotalAmount, b.PaidAmount,
+            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch,
+            TourThumbnailFromJson(b.ThumbnailUrls, b.TourImages))).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
+    }
+
+    private static string? TourThumbnailFromJson(string? thumbnailUrls, string? images)
+    {
+        foreach (var json in new[] { thumbnailUrls, images })
+        {
+            if (string.IsNullOrWhiteSpace(json)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var first = doc.RootElement.EnumerateArray().FirstOrDefault().GetString();
+                if (!string.IsNullOrWhiteSpace(first)) return first;
+            }
+            catch { }
+        }
+        return null;
     }
 
     // WF06: Điểm danh hành khách
@@ -449,6 +553,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
         else
             throw new BookingException(400, "Trạng thái điểm danh không hợp lệ.");
 
+        if (request.Note is not null)
+            participant.StatusNote = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         participant.CheckedBy = guideId;
         participant.CheckedAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(ct);
@@ -456,53 +562,56 @@ public sealed partial class BookingService(BookingRepository repository, Account
         return Participant(participant);
     }
 
-    // WF06: Báo cáo sự cố. Keep JSON clients working; images are optional.
+    // WF06: Báo cáo sự cố
     public async Task<IncidentDto> ReportIncident(
         string guideId, int bookingId, ReportIncidentRequest request, CancellationToken ct,
-        IReadOnlyList<IncidentEvidenceFile>? images = null)
+        IReadOnlyList<string>? evidenceUrls = null)
     {
         var booking = await repository.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
-        if (!booking.AssignedGuides.Any(ag => ag.GuideId == guideId))
-            throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền báo sự cố.");
+        var assignment = booking.AssignedGuides.SingleOrDefault(ag => ag.GuideId == guideId)
+            ?? throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền báo sự cố.");
 
-        if (!IncidentTypeRules.IsAllowed(request.IncidentType))
-            throw new BookingException(422, "Loại sự cố không hợp lệ.");
-
-        if (images is { Count: > 0 })
-        {
-            GuideCheckinPhotoRules.ValidateFiles(images
-                .Select(f => ((long)f.Bytes.Length, f.Mime)).ToArray());
-            if (images.Any(f => !GuideCheckinPhotoRules.IsValidImage(f.Bytes, f.Mime)))
-                throw new BookingException(422, "Ảnh minh chứng phải là JPEG, PNG hoặc WebP hợp lệ.");
-        }
-
-        var evidenceUrls = new List<string>();
-        if (images is { Count: > 0 })
-            foreach (var image in images)
-                evidenceUrls.Add(await photoStorage.UploadGuideIncidentImage(
-                    guideId, image.Bytes, image.Mime, ct));
-
+        var normalizedType = string.IsNullOrWhiteSpace(request.IncidentType) ? "OTHER" : request.IncidentType.Trim();
         var incident = new BookingIncident
         {
-            EvidenceUrls = evidenceUrls.Count == 0 ? null : GuideCheckinPhotoRules.Encode(evidenceUrls),
             BookingId = bookingId,
-            AgencyId = booking.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId,
-            IncidentType = request.IncidentType.Trim().ToUpperInvariant(),
-            Title = $"[{request.IncidentType.Trim().ToUpperInvariant()}] {request.Title.Trim()}",
-            Description = request.Description.Trim(),
+            AgencyId = assignment.AgencyId,
+            IncidentType = normalizedType,
+            Title = normalizedType.Equals("OTHER", StringComparison.OrdinalIgnoreCase)
+                ? request.Title.Trim()
+                : $"[{normalizedType}] {request.Title.Trim()}",
+            Description = IncidentDescription(request.Description, request.Severity),
             Status = IncidentStatus.Reported,
-            ReportedBy = guideId
+            ReportedBy = guideId,
+            EvidenceUrls = evidenceUrls is { Count: > 0 } ? GuideCheckinPhotoRules.Encode(evidenceUrls) : null,
         };
 
         repository.AddIncident(incident);
         await repository.SaveChangesAsync(ct);
 
-        return Incident(incident, reporterName: (await accounts.Current(guideId, ct)).Name);
+        return IncidentToDto(incident, assignment.Guide?.Name);
     }
 
+    private IncidentDto IncidentToDto(BookingIncident i, string? reporterName) => new(
+        i.Id, i.BookingId,
+        i.Title, i.Description, Severity(i.Description),
+        i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(),
+        i.CreatedAt ?? DateTime.UnixEpoch,
+        GuideCheckinPhotoRules.Decode(i.EvidenceUrls)
+            .Select(url => photoStorage.DeliveryUrl(url)!)
+            .Distinct()
+            .ToArray(),
+        i.ReportedBy,
+        reporterName ?? i.Reporter?.Name,
+        i.AgencyId);
+
     private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName,
-        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null) =>
-        new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null)
+    {
+        var bookedConfig = string.IsNullOrWhiteSpace(b.TourConfigurationData)
+            ? null
+            : JsonSerializer.Deserialize<TripOps.Service.Tours.TourConfiguration>(b.TourConfigurationData, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        return new(b.Id, b.BookingCode, b.CustomerId ?? "", b.Customer?.Name ?? "",
             b.TourId, tourName, agencyId, agencyName,
             b.StartDate, EndDate(b), TotalGuests(b), b.TotalAmount,
             DisplayDeposit(b), PaidAmount(b), b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(),
@@ -510,45 +619,65 @@ public sealed partial class BookingService(BookingRepository repository, Account
             b.Participants.OrderBy(p => p.ParticipantIndex).Select(Participant).ToList(),
             b.AssignedGuides.Select(ag => new AssignedGuideDto(
                 ag.Id, ag.GuideId, ag.Guide?.Name ?? "", ag.Guide?.Phone,
-                ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId)).ToList(),
+                ag.Role, "ASSIGNED", ag.Notes, ag.AssignedAt, ag.AgencyId, ag.Guide?.Avatar)).ToList(),
             b.CreatedAt ?? DateTime.UnixEpoch, b.UpdatedAt,
-            b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i =>
-                Incident(i, i.Reporter?.Name)).ToList(),
+            b.Incidents.OrderByDescending(i => i.CreatedAt).Select(i => IncidentToDto(i, i.Reporter?.Name)).ToList(),
             b.Timelines.OrderBy(t=>t.DayNumber).Select(t=>new BookingDayDto(t.Id,t.DayNumber,t.Title,t.Description,
                 GuideLocationCheckinRules.OrderedStops([t]).Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,a.AgencyId,
                     a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.PhotoUrl))
-                        .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray())).ToList(),
+                        .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray(),
+                    a.Checkins.OrderByDescending(c => c.CheckinTime).Select(c => c.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)))).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
-                    SupplierOf(snapshots, $"meal:{m.Id}"),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
+                    SupplierOfMeal(snapshots, bookedConfig, t.DayNumber, m),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
-                SupplierOf(snapshots, $"hotel:{h.Id}"),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
+                SupplierOfHotel(snapshots, bookedConfig, h),h.OriginalHotelName,h.AgencyId,h.DateFrom,h.DateTo)).ToList(),
             Schedule(b), Transactions(b), Cancellation(b), ContractOf(b), b.OriginalTotalPrice,
             b.PriceAdjustments.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Select(a => new BookingPriceAdjustmentDto(a.Id,
                 a.Adjuster?.Name ?? a.AdjustedBy, a.PreviousTotalPrice, a.Amount, a.NewTotalPrice, a.Reason, a.CreatedAt,a.AgencyId)).ToList(), BaseTourAmount(b), SurchargeTotal(b), HasBeenApproved(b), CanRecordAttendance: b.StartDate.Date == PaymentRules.VietnamDate(UtcNow),
             CanCheckInLocations: GuideLocationCheckinRules.CanCheckIn(b, UtcNow),
             NextLocationCheckInId: GuideLocationCheckinRules.NextUncheckedStopId(b.Timelines));
+    }
 
-    private IncidentDto Incident(BookingIncident item, string? reporterName) => new(
-        item.Id, item.BookingId, item.Title, CleanLegacyIncidentDescription(item.Description),
-        item.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(),
-        item.CreatedAt ?? DateTime.UnixEpoch, item.IncidentType, item.AgencyId,
-        reporterName, GuideCheckinPhotoRules.Decode(item.EvidenceUrls)
-            .Select(url => photoStorage.DeliveryUrl(url)!).ToArray());
+    private static BookingSupplierDto? ToSupplierDto(TripOps.Service.Tours.SupplierSnapshotInput? s) =>
+        s is null ? null : new BookingSupplierDto(s.Address, s.ContactPhone, s.Area, s.ContactName, s.ReferencePrice, s.Conditions);
 
-    private static BookingSupplierDto? SupplierOf(Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots, string slot) =>
-        snapshots?.GetValueOrDefault(slot) is { } s ? new BookingSupplierDto(s.Address, s.ContactPhone) : null;
+    private static BookingSupplierDto? SupplierOfMeal(
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots,
+        TripOps.Service.Tours.TourConfiguration? config,
+        int dayNumber,
+        BookingTimelineMeal m)
+    {
+        var snap = snapshots?.GetValueOrDefault($"meal:{m.Id}");
+        if (snap is not null) return ToSupplierDto(snap);
+        var name = m.CurrentRestaurantName ?? m.OriginalRestaurantName;
+        var configured = config?.Timelines?.FirstOrDefault(d => d.DayNumber == dayNumber)?.Meals?
+            .FirstOrDefault(x => x.MealType == m.MealType && (string.Equals(x.RestaurantName, name, StringComparison.OrdinalIgnoreCase)));
+        return ToSupplierDto(configured?.Supplier);
+    }
+
+    private static BookingSupplierDto? SupplierOfHotel(
+        Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots,
+        TripOps.Service.Tours.TourConfiguration? config,
+        BookingAccommodation h)
+    {
+        var snap = snapshots?.GetValueOrDefault($"hotel:{h.Id}");
+        if (snap is not null) return ToSupplierDto(snap);
+        var name = h.CurrentHotelName ?? h.OriginalHotelName;
+        var configured = config?.Timelines?.SelectMany(d => d.Accommodations ?? [])
+            .FirstOrDefault(x => string.Equals(x.DestinationName, h.Destination, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.HotelName, name, StringComparison.OrdinalIgnoreCase));
+        return ToSupplierDto(configured?.Supplier);
+    }
 
     private static ParticipantDto Participant(BookingParticipant p) => new(p.Id, p.FullName, p.PhoneNumber,
         p.DateOfBirth, p.Gender, p.IdentityNumber, p.AttendanceStatus.GetValueOrDefault(AttendanceStatus.Pending).ToString(),
-        p.Status ?? "ACTIVE", p.AssignedGuide?.Name, p.Price, p.TierName, p.AgencyId, p.ParticipantIndex, p.IsPrimary, p.Note, p.RoommateNote, p.RestaurantNote, p.CheckedBy, p.CheckedAt, p.AssignedGuideId);
+        p.Status ?? "ACTIVE", p.AssignedGuide?.Name, p.Price, p.TierName, p.AgencyId, p.ParticipantIndex, p.IsPrimary, p.Note, p.RoommateNote, p.RestaurantNote, p.CheckedBy, p.CheckedAt, p.AssignedGuideId, p.StatusNote);
     private static int TotalGuests(Booking booking) => BookingAlliance.GuestCount(booking);
     private static decimal PaidAmount(Booking booking) => BookingBilling.NetPaidAmount(booking);
     private static DateTime EndDate(Booking booking) => booking.StartDate.AddDays(Math.Max(1,
         booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max()) - 1);
-    // Old records appended a pseudo-severity line to free-text descriptions.
-    // Hide only that generated suffix in API responses; do not rewrite historical rows.
-    private static string CleanLegacyIncidentDescription(string description) =>
-        System.Text.RegularExpressions.Regex.Replace(
-            description, @"(?:\r?\n)Mức độ:\s*(?:Low|Medium|High|Critical)\s*$",
-            "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).TrimEnd();
+    private static string IncidentDescription(string description, string? severity) => string.IsNullOrWhiteSpace(severity)
+        ? description.Trim() : $"{description.Trim()}\nMức độ: {severity.Trim()}";
+    private static string? Severity(string? description) => string.IsNullOrWhiteSpace(description) ? null
+        : System.Text.RegularExpressions.Regex.Match(description, @"(?:^|\n)Mức độ: ([^\r\n]+)") is { Success: true } match ? match.Groups[1].Value : null;
 }

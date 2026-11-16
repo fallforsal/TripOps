@@ -45,7 +45,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         await db.SaveChangesAsync(ct);
     }
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
-        u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
+        u.BusinessProfile is null ? null : Profile(u.BusinessProfile), u.Avatar);
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
     {
         if (!request.AcceptedTerms) throw new AccountException(400, "Vui lòng đồng ý điều khoản.");
@@ -90,6 +90,8 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
             ?? throw new AccountException(404, "Không tìm thấy tài khoản HDV thuộc Agency của bạn. Hồ sơ mẫu chưa có trong database không thể đổi mật khẩu.");
         guide.PasswordHash = hasher.HashPassword(guide, request.NewPassword);
         guide.UpdatedAt = DateTime.UtcNow;
+        // HDV đang đăng nhập bằng mật khẩu cũ sẽ bị đăng xuất.
+        guide.PasswordChangedAt = new DateTime(guide.UpdatedAt.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
         await db.SaveChangesAsync(ct);
     }
     public async Task<ProfileDto> Submit(string id, ProfileRequest request, byte[]? image, string? mime, CancellationToken ct)

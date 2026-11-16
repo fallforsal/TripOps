@@ -33,10 +33,11 @@ class GuideRepository {
   Future<BookingDetail> start(int id) async =>
       BookingDetail.fromJson(await api.postMap('guide/bookings/$id/start'));
 
-  Future<void> attendance(int bookingId, int participantId, String status) async {
+  Future<void> attendance(int bookingId, int participantId, String status, {String? note}) async {
     await api.postMap('guide/bookings/$bookingId/attendance', {
       'participantId': participantId,
       'status': status,
+      if (note != null) 'note': note,
     });
   }
 
@@ -75,23 +76,39 @@ class GuideRepository {
 
   Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
 
-  Future<void> incident(int id, {required String type, required String title,
-    required String description, List<CheckinPhoto> images = const []}) async {
-    final validation = CheckinPhoto.validate(images);
-    if (validation != null) throw ApiFailure(validation);
-    // The single incident API accepts multipart/form-data even without photos.
-    final form = FormData();
-    form.fields.addAll([
-      MapEntry('IncidentType', type),
-      MapEntry('Title', title),
-      MapEntry('Description', description),
-    ]);
-    for (final photo in images) {
-      form.files.add(MapEntry('Images', await MultipartFile.fromFile(
-        photo.path, filename: photo.name,
-        contentType: DioMediaType.parse(photo.mime),
-      )));
+  Future<void> incident(int id, {
+    String type = 'OTHER',
+    required String title,
+    required String description,
+    String? severity,
+    List<CheckinPhoto> photos = const [],
+  }) async {
+    if (photos.isNotEmpty) {
+      final validation = CheckinPhoto.validate(photos);
+      if (validation != null) throw ApiFailure(validation);
+      final form = FormData();
+      form.fields.add(MapEntry('IncidentType', type));
+      form.fields.add(MapEntry('Title', title));
+      form.fields.add(MapEntry('Description', description));
+      if (severity != null && severity.isNotEmpty) {
+        form.fields.add(MapEntry('Severity', severity));
+      }
+      for (final photo in photos) {
+        final part = await MultipartFile.fromFile(
+          photo.path,
+          filename: photo.name,
+          contentType: DioMediaType.parse(photo.mime),
+        );
+        form.files.add(MapEntry('Images', part));
+      }
+      await api.postForm('guide/bookings/$id/incidents-with-images', form);
+      return;
     }
-    await api.postForm('guide/bookings/$id/incidents', form);
+    await api.postMap('guide/bookings/$id/incidents', {
+      'incidentType': type,
+      'title': title,
+      'description': description,
+      if (severity != null && severity.isNotEmpty) 'severity': severity,
+    });
   }
 }

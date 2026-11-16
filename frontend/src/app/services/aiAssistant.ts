@@ -22,6 +22,21 @@ export interface AiChatResponse {
   aiConfigured: boolean;
 }
 
+/**
+ * UC-038: trợ lý cho Agency. Góp ý thiết kế tour (chỗ ở, ăn uống, lịch trình) thay vì tư vấn như khách mua tour.
+ * Gửi kèm khung tour AI vừa soạn (nếu có) để trợ lý trả lời đúng tour đó.
+ */
+export const askAgencyAssistant = (
+  messages: { role: AiRole; content: string }[],
+  draft: import("@/app/services/wf02Tours").TourConfiguration | null,
+  signal?: AbortSignal,
+) =>
+  http<AiChatResponse>("/agency/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages: messages.slice(-10), draft }),
+    signal,
+  });
+
 /** Hỏi trợ lý TripOps (không cần đăng nhập). Chỉ gửi nội dung hội thoại, không gửi thông tin tài khoản. */
 export const askGuestAssistant = (messages: { role: AiRole; content: string }[], signal?: AbortSignal) =>
   http<AiChatResponse>("/ai/guest-chat", {

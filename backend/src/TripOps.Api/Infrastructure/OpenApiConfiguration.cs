@@ -95,7 +95,10 @@ internal sealed class EndpointDocumentationTransformer : IOpenApiOperationTransf
             AddError(409, "Invalid workflow state, stale version or unsupported historical snapshot.", problem);
             AddError(422, "Tour configuration, service eligibility or workflow business validation failed.", problem);
         }
-        if (action.ControllerName == "ItineraryDrafts") AddError(503, "AI generation is not configured; manual creation remains available.", problem);
+        if (action.ControllerName == "ItineraryDrafts" && action.ActionName != "Save") {
+            AddError(502, "AI returned content that could not be read; retry.", problem);
+            AddError(503, "AI generation is not configured or the AI provider is unavailable; manual creation remains available.", problem);
+        }
         if (action.ControllerName == "ProviderServices") {
             AddError(404, "Service does not exist or belongs to another Provider.", problem);
             AddError(409, "Service changed concurrently or is referenced by a tour or booking.", problem);

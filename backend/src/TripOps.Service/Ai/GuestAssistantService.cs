@@ -100,13 +100,16 @@ public sealed partial class GuestAssistantService(
     }
 
     /// <summary>Chỉ nhận role user/assistant, cắt độ dài, giữ 10 lượt gần nhất; lượt cuối phải là câu hỏi của khách.</summary>
-    private static List<AiChatMessage> Clean(IEnumerable<AiChatMessage> messages)
+    private static List<AiChatMessage> Clean(IEnumerable<AiChatMessage> messages) => Clean(messages, MaxHistory, MaxQuestionLength);
+
+    /// <summary>Dùng chung với trợ lý Agency: bỏ role lạ (kể cả "system" do client gửi), cắt độ dài, giữ các lượt gần nhất.</summary>
+    internal static List<AiChatMessage> Clean(IEnumerable<AiChatMessage> messages, int maxHistory, int maxLength)
     {
         var rows = messages
             .Select(m => new AiChatMessage(m.Role.Trim().ToLowerInvariant(), (m.Content ?? string.Empty).Trim()))
             .Where(m => m.Role is "user" or "assistant" && m.Content.Length > 0)
-            .Select(m => m with { Content = m.Content.Length <= MaxQuestionLength ? m.Content : m.Content[..MaxQuestionLength] })
-            .TakeLast(MaxHistory)
+            .Select(m => m with { Content = m.Content.Length <= maxLength ? m.Content : m.Content[..maxLength] })
+            .TakeLast(maxHistory)
             .ToList();
         if (rows.Count == 0 || rows[^1].Role != "user")
             throw new AiAssistantException(422, "Vui lòng nhập câu hỏi.");

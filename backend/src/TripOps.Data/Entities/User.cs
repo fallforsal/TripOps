@@ -29,4 +29,6 @@ public string? ProvinceCode { get; set; }
 public string? ProvinceName { get; set; }
 public string? WardCode { get; set; }
 public string? WardName { get; set; }
+// Lần đổi mật khẩu gần nhất: phiên đăng nhập tạo trước mốc này bị đăng xuất (đăng xuất mọi thiết bị khi đổi/đặt lại mật khẩu).
+public DateTime? PasswordChangedAt { get; set; }
 }

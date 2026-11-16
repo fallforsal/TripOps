@@ -51,9 +51,9 @@ class TripOpsApi {
     final dio = Dio(
       BaseOptions(
         baseUrl: '$cleanUrl/api/v1/',
-        connectTimeout: const Duration(seconds: 12),
-        receiveTimeout: const Duration(seconds: 18),
-        sendTimeout: const Duration(seconds: 18),
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 45),
+        sendTimeout: const Duration(seconds: 30),
         headers: {'Accept': 'application/json'},
         contentType: Headers.jsonContentType,
         followRedirects: false,

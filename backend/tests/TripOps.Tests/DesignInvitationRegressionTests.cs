@@ -45,6 +45,7 @@ public sealed partial class TourFlowTests
             Assert.Equal("accepted",rows.Single(a=>a.AgencyId=="agency").Status);
             Assert.Equal("cancelled",rows.Single(a=>a.AgencyId=="other").Status);
         });
+        await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(null,Complete(),true)));
         var invited=await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other")));
         Assert.Equal("partner",invited.Single(h=>h.CompanyId=="other").Role);
         Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept"))).StatusCode);

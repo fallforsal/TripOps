@@ -204,16 +204,31 @@ public sealed partial class BookingService
                 s.Amount,
                 Deadline: s.DueAt is { } due ? VietnamText(due) : s.DueDate is { } date ? "hết ngày " + date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "theo thông báo"))
             .ToList();
+        var meals = new Dictionary<string, string> { ["breakfast"] = "Sáng", ["lunch"] = "Trưa", ["dinner"] = "Tối" };
+        var days = booking.Timelines.OrderBy(t => t.DayNumber).Select(t =>
+        {
+            var date = booking.StartDate.Date.AddDays(t.DayNumber - 1);
+            var dayMeals = t.Meals.OrderBy(m => m.MealType switch { "breakfast" => 0, "lunch" => 1, _ => 2 })
+                .Select(m => meals.GetValueOrDefault(m.MealType, m.MealType)).Distinct().ToArray();
+            var stays = booking.Accommodations.Where(h => h.DateFrom is { } from && h.DateTo is { } to && from.Date <= date && date < to.Date)
+                .Select(h => h.CurrentHotelName ?? h.OriginalHotelName).Distinct().ToArray();
+            return new ContractDay(t.DayNumber, date, t.Title, dayMeals.Length == 0 ? null : string.Join(", ", dayMeals),
+                stays.Length == 0 ? null : string.Join("; ", stays));
+        }).ToList();
+        var coHosts = booking.BookingAgencies.Where(a => a.AgencyId != booking.Tour?.AgencyId)
+            .Select(a => new ContractCoHost(a.Agency?.BusinessProfile?.BusinessName ?? a.Agency?.Name ?? a.AgencyId, a.Agency?.BusinessProfile?.TaxCode, a.FinalAmount))
+            .ToList();
         return new ContractData(
             contract.ContractNo, contract.Version,
             DateTime.SpecifyKind(contract.CreatedAt ?? UtcNow, DateTimeKind.Utc).Add(PaymentRules.VietnamOffset),
+            booking.CreatedAt is { } created ? DateTime.SpecifyKind(created, DateTimeKind.Utc).Add(PaymentRules.VietnamOffset) : null,
             profile?.BusinessName ?? agency?.Name ?? "Công ty lữ hành", profile?.TaxCode, profile?.BusinessAddress, agency?.Email, agency?.Phone,
-            booking.ContactName, booking.ContactPhone, booking.ContactEmail,
+            coHosts,
+            booking.ContactName, booking.ContactPhone, booking.ContactEmail, booking.Customer?.OrganizationName,
             booking.BookingCode, booking.Tour?.Name ?? "Tour du lịch", booking.StartDate, EndDate(booking), TotalGuests(booking),
             booking.Participants.Where(p => p.Status != "INACTIVE").GroupBy(p=>p.ParticipantIndex).OrderBy(g=>g.Key)
                 .Select(g => (g.First().FullName, g.First().TierName, (decimal?)g.Sum(p=>p.Price))).ToList(),
-            booking.Timelines.OrderBy(t => t.DayNumber).Select(t => (t.DayNumber, t.Title)).ToList(),
-            booking.Accommodations.Select(h => (h.Destination, h.CurrentHotelName ?? h.OriginalHotelName, h.NightsCount)).ToList(),
+            days,
             contract.TotalAmount, schedule);
     }
 }

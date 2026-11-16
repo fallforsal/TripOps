@@ -1,25 +1,14 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TripOps.Service.Accounts;
 using TripOps.Service.Payments;
 using TripOps.Service.Settlements;
 using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Bookings;
 
 namespace TripOps.Api.Controllers;
-
-/// <summary>Single incident submission contract: multipart fields with optional evidence photos.</summary>
-public sealed class IncidentReportForm
-{
-    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(100)]
-    public string IncidentType { get; set; } = string.Empty;
-    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(255)]
-    public string Title { get; set; } = string.Empty;
-    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(2000)]
-    public string Description { get; set; } = string.Empty;
-    public List<IFormFile> Images { get; set; } = [];
-}
-
 
 [ApiController, Authorize(Roles = "user"), Route("api/v1/bookings")]
 [Tags("Booking Management")]
@@ -130,8 +119,8 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
     [HttpGet("available-guides")]
     [EndpointSummary("List active tour guides available for booking assignment")]
     [ProducesResponseType<IReadOnlyList<AvailableGuideDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> AvailableGuides(CancellationToken ct) =>
-        Ok(await bookings.AvailableGuides(Actor,ct));
+    public async Task<IActionResult> AvailableGuides(CancellationToken ct, [FromQuery] int? bookingId = null) =>
+        Ok(await bookings.AvailableGuides(Actor,ct,bookingId));
 
     [HttpGet]
     [EndpointSummary("List bookings for tours owned by the authenticated agency")]
@@ -184,9 +173,22 @@ public sealed class AgencyBookingsController(BookingService bookings) : Controll
         Ok(await bookings.AssignGuide(Actor, id, request, ct));
 }
 
+public sealed class GuideIncidentImagesForm
+{
+    [StringLength(100)]
+    public string? IncidentType { get; set; }
+    [Required, StringLength(255)]
+    public string Title { get; set; } = string.Empty;
+    [Required, StringLength(2000)]
+    public string Description { get; set; } = string.Empty;
+    [StringLength(50)]
+    public string? Severity { get; set; }
+    public List<IFormFile> Images { get; set; } = [];
+}
+
 [ApiController, Authorize(Roles = "guide"), Route("api/v1/guide/bookings")]
 [Tags("Tour Operations")]
-public sealed class GuideBookingsController(BookingService bookings) : ControllerBase
+public sealed class GuideBookingsController(BookingService bookings, CloudinaryStorage media) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
@@ -209,38 +211,30 @@ public sealed class GuideBookingsController(BookingService bookings) : Controlle
         Ok(await bookings.RecordAttendance(Actor, id, request, ct));
 
     [HttpPost("{id:int}/incidents")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(22 * 1024 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
-    [EndpointSummary("Report incident, with 0–5 optional JPEG/PNG/WebP photos (max 5 MB per image, 20 MB total)")]
+    [EndpointSummary("Report an operational incident during the trip")]
     [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportIncident(
-        int id, [FromForm] IncidentReportForm form, CancellationToken ct)
+    public async Task<IActionResult> ReportIncident(int id, ReportIncidentRequest request, CancellationToken ct) =>
+        Ok(await bookings.ReportIncident(Actor, id, request, ct));
+
+    [HttpPost("{id:int}/incidents-with-images")]
+    [RequestSizeLimit(GuideCheckinPhotoRules.MaxTotalBytes + (1024 * 1024))]
+    [RequestFormLimits(MultipartBodyLengthLimit = GuideCheckinPhotoRules.MaxTotalBytes + (1024 * 1024))]
+    [EndpointSummary("Report an operational incident with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
+    [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReportIncidentWithImages(int id, [FromForm] GuideIncidentImagesForm request, CancellationToken ct)
     {
-        if (!IncidentTypeRules.IsAllowed(form.IncidentType))
-            throw new BookingException(422, "Loại sự cố không hợp lệ.");
-        if (string.IsNullOrWhiteSpace(form.Title) || string.IsNullOrWhiteSpace(form.Description) ||
-            form.Title.Length > 255 || form.Description.Length > 2000)
-            throw new BookingException(422, "Thông tin báo cáo sự cố không hợp lệ.");
-
-        var files = form.Images ?? [];
-        if (files.Count > 0)
-            GuideCheckinPhotoRules.ValidateFiles(files
-                .Select(file => (file.Length, file.ContentType)).ToArray());
-
-        var evidence = new List<IncidentEvidenceFile>(files.Count);
-        foreach (var file in files)
+        GuideCheckinPhotoRules.ValidateFiles(request.Images.Select(f => (f.Length, f.ContentType)).ToArray());
+        var photoUrls = new List<string>(request.Images.Count);
+        foreach (var file in request.Images)
         {
-            await using var ms = new MemoryStream();
-            await file.CopyToAsync(ms, ct);
-            var bytes = ms.ToArray();
-            if (bytes.LongLength != file.Length ||
-                !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
-                throw new BookingException(422, "Ảnh minh chứng phải là JPEG, PNG hoặc WebP hợp lệ.");
-            evidence.Add(new IncidentEvidenceFile(bytes, file.ContentType));
+            await using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            var bytes = stream.ToArray();
+            if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
+                throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
+            photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
         }
-        return Ok(await bookings.ReportIncident(Actor, id,
-            new ReportIncidentRequest(form.IncidentType, form.Title, form.Description),
-            ct, evidence));
+        return Ok(await bookings.ReportIncident(
+            Actor, id, new ReportIncidentRequest(request.IncidentType, request.Title, request.Description, request.Severity), ct, photoUrls));
     }
 }
