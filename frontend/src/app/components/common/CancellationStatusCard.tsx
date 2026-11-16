@@ -84,9 +84,9 @@ export function CancellationStatusCard({ cancellation: c, onSaveRefundAccount }:
           <XCircle className="w-4 h-4 text-gray-500" />
         )}
         {pending
-          ? "Yêu cầu hủy đang chờ Admin duyệt"
+          ? "Đơn đã hủy, đang chờ Admin hoàn tiền"
           : c.status === "Completed"
-            ? "Admin đã duyệt hủy đơn"
+            ? "Đã hủy đơn và hoàn tất hoàn tiền"
             : "Yêu cầu hủy đã bị từ chối"}
       </div>
       <p>

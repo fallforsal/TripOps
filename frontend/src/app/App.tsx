@@ -760,7 +760,7 @@ function Application() {
           accountHolder: data.refundAccountNumber ? data.refundAccountHolder : undefined,
         }),
       );
-      toast.success("Đã gửi yêu cầu hủy. Đơn sẽ được hủy và hoàn tiền sau khi Admin duyệt.");
+      toast.success("Đã hủy đơn. Admin sẽ chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn.");
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không gửi được yêu cầu hủy.");
@@ -828,7 +828,7 @@ function Application() {
       toast.success(
         updated.status === "cancelled"
           ? "Đã hủy đơn đặt tour."
-          : "Đã gửi yêu cầu hủy. Đơn sẽ được hủy sau khi Admin duyệt và hoàn tiền cho khách.",
+          : "Đã hủy đơn. Admin sẽ hoàn tiền cho khách theo chính sách.",
       );
       return true;
     } catch (err) {

@@ -159,7 +159,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Refund_is_paid_out_through_payOS_and_the_booking_is_cancelled_only_when_payOS_confirms()
+    public async Task Refund_is_paid_out_through_payOS_and_completes_when_payOS_confirms()
     {
         var payout = new FakePayout();
         using var app = PayoutApp(payout); await app.Initialize();
@@ -177,8 +177,8 @@ public sealed partial class BookingFlowTests
         Assert.Equal("970436", order.ToBin);
         Assert.Equal("0123456789", order.ToAccountNumber);
 
-        // Đang chuyển: đơn chưa hủy, không duyệt/chi lần hai, khách không trả tiền tiếp.
-        Assert.Equal("Confirmed", (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.Status);
+        // Đơn đã hủy từ lúc gửi yêu cầu; đang chuyển thì không chi/ghi nhận lần hai.
+        Assert.Equal("Cancelled", (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{refund.Id}/payout", new RefundPayoutRequest(1500000, null))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{refund.Id}/approve", new RefundApprovalRequest(1500000, "FT1", null))).StatusCode);
         Assert.Equal(1, payout.CreateCalls);
@@ -198,7 +198,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Failed_or_rejected_payout_returns_the_request_to_pending_without_cancelling()
+    public async Task Failed_or_rejected_payout_returns_the_request_to_pending_for_another_attempt()
     {
         var payout = new FakePayout();
         using var app = PayoutApp(payout); await app.Initialize();
@@ -210,16 +210,17 @@ public sealed partial class BookingFlowTests
         Assert.Equal("Pending", afterReject.Status);
         Assert.Contains("Số dư không đủ", afterReject.LastPayoutError);
 
-        // Lần hai: payOS nhận lệnh nhưng ngân hàng báo lỗi → về chờ duyệt, đơn không bị hủy.
+        // Lần hai: payOS nhận lệnh nhưng ngân hàng báo lỗi → khoản hoàn về chờ xử lý (đơn vẫn ở trạng thái đã hủy).
         var started = await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{refund.Id}/payout", new RefundPayoutRequest(1500000, null)));
         Assert.Equal("Approved", started.Status);
         payout.Fail(payout.ByKey.Values.Single().ReferenceId, "Tài khoản nhận không tồn tại");
         var failed = await Read<AdminRefundDto>(await admin.PostAsync($"/api/v1/admin/refunds/{refund.Id}/payout/sync", null));
         Assert.Equal("Pending", failed.Status);
         Assert.Contains("Tài khoản nhận không tồn tại", failed.AdminNote);
-        Assert.Equal("Confirmed", (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.Status);
+        var stillCancelled = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal(("Cancelled", "Pending"), (stillCancelled.Status, stillCancelled.Cancellation!.Status));
 
-        // Vẫn duyệt chuyển tay được sau khi chi hộ lỗi.
+        // Vẫn ghi nhận chuyển tay được sau khi chi hộ lỗi.
         await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{refund.Id}/approve", new RefundApprovalRequest(1500000, "FT-TAY-1", null)));
         Assert.Equal("Cancelled", (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.Status);
     }

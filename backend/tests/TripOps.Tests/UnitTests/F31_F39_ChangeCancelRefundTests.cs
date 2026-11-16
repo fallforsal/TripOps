@@ -277,7 +277,8 @@ public sealed partial class BookingFlowTests
         using var app = await UtApp();
         var booking = await PaidDeposit(app);
         await CustomerCancel(app, booking.Id);
-        Assert.Equal((409, "Đơn đã có yêu cầu hủy đang chờ Admin duyệt."), await Rejects(() => CustomerCancel(app, booking.Id)));
+        // Đơn đã hủy ngay ở yêu cầu đầu nên yêu cầu thứ hai bị chặn theo trạng thái đơn.
+        Assert.Equal((422, "Không thể hủy đơn đặt đang ở trạng thái Cancelled."), await Rejects(() => CustomerCancel(app, booking.Id)));
     }
 
     [Fact]

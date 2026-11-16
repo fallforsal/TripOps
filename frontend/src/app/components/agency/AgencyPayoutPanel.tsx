@@ -43,7 +43,9 @@ export function AgencyPayoutPanel() {
         setBankName(acc.bankName ?? "");
         setAccountNumber(acc.accountNumber ?? "");
         setHolder(acc.accountHolder ?? "");
-        setItems(list);
+        // Khoản mới nhất lên trên cùng.
+        const time = (s: SettlementDto) => new Date(s.tourCompletedAt ?? s.startDate).getTime() || 0;
+        setItems([...list].sort((a, b) => time(b) - time(a) || b.id - a.id));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Không tải được tài khoản nhận tiền."))
       .finally(() => setLoading(false));
@@ -84,11 +86,7 @@ export function AgencyPayoutPanel() {
             <Landmark className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">Tài khoản nhận tiền</h2>
-            <p className="text-xs text-slate-500">
-              Sau khi Agency chủ trì bấm hoàn thành tour 2 ngày, TripOps tự chuyển tiền tour (đã trừ 10% phí sàn) vào tài khoản này nếu
-              khách đã thanh toán đủ và không có khiếu nại. Có khiếu nại thì Admin liên hệ để xử lý trước khi chuyển.
-            </p>
+            <h2 className="text-base font-bold text-slate-900">Số tài khoản</h2>
           </div>
         </div>
 
@@ -107,7 +105,7 @@ export function AgencyPayoutPanel() {
           </div>
         </div>
         <p className="text-[11px] text-slate-500">
-          Tên chủ tài khoản phải trùng với ngân hàng (in hoa, không dấu). Sau khi đổi tài khoản, hệ thống chờ 24 giờ mới tự chuyển vào tài khoản mới.
+          Tên chủ tài khoản phải trùng với ngân hàng (in hoa, không dấu). Sau khi đổi tài khoản, khoản tiền đến hạn trong 24 giờ đầu sẽ chờ đủ 24 giờ rồi mới tự chuyển vào tài khoản mới.
         </p>
         {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
         {saved && !changed && (
