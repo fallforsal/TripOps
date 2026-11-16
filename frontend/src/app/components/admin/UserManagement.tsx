@@ -356,8 +356,8 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
       <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-slate-600 gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            Hiển thị <strong>${firstItem}–${lastItem}</strong>
-            {" / "}<strong>${total}</strong> tài khoản
+            Hiển thị <strong>{firstItem}–{lastItem}</strong>
+            {" / "}<strong>{total}</strong> tài khoản
           </span>
           <label className="inline-flex items-center gap-2">
             Số tài khoản/trang:
@@ -367,12 +367,12 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
               className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
             >
-              ${PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>${size}</option>)}
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          ${totalPages > 1 && (
+          {totalPages > 1 && (
             <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản">
               <Button
                 type="button"
@@ -386,9 +386,9 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                 <ChevronLeft className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Trước</span>
               </Button>
-              ${visiblePages.map((pageNumber, index) => (
+              {visiblePages.map((pageNumber, index) => (
                 <div key={pageNumber} className="inline-flex items-center gap-1">
-                  ${index > 0 && pageNumber > visiblePages[index - 1] + 1 && (
+                  {index > 0 && pageNumber > visiblePages[index - 1] + 1 && (
                     <span aria-hidden="true" className="px-1 text-slate-400">…</span>
                   )}
                   <Button
@@ -401,7 +401,7 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                     onClick={() => setPage(pageNumber)}
                     className={`h-8 min-w-8 px-2 text-xs ${pageNumber === page ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
                   >
-                    ${pageNumber}
+                    {pageNumber}
                   </Button>
                 </div>
               ))}
@@ -421,7 +421,7 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
           )}
           <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 text-xs" disabled={loading} onClick={refresh}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            ${loading ? "Đang tải..." : "Tải lại"}
+            {loading ? "Đang tải..." : "Tải lại"}
           </Button>
         </div>
       </div>
