@@ -402,8 +402,6 @@ export function AdminFinancialManagement({
           </div>
         </div>
       </div>
-
-      <AdminAllianceAllocationLedger />
     </div>
   );
 }
