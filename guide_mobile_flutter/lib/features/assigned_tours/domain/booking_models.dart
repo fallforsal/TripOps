@@ -45,12 +45,13 @@ class BookingPage {
 }
 
 class Passenger {
-  const Passenger({required this.id, required this.name, required this.status, this.phone, this.recordStatus});
+  const Passenger({required this.id, required this.name, required this.status, this.phone, this.recordStatus, this.statusNote});
   final int id;
   final String name;
   final String status;
   final String? phone;
   final String? recordStatus;
+  final String? statusNote;
 
   factory Passenger.fromJson(Map<String, dynamic> j) => Passenger(
     id: (j['id'] as num).toInt(),
@@ -58,22 +59,25 @@ class Passenger {
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     phone: j['phoneNumber']?.toString(),
     recordStatus: j['status']?.toString(),
+    statusNote: j['statusNote']?.toString(),
   );
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const []});
+  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const [], this.checkinNote});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
   final List<String> photoUrls;
+  final String? checkinNote;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
     photoUrls: (j['photoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
+    checkinNote: j['checkinNote']?.toString(),
   );
 }
 
@@ -91,14 +95,24 @@ class TourDay {
 }
 
 class TourIncident {
-  const TourIncident({required this.title, required this.description, required this.status});
+  const TourIncident({
+    required this.title,
+    required this.description,
+    required this.status,
+    this.evidenceUrls = const [],
+  });
   final String title;
   final String description;
   final String status;
+  final List<String> evidenceUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
     status: (j['status'] ?? '').toString(),
+    evidenceUrls: (j['evidenceUrls'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList(),
   );
 }
 

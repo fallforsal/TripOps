@@ -18,13 +18,13 @@ public sealed record PassengerEdit(int Id, [Required, StringLength(150)] string 
 public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
 // The Guide confirms arrival. Skipping cannot advance the itinerary.
 public sealed record LocationCheckin(
-    [Required, AllowedValues("CheckedIn")] string Status,
+    [Required, AllowedValues("CheckedIn", "Skipped")] string Status,
     [StringLength(500)] string? Note);
 
 /// <summary>One to five check-in photos, uploaded in the same action.</summary>
 public sealed class GuideCheckinImagesForm
 {
-    [Required, AllowedValues("CheckedIn")]
+    [Required, AllowedValues("CheckedIn", "Skipped")]
     public string Status { get; set; } = "CheckedIn";
     [StringLength(500)]
     public string? Note { get; set; }
@@ -113,8 +113,8 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         // Serializable transaction prevents two parallel check-ins from racing forward.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var booking = await Assigned(id, ct);
-        if (request.Status != "CheckedIn")
-            throw new BookingException(422, "Chỉ được xác nhận đã đến địa điểm.");
+        if (request.Status is not ("CheckedIn" or "Skipped"))
+            throw new BookingException(422, "Chỉ được xác nhận đã đến hoặc bỏ qua địa điểm.");
 
         // Read the complete itinerary rather than only the requested stop.
         // A guide from another Agency may not check in another Agency's stage.
@@ -129,8 +129,8 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         // Check ownership before lifecycle rules, including before departure.
         if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
-        if (location.AttendanceStatus == "CheckedIn")
-            throw new BookingException(409, "Điểm đến này đã check-in.");
+        if (location.AttendanceStatus is "CheckedIn" or "Skipped")
+            throw new BookingException(409, "Điểm đến này đã được xử lý.");
 
         var nextId = GuideLocationCheckinRules.NextUncheckedStopId(days);
         if (nextId != locationId)
@@ -163,11 +163,12 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
             }
             checkin.PhotoUrl = GuideCheckinPhotoRules.Encode(photoUrls);
         }
-        checkin.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
+        var skipped = request.Status == "Skipped";
+        checkin.AttendanceStatus = skipped ? AttractionCheckinStatus.Skipped : AttractionCheckinStatus.CheckedIn;
         checkin.CheckinTime = DateTime.UtcNow;
-        checkin.Note = request.Note;
+        checkin.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         location.GuideId = Actor;
-        location.AttendanceStatus = "CheckedIn";
+        location.AttendanceStatus = skipped ? "Skipped" : "CheckedIn";
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));

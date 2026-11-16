@@ -1,13 +1,13 @@
 import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
 import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import { http } from "@/app/lib/http";
-import type { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
+import type { AgencyEvidence, CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 
 type RequestDto = {
   archivedAt?: string; closedAt?: string; closeReason?: string; bookingId?: number; collaborationVersions?: number[]; hasCollaborations?: boolean;
   sharedTourThumbnail?: string | null; sharedTourName?: string | null;
-  coHosts?: TourCoHost[];
+  coHosts?: TourCoHost[]; collaborationInvitations?: CustomTourRequest["collaborationInvitations"];
   rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
@@ -19,10 +19,10 @@ type RequestDto = {
   designedTourId: number | null; currentVersion: number | null;
   quotedPricePerPerson: number | null;
 };
-type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null };
+type AgencyChoice = { id: string; name: string; address: string; phone: string; email: string; logoUrl?: string | null; description?: string | null; evidence: AgencyEvidence };
 
 const fromDto = (r: RequestDto): CustomTourRequest => ({
-  archivedAt:r.archivedAt,closedAt:r.closedAt,closeReason:r.closeReason,bookingId:r.bookingId?String(r.bookingId):undefined,collaborationVersions:r.collaborationVersions,hasCollaborations:r.hasCollaborations,
+  archivedAt:r.archivedAt,closedAt:r.closedAt,closeReason:r.closeReason,bookingId:r.bookingId?String(r.bookingId):undefined,collaborationVersions:r.collaborationVersions,collaborationInvitations:r.collaborationInvitations,hasCollaborations:r.hasCollaborations,
   sharedTourThumbnail:r.sharedTourThumbnail || undefined, sharedTourName:r.sharedTourName || undefined,
   coHosts: normalizeDesignHosts(r.coHosts,r.agencyId), isCoHosted: hasDesignPartners(normalizeDesignHosts(r.coHosts,r.agencyId)),
   rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
@@ -38,10 +38,11 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
   currentVersion: r.currentVersion || undefined,
   quotedPricePerPerson: r.quotedPricePerPerson || undefined,
 });
-export const requestAgencies = async (): Promise<TourCompany[]> =>
-  (await http<AgencyChoice[]>("/tour-design-requests/agencies")).map((a) => ({
+export const requestAgencies = async (provinceCodes: string[] = [], signal?: AbortSignal): Promise<TourCompany[]> =>
+  (await http<AgencyChoice[]>(`/tour-design-requests/agencies${provinceCodes.length ? `?provinceCode=${encodeURIComponent(provinceCodes.join(','))}` : ''}`, { signal })).map((a) => ({
     id: a.id, name: a.name, address: a.address, phone: a.phone, email: a.email,
     logo: a.logoUrl || undefined,
+    description: a.description || undefined, evidence: a.evidence,
     taxCode: "", adminId: a.id, createdAt: "", status: "approved" as const,
   }));
 export const customerDesignRequests = async () =>

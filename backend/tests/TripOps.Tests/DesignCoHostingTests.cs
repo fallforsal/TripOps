@@ -60,6 +60,8 @@ public sealed partial class TourFlowTests
         await Receive(lead,request.Id);
         Assert.Equal(HttpStatusCode.Forbidden,(await customer.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,(await partner.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("agency"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other"))).StatusCode);
+        await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(null,Complete(),true)));
         await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other")));
         var incoming=Assert.Single(await Read<DesignRequestDto[]>(await partner.GetAsync("/api/v1/agency/tour-design-requests")));
         Assert.Equal("",incoming.ContactPhone);Assert.Empty(incoming.CoHosts!.Single(h=>h.CompanyId=="other").AssignedDays);
@@ -97,7 +99,7 @@ public sealed partial class TourFlowTests
         Assert.Equal("other",changed.Configuration.Timelines[1].Accommodations![0].AgencyId);
         Assert.Equal("other",changed.Configuration.Timelines[1].Meals![0].AgencyId);
         Assert.Equal(2100000,changed.Configuration.BasePrice);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/other")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await partner.DeleteAsync(root+"/co-hosts/other")).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.DeleteAsync(root+"/co-hosts/agency")).StatusCode);
         Assert.Equal(first.Version,(await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"))).Version);
         Assert.Equal(HttpStatusCode.Conflict,(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(working.Revision,[day1,day2,working.Configuration.Timelines![2]],ownPrices))).StatusCode);
@@ -110,6 +112,10 @@ public sealed partial class TourFlowTests
         Assert.Equal("Partner hotel",final.Configuration.Timelines[1].Accommodations![0].HotelName);
         Assert.Equal("Partner restaurant",final.Configuration.Timelines[1].Meals![0].RestaurantName);
         Assert.Equal(600000,final.Configuration.AgencyPricing!.Single(p=>p.AgencyId=="other").Tiers.Single(p=>p.MinAge==12).PricePerGuest);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.GetAsync(root+$"/working-tour?version={final.Version}")).StatusCode);
+        await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other",Version:final.Version)));
+        Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept",Version:final.Version))).StatusCode);
+        final=await Read<TourDto>(await lead.GetAsync(root+$"/working-tour?version={final.Version}"));
         await Share(lead,request.Id,final);
         var visible=await Read<TourDto>(await customer.GetAsync($"/api/v1/tour-design-requests/{request.Id}/tour"));
         Assert.Null(visible.Configuration.AgencyPricing);Assert.Equal(2100000,visible.Configuration.PricingTiers!.Single(p=>p.MinAge==12).PricePerGuest);

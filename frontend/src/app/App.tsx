@@ -689,6 +689,13 @@ function Application() {
             ? Number(m.serviceId)
             : undefined,
       })),
+      locationChoices: (data.locationChanges || []).map((lc) => ({
+        dayNumber: lc.dayNumber,
+        originalLocationName:
+          lc.originalLocationName || lc.originalLocations?.[0] || "",
+        requestedLocationName: lc.requestedLocations,
+        note: lc.note,
+      })),
       participants: data.passengers.map((p) => ({
         fullName: p.fullName,
         phoneNumber: p.phone?.trim() || undefined,
@@ -1452,7 +1459,6 @@ function Application() {
       incident.location
         ? `Địa điểm: ${incident.location}\n${incident.description}`
         : incident.description || "Không có mô tả",
-      incident.severity || "medium",
     );
     const booking = fromApiBooking(
       await getGuideBookingDetail(Number(schedule.booking.id)),

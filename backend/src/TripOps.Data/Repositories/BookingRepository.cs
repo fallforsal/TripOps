@@ -4,11 +4,18 @@ using TripOps.Data.Enums;
 
 namespace TripOps.Data.Repositories;
 
+public sealed record GuideBookingSummary(
+    int Id, string BookingCode, string? TourName, string? ThumbnailUrls, string? TourImages,
+    string? CustomerName, string? ContactPhone, DateTime StartDate, int Guests,
+    decimal TotalAmount, decimal PaidAmount, BookingStatus? Status, PaymentStatus? PaymentStatus, DateTime? CreatedAt);
+
 public sealed class BookingRepository(TripOpsDbContext db)
 {
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
     public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
         .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);
+    public Task<int> LockBooking(int bookingId, CancellationToken ct) => db.Bookings.IgnoreQueryFilters().Where(b => b.Id == bookingId)
+        .ExecuteUpdateAsync(s => s.SetProperty(b => b.UpdatedAt, b => b.UpdatedAt), ct);
     public async Task<bool> GuideHasConflict(string guideId, int bookingId, DateTime start, DateTime end, CancellationToken ct)
     {
         var trips = await db.Bookings.AsNoTracking().IgnoreQueryFilters().Include(b => b.Timelines).Include(b => b.Tour)
@@ -24,7 +31,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         .Include(b => b.Tour!).ThenInclude(t => t.Agency).ThenInclude(a => a.BusinessProfile)
         .Include(b => b.Participants!).ThenInclude(p => p.AssignedGuide)
         .Include(b => b.AssignedGuides!).ThenInclude(ag => ag.Guide)
-        .Include(b => b.Incidents)
+        .Include(b => b.Incidents!).ThenInclude(i => i.Reporter)
         .Include(b => b.PaymentTransactions)
         .Include(b => b.PaymentRequests)
         .Include(b => b.RefundRequests)
@@ -99,22 +106,38 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return (rows, total);
     }
 
-    public async Task<(List<Booking> Rows, int Total)> ListForGuide(
+    public async Task<(List<GuideBookingSummary> Rows, int Total)> ListForGuide(
         string guideId, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Bookings.AsNoTracking()
-            .Include(b => b.Tour)
-            .Include(b => b.Customer)
-            .Include(b => b.Participants).Include(b=>b.AssignedGuides)
-            .Include(b => b.PaymentTransactions)
-            .Include(b => b.RefundRequests)
-            .Include(b => b.Contracts)
-            .Include(b => b.PaymentRequests).AsSplitQuery()
+        var baseQuery = db.Bookings.AsNoTracking()
             .Where(b => b.AssignedGuides.Any(ag => ag.GuideId == guideId));
 
-        var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(b => b.StartDate)
+        var total = await baseQuery.CountAsync(ct);
+        var rows = await baseQuery
+            .OrderByDescending(b => b.StartDate)
             .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(b => new GuideBookingSummary(
+                b.Id,
+                b.BookingCode,
+                b.Tour != null ? b.Tour.Name : null,
+                b.Tour != null ? b.Tour.ThumbnailUrls : null,
+                b.Tour != null ? b.Tour.Images : null,
+                b.Customer != null ? b.Customer.Name : null,
+                b.ContactPhone,
+                b.StartDate,
+                b.Participants
+                    .Where(p => p.Status != "INACTIVE" &&
+                                b.AssignedGuides.Any(ag => ag.GuideId == guideId && ag.AgencyId == p.AgencyId))
+                    .Select(p => p.ParticipantIndex)
+                    .Distinct()
+                    .Count(),
+                b.TotalAmount,
+                b.PaymentTransactions
+                    .Where(t => t.Status == PaymentTransactionStatus.Success)
+                    .Sum(t => (decimal?)t.Amount) ?? 0m,
+                b.Status,
+                b.PaymentStatus,
+                b.CreatedAt))
             .ToListAsync(ct);
 
         return (rows, total);
@@ -140,7 +163,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);
 
     public Task<List<User>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        db.Users.AsNoTracking()
+        db.Users.AsNoTracking().Include(u => u.GuideProfile)
             .Where(u => u.Role == UserRole.TourGuide && u.Status == UserStatus.Active && u.AgencyId == agencyId)
             .OrderBy(u => u.Name).ToListAsync(ct);
 

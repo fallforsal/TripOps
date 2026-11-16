@@ -111,6 +111,18 @@ if (builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+if (builder.Configuration.GetValue<bool>("SeedRegionalDemo"))
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Regional demo seed is only available in Development.");
+    var path = builder.Configuration["RegionalDemo:Manifest"] ?? throw new InvalidOperationException("RegionalDemo:Manifest is required.");
+    var manifest = RegionalDemoSeed.ReadManifest(path);
+    var report = await RegionalDemoSeed.Run(app.Services, manifest);
+    var reportPath = builder.Configuration["RegionalDemo:Report"];
+    var json = System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true });
+    if (reportPath is not null) await File.WriteAllTextAsync(reportPath, json);
+    Console.WriteLine(json);
+    return;
+}
 if (builder.Configuration.GetValue<bool>("SeedDemo"))
 {
     if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo seed is only available in Development.");

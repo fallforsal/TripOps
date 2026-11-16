@@ -1,5 +1,5 @@
 import { countPendingCoHostInvites } from "@/app/lib/designAlliance";
-import { AgencyDesignCoHosting } from "./DesignCollaborationPanel";
+import { AgencyDesignWorkspace } from "./AgencyDesignWorkspace";
 import { useEffect, useState } from "react";
 import {
   Tour,
@@ -21,7 +21,6 @@ import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement } from "./AgencyTourManagement";
 import { AgencyBookingManagement } from "./AgencyBookingManagement";
 import { AgencyGuideManagement } from "./AgencyGuideManagement";
-import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
@@ -30,6 +29,9 @@ import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccoun
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
 import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
+
+import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
+import { toast } from "@/app/lib/notifications";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -106,7 +108,8 @@ export function AgencyDashboard({
     const handleHash = () => {
       const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
       if (match) {
-        const sec = match[1];
+        const sec = match[1] === "co-hosting" ? "custom-requests" : match[1];
+        if(match[1] === "co-hosting")window.history.replaceState(null,"",window.location.hash.replace("/co-hosting","/custom-requests"));
         const bId = match[2] || null;
         setActiveSection(sec);
         if (bId) setSelectedBookingId(bId);
@@ -116,6 +119,21 @@ export function AgencyDashboard({
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
+
+  // Refresh stale booking details when Agency enters a booking after a Guide's report.
+  useEffect(() => {
+    if (activeSection !== "bookings" || !selectedBookingId) return;
+    const id = Number(selectedBookingId);
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    let cancelled = false;
+    void getAgencyBookingDetail(id)
+      .then((dto) => { if (!cancelled) onBookingChanged?.(dto); })
+      .catch((error) => {
+        if (!cancelled) toast.error(error instanceof Error
+          ? error.message : "Không tải được dữ liệu booking mới nhất.");
+      });
+    return () => { cancelled = true; };
+  }, [activeSection, selectedBookingId]);
 
   const companyTours = tours.filter(
     (t) =>
@@ -148,6 +166,7 @@ export function AgencyDashboard({
     : null;
 
   const handleNavigateSection = (section: string) => {
+    section = section === "co-hosting" ? "custom-requests" : section;
     setActiveSection(section);
     setSelectedBookingId(null);
     window.location.hash = `#/agency/${section}`;
@@ -238,9 +257,10 @@ export function AgencyDashboard({
             onViewBookingDetail={(id) => { setSelectedBookingId(id); setActiveSection("bookings"); }}
           />
         );
+      case "co-hosting":
       case "custom-requests":
         return (
-          <AgencyCustomRequests
+          <AgencyDesignWorkspace
             onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
             services={services}
             requests={companyCustomRequests}
@@ -266,8 +286,6 @@ export function AgencyDashboard({
       case "complaints":
         return <AgencyComplaintsPage />;
 
-      case "co-hosting":
-        return <AgencyDesignCoHosting requests={companyCustomRequests} company={company} onChanged={async () => { await onUpdateCustomRequest?.("", {}); }}/>;
       default:
         return null;
     }

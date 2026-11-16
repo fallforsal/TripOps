@@ -6,7 +6,9 @@ export function chatContextHref(context: ChatBusinessContext, role: string, conv
   switch(context.kind) {
     case "tour": return `#/chat-tour/${conversationId}/${messageId}`;
     case "service": return role === "provider" ? `#/provider/detail/${id}` : `#/agency/services/${id}`;
-    case "booking": return role === "provider" ? `#/provider/room-requests?bookingId=${id}` : role === "user" ? `#/my-bookings/${id}` : `#/agency/bookings/${id}`;
+    case "booking": return role === "provider"
+      ? `#/provider/room-requests?bookingId=${id}${context.version ? `&requestId=${context.version}` : ""}`
+      : role === "user" ? `#/my-bookings/${id}` : `#/agency/bookings/${id}`;
     case "design-request": return role === "user" ? `#/my-requests?requestId=${id}` : `#/agency/custom-requests?requestId=${id}`;
     case "complaint": return role === "admin" ? `#/admin/complaints?id=${id}` : role === "agency" ? `#/agency/complaints?id=${id}` : role === "user" ? `#/my-complaints?id=${id}` : undefined;
   }

@@ -283,3 +283,92 @@ class GuideEmptyState extends StatelessWidget {
     ]),
   );
 }
+
+/// Opens a modal text-input dialog whose [TextEditingController] lifecycle is
+/// bound to the dialog widget's [State] so it is disposed only after the route
+/// exit transition finishes.
+Future<String?> showGuideTextInputDialog({
+  required BuildContext context,
+  required String title,
+  required String hintText,
+  String initialValue = '',
+  String confirmLabel = 'Lưu',
+  int maxLines = 3,
+  int maxLength = 500,
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _GuideTextInputDialog(
+    title: title,
+    hintText: hintText,
+    initialValue: initialValue,
+    confirmLabel: confirmLabel,
+    maxLines: maxLines,
+    maxLength: maxLength,
+  ),
+);
+
+class _GuideTextInputDialog extends StatefulWidget {
+  const _GuideTextInputDialog({
+    required this.title,
+    required this.hintText,
+    required this.initialValue,
+    required this.confirmLabel,
+    required this.maxLines,
+    required this.maxLength,
+  });
+
+  final String title;
+  final String hintText;
+  final String initialValue;
+  final String confirmLabel;
+  final int maxLines;
+  final int maxLength;
+
+  @override
+  State<_GuideTextInputDialog> createState() => _GuideTextInputDialogState();
+}
+
+class _GuideTextInputDialogState extends State<_GuideTextInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _close([String? result]) {
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      widget.title,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+    ),
+    content: TextField(
+      controller: _controller,
+      maxLines: widget.maxLines,
+      maxLength: widget.maxLength,
+      decoration: InputDecoration(
+        hintText: widget.hintText,
+        border: const OutlineInputBorder(),
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => _close(), child: const Text('Hủy')),
+      FilledButton(
+        onPressed: () => _close(_controller.text),
+        child: Text(widget.confirmLabel),
+      ),
+    ],
+  );
+}

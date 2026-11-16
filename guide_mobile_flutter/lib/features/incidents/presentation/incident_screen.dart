@@ -1,9 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
+import '../../location_checkin/domain/checkin_photo.dart';
 
 class IncidentScreen extends StatefulWidget {
   const IncidentScreen({super.key, required this.detail, required this.guides});
@@ -17,27 +21,80 @@ class _IncidentScreenState extends State<IncidentScreen> {
   final form = GlobalKey<FormState>();
   final title = TextEditingController();
   final description = TextEditingController();
-  final type = TextEditingController(text: 'OTHER');
-  String severity = 'Medium';
+  final ImagePicker _picker = ImagePicker();
+  final List<CheckinPhoto> _selectedPhotos = [];
+  final Map<String, Future<Uint8List>> _photoDownloads = {};
+  bool _picking = false;
+  String? _photoError;
   bool busy = false;
   String? error;
 
   @override
   void dispose() {
-    title.dispose(); description.dispose(); type.dispose();
+    title.dispose();
+    description.dispose();
     super.dispose();
   }
 
+  Future<void> _pickPhotos(ImageSource source) async {
+    if (_picking || busy) return;
+    setState(() {
+      _picking = true;
+      _photoError = null;
+    });
+    try {
+      final picked = source == ImageSource.camera
+          ? [await _picker.pickImage(source: ImageSource.camera, imageQuality: 85)]
+              .whereType<XFile>()
+              .toList()
+          : await _picker.pickMultiImage(imageQuality: 85);
+      if (!mounted || picked.isEmpty) return;
+
+      final additions = <CheckinPhoto>[];
+      for (final file in picked) {
+        additions.add(CheckinPhoto(
+          path: file.path,
+          name: file.name,
+          mime: CheckinPhoto.mimeForFileName(file.name) ?? '',
+          bytes: await file.length(),
+        ));
+      }
+      if (!mounted) return;
+
+      final validation = CheckinPhoto.validate([..._selectedPhotos, ...additions]);
+      setState(() {
+        _photoError = validation;
+        if (validation == null) _selectedPhotos.addAll(additions);
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _photoError = 'Không thể mở camera hoặc thư viện ảnh.');
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   Future<void> submit() async {
-    if (busy || !form.currentState!.validate()) return;
+    if (busy || _picking || !form.currentState!.validate()) return;
+    final validation = _selectedPhotos.isEmpty
+        ? null
+        : CheckinPhoto.validate(_selectedPhotos);
+    if (validation != null) {
+      setState(() => _photoError = validation);
+      return;
+    }
     setState(() { busy = true; error = null; });
     try {
-      await widget.guides.incident(widget.detail.id,
-        type: type.text.trim(), title: title.text.trim(),
-        description: description.text.trim(), severity: severity);
+      await widget.guides.incident(
+        widget.detail.id,
+        title: title.text.trim(),
+        description: description.text.trim(),
+        photos: List<CheckinPhoto>.unmodifiable(_selectedPhotos),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backend đã tiếp nhận báo cáo sự cố.')));
+        const SnackBar(content: Text('Đã gửi báo cáo sự cố thành công.')));
       Navigator.pop(context);
     } catch (e) {
       if (mounted) setState(() => error = readableError(e));
@@ -73,46 +130,77 @@ class _IncidentScreenState extends State<IncidentScreen> {
             space(10),
             ...widget.detail.incidents.map((incident) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Card(child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8,
+              child: Card(child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10,
                 ),
-                leading: Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0E4),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.report_problem_outlined,
-                    color: alertOrange),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF0E4),
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: const Icon(Icons.report_problem_outlined,
+                            color: alertOrange),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(incident.title, style: const TextStyle(
+                                color: ink, fontSize: 13, fontWeight: FontWeight.w800,
+                              )),
+                              const SizedBox(height: 3),
+                              Text(incident.description, maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: muted)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GuideStatusPill(incident.status),
+                      ],
+                    ),
+                    if (incident.evidenceUrls.isNotEmpty) ...[
+                      space(10),
+                      Wrap(spacing: 7, runSpacing: 7, children: [
+                        for (final url in incident.evidenceUrls)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: FutureBuilder<Uint8List>(
+                              future: _photoDownloads.putIfAbsent(
+                                url, () => widget.guides.imageBytes(url)),
+                              builder: (context, snapshot) => snapshot.hasData
+                                  ? Image.memory(
+                                      snapshot.data!,
+                                      width: 64, height: 64, fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      width: 64, height: 64, color: paleTeal,
+                                      alignment: Alignment.center,
+                                      child: const Icon(
+                                        Icons.image_outlined, size: 20, color: teal,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                      ]),
+                    ],
+                  ],
                 ),
-                title: Text(incident.title, style: const TextStyle(
-                  color: ink, fontSize: 13, fontWeight: FontWeight.w800,
-                )),
-                subtitle: Text(incident.description, maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: muted)),
-                trailing: GuideStatusPill(incident.status),
               )),
             )),
             space(15),
           ],
           const GuideSectionTitle('Tạo báo cáo mới'),
           space(12),
-          const Text('Loại sự cố', style: TextStyle(
-            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
-          )),
-          space(7),
-          TextFormField(
-            controller: type, maxLength: 100,
-            decoration: const InputDecoration(
-              hintText: 'Ví dụ: TRANSPORT, HEALTH, OTHER',
-              prefixIcon: Icon(Icons.category_outlined),
-            ),
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'Nhập loại sự cố' : null,
-          ),
-          space(4),
           const Text('Tiêu đề', style: TextStyle(
             fontWeight: FontWeight.w700, color: ink, fontSize: 12,
           )),
@@ -126,27 +214,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
             validator: (v) => v == null || v.trim().isEmpty
                 ? 'Nhập tiêu đề' : null,
           ),
-          space(4),
-          const Text('Mức độ ảnh hưởng', style: TextStyle(
-            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
-          )),
-          space(7),
-          DropdownButtonFormField<String>(
-            initialValue: severity,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.priority_high_rounded),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Low', child: Text('Thấp')),
-              DropdownMenuItem(value: 'Medium', child: Text('Trung bình')),
-              DropdownMenuItem(value: 'High', child: Text('Cao')),
-              DropdownMenuItem(value: 'Critical', child: Text('Khẩn cấp')),
-            ],
-            onChanged: busy ? null : (v) {
-              if (v != null) setState(() => severity = v);
-            },
-          ),
-          space(17),
+          space(8),
           const Text('Mô tả chi tiết', style: TextStyle(
             fontWeight: FontWeight.w700, color: ink, fontSize: 12,
           )),
@@ -160,6 +228,84 @@ class _IncidentScreenState extends State<IncidentScreen> {
             validator: (v) => v == null || v.trim().isEmpty
                 ? 'Nhập mô tả' : null,
           ),
+          space(10),
+          const Text('Ảnh minh chứng (tối đa 5 ảnh, không bắt buộc)',
+            style: TextStyle(fontWeight: FontWeight.w700, color: ink, fontSize: 12)),
+          space(8),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy || _picking
+                    ? null
+                    : () => _pickPhotos(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt_outlined, size: 17),
+                label: const Text('Chụp ảnh'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy || _picking
+                    ? null
+                    : () => _pickPhotos(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library_outlined, size: 17),
+                label: const Text('Chọn từ máy'),
+              ),
+            ),
+          ]),
+          if (_photoError != null) ...[
+            space(8),
+            GuideInfoBanner(
+              message: _photoError!, icon: Icons.warning_amber_rounded, warning: true,
+            ),
+          ],
+          if (_selectedPhotos.isNotEmpty) ...[
+            space(10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var i = 0; i < _selectedPhotos.length; i++)
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.file(
+                          File(_selectedPhotos[i].path),
+                          width: 74,
+                          height: 74,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: -6,
+                        right: -6,
+                        child: InkWell(
+                          onTap: busy
+                              ? null
+                              : () => setState(() {
+                                    _selectedPhotos.removeAt(i);
+                                    _photoError = null;
+                                  }),
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: const BoxDecoration(
+                              color: Colors.black87,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+          space(16),
           if (error != null) ...[
             GuideInfoBanner(
               message: error!, icon: Icons.error_outline, warning: true,
@@ -175,10 +321,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
             ) : const Icon(Icons.send_rounded, size: 17),
             label: const Text('Gửi báo cáo sự cố'),
           ),
-          space(12),
-          const Text('Đính kèm ảnh chưa được backend hỗ trợ.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: muted, fontSize: 11)),
         ],
       ),
     ),

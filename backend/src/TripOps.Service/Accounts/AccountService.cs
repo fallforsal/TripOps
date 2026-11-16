@@ -61,7 +61,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         }
     }
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
-        u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
+        u.BusinessProfile is null ? null : Profile(u.BusinessProfile), u.Avatar);
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
     {
         if (!request.AcceptedTerms) throw new AccountException(400, "Vui lòng đồng ý điều khoản.");

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
 import '../features/assigned_tours/data/guide_repository.dart';
 import '../features/assigned_tours/domain/booking_models.dart';
@@ -104,13 +105,30 @@ class _GuideShellState extends State<GuideShell> {
             onPressed: loading ? null : refresh,
             icon: const Icon(Icons.refresh_rounded, color: ink, size: 21),
           ),
-          const Padding(
-            padding: EdgeInsets.only(right: 17, left: 4),
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: paleTeal,
-              child: Icon(Icons.person_rounded, color: deepTeal, size: 19),
-            ),
+          Padding(
+            padding: const EdgeInsets.only(right: 17, left: 4),
+            child: () {
+              final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
+              return CircleAvatar(
+                radius: 17,
+                backgroundColor: paleTeal,
+                child: avatarUrl == null
+                    ? const Icon(Icons.person_rounded, color: deepTeal, size: 19)
+                    : ClipOval(
+                        child: Image.network(
+                          avatarUrl,
+                          width: 34,
+                          height: 34,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.person_rounded,
+                            color: deepTeal,
+                            size: 19,
+                          ),
+                        ),
+                      ),
+              );
+            }(),
           ),
         ],
       ),

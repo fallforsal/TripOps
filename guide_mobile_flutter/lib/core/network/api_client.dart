@@ -51,9 +51,9 @@ class TripOpsApi {
     final dio = Dio(
       BaseOptions(
         baseUrl: '$cleanUrl/api/v1/',
-        connectTimeout: const Duration(seconds: 12),
-        receiveTimeout: const Duration(seconds: 18),
-        sendTimeout: const Duration(seconds: 18),
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 45),
+        sendTimeout: const Duration(seconds: 30),
         headers: {'Accept': 'application/json'},
         contentType: Headers.jsonContentType,
         followRedirects: false,
@@ -111,7 +111,8 @@ class TripOpsApi {
   Future<Uint8List> imageBytes(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null ||
-        !(url.startsWith('/api/v1/files/guide-checkins/') ||
+        !((url.startsWith('/api/v1/files/guide-checkins/') ||
+          url.startsWith('/api/v1/files/guide-incidents/')) ||
           (uri.scheme == 'https' && uri.host.isNotEmpty))) {
       throw const ApiFailure('Đường dẫn ảnh check-in không hợp lệ.');
     }

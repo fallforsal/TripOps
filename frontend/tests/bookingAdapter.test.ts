@@ -305,3 +305,14 @@ test("missing booking allocation data never invents agencies from a newer catalo
   assert.equal(booking.isCoHosted,false);assert.equal(booking.tour.isCoHosted,false);
   assert.deepEqual(booking.coHosts,[]);assert.deepEqual(booking.tour.coHosts,[]);
 });
+
+test("assigned guides and check-in badges preserve avatars across reloads", () => {
+  const assigned = { id: 1, guideId: "guide-a", guideName: "Guide A", guideAvatar: "/api/v1/files/avatars/a.jpg", status: "ASSIGNED", agencyId: "agency" };
+  const booking = fromApiBooking({ ...dto, assignedGuides: [assigned], attractionCheckins: [
+    { id: 2, locationId: 11, agencyId: "agency", guideId: "guide-a", guideName: "Guide A", status: "Pending" },
+    { id: 3, locationId: 12, agencyId: "agency", guideId: "guide-b", guideName: "Guide B", guideAvatar: "/api/v1/files/avatars/b.jpg", status: "Pending" },
+  ] });
+  assert.equal(booking.assignedGuides?.[0].guideAvatar, assigned.guideAvatar);
+  assert.equal(booking.attractionCheckins?.[0].guideAvatar, assigned.guideAvatar);
+  assert.equal(booking.attractionCheckins?.[1].guideAvatar, "/api/v1/files/avatars/b.jpg");
+});

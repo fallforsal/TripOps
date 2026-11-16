@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Building2,
   PenSquare,
-  Handshake,
   Compass,
   BookUser,
   HandCoins,
@@ -54,8 +53,7 @@ export function AgencyLayout({
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
     { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
-    { id: "custom-requests", label: "Yêu cầu thiết kế riêng", icon: PenSquare },
-    { id: "co-hosting", label: "Liên minh lữ hành", icon: Handshake, badge: coHostingBadgeCount },
+    { id: "custom-requests", label: "Thiết kế tour & Liên minh", icon: PenSquare, badge: coHostingBadgeCount },
     { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 
@@ -155,7 +153,7 @@ export function AgencyLayout({
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans antialiased text-[#0F172A]">
+    <div className="min-h-screen w-full overflow-x-clip bg-[#F8FAFC] flex font-sans antialiased text-[#0F172A]">
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:flex flex-col bg-white border-r border-[#CBD5E1] transition-all duration-300 fixed left-0 top-0 bottom-0 z-30 ${

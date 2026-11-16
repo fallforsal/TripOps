@@ -12,6 +12,7 @@ export interface ParticipantInput {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface CreateBookingRequest {
@@ -29,6 +30,12 @@ export interface CreateBookingRequest {
     mealType: string;
     name: string;
     serviceId?: number;
+  }[];
+  locationChoices?: {
+    dayNumber: number;
+    originalLocationName: string;
+    requestedLocationName: string;
+    note?: string;
   }[];
 }
 
@@ -53,9 +60,11 @@ export interface ParticipantDto {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface AssignedGuideDto {
+  guideAvatar?: string;
   id: number;
   guideId: string;
   guideName: string;
@@ -77,7 +86,7 @@ export interface BookingDto {
   isPartnerView?: boolean;
   agencyDirectory?:{agencyId:string;agencyName:string}[];
   bookingAgencies?:BookingAgencyDto[];
-  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;status:string;checkedAt?:string;note?:string}[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string;photoUrls?:string[]}[];
   id: number;
   bookingCode: string;
   customerId: string;
@@ -129,6 +138,7 @@ export interface BookingDto {
       attendanceStatus?: string;
       changeReason?: string;
       agencyId?:string;
+      photoUrls?: string[];
     }[];
     meals: {
       id: number;
@@ -139,7 +149,7 @@ export interface BookingDto {
       time?: string;
       serviceId?: number;
       priceDifference: number;
-      supplier?: { address?: string; contactPhone?: string };
+      supplier?: { address?: string; contactPhone?: string; area?: string; contactName?: string; referencePrice?: number; conditions?: string; contactEmail?: string; notes?: string };
     }[];
   }[];
   snapshotHotels?: {
@@ -425,13 +435,17 @@ export interface BookingPage<T> {
 }
 
 export interface IncidentDto {
+  incidentType?: string | null;
+  agencyId?: string | null;
+  reportedByName?: string | null;
+  evidenceUrls?: string[] | null;
   id: number;
   bookingId: number;
   title: string;
   description: string;
-  resolutionNotes?: string;
   status: string;
   createdAt: string;
+  reportedById?: string;
 }
 
 // 1. Customer APIs (WF05)
@@ -683,11 +697,16 @@ export async function reportIncident(
   incidentType: string,
   title: string,
   description: string,
-  severity?: string,
+  images: File[] = [],
 ): Promise<IncidentDto> {
+  const form = new FormData();
+  form.append("IncidentType", incidentType);
+  form.append("Title", title);
+  form.append("Description", description);
+  for (const image of images) form.append("Images", image);
   return await http<IncidentDto>(`/guide/bookings/${bookingId}/incidents`, {
     method: "POST",
-    body: JSON.stringify({ incidentType, title, description, severity }),
+    body: form,
   });
 }
 

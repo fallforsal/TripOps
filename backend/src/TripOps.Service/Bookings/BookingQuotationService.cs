@@ -24,7 +24,7 @@ public sealed record ProviderRequestView(int Id, int BookingId, int? ServiceId, 
     int? ParentRequestId = null, string? ParticipantIndicesJson = null, string? OwnerAgencyId = null, bool IsSupplement = false, int? AgencySupplierId = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
-    string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null);
+    string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null, string? IdentityNumber = null);
 /// <summary>Yêu cầu dịch vụ hiển thị cho Provider: các trường của ProviderRequestView kèm thông tin booking,
 /// công ty lữ hành và đoàn khách. Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
 public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
@@ -115,16 +115,18 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             .Include(t => t.Timelines).ThenInclude(d => d.Meals)
             .Include(t => t.Timelines).ThenInclude(d => d.Attractions).AsSplitQuery()
             .SingleAsync(t => t.Id == booking.TourId, ct);
-        decimal Reference(string key, string name, string? destination, int? day, string? mealType)
+        SupplierSnapshotInput? SnapshotOf(string key, string name, string? destination, int? day, string? mealType)
         {
             var raw = key.StartsWith("hotel:")
                 ? tour!.Accommodations.FirstOrDefault(h => h.DestinationName == destination && h.HotelName == name)?.SupplierSnapshot
                 : tour!.Timelines.Where(d => d.DayNumber == day).SelectMany(d => d.Meals)
                     .FirstOrDefault(m => m.MealType == mealType && m.RestaurantName == name)?.SupplierSnapshot;
-            if (raw is null) return 0;
-            try { return JsonSerializer.Deserialize<SupplierSnapshotInput>(raw, Json)?.ReferencePrice ?? 0; }
-            catch (JsonException) { return 0; }
+            if (raw is null) return null;
+            try { return JsonSerializer.Deserialize<SupplierSnapshotInput>(raw, Json); }
+            catch (JsonException) { return null; }
         }
+        decimal Reference(string key, string name, string? destination, int? day, string? mealType) =>
+            SnapshotOf(key, name, destination, day, mealType)?.ReferencePrice ?? 0;
         var lines = new List<CostLine>();
         if (tour != null && booking.DesignRequestId.HasValue) {
             var version = await db.TourVersions.AsNoTracking().SingleAsync(v => v.TourId == tour.Id && v.VersionNumber == booking.TourVersion, ct);
@@ -137,8 +139,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
             var quantity = unit is "person" or "meal" ? BookingAlliance.GuestCount(booking,BookingAlliance.OwnerOfSlot(booking,s.Key)) : unit is "trip" or "item" ? 1 : s.Quantity;
             var price = service?.Price ?? Reference(s.Key, s.Name, s.Destination, s.Day, s.MealType);
             if(unit=="person_night") quantity=s.Quantity*BookingAlliance.GuestCount(booking,BookingAlliance.OwnerOfSlot(booking,s.Key));
+            var snapshot = service is null ? SnapshotOf(s.Key, s.Name, s.Destination, s.Day, s.MealType) : null;
             lines.Add(new CostLine(s.Key, service is null ? "AGENCY_SUPPLIER" : "PLATFORM_PARTNER",
-                s.Name, quantity, unit, price, price, Money(price * quantity)));
+                s.Name, quantity, unit, price, price, Money(price * quantity), Supplier: snapshot));
             if (service is not null)
             {
                 db.WorkflowNotifications.Add(new WorkflowNotification { UserId = service.ProviderId, BookingId = bookingId, Message = "Có yêu cầu xác nhận giá và khả năng cung cấp dịch vụ." });
@@ -328,10 +331,11 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         foreach (var person in booking.Participants)
         {
             var tier = tour.PricingTiers.FirstOrDefault(t => t.Name == person.TierName);
-            person.Price = (tier?.PricePerGuest ?? tour.BasePrice ?? 0) + extra;
+            var basePrice = tier?.PricePerGuest ?? tour.BasePrice ?? 0;
+            person.Price = basePrice > 0 ? Money(Math.Max(0, basePrice + extra)) : 0;
         }
         booking.TotalAmount = booking.Participants.Sum(p => p.Price);
-        booking.OriginalTotalPrice = booking.TotalAmount - extra * booking.Participants.Count;
+        booking.OriginalTotalPrice = booking.TotalAmount;
         booking.HasCustomization = hotelChoices.Length > 0 || mealChoices.Length > 0 ||
             input.Participants is not null || input.StartDate.HasValue;
         if (input.SpecialRequests is not null)
@@ -434,7 +438,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 closed ? b.CancelledAt : null,
                 RequestPassengers(b,r).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
-                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null, p.PhoneNumber))
+                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null,
+                        null,
+                        r.SlotKey.StartsWith("meal:") ? null : p.IdentityNumber))
                     .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay,
                 AgencyId: agencyId, AgencyLogo: agency?.Logo, ParentRequestId: r.ParentRequestId, IsSupplement: v.IsSupplement);
         }).ToArray();

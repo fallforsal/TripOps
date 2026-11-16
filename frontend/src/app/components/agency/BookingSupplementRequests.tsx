@@ -41,7 +41,7 @@ export function BookingSupplementRequests({state,passengers,viewerAgencyId,canAm
       {r.note&&<p className="whitespace-pre-wrap text-slate-700">{r.agencySupplierId ? "Ghi chú Agency" : "Phản hồi Provider"}: {r.note}</p>}
       {r.quotedCost!=null&&<p className="text-slate-700">Giá phần bổ sung: <strong>{r.quotedCost.toLocaleString("vi-VN")}đ</strong></p>}
       <div className="flex flex-wrap items-center gap-2">{r.serviceId&&<Button size="sm" variant="outline" onClick={()=>onOpenService(String(r.serviceId))}><Eye className="mr-1 h-3.5 w-3.5"/>Xem bài dịch vụ</Button>}
-        <ChatWithButton userId={r.providerId} context={{kind:"booking",id:Number(state.bookingId),title:r.serviceName}}>Nhắn Provider</ChatWithButton>
+        <ChatWithButton userId={r.providerId} context={{kind:"booking",id:Number(state.bookingId),version:r.id,title:r.serviceName}}>Nhắn Provider</ChatWithButton>
         {r.agencySupplierId&&<p className="text-slate-500">{r.fullAddress}{r.providerPhone&&<> · <a href={`tel:${r.providerPhone}`}>{r.providerPhone}</a></>}</p>}
         {r.ownerAgencyId===viewerAgencyId&&r.status==="Rejected"&&<Button size="sm" disabled={!canAmend} onClick={()=>{setEditing(r);setChoice(null);setReason("Provider không thể nhận thêm khách");setError("");}}><RefreshCw className="mr-1 h-3.5 w-3.5"/>Tìm dịch vụ khác cho khách bổ sung</Button>}
         {r.status==="Pending"&&<span className="text-slate-500">Đang chờ Provider phản hồi.</span>}</div>

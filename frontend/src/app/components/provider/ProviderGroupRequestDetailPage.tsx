@@ -621,7 +621,6 @@ export function ProviderGroupRequestDetailPage({
                         <td className="py-3 px-4 font-bold text-gray-900">
                           <div className="flex items-center gap-1.5">
                             <span>{guest.fullName}</span>
-                            {guest.phone && <a href={`tel:${guest.phone}`} className="block text-xs font-normal text-sky-800 hover:underline">{guest.phone}</a>}
                             <span className="text-[10px] text-gray-400 font-normal">
                               ({genderLabel})
                             </span>

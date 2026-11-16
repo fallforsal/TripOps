@@ -7,7 +7,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { DesignVersionSelector } from "./DesignVersionSelector";
 import { DesignCollaborationPanel } from "./DesignCollaborationPanel";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/app/lib/notifications";
 import { CheckCircle2, Copy, Eye, Handshake, Loader2, Search, Sparkles, XCircle, MoreHorizontal, CalendarDays, Users, MapPin } from "lucide-react";
 import { http } from "@/app/lib/http";
@@ -21,6 +21,7 @@ import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestD
 import type { DesignRequestDecision } from "./DesignRequestAgencyActions";
 
 interface Props {
+  embedded?: boolean; onDetailChange?: (open: boolean) => void;
   onViewBooking?: (id:string)=>void; services?: Service[]; requests: CustomTourRequest[]; company: TourCompany; tours: Tour[]; allCompanies?: TourCompany[];
   onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
   onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
@@ -30,7 +31,7 @@ interface Props {
 const labels: Record<string, string> = { pending: "Chờ xử lý", reviewing: "Đã tiếp nhận", designed: "Khách đang xem", rejected: "Đã từ chối", cancelled: "Đã hủy", booked:"Đã đặt tour", closed:"Đã đóng", archived:"Lưu trữ" };
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
-export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour, onViewBooking, services = [] }: Props) {
+export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest, onCreateTour, onViewTour, onViewBooking, services = [], embedded=false, onDetailChange }: Props) {
   const [preview, setPreview] = useState<Tour | null>(null);
   const [collaborating, setCollaborating] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("all");
@@ -118,6 +119,9 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
     [r.id,r.destinations,r.contactName,r.contactEmail,r.contactPhone,r.businessName].some(v=>v?.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)),[requests,filter,search,company.id]);
   const collaboration = requests.find(r => r.id === collaborating);
+  const detailOpen=!!(preview || collaboration || designing || viewing && requests.some(r=>r.id===viewing) && new URLSearchParams(window.location.hash.split("?")[1]).has("requestId"));
+  useEffect(()=>{onDetailChange?.(detailOpen);},[detailOpen,onDetailChange]);
+  useEffect(()=>()=>onDetailChange?.(false),[onDetailChange]);
   if (preview) return <div className="space-y-3"><div className="rounded-lg bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">Xem trước phiên bản v{preview.version} · Nội dung này chưa thay đổi phiên bản khách đang xem.</div><TourDetailPage tour={preview} services={services} currentUser={company} previewOnly onBack={() => setPreview(null)}/></div>;
   if (collaboration) return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={() => collaborationChanged(collaboration)}/>;
   if (designing) return <TourFormPage key={`${designing.id}-${editing?.version ?? "new"}`} company={company} tour={editing || template} customRequest={designing} isCustomTour={true} ownershipCollaboration
@@ -126,12 +130,12 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   const viewed = requests.find(r => r.id === viewing) || null;
   if(viewed && new URLSearchParams(window.location.hash.split("?")[1]).has("requestId")) return <CustomRequestDetailModal embedded isOpen onClose={()=>{setViewing(null);window.location.hash="#/agency/custom-requests";}} request={viewed} matchingTour={currentTour(viewed)} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={setPreview}/>;
   return <div className="space-y-5">
-    <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-1">
+    {!embedded && <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-1">
       <div><h1 className="text-2xl font-semibold text-slate-900">Yêu cầu thiết kế tour</h1>
         <p className="mt-2 text-sm text-slate-500">Tiếp nhận nhu cầu, xây dựng hành trình và chọn phiên bản khách được xem.</p></div>
       <p className="pt-2 text-sm text-slate-500"><strong className="font-semibold text-slate-800">{requests.filter(r => r.targetCompanyId === company.id).length}</strong> yêu cầu
         <span className="mx-2 text-slate-300">/</span><span className="text-amber-800">{requests.filter(r => r.targetCompanyId === company.id && r.status === "pending").length} chờ tiếp nhận</span></p>
-    </header>
+    </header>}
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label="Danh sách yêu cầu thiết kế tour">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div className="relative min-w-[240px] flex-1 sm:max-w-lg"><Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-slate-400"/>
@@ -194,7 +198,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
       <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">Hiển thị {rows.length} yêu cầu · Mới nhất trước</p>
     </section>
     <CustomRequestDetailModal isOpen={Boolean(viewed)} onClose={() => setViewing(null)} request={viewed} matchingTour={viewed ? currentTour(viewed) : null} userRole="agency" agencyActionBusy={busy} onAgencyDecision={decide} onStartDesignTour={start} onViewTour={setPreview}/>
-    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="flex max-h-[88vh] flex-col overflow-hidden bg-white sm:max-w-5xl"><DialogHeader><DialogTitle>Mời và quản lý đối tác · Yêu cầu #{historyRequestId}</DialogTitle><DialogDescription>Chọn phiên bản tour để mời, thu hồi lời mời hoặc gỡ Agency đồng tổ chức.</DialogDescription></DialogHeader>
+    <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}><DialogContent className="flex max-h-[88vh] flex-col overflow-hidden bg-white sm:max-w-5xl"><DialogHeader><DialogTitle>Mời và quản lý đối tác · Yêu cầu #{historyRequestId}</DialogTitle><DialogDescription>Chọn phiên bản tour để mời hoặc gỡ Agency đối tác. Quyền chỉnh sửa chỉ áp dụng cho phiên bản được mời.</DialogDescription></DialogHeader>
       <div className="min-h-0 overflow-y-auto pr-1">{requests.filter(r => r.id === historyRequestId).map(request => <DesignCollaborationPanel key={request.id} embedded request={request} company={company} onClose={() => setHistoryRequestId(null)} onChanged={() => collaborationChanged(request)}/>)}</div>
     </DialogContent></Dialog>
     <AlertDialog open={Boolean(rejecting)} onOpenChange={open => { if (!busy && !open) setRejecting(null); }}><AlertDialogContent tone="error" className="bg-white sm:max-w-lg"><AlertDialogHeader><AlertDialogTitle>Từ chối yêu cầu thiết kế #{rejecting?.id}</AlertDialogTitle><AlertDialogDescription>Cho khách biết vì sao Agency chưa thể tổ chức chuyến đi này.</AlertDialogDescription></AlertDialogHeader>

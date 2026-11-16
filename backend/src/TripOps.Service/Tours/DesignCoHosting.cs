@@ -39,7 +39,7 @@ public sealed partial class TourService
         if(seeds.All(a=>a.AgencyId!=tour.AgencyId))seeds.Add(new TourVersionAgency{TourVersionId=version.Id,AgencyId=tour.AgencyId!,IsHost=true,Status="accepted"});
         db.TourVersionAgencies.AddRange(seeds);await db.SaveChangesAsync(ct);
     }
-    public async Task<DesignCoHostDto[]> CoHosts(int id,CancellationToken ct,int? number=null)
+    public async Task<DesignCoHostDto[]> CoHosts(int id,CancellationToken ct,int? number=null,bool includeHistory=false)
     {
         var request=await db.TourDesignRequests.AsNoTracking().SingleAsync(r=>r.Id==id,ct);
         var version=await VersionRow(id,number,ct);
@@ -51,8 +51,8 @@ public sealed partial class TourService
         if(rows.All(a=>a.AgencyId!=request.AgencyId))rows.Insert(0,new TourVersionAgency{AgencyId=request.AgencyId!,IsHost=true,Status="accepted"});
         var ids=rows.Select(a=>a.AgencyId).ToArray();
         var agencies=await db.Users.AsNoTracking().Include(u=>u.BusinessProfile).Where(u=>ids.Contains(u.Id)).ToDictionaryAsync(u=>u.Id,ct);
-        return rows.Where(a=>a.Status!="excluded" && a.Status!="cancelled").OrderByDescending(a=>a.IsHost).ThenBy(a=>a.Id).Select(a=>{
-            var user=agencies[a.AgencyId];var status=!a.IsHost && a.Status=="accepted" && !global.Any(g=>g.AgencyId==a.AgencyId && g.Status=="accepted") ? "revoked" : a.Status;
+        return rows.Where(a=>includeHistory || a.Status!="excluded" && a.Status!="cancelled").OrderByDescending(a=>a.IsHost).ThenBy(a=>a.Id).Select(a=>{
+            var user=agencies[a.AgencyId];var status=a.Status is "excluded" or "cancelled" ? "removed" : !a.IsHost && a.Status=="accepted" && !global.Any(g=>g.AgencyId==a.AgencyId && g.Status=="accepted") ? "revoked" : a.Status;
             return new DesignCoHostDto(a.AgencyId,user.BusinessProfile?.BusinessName??user.Name??"Agency",a.IsHost?"lead":"partner",status,[],a.StageArea,a.SuggestedBudget,
                 Notes:a.CommunicationNotes,RejectionReason:a.Status=="rejected"?a.CommunicationNotes:null,InvitedAt:a.AssignedAt,RespondedAt:a.RespondedAt,CompanyPhone:user.Phone,CompanyEmail:user.Email,Version:version?.VersionNumber,CompanyLogo:user.BusinessProfile?.LogoUrl??user.Avatar);
         }).ToArray();
@@ -66,10 +66,14 @@ public sealed partial class TourService
     public async Task<DesignCoHostDto[]> GetCoHosts(string actor,int id,CancellationToken ct,int? number=null)
     {
         await Agency(actor,ct);
-        var request=await db.TourDesignRequests.SingleOrDefaultAsync(r=>r.Id==id && (r.AgencyId==actor || db.TourDesignRequestAgencies.Any(a=>a.TourDesignRequestId==id && a.AgencyId==actor && !a.IsHost && (a.Status=="accepted" || a.Status=="pending"))),ct)??throw new TourException(404,"Không tìm thấy lời mời.");
+        var request=await db.TourDesignRequests.SingleOrDefaultAsync(r=>r.Id==id && (r.AgencyId==actor || db.TourDesignRequestAgencies.Any(a=>a.TourDesignRequestId==id && a.AgencyId==actor && !a.IsHost)),ct)
+            ??throw new TourException(404,"Không tìm thấy lời mời.");
         var version=await VersionRow(id,number,ct);
-        if(version!=null)await RequireVersionAccess(actor,request,version,ct,true);
-        return await CoHosts(id,ct,number);
+        if(actor!=request.AgencyId && version!=null && !await db.TourVersionAgencies.AnyAsync(a=>a.TourVersionId==version.Id && a.AgencyId==actor && !a.IsHost && a.Status!="uninvited",ct))
+            throw new TourException(404,"Bạn chưa được mời vào phiên bản này.");
+        var hosts=await CoHosts(id,ct,number,true);
+        return actor==request.AgencyId || hosts.Any(h=>h.CompanyId==actor && h.Status=="accepted")
+            ? hosts : hosts.Where(h=>h.Role=="lead" || h.CompanyId==actor).ToArray();
     }
     public async Task<DesignCoHostDto[]> InviteCoHost(string actor,int id,InviteDesignCoHost input,CancellationToken ct)
     {
@@ -78,9 +82,15 @@ public sealed partial class TourService
         Require(input.AgencyId!=actor,"Hãy chọn Agency đối tác khác.");
         Require(await db.Users.AnyAsync(u=>u.Id==input.AgencyId && u.Role==UserRole.TravelAgency && u.Status==UserStatus.Active && u.BusinessProfile!=null && u.BusinessProfile.Status==BusinessProfileStatus.Approved,ct),"Đối tác chưa được phê duyệt hoặc ngừng hoạt động.");
         var version=await VersionRow(id,input.Version,ct);
+        Require(version!=null,"Hãy lưu phiên bản tour trước khi mời đối tác.");
         var global=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==input.AgencyId,ct);
+        // Preserve old global revocations as version removals before re-inviting one version.
+        // Re-invitation must never silently restore access to other historical versions.
+        if(global?.Status=="cancelled")
+            await db.TourVersionAgencies.Where(a=>a.TourVersion.Tour.DesignRequestId==id && a.AgencyId==input.AgencyId && !a.IsHost && (a.Status=="accepted" || a.Status=="pending"))
+                .ExecuteUpdateAsync(set=>set.SetProperty(a=>a.Status,"excluded").SetProperty(a=>a.RespondedAt,global.RespondedAt??DateTime.UtcNow),ct);
         TourVersionAgency? row=version==null?null:await db.TourVersionAgencies.SingleOrDefaultAsync(a=>a.TourVersionId==version.Id && a.AgencyId==input.AgencyId,ct);
-        Require(version!=null ? row==null || row.Status is "excluded" or "rejected" or "cancelled" || global?.Status=="cancelled" : global==null || global.Status is "rejected" or "cancelled","Đối tác đã tham gia hoặc đang có lời mời trong phiên bản này.");
+        Require(version!=null ? row==null || row.Status is "excluded" or "rejected" or "cancelled" or "uninvited" || global?.Status=="cancelled" : global==null || global.Status is "rejected" or "cancelled","Đối tác đã tham gia hoặc đang có lời mời trong phiên bản này.");
         if(global==null){global=new TourDesignRequestAgency{TourDesignRequestId=id,AgencyId=input.AgencyId};db.TourDesignRequestAgencies.Add(global);}
         global.IsHost=false;
         if(global.Status!="accepted")global.Status="pending";
@@ -88,7 +98,7 @@ public sealed partial class TourService
         if(version!=null){if(row==null){row=new TourVersionAgency{TourVersionId=version.Id,AgencyId=input.AgencyId};db.TourVersionAgencies.Add(row);}row.Status="pending";row.StageArea=global.StageArea;row.SuggestedBudget=input.Budget;row.CommunicationNotes=global.CommunicationNotes;row.AssignedAt=DateTime.UtcNow;row.RespondedAt=null;}
         await BumpDesignRevision(id,ct);
         db.WorkflowNotifications.Add(new WorkflowNotification{UserId=input.AgencyId,RequestId=id,Message=$"Có lời mời đồng tổ chức yêu cầu #{id}"+(version==null?"":$", phiên bản v{version.VersionNumber}")});
-        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await CoHosts(id,ct,input.Version);
+        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await CoHosts(id,ct,input.Version,true);
     }
     public async Task DecideCoHost(string actor,int id,DesignCoHostDecision input,CancellationToken ct)
     {
@@ -120,34 +130,29 @@ public sealed partial class TourService
         var config=target==tour.Version?Configuration(tour):JsonSerializer.Deserialize<TourSnapshot>((await db.TourVersions.SingleAsync(v=>v.TourId==tour.Id && v.VersionNumber==target,ct)).SnapshotData,Json)!.Configuration;
         tour.Version=target;return(tour,config);
     }
-    public async Task RemoveCoHost(string actor,int id,string partner,CancellationToken ct,bool removeContent=false,int? number=null,bool terminate=false)
+    public async Task RemoveCoHost(string actor,int id,string partner,CancellationToken ct,int? number=null)
     {
         await using var tx=await db.Database.BeginTransactionAsync(ct);await LockDesignRequest(actor,id,ct);
         var request=await CollaborativeRequest(actor,id,ct,true);await MutableCollaboration(request,ct);
         Require(partner!=request.AgencyId,"Không thể gỡ Agency chủ trì.");
-        var global=await db.TourDesignRequestAgencies.SingleOrDefaultAsync(a=>a.TourDesignRequestId==id && a.AgencyId==partner,ct)??throw new TourException(404,"Không tìm thấy đối tác.");
-        var version=await VersionRow(id,number,ct);
-        if(terminate || version==null){Require(global.Status!="cancelled","Hợp tác đã được thu hồi.");global.Status="cancelled";global.RespondedAt=DateTime.UtcNow;var identity=await DesignIdentity(id,ct);
-            if(identity!=null){identity.Revision++;if(identity.SharedVersion.HasValue){var shared=JsonSerializer.Deserialize<TourSnapshot>((await db.TourVersions.SingleAsync(v=>v.TourId==identity.Id && v.VersionNumber==identity.SharedVersion,ct)).SnapshotData,Json)!.Configuration;if(HasCoHostContent(shared,partner)||(shared.CoHosts??[]).Any(h=>h.CompanyId==partner))identity.SharedVersion=null;}}
-        }else{
-            var row=await db.TourVersionAgencies.SingleOrDefaultAsync(a=>a.TourVersionId==version.Id && a.AgencyId==partner,ct)??throw new TourException(404,"Đối tác không có trong phiên bản này.");
-            Require(row.Status!="excluded","Đối tác đã được bỏ khỏi phiên bản này.");
-            var(tour,config)=await EditableVersion(request,version.VersionNumber,ct);
-            var hasContent=HasCoHostContent(config,partner)||(config.AgencyPricing??[]).Any(p=>p.AgencyId==partner && p.Tiers.Any(t=>t.PricePerGuest>0));
-            Require(removeContent || !hasContent,"Hãy xác nhận gỡ cả nội dung và bảng giá của đối tác trong phiên bản này.");
-            row.Status="excluded";row.RespondedAt=DateTime.UtcNow;await db.SaveChangesAsync(ct);
-            config=await CollaborationConfiguration(request,WithoutCoHost(config,partner),ct,version.VersionNumber);
-            Apply(tour,config);tour.Status=TourStatus.Draft;if(tour.SharedVersion==version.VersionNumber)tour.SharedVersion=null;
-            await Save(tour,actor,"Bỏ đối tác khỏi phiên bản này",ct);
-        }
-        db.WorkflowNotifications.Add(new WorkflowNotification{UserId=partner,RequestId=id,Message=terminate?$"Đã kết thúc hợp tác yêu cầu #{id}":$"Đã bỏ bạn khỏi phương án v{version?.VersionNumber} của yêu cầu #{id}"});
+        var version=await VersionRow(id,number,ct)??throw new TourException(422,"Hãy chọn phiên bản tour cần gỡ đối tác.");
+        var row=await db.TourVersionAgencies.SingleOrDefaultAsync(a=>a.TourVersionId==version.Id && a.AgencyId==partner,ct)
+            ??throw new TourException(404,"Đối tác không có trong phiên bản này.");
+        Require(row.Status!="excluded","Đối tác đã bị gỡ khỏi phiên bản này.");
+        var(tour,config)=await EditableVersion(request,version.VersionNumber,ct);
+        row.Status="excluded";row.RespondedAt=DateTime.UtcNow;await db.SaveChangesAsync(ct);
+        config=await CollaborationConfiguration(request,WithoutCoHost(config,partner),ct,version.VersionNumber);
+        Apply(tour,config);tour.Status=TourStatus.Draft;if(tour.SharedVersion==version.VersionNumber)tour.SharedVersion=null;
+        await Save(tour,actor,"Gỡ đối tác và nội dung khỏi phiên bản",ct);
+        db.WorkflowNotifications.Add(new WorkflowNotification{UserId=partner,RequestId=id,
+            Message=$"Agency chủ trì đã gỡ bạn khỏi phiên bản v{version.VersionNumber} của yêu cầu #{id}. Nội dung và bảng giá của bạn trong phiên bản này đã được gỡ."});
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
     }
     private static bool HasCoHostContent(TourConfiguration c,string partner)=>(c.Timelines??[]).Any(d=>(d.Activities??[]).Any(a=>a.AgencyId==partner)||(d.Meals??[]).Any(m=>m.AgencyId==partner)||(d.Accommodations??[]).Any(h=>h.AgencyId==partner));
     private static TourConfiguration WithoutCoHost(TourConfiguration c,string partner)=>c with{CoHosts=c.CoHosts?.Where(h=>h.CompanyId!=partner).ToArray(),AgencyPricing=c.AgencyPricing?.Where(p=>p.AgencyId!=partner).ToArray(),Timelines=c.Timelines?.Select(d=>d with{Activities=d.Activities?.Where(a=>a.AgencyId!=partner).ToArray(),Meals=d.Meals?.Where(m=>m.AgencyId!=partner).ToArray(),Accommodations=d.Accommodations?.Where(h=>h.AgencyId!=partner).ToArray()}).ToArray()};
     private async Task<TourConfiguration> CollaborationConfiguration(TourDesignRequest request,TourConfiguration config,CancellationToken ct,int? number=null)
     {
-        var hosts=await CoHosts(request.Id,ct,number);var members=hosts.Where(h=>h.Status=="accepted").ToArray();
+        var hosts=await CoHosts(request.Id,ct,number);var members=hosts.Where(h=>h.Status is "accepted" or "pending" or "uninvited").ToArray();
         foreach(var owner in (config.CoHosts??[]).Select(h=>h.CompanyId).Concat((config.AgencyPricing??[]).Select(p=>p.AgencyId)).Distinct().Where(id=>id!=request.AgencyId && members.All(m=>m.CompanyId!=id)))config=WithoutCoHost(config,owner);
         var existing=config.AgencyPricing??[new AgencyPricingInput(request.AgencyId!,config.PricingTiers??[])];
         var pricing=existing.Where(p=>members.Any(h=>h.CompanyId==p.AgencyId)).ToList();

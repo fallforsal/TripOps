@@ -79,11 +79,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Future<void> update(Passenger passenger, String status) async {
+  Future<void> editNote(Passenger passenger) async {
+    if (busy != null || !current.canRecordAttendance) return;
+    final saved = await showGuideTextInputDialog(
+      context: context,
+      title: 'Ghi chú · ${passenger.name}',
+      hintText: 'Nhập ghi chú điểm danh (VD: đến muộn, lý do vắng...)',
+      initialValue: passenger.statusNote ?? '',
+    );
+    if (saved == null || !mounted) return;
+    await update(passenger, passenger.status, note: saved.trim());
+  }
+
+  Future<void> update(Passenger passenger, String status, {String? note}) async {
     if (busy != null || !current.canRecordAttendance) return;
     setState(() { busy = passenger.id; error = null; });
     try {
-      await widget.guides.attendance(current.id, passenger.id, status);
+      await widget.guides.attendance(current.id, passenger.id, status, note: note);
       final updated = await widget.guides.detail(current.id);
       if (mounted) setState(() => current = updated);
     } catch (e) {
@@ -290,6 +302,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                     ],
                   ]),
+                  if (p.statusNote != null && p.statusNote!.trim().isNotEmpty) ...[
+                    space(6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        'Ghi chú HDV: ${p.statusNote!.trim()}',
+                        style: const TextStyle(fontSize: 12, color: ink),
+                      ),
+                    ),
+                  ],
                   space(12),
                   if (busy == p.id) ...[
                     const LinearProgressIndicator(),
@@ -321,15 +349,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       label: const Text('Vắng mặt'),
                     )),
                   ]),
-                  if (p.status != 'Pending')
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
+                  Row(children: [
+                    TextButton.icon(
+                      onPressed: busy != null || !canRecord ? null : () => editNote(p),
+                      icon: const Icon(Icons.edit_note_rounded, size: 18),
+                      label: Text(
+                        p.statusNote != null && p.statusNote!.trim().isNotEmpty ? 'Sửa ghi chú' : 'Thêm ghi chú',
+                      ),
+                    ),
+                    const Spacer(),
+                    if (p.status != 'Pending')
+                      TextButton(
                         onPressed: busy != null || !canRecord ? null :
                             () => update(p, 'Pending'),
                         child: const Text('Đặt lại: Chưa rõ'),
                       ),
-                    ),
+                  ]),
                 ],
               ),
             )),
