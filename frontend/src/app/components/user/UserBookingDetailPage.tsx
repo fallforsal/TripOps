@@ -237,10 +237,10 @@ export function UserBookingDetailPage({
   const canCancel = cancellableStatus && !cancellationPending && !hasPendingGatewayPayment;
   const cancelBlockedReason = canCancel
     ? paidSoFar > 0
-      ? "Đơn đã có khoản thanh toán: bạn gửi yêu cầu hủy, phí hủy tính theo chính sách chung và đơn chỉ bị hủy sau khi Admin duyệt."
+      ? "Đơn đã có khoản thanh toán: đơn được hủy ngay khi bạn gửi yêu cầu, phí hủy tính theo chính sách chung và Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn."
       : null
     : cancellationPending
-      ? "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán."
+      ? "Đơn đã hủy, đang chờ Admin hoàn tiền."
       : hasPendingGatewayPayment && cancellableStatus
         ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
         : null;

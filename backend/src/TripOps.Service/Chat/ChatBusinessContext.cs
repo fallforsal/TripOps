@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Service.Accounts;
 using TripOps.Service.Tours;
@@ -62,6 +63,13 @@ public sealed partial class ChatService
             b.BookingAgencies.Any(a => a.AgencyId == userId) || b.AssignedGuides.Any(g => g.GuideId == userId)), ct) ||
         await Db.BookingSupplierRequests.AnyAsync(r => r.BookingId == id && r.ProviderId == userId, ct);
 
+    async Task<bool> ComplaintContextAccess(string userId, Complaint complaint, CancellationToken ct) =>
+        complaint.ComplainantId == userId ||
+        await Db.Users.AnyAsync(u => u.Id == userId && u.Role == UserRole.Admin, ct) ||
+        (complaint.Type == ComplaintTypes.Trip && complaint.BookingId is int bookingId &&
+         (complaint.TargetId == userId || await Db.Bookings.AnyAsync(b => b.Id == bookingId &&
+             (b.Tour!.AgencyId == userId || b.BookingAgencies.Any(a => a.AgencyId == userId)), ct)));
+
     async Task<bool> DesignContextAccess(string userId, int id, CancellationToken ct) =>
         await Db.Users.AnyAsync(u => u.Id == userId && u.Role == UserRole.Admin, ct) ||
         await Db.TourDesignRequests.AnyAsync(r => r.Id == id && (r.CustomerId == userId || r.AgencyId == userId), ct) ||
@@ -87,6 +95,18 @@ public sealed partial class ChatService
                 ? $"{booking.Tour?.Name} · {serviceReq.Name}"
                 : booking.Tour?.Name;
             return new("booking", booking.Id, $"Booking {booking.BookingCode}", FirstImage(booking.Tour?.ThumbnailUrls) ?? FirstImage(booking.Tour?.Images), subtitle, serviceReq?.Id);
+        }
+        if (context.Kind == "complaint")
+        {
+            var complaint = await Db.Complaints.AsNoTracking().Include(c => c.Booking)
+                .SingleOrDefaultAsync(c => c.Id == context.Id, ct)
+                ?? throw new AccountException(404, "Không tìm thấy khiếu nại.");
+            // Thẻ khiếu nại chỉ gắn trong chat có Admin, với người gửi khiếu nại hoặc Agency của booking bị khiếu nại.
+            if (!await ComplaintContextAccess(actor, complaint, ct) || !await ComplaintContextAccess(recipient, complaint, ct) ||
+                !await Db.Users.AnyAsync(u => (u.Id == actor || u.Id == recipient) && u.Role == UserRole.Admin, ct))
+                throw new AccountException(403, "Chỉ Admin chia sẻ khiếu nại với khách hoặc Agency liên quan.");
+            var subtitle = complaint.Booking is null ? "Khiếu nại về nền tảng" : $"Booking {complaint.Booking.BookingCode}";
+            return new("complaint", complaint.Id, $"Khiếu nại #{complaint.Id}: {complaint.Title}", Subtitle: subtitle);
         }
         if (context.Kind == "design-request")
         {
@@ -129,6 +149,6 @@ public sealed partial class ChatService
                 throw new AccountException(403, "Tour chưa mở bán công khai.");
             return new("tour", tour.Id, tour.Name ?? "Tour du lịch", FirstImage(tour.ThumbnailUrls) ?? FirstImage(tour.Images), tour.Destination);
         }
-        throw new AccountException(400, "Chỉ đính kèm tour, dịch vụ, booking hoặc yêu cầu thiết kế.");
+        throw new AccountException(400, "Chỉ đính kèm tour, dịch vụ, booking, yêu cầu thiết kế hoặc khiếu nại.");
     }
 }

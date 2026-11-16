@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -133,7 +134,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Admin_accepts_or_rejects_a_trip_complaint_with_a_response_and_the_payout_is_held_until_then()
+    public async Task Admin_resolves_a_trip_complaint_the_agency_sees_it_and_platform_complaints_stay_hidden()
     {
         var clock = new TestClock { Fixed = Now() };
         using var app = ReviewApp(clock);
@@ -154,16 +155,33 @@ public sealed partial class BookingFlowTests
         Assert.Equal("Pending", complaint.Status);
         Assert.Equal("agency1", complaint.AgencyId);
 
-        // Một chuyến đi chỉ có một khiếu nại đang mở; khiếu nại đang mở chặn tự chuyển tiền cho Agency.
+        // Một chuyến đi chỉ có một khiếu nại đang mở.
         Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsync("/api/v1/me/complaints",
             ComplaintBody("Trip", booking.Id, "other", "Thêm một khiếu nại", "Nội dung khiếu nại thứ hai cho cùng chuyến."))).StatusCode);
         Assert.Equal(1, (await Settlement(admin, booking.Id)).OpenComplaints);
 
-        // Agency không xem/trả lời khiếu nại trên hệ thống.
+        // Agency xem (chỉ đọc) khiếu nại về booking của mình, không vào được trang Admin.
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.GetAsync("/api/v1/admin/complaints")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await agency.GetAsync($"/api/v1/me/complaints/{complaint.Id}")).StatusCode);
+        var agencyList = await agency.GetFromJsonAsync<List<ComplaintSummaryDto>>("/api/v1/agency/complaints");
+        Assert.Equal(complaint.Id, Assert.Single(agencyList!).Id);
+        Assert.Equal("Pending", (await agency.GetFromJsonAsync<ComplaintDto>($"/api/v1/agency/complaints/{complaint.Id}"))!.Status);
+        using (var otherAgency = await app.Client("agency2@example.test"))
+        {
+            Assert.Empty((await otherAgency.GetFromJsonAsync<List<ComplaintSummaryDto>>("/api/v1/agency/complaints"))!);
+            Assert.Equal(HttpStatusCode.NotFound, (await otherAgency.GetAsync($"/api/v1/agency/complaints/{complaint.Id}")).StatusCode);
+        }
 
-        // Admin xem (có SĐT/email khách để liên hệ ngoài hệ thống), ghi phản hồi rồi chấp nhận.
+        // Admin gắn thẻ khiếu nại khi chat với Agency.
+        var conversation = (await Read<JsonElement>(await admin.PostAsJsonAsync("/api/v1/chat/conversations", new { userId = "agency1" }))).GetProperty("id").GetInt32();
+        Assert.True((await admin.PostAsJsonAsync($"/api/v1/chat/conversations/{conversation}/messages",
+            new { content = "Agency kiểm tra giúp phòng đêm 2", clientMessageId = Guid.NewGuid(), context = new { kind = "complaint", id = complaint.Id } })).IsSuccessStatusCode);
+
+        // Khiếu nại không còn từ chối: chỉ đánh dấu đã giải quyết.
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/v1/admin/complaints/{complaint.Id}/resolve",
+            new ResolveComplaintRequest("Rejected", "Không chấp nhận khiếu nại này."))).StatusCode);
+
+        // Admin xem (có SĐT/email khách để liên hệ), ghi cách giải quyết rồi đánh dấu đã giải quyết.
         var forAdmin = await admin.GetFromJsonAsync<ComplaintDto>($"/api/v1/admin/complaints/{complaint.Id}");
         Assert.Equal("Customer One", forAdmin!.CustomerName);
         var resolved = await Read<ComplaintDto>(await admin.PostAsJsonAsync($"/api/v1/admin/complaints/{complaint.Id}/resolve",
@@ -172,7 +190,8 @@ public sealed partial class BookingFlowTests
         var seen = await customer.GetFromJsonAsync<ComplaintDto>($"/api/v1/me/complaints/{complaint.Id}");
         Assert.Equal("Agency xác nhận đổi phòng; hoàn 500.000đ cho khách.", seen!.AdminNotes);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/complaints/{complaint.Id}/resolve",
-            new ResolveComplaintRequest("Rejected", "Đổi ý sau khi đã kết luận."))).StatusCode);
+            new ResolveComplaintRequest("Resolved", "Giải quyết lại lần hai."))).StatusCode);
+        Assert.Equal("Resolved", (await agency.GetFromJsonAsync<ComplaintDto>($"/api/v1/agency/complaints/{complaint.Id}"))!.Status);
         Assert.Equal(0, (await Settlement(admin, booking.Id)).OpenComplaints);
 
         var stats = await admin.GetFromJsonAsync<List<AgencyComplaintStatDto>>("/api/v1/admin/complaints/agency-stats");
@@ -187,6 +206,7 @@ public sealed partial class BookingFlowTests
         Assert.Null(platform.BookingId);
         Assert.Null(platform.AgencyId);
         Assert.Equal(2, (await customer.GetFromJsonAsync<List<ComplaintSummaryDto>>("/api/v1/me/complaints"))!.Count);
+        Assert.Single((await agency.GetFromJsonAsync<List<ComplaintSummaryDto>>("/api/v1/agency/complaints"))!);
     }
 
     [Fact]

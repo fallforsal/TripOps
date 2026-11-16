@@ -1,13 +1,12 @@
-import { Clock, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { formatDateTime, isComplaintOpen, type ComplaintDetail } from "@/app/services/reviews";
 
 /**
- * Nội dung một khiếu nại: mô tả + ảnh bằng chứng khách gửi, và phản hồi của Admin (chấp nhận / không chấp nhận).
- * Không có nhắn tin qua lại: cần trao đổi thêm thì Admin gọi điện hoặc dùng chat.
+ * Nội dung một khiếu nại: mô tả + ảnh bằng chứng khách gửi, và cách Admin đã giải quyết.
+ * Khiếu nại chỉ có Đang xử lý / Đã giải quyết; Admin trao đổi với khách và Agency qua chat.
  */
-export function ComplaintContent({ complaint, viewer = "customer" }: { complaint: ComplaintDetail; viewer?: "customer" | "admin" }) {
+export function ComplaintContent({ complaint }: { complaint: ComplaintDetail }) {
   const open = isComplaintOpen(complaint.status);
-  const accepted = complaint.status === "Resolved";
   return (
     <div className="space-y-4">
       <div className="space-y-1.5 text-sm">
@@ -30,19 +29,14 @@ export function ComplaintContent({ complaint, viewer = "customer" }: { complaint
         </div>
       )}
 
-      {open ? (viewer === "admin" ? null :
-        <div className="flex items-start gap-2 rounded-[6px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <Clock className="w-4 h-4 shrink-0 mt-0.5" />
-          <p>Admin TripOps đang xem xét khiếu nại. Nếu cần thêm thông tin, Admin sẽ liên hệ bạn qua số điện thoại hoặc tin nhắn.</p>
-        </div>
-      ) : (
-        <div className={`rounded-[6px] border p-3 text-sm ${accepted ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-rose-50 border-rose-200 text-rose-900"}`}>
+      {!open && (
+        <div className="rounded-[6px] border p-3 text-sm bg-emerald-50 border-emerald-200 text-emerald-900">
           <p className="font-semibold flex items-center gap-1.5 mb-1">
             <ShieldCheck className="w-4 h-4" />
-            {accepted ? "Khiếu nại được chấp nhận" : "Khiếu nại không được chấp nhận"}
+            Khiếu nại đã được giải quyết
           </p>
           <p className="whitespace-pre-line">{complaint.adminNotes}</p>
-          {complaint.resolvedAt && <p className="text-[11px] opacity-70 mt-1">Phản hồi lúc {formatDateTime(complaint.resolvedAt)}</p>}
+          {complaint.resolvedAt && <p className="text-[11px] opacity-70 mt-1">Giải quyết lúc {formatDateTime(complaint.resolvedAt)}</p>}
         </div>
       )}
     </div>

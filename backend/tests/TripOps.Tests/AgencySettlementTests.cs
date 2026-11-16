@@ -145,7 +145,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Open_complaint_stops_automatic_payout_and_admin_records_a_manual_transfer_with_a_note()
+    public async Task Open_complaint_no_longer_blocks_automatic_payout()
     {
         var payout = new FakePayout();
         var completedAt = Now();
@@ -160,22 +160,30 @@ public sealed partial class BookingFlowTests
             await db.SaveChangesAsync();
         }
 
+        var before = await Settlement(admin, booking.Id);
+        Assert.Equal(1, before.OpenComplaints); // vẫn hiện để Admin biết, nhưng không chặn chuyển tiền
+        Assert.DoesNotContain(before.AutoBlockers, b => b.Contains("khiếu nại"));
+
         clock.Fixed = completedAt.AddDays(3);
         var run = await Read<SettlementRunResult>(await admin.PostAsync("/api/v1/admin/settlements/run", null));
-        Assert.Equal(0, run.Started);
+        Assert.Equal(1, run.Started);
+        Assert.Equal(1, payout.CreateCalls);
+    }
+
+    [Fact]
+    public async Task Admin_records_a_manual_transfer_and_must_explain_a_different_amount()
+    {
+        var payout = new FakePayout();
+        var clock = new TestClock { Fixed = Now() };
+        using var app = SettlementApp(payout, clock); await app.Initialize();
+        var (admin, _, booking) = await CompletedTour(app, paid: true);
         var held = await Settlement(admin, booking.Id);
-        Assert.Equal("Ready", held.Status);
-        Assert.Equal(1, held.OpenComplaints);
-        Assert.Contains(held.AutoBlockers, b => b.Contains("khiếu nại"));
-        Assert.Empty(held.PayoutBlockers);
-
-        // Admin tạm giữ trong lúc làm việc với Agency.
         Assert.Equal("OnHold", (await Read<SettlementDto>(await admin.PostAsJsonAsync($"/api/v1/admin/settlements/{held.Id}/hold",
-            new SettlementHoldRequest("Đang xác minh khiếu nại khách sạn")))).Status);
+            new SettlementHoldRequest("Đang đối chiếu với Agency")))).Status);
 
-        // Có khiếu nại mở: phải ghi chú. Thỏa thuận trừ 500.000đ bồi thường → chuyển 8.500.000đ.
+        // Chuyển ít hơn số được nhận (trừ bồi thường) thì phải ghi lý do; không được vượt số được nhận.
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await admin.PostAsJsonAsync($"/api/v1/admin/settlements/{held.Id}/manual",
-            new SettlementManualRequest("FT26317000111", null, null))).StatusCode);
+            new SettlementManualRequest("FT26317000111", 8500000, null))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await admin.PostAsJsonAsync($"/api/v1/admin/settlements/{held.Id}/manual",
             new SettlementManualRequest("FT26317000111", 9500000, "Quá số được nhận"))).StatusCode);
         var paid = await Read<SettlementDto>(await admin.PostAsJsonAsync($"/api/v1/admin/settlements/{held.Id}/manual",

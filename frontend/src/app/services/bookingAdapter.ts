@@ -350,7 +350,7 @@ export function fromApiBooking(
       reportedById: i.reportedById || "",
       reportedByName: i.reportedByName || "Hướng dẫn viên",
       incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER"].find(
-        (c) => i.title.toUpperCase().startsWith(`[${c}]`),
+        (c) => (i.incidentType || "").toUpperCase() === c || i.title.toUpperCase().startsWith(`[${c}]`),
       ) || "OTHER") as import("../types/index.ts").IncidentCategory,
       title: i.title,
       description: i.description,
@@ -383,11 +383,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(
-        i.resolutionNotes?.toLowerCase() || "",
-      )
-        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
-        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"

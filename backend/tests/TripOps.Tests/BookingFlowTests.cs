@@ -39,6 +39,10 @@ public sealed partial class BookingFlowTests
                 ["Settlement:AutoPayoutEnabled"] = "false",
                 // Không dùng khóa OpenAI thật trên máy dev trong test (tốn phí, kết quả không cố định).
                 ["OpenAI:ApiKey"] = "",
+                // Always use the Development OTP fallback, regardless of local SMTP user-secrets.
+                ["Smtp:Host"] = "",
+                ["Smtp:UserName"] = "",
+                ["Smtp:Password"] = "",
             }));
             builder.ConfigureServices(services =>
             {

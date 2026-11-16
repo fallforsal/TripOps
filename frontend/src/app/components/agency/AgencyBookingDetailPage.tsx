@@ -677,10 +677,6 @@ export function AgencyBookingDetailPage({
     }
   };
 
-  useEffect(() => {
-    setIncidents(booking.incidents || []);
-  }, [booking.incidents]);
-
   // ----------------------------------------------------
   // ATTRACTION ASSIGNMENT MODAL STATES
   // ----------------------------------------------------

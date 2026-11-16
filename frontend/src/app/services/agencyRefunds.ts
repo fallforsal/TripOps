@@ -44,7 +44,7 @@ export const listAgencyRefunds = (filter?: { status?: string; from?: string; to?
 export const getAgencyRefund = (id: number) => http<AgencyRefundDto>(`/agency/refunds/${id}`);
 
 export const REFUND_STATUS_LABEL: Record<AgencyRefundStatus, string> = {
-  Pending: "Chờ Admin duyệt",
+  Pending: "Chờ Admin hoàn tiền",
   Reviewing: "Admin đang xem xét",
   Approved: "Đã duyệt, đang hoàn tiền",
   Rejected: "Bị từ chối",
