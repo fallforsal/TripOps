@@ -67,7 +67,7 @@ void main() {
     expect(find.text('Cần check-in điểm trước đó'), findsWidgets);
     expect(find.textContaining('GPS'), findsOneWidget);
     expect(find.textContaining('Phạm vi GPS'), findsNothing);
-    expect(find.text('Bỏ qua'), findsNothing);
+    expect(find.text('Bỏ qua'), findsWidgets);
   });
 
   testWidgets('server advancement unlocks the next stop even without GPS',
