@@ -1,11 +1,13 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/app/lib/notifications";
 import {
   AlertCircle,
   Ban,
   Building2,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   ExternalLink,
   Eye,
@@ -45,7 +47,7 @@ import {
 type Tab = "all" | "user" | "agency" | "provider";
 type StatusFilter = "" | AccountStatus;
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const TABS: { id: Tab; label: string; Icon: LucideIcon; count: (c: AccountCounts) => number }[] = [
   { id: "all", label: "Toàn bộ tài khoản", Icon: Users, count: (c) => c.all },
@@ -135,7 +137,20 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
   const [status, setStatus] = useState<StatusFilter>("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, pageSize);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const activePage = Math.min(page, totalPages);
+  const firstIndex = (activePage - 1) * pageSize;
+  const visiblePages = useMemo(() => {
+    const candidates = new Set([1, totalPages, activePage - 1, activePage, activePage + 1]);
+    return [...candidates].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  }, [activePage, totalPages]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   const [selected, setSelected] = useState<AdminAccount | null>(null);
   const [target, setTarget] = useState<AdminAccount | null>(null);
@@ -337,20 +352,75 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
       </div>
 
       {/* Phân trang */}
-      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-        <span>Trang {page} · Tổng {total} tài khoản phù hợp</span>
-        <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl" disabled={loading || page <= 1} onClick={() => setPage((v) => v - 1)}>
-            Trang trước
-          </Button>
-          <Button variant="outline" className="rounded-xl" disabled={loading || page * PAGE_SIZE >= total} onClick={() => setPage((v) => v + 1)}>
-            Trang sau
-          </Button>
-          <Button variant="outline" className="rounded-xl gap-1.5" disabled={loading} onClick={refresh}>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-gray-500 gap-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            Hiển thị <strong>{total ? firstIndex + 1 : 0}–{firstIndex + items.length}</strong>
+            {" / "}<strong>{total}</strong> tài khoản
+          </span>
+          <label className="inline-flex items-center gap-2">
+            Số tài khoản/trang:
+            <select
+              aria-label="Số tài khoản mỗi trang"
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs" disabled={loading} onClick={refresh}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             {loading ? "Đang tải..." : "Tải lại"}
           </Button>
         </div>
+        {totalPages > 1 && (
+          <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản người dùng">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || activePage === 1}
+              onClick={() => setPage(activePage - 1)}
+              className="h-8 gap-1 px-2 text-xs"
+              aria-label="Trang trước"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Trước</span>
+            </Button>
+            {visiblePages.map((p, index) => (
+              <div key={p} className="inline-flex items-center gap-1">
+                {index > 0 && p > visiblePages[index - 1] + 1 && (
+                  <span aria-hidden="true" className="px-1 text-gray-400">…</span>
+                )}
+                <Button
+                  type="button"
+                  variant={p === activePage ? "default" : "outline"}
+                  size="sm"
+                  aria-label={`Trang ${p}`}
+                  aria-current={p === activePage ? "page" : undefined}
+                  disabled={loading}
+                  onClick={() => setPage(p)}
+                  className={`h-8 min-w-8 px-2 text-xs ${p === activePage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                >
+                  {p}
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || activePage === totalPages}
+              onClick={() => setPage(activePage + 1)}
+              className="h-8 gap-1 px-2 text-xs"
+              aria-label="Trang sau"
+            >
+              <span className="hidden sm:inline">Sau</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </nav>
+        )}
       </div>
 
       {/* Chi tiết tài khoản */}

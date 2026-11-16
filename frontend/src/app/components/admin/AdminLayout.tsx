@@ -56,6 +56,11 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
+      id: "users",
+      label: "Quản lý Người dùng",
+      icon: Users,
+    },
+    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
@@ -87,11 +92,6 @@ export function AdminLayout({
       id: "finance",
       label: "STK Sàn",
       icon: Landmark,
-    },
-    {
-      id: "users",
-      label: "Quản lý Người dùng",
-      icon: Users,
     },
   ];
 

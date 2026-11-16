@@ -1756,6 +1756,16 @@ function Application() {
             <BookingFormPage
               tour={bookingTour}
               currentUser={currentUser as any}
+              defaultStartDate={
+                bookingTour.customRequestId
+                  ? customTourRequests
+                      .find(
+                        (r) =>
+                          String(r.id) === String(bookingTour.customRequestId),
+                      )
+                      ?.departureDate?.slice(0, 10)
+                  : undefined
+              }
               hasLocationCustomization={
                 bookingCustomData?.hasLocationCustomization
               }

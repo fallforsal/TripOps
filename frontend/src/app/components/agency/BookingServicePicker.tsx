@@ -19,6 +19,7 @@ export function BookingServicePicker({ kind, value, onChange, platformOnly = fal
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
+  const [provinceFilter, setProvinceFilter] = useState("all");
   const [preview, setPreview] = useState(false);
   useEffect(() => {
     if (platformOnly) { setLoading(false); return; }
@@ -37,10 +38,15 @@ export function BookingServicePicker({ kind, value, onChange, platformOnly = fal
     : s.priceFrom ?? s.price;
   const match = (text: string) => text.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"));
   const catalogue = services.filter(s => s.category === (kind === "hotel" ? "hotel" : "fnb") && s.status === "approved" && !s.isPaused);
+  const catalogueProvinces = Array.from(new Set(catalogue.map(s => (s.province || s.location || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, "vi"));
   const selected = catalogue.find(s => Number(s.id) === value?.serviceId);
   const selectedReferencePrice = selected ? displayedPrice(selected) : value?.supplier?.referencePrice;
   useEffect(() => { if (!selected) setPreview(false); }, [selected]);
-  const candidates = catalogue.filter(s => match(`${s.name} ${address(s)}`));
+  const candidates = catalogue.filter(s =>
+    (provinceFilter === "all" || (s.province || s.location || "").trim() === provinceFilter) &&
+    match(`${s.name} ${address(s)}`),
+  );
   const privateCandidates = suppliers.filter(s => s.status === "ACTIVE" && match(`${s.name} ${s.address || s.area || ""}`));
   const switchSource = (next: typeof source) => { setSource(next); setExpanded(false); setSearch(""); onChange(null); };
   const choose = (next: BookingReplacement) => { onChange(next); setExpanded(false); setSearch(""); };
@@ -63,8 +69,22 @@ export function BookingServicePicker({ kind, value, onChange, platformOnly = fal
         <span className="min-w-0 truncate">{value?.name || (source === "directory" && loading ? "Đang tải danh bạ…" : `Chọn ${label} ${source === "platform" ? "trên sàn" : "đã lưu"}`)}</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
       {expanded && <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b px-3"><Search className="h-4 w-4 shrink-0 text-slate-400" />
-          <input aria-label="Tìm dịch vụ thay thế" autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, địa chỉ…" className="h-10 min-w-0 flex-1 bg-transparent outline-none" />
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+            <input aria-label="Tìm dịch vụ thay thế" autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, địa chỉ…" className="h-9 min-w-0 flex-1 bg-transparent outline-none" />
+          </div>
+          {source === "platform" && catalogueProvinces.length > 0 && (
+            <select
+              aria-label="Lọc theo tỉnh thành"
+              value={provinceFilter}
+              onChange={e => setProvinceFilter(e.target.value)}
+              className="h-8 max-w-[180px] rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 outline-none focus:border-sky-500"
+            >
+              <option value="all">Tất cả tỉnh/thành</option>
+              {catalogueProvinces.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
         </div>
         <div id="replacement-options" role="listbox" aria-label="Dịch vụ thay thế" className="max-h-44 overflow-y-auto overscroll-contain">
           {source === "platform" ? candidates.map(s => <button key={s.id} type="button" role="option" aria-selected={Number(s.id) === value?.serviceId}
