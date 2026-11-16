@@ -689,6 +689,13 @@ function Application() {
             ? Number(m.serviceId)
             : undefined,
       })),
+      locationChoices: (data.locationChanges || []).map((lc) => ({
+        dayNumber: lc.dayNumber,
+        originalLocationName:
+          lc.originalLocationName || lc.originalLocations?.[0] || "",
+        requestedLocationName: lc.requestedLocations,
+        note: lc.note,
+      })),
       participants: data.passengers.map((p) => ({
         fullName: p.fullName,
         phoneNumber: p.phone?.trim() || undefined,

@@ -56,18 +56,17 @@ public static class ContractPdf
             page.Margin(1.8f, Unit.Centimetre);
             page.DefaultTextStyle(style => style.FontSize(10).FontFamily("Arial").LineHeight(1.3f));
 
-            page.Header().Column(header =>
-            {
-                header.Item().AlignCenter().Text("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM").Bold();
-                header.Item().AlignCenter().Text("Độc lập – Tự do – Hạnh phúc").Italic();
-                header.Item().PaddingTop(8).AlignCenter().Text("HỢP ĐỒNG DỊCH VỤ DU LỊCH THEO ĐOÀN").Bold().FontSize(15);
-                header.Item().AlignCenter().Text("(Hợp đồng lữ hành nội địa)").Italic();
-                header.Item().AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
-            });
-
-            page.Content().PaddingTop(12).Column(col =>
+            page.Content().Column(col =>
             {
                 col.Spacing(6);
+                col.Item().Column(header =>
+                {
+                    header.Item().AlignCenter().Text("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM").Bold();
+                    header.Item().AlignCenter().Text("Độc lập – Tự do – Hạnh phúc").Italic();
+                    header.Item().PaddingTop(8).AlignCenter().Text("HỢP ĐỒNG DỊCH VỤ DU LỊCH THEO ĐOÀN").Bold().FontSize(15);
+                    header.Item().AlignCenter().Text("(Hợp đồng lữ hành nội địa)").Italic();
+                    header.Item().PaddingBottom(6).AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
+                });
                 KeyValues(col, "Thông tin đơn", [
                     ("Mã đặt chỗ", d.BookingCode),
                     ("Thời gian tạo đơn", d.BookedAtVietnam is { } booked ? DateTimeText(booked) : null),

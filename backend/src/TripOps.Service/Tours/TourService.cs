@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db)
+public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -499,7 +499,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             .ToArray();
         if (codes.Length == 0 || codes.Any(c => !VietnamProvinceCatalog.IsValidCode(c)))
             throw new TourException(400, "Invalid province code filter.");
-        return codes;
+        return VietnamProvinceCatalog.ExpandFilter(codes);
     }
     public async Task<TourPage<TourListItem>> List(string? actor, bool admin, string? status,
         string? search, string? destination, decimal? maxPrice, int? headcount, int page, int pageSize, CancellationToken ct, string? provinceCode = null)
@@ -517,31 +517,9 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     {
         await Agency(actor, ct);
         var codes = ParseProvinceFilter(provinceCode) ?? throw new TourException(400, "Province code is required.");
-        var tours = await repository.PublishedToursByProvinces(codes, excludeSelf ? actor : null, ct);
-        return tours
-            .Where(t => !string.IsNullOrWhiteSpace(t.AgencyId) && t.Agency is not null)
-            .GroupBy(t => t.AgencyId, StringComparer.OrdinalIgnoreCase)
-            .Select(g =>
-            {
-                var agency = g.First().Agency;
-                var matchedCodes = g.SelectMany(t => t.Provinces.Select(p => VietnamProvinceCatalog.NormalizeCode(p.ProvinceCode)))
-                    .Where(c => codes.Contains(c, StringComparer.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                return new CandidateAgencyDto(
-                    agency.Id,
-                    agency.BusinessProfile?.BusinessName ?? agency.Name ?? agency.Email,
-                    agency.Email,
-                    agency.Phone,
-                    agency.Avatar,
-                    matchedCodes,
-                    g.Select(t => t.Id).Distinct().Count());
-            })
-            .OrderByDescending(a => a.MatchedProvinceCodes.Length)
-            .ThenByDescending(a => a.MatchedTourCount)
-            .ThenBy(a => a.BusinessName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var rows = await discovery.List(string.Join(',', codes), ct, excludeSelf ? actor : null, matchesOnly: true);
+        return rows.Select(a => new CandidateAgencyDto(a.Id, a.Name, a.Email, a.Phone, a.LogoUrl,
+            a.Evidence.MatchedProvinceCodes, a.Evidence.MatchedTourCount, a.Evidence)).ToArray();
     }
     public async Task<TourValidationResult> ValidateDraft(string actor, int id, CancellationToken ct)
     {

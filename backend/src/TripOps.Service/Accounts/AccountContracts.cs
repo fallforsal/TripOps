@@ -32,7 +32,7 @@ public sealed record AdminAccountPageDto(IReadOnlyList<AdminAccountDto> Items, i
 public sealed record BanAccountRequest([Required, StringLength(1000, MinimumLength = 5)] string Reason);
 
 public sealed record AccountDto(string Id, string Name, string Email, string? Phone,
-    string Role, ProfileDto? BusinessProfile);
+    string Role, ProfileDto? BusinessProfile, string? Avatar = null);
 public sealed record PartnerDto(ProfileDto Profile, string Name, string Email, string? Phone, string Role);
 // Describes the existing anonymous list response without changing its runtime shape.
 public sealed record PartnerPageDto(IReadOnlyList<PartnerDto> Items, int Total, int Page, int PageSize);

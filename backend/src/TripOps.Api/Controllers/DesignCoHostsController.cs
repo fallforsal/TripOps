@@ -22,7 +22,10 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     [HttpDelete("co-hosts/{partner}")]
     [EndpointSummary("Lead Agency withdraws a co-host invitation or partnership")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] bool removeContent = false,[FromQuery] int? version=null,[FromQuery] bool terminate=false) {await tours.RemoveCoHost(Actor,id,partner,ct,removeContent,version,terminate);return NoContent();}
+    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] int? version=null,[FromQuery] bool terminate=false) {
+        if(terminate)throw new TourException(422,"Chỉ hỗ trợ gỡ đối tác theo phiên bản. Hãy chọn phiên bản cần gỡ.");
+        await tours.RemoveCoHost(Actor,id,partner,ct,version);return NoContent();
+    }
     [HttpGet("working-tour")]
     [EndpointSummary("Lead or accepted co-host reads the current private working tour")]
     public async Task<ActionResult<TourDto>> WorkingTour(int id,CancellationToken ct,[FromQuery] int? version=null) => Ok(await tours.CollaborativeTour(Actor,id,ct,version));

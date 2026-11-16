@@ -1,5 +1,5 @@
 import { countPendingCoHostInvites } from "@/app/lib/designAlliance";
-import { AgencyDesignCoHosting } from "./DesignCollaborationPanel";
+import { AgencyDesignWorkspace } from "./AgencyDesignWorkspace";
 import { useEffect, useState } from "react";
 import {
   Tour,
@@ -21,7 +21,6 @@ import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement } from "./AgencyTourManagement";
 import { AgencyBookingManagement } from "./AgencyBookingManagement";
 import { AgencyGuideManagement } from "./AgencyGuideManagement";
-import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
@@ -105,7 +104,8 @@ export function AgencyDashboard({
     const handleHash = () => {
       const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
       if (match) {
-        const sec = match[1];
+        const sec = match[1] === "co-hosting" ? "custom-requests" : match[1];
+        if(match[1] === "co-hosting")window.history.replaceState(null,"",window.location.hash.replace("/co-hosting","/custom-requests"));
         const bId = match[2] || null;
         setActiveSection(sec);
         if (bId) setSelectedBookingId(bId);
@@ -147,6 +147,7 @@ export function AgencyDashboard({
     : null;
 
   const handleNavigateSection = (section: string) => {
+    section = section === "co-hosting" ? "custom-requests" : section;
     setActiveSection(section);
     setSelectedBookingId(null);
     window.location.hash = `#/agency/${section}`;
@@ -237,9 +238,10 @@ export function AgencyDashboard({
             onViewBookingDetail={(id) => { setSelectedBookingId(id); setActiveSection("bookings"); }}
           />
         );
+      case "co-hosting":
       case "custom-requests":
         return (
-          <AgencyCustomRequests
+          <AgencyDesignWorkspace
             onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
             services={services}
             requests={companyCustomRequests}
@@ -262,8 +264,6 @@ export function AgencyDashboard({
       case "reviews":
         return <AgencyReviewsPage />;
 
-      case "co-hosting":
-        return <AgencyDesignCoHosting requests={companyCustomRequests} company={company} onChanged={async () => { await onUpdateCustomRequest?.("", {}); }}/>;
       default:
         return null;
     }
