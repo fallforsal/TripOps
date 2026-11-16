@@ -1,11 +1,13 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/app/lib/notifications";
 import {
   AlertCircle,
   Ban,
   Building2,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   ExternalLink,
   Eye,
@@ -45,7 +47,7 @@ import {
 type Tab = "all" | "user" | "agency" | "provider";
 type StatusFilter = "" | AccountStatus;
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const TABS: { id: Tab; label: string; Icon: LucideIcon; count: (c: AccountCounts) => number }[] = [
   { id: "all", label: "Toàn bộ tài khoản", Icon: Users, count: (c) => c.all },
@@ -135,7 +137,21 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
   const [status, setStatus] = useState<StatusFilter>("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, pageSize);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const visiblePages = useMemo(() => {
+    const candidates = new Set([1, totalPages, page - 1, page, page + 1]);
+    return [...candidates].filter((value) => value >= 1 && value <= totalPages).sort((a, b) => a - b);
+  }, [page, totalPages]);
+  const firstItem = items.length > 0 ? (page - 1) * pageSize + 1 : 0;
+  const lastItem = items.length > 0 ? Math.min(total, (page - 1) * pageSize + items.length) : 0;
+
+  // Keep the current page valid when a ban/unban or server refresh reduces the result count.
+  useEffect(() => {
+    if (!loading && !error && page > totalPages) setPage(totalPages);
+  }, [loading, error, page, totalPages]);
 
   const [selected, setSelected] = useState<AdminAccount | null>(null);
   const [target, setTarget] = useState<AdminAccount | null>(null);
@@ -336,19 +352,76 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
         )}
       </div>
 
-      {/* Phân trang */}
-      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-        <span>Trang {page} · Tổng {total} tài khoản phù hợp</span>
-        <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl" disabled={loading || page <= 1} onClick={() => setPage((v) => v - 1)}>
-            Trang trước
-          </Button>
-          <Button variant="outline" className="rounded-xl" disabled={loading || page * PAGE_SIZE >= total} onClick={() => setPage((v) => v + 1)}>
-            Trang sau
-          </Button>
-          <Button variant="outline" className="rounded-xl gap-1.5" disabled={loading} onClick={refresh}>
+      {/* Phân trang - sử dụng dữ liệu đã được phân trang từ API */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-slate-600 gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            Hiển thị <strong>${firstItem}–${lastItem}</strong>
+            {" / "}<strong>${total}</strong> tài khoản
+          </span>
+          <label className="inline-flex items-center gap-2">
+            Số tài khoản/trang:
+            <select
+              aria-label="Số tài khoản mỗi trang"
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            >
+              ${PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>${size}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          ${totalPages > 1 && (
+            <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang trước"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Trước</span>
+              </Button>
+              ${visiblePages.map((pageNumber, index) => (
+                <div key={pageNumber} className="inline-flex items-center gap-1">
+                  ${index > 0 && pageNumber > visiblePages[index - 1] + 1 && (
+                    <span aria-hidden="true" className="px-1 text-slate-400">…</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={pageNumber === page ? "default" : "outline"}
+                    size="sm"
+                    disabled={loading}
+                    aria-label={`Trang ${pageNumber}`}
+                    aria-current={pageNumber === page ? "page" : undefined}
+                    onClick={() => setPage(pageNumber)}
+                    className={`h-8 min-w-8 px-2 text-xs ${pageNumber === page ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                  >
+                    ${pageNumber}
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang sau"
+              >
+                <span className="hidden sm:inline">Sau</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </nav>
+          )}
+          <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 text-xs" disabled={loading} onClick={refresh}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Đang tải..." : "Tải lại"}
+            ${loading ? "Đang tải..." : "Tải lại"}
           </Button>
         </div>
       </div>
