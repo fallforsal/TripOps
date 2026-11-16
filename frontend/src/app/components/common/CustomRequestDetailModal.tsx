@@ -367,9 +367,11 @@ export function CustomRequestDetailModal({
                 <span className="text-slate-400 block font-medium">Tiêu chuẩn khách sạn / lưu trú:</span>
                 <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block mt-0.5">
                   {request.hotelStars
-                    ? request.hotelStars.includes("sao")
-                      ? request.hotelStars
-                      : `Khách sạn / Resort ${request.hotelStars} sao`
+                    ? request.hotelStars === "homestay"
+                      ? "Homestay / Trải nghiệm bản địa"
+                      : /^[1-5]$/.test(request.hotelStars.trim())
+                        ? `Khách sạn / Resort ${request.hotelStars.trim()} sao`
+                        : request.hotelStars
                     : "Theo tư vấn của Agency"}
                 </span>
               </div>

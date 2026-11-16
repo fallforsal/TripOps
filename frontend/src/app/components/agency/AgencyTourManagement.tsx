@@ -162,12 +162,14 @@ export function AgencyTourManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [provinceFilter, setProvinceFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "published" | "draft" | "hidden"
+    "all" | "published" | "hidden"
   >("all");
   const [sortBy, setSortBy] = useState<
     "newest" | "status" | "price-asc" | "price-desc" | "rating" | "bookings"
   >("newest");
   const [selectedTourIds, setSelectedTourIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const TOUR_PAGE_SIZE = 9;
 
   // UC-038: cửa sổ AI lưu tour nháp rồi chuyển tới #/agency/tours?edit=<id>; mở trang sửa khi danh sách đã có tour đó.
   const [pendingEditId, setPendingEditId] = useState<string | null>(() => editTourIdFromHash());
@@ -190,42 +192,31 @@ export function AgencyTourManagement({
 
   const isApproved = company.status === "approved";
 
-  // LOẠI BỎ TOUR THIẾT KẾ RIÊNG VÀ TOUR ĐÃ XÓA (Soft-deleted theo Database Schema: is_request, status, visibility)
+  // LOẠI BỎ TOUR THIẾT KẾ RIÊNG VÀ TOUR ĐÃ XÓA (chỉ giữ lại tour cứng)
   const publicTours = tours.filter(
     (t) =>
       !t.is_request &&
+      !t.customRequestId &&
       t.tourType !== "custom_request" &&
+      !t.targetUserId &&
+      !t.targetCustomerName &&
+      !(t.tourCode || "").trim().toUpperCase().startsWith("TC-") &&
+      !(t.name || "").trim().toLowerCase().startsWith("tour riêng:") &&
       (t.status as any) !== "deleted",
   );
 
-  const publishedCount = publicTours.filter(
-    (t) =>
-      (t.status === "completed" || t.status === "published" || !t.status) &&
-      (t.visibility === "public" || !t.visibility),
-  ).length;
-  const draftCount = publicTours.filter((t) => t.status === "draft").length;
-  const hiddenCount = publicTours.filter(
-    (t) =>
-      (t.status === "completed" || t.status === "published") &&
-      t.visibility === "hidden",
-  ).length;
+  const isTourPublished = (t: Tour) =>
+    (t.status === "completed" || t.status === "published" || !t.status) &&
+    t.visibility !== "hidden";
 
-  // Lọc và sắp xếp danh sách tour công khai
+  const publishedCount = publicTours.filter(isTourPublished).length;
+  const hiddenCount = publicTours.filter((t) => !isTourPublished(t)).length;
+
+  // Lọc và sắp xếp danh sách tour cứng
   const filteredTours = publicTours
     .filter((t) => {
-      // Bộ lọc trạng thái & hiển thị theo Database Schema (status: completed | draft, visibility: public | hidden)
-      if (
-        statusFilter === "published" &&
-        ((t.status !== "completed" && t.status !== "published" && !!t.status) ||
-          t.visibility === "hidden")
-      )
-        return false;
-      if (statusFilter === "draft" && t.status !== "draft") return false;
-      if (
-        statusFilter === "hidden" &&
-        (t.visibility !== "hidden" || t.status === "draft")
-      )
-        return false;
+      if (statusFilter === "published" && !isTourPublished(t)) return false;
+      if (statusFilter === "hidden" && isTourPublished(t)) return false;
 
       // Tìm kiếm theo Tên tour, Mã tour, Điểm đến
       if (searchQuery.trim()) {
@@ -259,6 +250,17 @@ export function AgencyTourManagement({
       if (sortBy === "status") return tourStatusOrder(a) - tourStatusOrder(b) || compareTourCreation(a, b);
       return compareTourCreation(a, b);
     });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, provinceFilter, statusFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTours.length / TOUR_PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedTours = filteredTours.slice(
+    (safePage - 1) * TOUR_PAGE_SIZE,
+    safePage * TOUR_PAGE_SIZE,
+  );
 
   // Xử lý thực thi hành động sau khi người dùng xác nhận trên AlertDialog
   const handleExecuteConfirmedAction = async () => {
@@ -368,10 +370,6 @@ export function AgencyTourManagement({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Quản lý Tour</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            {publicTours.length} tour công khai · {publishedCount} đang mở bán ·{" "}
-            {draftCount} bản nháp · {hiddenCount} tạm dừng
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -479,7 +477,7 @@ export function AgencyTourManagement({
           </div>
         </div>
 
-        {/* Tabs Phân Loại: Chỉ gồm các tour công khai (Tất cả, Đang mở bán, Tạm dừng) */}
+        {/* Tabs Phân Loại: Chỉ gồm các tour cứng (Tất cả, Đang đăng, Chưa đăng) */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#CBD5E1] pb-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
@@ -498,16 +496,7 @@ export function AgencyTourManagement({
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
-              Đang mở bán ({publishedCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter("draft")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === "draft"
-                  ? "bg-[#075985] text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-            >
-              Bản nháp ({draftCount})
+              Đang đăng ({publishedCount})
             </button>
             <button
               onClick={() => setStatusFilter("hidden")}
@@ -516,7 +505,7 @@ export function AgencyTourManagement({
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
-              Chưa đăng / Tạm ẩn ({hiddenCount})
+              Chưa đăng ({hiddenCount})
             </button>
           </div>
 
@@ -530,13 +519,13 @@ export function AgencyTourManagement({
                 onClick={() => handleBulkToggleVisibility("public")}
                 className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded hover:bg-emerald-200"
               >
-                Mở bán
+                Đăng tour
               </button>
               <button
                 onClick={() => handleBulkToggleVisibility("hidden")}
                 className="text-[11px] font-semibold text-slate-800 bg-slate-200 px-2 py-0.5 rounded hover:bg-slate-300"
               >
-                Tạm dừng
+                Chưa đăng
               </button>
               <button
                 onClick={() => setSelectedTourIds([])}
@@ -564,9 +553,9 @@ export function AgencyTourManagement({
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500 font-medium">
             {statusFilter === "published"
-              ? "Chưa có tour công khai nào đang mở bán"
+              ? "Chưa có tour nào đang đăng"
               : statusFilter === "hidden"
-                ? "Không có tour nào đang tạm dừng"
+                ? "Không có tour nào chưa đăng"
                 : "Không tìm thấy tour nào phù hợp"}
           </p>
           {isApproved && (
@@ -581,7 +570,7 @@ export function AgencyTourManagement({
       ) : viewMode === "grid" ? (
         /* CHẾ ĐỘ LƯỚI (GRID VIEW) */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredTours.map((tour) => {
+          {paginatedTours.map((tour) => {
             const isSelected = selectedTourIds.includes(tour.id);
 
             return (
@@ -633,25 +622,15 @@ export function AgencyTourManagement({
                         {tour.tourCode || "T-NEW"}
                       </div>
 
-                      {tour.status === "draft" && (
-                        <div className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                          Bản nháp
+                      {isTourPublished(tour) ? (
+                        <div className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                          Đang đăng
+                        </div>
+                      ) : (
+                        <div className="bg-slate-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                          Chưa đăng
                         </div>
                       )}
-                      {tour.visibility === "hidden" &&
-                        tour.status !== "draft" && (
-                          <div className="bg-slate-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                            Chưa đăng / Tạm ẩn
-                          </div>
-                        )}
-                      {(tour.status === "completed" ||
-                        tour.status === "published" ||
-                        !tour.status) &&
-                        tour.visibility !== "hidden" && (
-                          <div className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                            Đang mở bán
-                          </div>
-                        )}
                     </div>
 
                     {tour.images && tour.images.length > 1 && (
@@ -731,43 +710,29 @@ export function AgencyTourManagement({
                         <Eye className="w-4 h-4" />
                       </button>
 
-                      {/* Nút hành động Mở bán / Tạm dừng / Đăng bán bản nháp */}
-                      {tour.status === "draft" ? (
-                        <button
-                          type="button"
-                          title="Đăng & Mở bán tour lên sàn TripOps"
-                          onClick={() =>
-                            setPendingAction({ type: "publish", tour })
-                          }
-                          className="p-1.5 text-amber-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                        >
-                          <Upload className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          title={
-                            tour.visibility === "hidden"
-                              ? "Mở bán lại tour trên sàn"
-                              : "Tạm ẩn tour khỏi sàn"
-                          }
-                          onClick={() => {
-                            const actionType =
-                              tour.visibility === "hidden" ? "publish" : "hide";
-                            setPendingAction({ type: actionType, tour });
-                          }}
-                          className={`p-1.5 rounded-lg transition-colors ${tour.visibility === "hidden"
-                              ? "text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
-                              : "text-emerald-600 hover:text-slate-600 hover:bg-slate-100"
-                            }`}
-                        >
-                          {tour.visibility === "hidden" ? (
-                            <ToggleLeft className="w-4 h-4 text-slate-400" />
-                          ) : (
-                            <ToggleRight className="w-4 h-4 text-emerald-600" />
-                          )}
-                        </button>
-                      )}
+                      {/* Nút hành động Đăng tour / Chuyển về Chưa đăng */}
+                      <button
+                        type="button"
+                        title={
+                          isTourPublished(tour)
+                            ? "Chuyển về Chưa đăng"
+                            : "Đăng tour lên sàn TripOps"
+                        }
+                        onClick={() => {
+                          const actionType = isTourPublished(tour) ? "hide" : "publish";
+                          setPendingAction({ type: actionType, tour });
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors ${!isTourPublished(tour)
+                            ? "text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+                            : "text-emerald-600 hover:text-slate-600 hover:bg-slate-100"
+                          }`}
+                      >
+                        {!isTourPublished(tour) ? (
+                          <ToggleLeft className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ToggleRight className="w-4 h-4 text-emerald-600" />
+                        )}
+                      </button>
 
                       {/* Chỉnh sửa chi tiết tour */}
                       {tour.is_request && <button
@@ -845,7 +810,7 @@ export function AgencyTourManagement({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTours.map((tour) => {
+                {paginatedTours.map((tour) => {
                   const isSelected = selectedTourIds.includes(tour.id);
 
                   return (
@@ -929,17 +894,13 @@ export function AgencyTourManagement({
                       </td>
 
                       <td className="p-3.5">
-                        {tour.status === "draft" ? (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
-                            Bản nháp
-                          </span>
-                        ) : tour.visibility === "hidden" ? (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
-                            Chưa đăng / Tạm ẩn
+                        {isTourPublished(tour) ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                            Đang đăng
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                            Đang mở bán
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
+                            Chưa đăng
                           </span>
                         )}
                       </td>
@@ -954,41 +915,25 @@ export function AgencyTourManagement({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {tour.status === "draft" ? (
-                            <button
-                              type="button"
-                              title="Đăng & Mở bán tour lên sàn TripOps"
-                              onClick={() =>
-                                setPendingAction({ type: "publish", tour })
-                              }
-                              className="p-1.5 text-amber-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
-                            >
-                              <Upload className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              title={
-                                tour.visibility === "hidden"
-                                  ? "Mở bán lại tour trên sàn"
-                                  : "Tạm ẩn tour khỏi sàn"
-                              }
-                              onClick={() => {
-                                const actionType =
-                                  tour.visibility === "hidden"
-                                    ? "publish"
-                                    : "hide";
-                                setPendingAction({ type: actionType, tour });
-                              }}
-                              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
-                            >
-                              {tour.visibility === "hidden" ? (
-                                <ToggleLeft className="w-4 h-4 text-slate-400" />
-                              ) : (
-                                <ToggleRight className="w-4 h-4 text-emerald-600" />
-                              )}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            title={
+                              isTourPublished(tour)
+                                ? "Chuyển về Chưa đăng"
+                                : "Đăng tour lên sàn TripOps"
+                            }
+                            onClick={() => {
+                              const actionType = isTourPublished(tour) ? "hide" : "publish";
+                              setPendingAction({ type: actionType, tour });
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                          >
+                            {!isTourPublished(tour) ? (
+                              <ToggleLeft className="w-4 h-4 text-slate-400" />
+                            ) : (
+                              <ToggleRight className="w-4 h-4 text-emerald-600" />
+                            )}
+                          </button>
                           <button
                             type="button"
                             title="Chỉnh sửa chi tiết"
@@ -1024,6 +969,48 @@ export function AgencyTourManagement({
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {filteredTours.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-600">
+          <span>
+            Hiển thị {(safePage - 1) * TOUR_PAGE_SIZE + 1}–
+            {Math.min(safePage * TOUR_PAGE_SIZE, filteredTours.length)} /{" "}
+            {filteredTours.length} tour (Trang {safePage}/{totalPages})
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Trước
+            </button>
+            {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((page) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => setCurrentPage(page)}
+                className={`w-8 h-8 rounded-lg font-semibold border transition-colors ${
+                  page === safePage
+                    ? "bg-[#075985] text-white border-[#075985]"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Sau
+            </button>
           </div>
         </div>
       )}
@@ -1124,16 +1111,15 @@ export function AgencyTourManagement({
               )}
               {pendingAction?.type === "hide" && (
                 <span>
-                  Tour này sẽ tạm thời bị ẩn khỏi sàn TripOps. Khách du lịch sẽ
-                  không tìm thấy hoặc gửi yêu cầu đặt tour này cho đến khi bạn
-                  mở bán trở lại.
+                  Tour này sẽ được chuyển về trạng thái Chưa đăng và ẩn khỏi sàn
+                  TripOps. Khách du lịch sẽ không tìm thấy hoặc gửi yêu cầu đặt
+                  tour này cho đến khi bạn đăng lại.
                 </span>
               )}
               {pendingAction?.type === "publish" && (
                 <span>
-                  {pendingAction.tour.status === "draft"
-                    ? "Tour này sẽ được chuyển từ Bản nháp sang trạng thái Đang mở bán công khai trên sàn TripOps để khách hàng có thể tìm kiếm và đặt tour ngay."
-                    : "Tour này sẽ được mở bán công khai trở lại trên sàn TripOps để khách hàng có thể tìm kiếm và đặt tour."}
+                  Tour này sẽ được chuyển sang trạng thái Đang đăng công khai
+                  trên sàn TripOps để khách hàng có thể tìm kiếm và đặt tour ngay.
                 </span>
               )}
               {pendingAction?.type === "duplicate" && (
@@ -3113,7 +3099,7 @@ export function TourFormPage(props: TourFormPageProps) {
       return;
     }
     const saveState = publicTourSaveState(tour);
-    const isDraft = mode === "draft" || (mode === "save" && saveState.status === "draft");
+    const isDraft = isCustom && mode === "draft";
     const prepareSupplier = <T extends TourHotel | TourAlternativeHotel | TourMeal | TourAlternativeMeal>(
       item: T, type: "HOTEL" | "RESTAURANT", referencePrice: number, area: string,
     ): T => {
@@ -3277,7 +3263,7 @@ export function TourFormPage(props: TourFormPageProps) {
       version: tour?.version,
       revision: tour?.revision,
       createNewVersion: isCustom && createNewVersion,
-      changeNote: (createNewVersion ? "Lưu với phiên bản mới" : isCustom ? "Cập nhật phiên bản tour" : "Cập nhật bản nháp"),
+      changeNote: (createNewVersion ? "Lưu với phiên bản mới" : isCustom ? "Cập nhật phiên bản tour" : "Cập nhật tour"),
 
     };
 
@@ -4216,78 +4202,21 @@ export function TourFormPage(props: TourFormPageProps) {
                                 </button>
                               </div>
 
-                              {/* Dropdown chọn khách sạn đối tác */}
-                              {(() => {
-                                const targetDest = (
-                                  hotel.destination ||
-                                  destination ||
-                                  ""
-                                )
-                                  .toLowerCase()
-                                  .trim();
-                                const allProviderHotels = mockServices.filter(
-                                  (s) =>
-                                    s.category === "hotel" &&
-                                    s.status === "approved",
-                                );
-                                const matchedHotels = allProviderHotels.filter(
-                                  (s) => {
-                                    if (!targetDest) return true;
-                                    const loc = (
-                                      s.location || ""
-                                    ).toLowerCase();
-                                    const prov = (
-                                      s.province || ""
-                                    ).toLowerCase();
-                                    const name = s.name.toLowerCase();
-                                    return (
-                                      loc.includes(targetDest) ||
-                                      prov.includes(targetDest) ||
-                                      name.includes(targetDest)
-                                    );
-                                  },
-                                );
-                                const displayList =
-                                  matchedHotels.length > 0
-                                    ? matchedHotels
-                                    : allProviderHotels;
-
-                                return (
-                                  <select
-                                    onChange={(e) => {
-                                      const selectedId = e.target.value;
-                                      if (!selectedId) return;
-                                      const foundServ = mockServices.find(
-                                        (s) => s.id === selectedId,
-                                      );
-                                      if (foundServ) {
-                                        handleAddHotelFromService(
-                                          hotel.id || "",
-                                          foundServ,
-                                        );
-                                      }
-                                      e.target.value = ""; // Reset dropdown
-                                    }}
-                                    className="w-full h-9 px-3 rounded-lg border border-sky-300 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#075985] cursor-pointer shadow-2xs"
-                                    defaultValue=""
-                                  >
-                                    <option value="">
-                                      -- Click chọn khách sạn đối tác để thêm
-                                      vào danh sách thẻ bên dưới --
-                                    </option>
-                                    {displayList.map((serv) => (
-                                      <option key={serv.id} value={serv.id}>
-                                        🏨 {serv.name} — {serv.stars || 4}★ (
-                                        {serv.location || "Đà Lạt"}) —{" "}
-                                        {formatVND(
-                                          serv.pricePerPerson || serv.price,
-                                        )}
-                                        /đêm
-                                      </option>
-                                    ))}
-                                  </select>
-                                );
-                              })()}
+                              {/* Dropdown chọn khách sạn đối tác kèm lọc tỉnh/thành */}
+                              <PartnerServiceSelect
+                                services={mockServices.filter(
+                                  (s) => s.category === "hotel" && s.status === "approved",
+                                )}
+                                initialDest={hotel.destination || destination || ""}
+                                placeholder="-- Click chọn khách sạn đối tác để thêm vào danh sách thẻ bên dưới --"
+                                selectClass="border-sky-300 focus:ring-[#075985]"
+                                formatLabel={(serv) =>
+                                  `🏨 ${serv.name} — ${serv.stars || 4}★ (${serv.location || serv.province || "Khác"}) — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
+                                }
+                                onSelect={(foundServ) =>
+                                  handleAddHotelFromService(hotel.id || "", foundServ)
+                                }
+                              />
 
                               {/* Form thêm khách sạn ngoài sàn */}
                               {showCustomHotelForm && (
@@ -5873,108 +5802,28 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     </button>
                                                   </div>
 
-                                                  {/* Dropdown chọn nhà hàng đối tác */}
-                                                  {(() => {
-                                                    const targetDest = (
-                                                      day.destinationCity ||
-                                                      destination ||
-                                                      ""
-                                                    )
-                                                      .toLowerCase()
-                                                      .trim();
-                                                    const allFnbServices =
-                                                      mockServices.filter(
-                                                        (s) =>
-                                                          s.category ===
-                                                          "fnb" &&
-                                                          s.status ===
-                                                          "approved",
-                                                      );
-                                                    const matchedFnb =
-                                                      allFnbServices.filter(
-                                                        (s) => {
-                                                          const loc = (
-                                                            s.location || ""
-                                                          ).toLowerCase();
-                                                          const prov = (
-                                                            s.province || ""
-                                                          ).toLowerCase();
-                                                          const name =
-                                                            s.name.toLowerCase();
-                                                          const matchDest =
-                                                            !targetDest ||
-                                                            loc.includes(
-                                                              targetDest,
-                                                            ) ||
-                                                            prov.includes(
-                                                              targetDest,
-                                                            ) ||
-                                                            name.includes(
-                                                              targetDest,
-                                                            );
-                                                          const matchType =
-                                                            !s.mealType ||
-                                                            s.mealType ===
-                                                            meal.type;
-                                                          return (
-                                                            matchDest &&
-                                                            matchType
-                                                          );
-                                                        },
-                                                      );
-                                                    const displayFnb =
-                                                      matchedFnb.length > 0
-                                                        ? matchedFnb
-                                                        : allFnbServices;
-
-                                                    return (
-                                                      <select
-                                                        onChange={(e) => {
-                                                          const selectedId =
-                                                            e.target.value;
-                                                          if (!selectedId)
-                                                            return;
-                                                          const foundServ =
-                                                            mockServices.find(
-                                                              (s) =>
-                                                                s.id ===
-                                                                selectedId,
-                                                            );
-                                                          if (foundServ) {
-                                                            handleAddMealFromService(
-                                                              dIdx,
-                                                              mIdx,
-                                                              foundServ,
-                                                            );
-                                                          }
-                                                          e.target.value = ""; // Reset dropdown sau khi chọn
-                                                        }}
-                                                        className="w-full h-9 px-3 rounded-lg border border-emerald-300 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer shadow-2xs"
-                                                        defaultValue=""
-                                                      >
-                                                        <option value="">
-                                                          -- Click chọn quán ăn
-                                                          / nhà hàng để thêm vào
-                                                          danh sách thẻ bên dưới
-                                                          --
-                                                        </option>
-                                                        {displayFnb.map(
-                                                          (serv) => (
-                                                            <option
-                                                              key={serv.id}
-                                                              value={serv.id}
-                                                            >
-                                                              🍴 {serv.name} —{" "}
-                                                              {serv.priceFrom &&
-                                                                serv.priceTo
-                                                                ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
-                                                                : `${formatVND(serv.pricePerPerson || serv.price)}/người`}
-                                                            </option>
-                                                          ),
-                                                        )}
-                                                      </select>
-                                                    );
-                                                  })()}
+                                                  {/* Dropdown chọn nhà hàng đối tác kèm lọc tỉnh/thành */}
+                                                  <PartnerServiceSelect
+                                                    services={mockServices.filter(
+                                                      (s) =>
+                                                        s.category === "fnb" &&
+                                                        s.status === "approved" &&
+                                                        (!s.mealType || s.mealType === meal.type),
+                                                    )}
+                                                    initialDest={day.destinationCity || destination || ""}
+                                                    placeholder="-- Click chọn quán ăn / nhà hàng để thêm vào danh sách thẻ bên dưới --"
+                                                    selectClass="border-emerald-300 focus:ring-emerald-600"
+                                                    formatLabel={(serv) =>
+                                                      `🍴 ${serv.name} (${serv.location || serv.province || "Khác"}) — ${
+                                                        serv.priceFrom && serv.priceTo
+                                                          ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
+                                                          : `${formatVND(serv.pricePerPerson || serv.price)}/người`
+                                                      }`
+                                                    }
+                                                    onSelect={(foundServ) =>
+                                                      handleAddMealFromService(dIdx, mIdx, foundServ)
+                                                    }
+                                                  />
 
                                                   {/* Form thêm quán ăn ngoài sàn */}
                                                   {showCustomMealForm[
@@ -7939,6 +7788,78 @@ export function TourFormPage(props: TourFormPageProps) {
         isOpen={Boolean(viewingServiceModal)}
         onClose={() => setViewingServiceModal(null)}
       />
+    </div>
+  );
+}
+
+function PartnerServiceSelect({
+  services,
+  initialDest,
+  placeholder,
+  selectClass,
+  formatLabel,
+  onSelect,
+}: {
+  services: Service[];
+  initialDest: string;
+  placeholder: string;
+  selectClass: string;
+  formatLabel: (s: Service) => string;
+  onSelect: (s: Service) => void;
+}) {
+  const provinceOf = (s: Service) => (s.province || s.location || "").trim();
+  const provinces = Array.from(
+    new Set(services.map(provinceOf).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, "vi"));
+
+  const [selectedProvince, setSelectedProvince] = useState<string>(() => {
+    const target = initialDest.trim().toLowerCase();
+    if (!target) return "all";
+    const match = provinces.find((p) => p.toLowerCase().includes(target) || target.includes(p.toLowerCase()));
+    return match || "all";
+  });
+
+  const filtered =
+    selectedProvince === "all"
+      ? services
+      : services.filter((s) => provinceOf(s) === selectedProvince);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-2">
+      <select
+        aria-label="Lọc dịch vụ theo tỉnh thành"
+        value={selectedProvince}
+        onChange={(e) => setSelectedProvince(e.target.value)}
+        className={`h-9 px-2.5 rounded-lg border bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${selectClass}`}
+      >
+        <option value="all">Tất cả tỉnh/thành ({services.length})</option>
+        {provinces.map((prov) => {
+          const count = services.filter((s) => provinceOf(s) === prov).length;
+          return (
+            <option key={prov} value={prov}>
+              {prov} ({count})
+            </option>
+          );
+        })}
+      </select>
+      <select
+        onChange={(e) => {
+          const selectedId = e.target.value;
+          if (!selectedId) return;
+          const foundServ = services.find((s) => s.id === selectedId);
+          if (foundServ) onSelect(foundServ);
+          e.target.value = "";
+        }}
+        className={`w-full h-9 px-3 rounded-lg border bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${selectClass}`}
+        defaultValue=""
+      >
+        <option value="">{placeholder}</option>
+        {filtered.map((serv) => (
+          <option key={serv.id} value={serv.id}>
+            {formatLabel(serv)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
