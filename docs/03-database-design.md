@@ -492,8 +492,7 @@ Báo cáo sự cố hiện trường của HDV, vi phạm thỏa thuận đồng
   - `responsible_agency_id VARCHAR(36) NULL` $\rightarrow$ `business_profiles(id)` (`N–1`)
 - **Cột dữ liệu:**
   - `reporter_role VARCHAR(30) NOT NULL` — `CHECK (reporter_role IN ('GUIDE', 'CUSTOMER', 'LEAD_AGENCY', 'LOCAL_AGENCY'))`
-  - `incident_type VARCHAR(40) NOT NULL` — `CHECK (incident_type IN ('MEDICAL', 'VEHICLE', 'WEATHER', 'SERVICE_QUALITY', 'COHOST_BREACH', 'CUSTOMER_COMPLAINT'))`
-  - `severity VARCHAR(20) NOT NULL DEFAULT 'MEDIUM'` — `CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))`
+  - `incident_type VARCHAR(40) NOT NULL` — `CHECK (incident_type IN ('HEALTH', 'VEHICLE', 'WEATHER', 'CUSTOMER', 'SECURITY', 'SERVICE_PROVIDER', 'SCHEDULE', 'OTHER'))`
   - `location_name VARCHAR(255)`, `title VARCHAR(255) NOT NULL`, `description TEXT NOT NULL`
   - `evidence_urls_json JSON`
   - `remedy_deadline TIMESTAMP` (Thời hạn yêu cầu khắc phục đối với vi phạm chặng)
