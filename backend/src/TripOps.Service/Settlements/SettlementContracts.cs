@@ -76,7 +76,7 @@ public sealed record SettlementDto(
     IReadOnlyList<string> PayoutBlockers, IReadOnlyList<string> AutoBlockers);
 
 /// <param name="Amount">Bỏ trống = chuyển đúng số Agency được nhận. Nhập số nhỏ hơn (VD trừ bồi thường khiếu nại) thì bắt buộc ghi chú.</param>
-/// <param name="Note">Bắt buộc khi đang có khiếu nại mở hoặc khi đổi số tiền.</param>
+/// <param name="Note">Bắt buộc khi đổi số tiền.</param>
 public sealed record SettlementPayoutRequest(
     [Range(1, 9999999999)] decimal? Amount,
     [StringLength(500)] string? Note);

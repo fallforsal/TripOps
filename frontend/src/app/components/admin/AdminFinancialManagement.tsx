@@ -197,8 +197,8 @@ export function AdminFinancialManagement({
       statusFilter === "all"
         ? true
         : statusFilter === "settled"
-        ? isSettled
-        : !isSettled;
+          ? isSettled
+          : !isSettled;
 
     return matchesSearch && matchesStatus;
   });
@@ -215,7 +215,7 @@ export function AdminFinancialManagement({
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  Tài chính, STK Ngân hàng Sàn & Quyết toán
+                  STK Ngân hàng
                 </h1>
                 <p className="text-sm text-gray-500">
                   Quản lý tài khoản ngân hàng trung gian của hệ thống và giải ngân chi trả cho công ty du lịch

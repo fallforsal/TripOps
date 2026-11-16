@@ -298,6 +298,7 @@ public sealed record IncidentDto(
     IReadOnlyList<string>? EvidenceUrls = null,
     string? ReportedById = null,
     string? ReportedByName = null,
-    string? AgencyId = null);
+    string? AgencyId = null,
+    string? IncidentType = null);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

@@ -12,9 +12,9 @@ namespace TripOps.Service.Settlements;
 // Quyết toán: trả tiền cho Agency sau khi tour hoàn thành.
 //  - Agency chủ trì bấm "hoàn thành" → mỗi dòng booking_agencies chuyển Ready, chốt phí sàn (mặc định 10%)
 //    và hẹn ngày chuyển tự động = lúc hoàn thành + AutoPayoutDelayDays (mặc định 2 ngày: 10/11 → 12/11).
-//  - Tự động (SettlementWorker): tới hẹn, khách đã trả đủ, KHÔNG có khiếu nại mở, không có yêu cầu hoàn tiền mở,
+//  - Tự động (SettlementWorker): tới hẹn, khách đã trả đủ, không có yêu cầu hoàn tiền mở,
 //    Agency đã nhập tài khoản (không vừa đổi trong 24 giờ) → tạo lệnh chi hộ payOS (TIỀN THẬT).
-//    Có khiếu nại mở → bỏ qua, Admin tự giải quyết với Agency rồi chuyển tay hoặc bấm chuyển.
+//    Khiếu nại KHÔNG ảnh hưởng việc chuyển tiền (xử lý riêng ở trang Khiếu nại).
 //  - Thủ công (Admin): chi qua payOS ngay, ghi nhận đã chuyển khoản tay, tạm giữ / bỏ tạm giữ, kiểm tra lệnh.
 //  - Chống chi hai lần: mọi thao tác khóa dòng booking trong transaction; đang Processing thì không tạo lệnh khác;
 //    mã lệnh SETTLE-{id}-{lần} là khóa idempotency gửi payOS nên gửi lại không tạo lệnh thứ hai.
@@ -55,7 +55,7 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
                 UserId = row.AgencyId,
                 BookingId = booking.Id,
                 Message = $"Tour của booking {booking.BookingCode} đã hoàn thành. Tiền quyết toán (trừ phí sàn {percent.ToString("0.##", Vietnamese)}%) " +
-                          $"sẽ được chuyển từ {VietnamText(autoAt)} nếu khách đã trả đủ và không có khiếu nại."
+                          $"sẽ được chuyển từ {VietnamText(autoAt)} nếu khách đã trả đủ."
             });
         }
         // Báo khách thời hạn khiếu nại (ngắn, trước ngày chuyển tiền) và đánh giá.
@@ -187,7 +187,9 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
             CustomerPaid = s.PayoutBlockers.Any(p => p.StartsWith("Khách chưa thanh toán đủ", StringComparison.Ordinal)) ? 0 : s.GrossAmount,
             PayoutBlockers = s.PayoutBlockers.Select(Mask).ToArray(),
             AutoBlockers = s.AutoBlockers.Select(Mask).ToArray()
-        }).ToArray();
+        })
+        // Khoản mới nhất lên trên cùng (theo lúc tour hoàn thành, chưa hoàn thành thì theo ngày khởi hành).
+        .OrderByDescending(s => s.TourCompletedAt ?? s.StartDate).ThenByDescending(s => s.Id).ToArray();
     }
 
     // ------------------------------------------------------------ Admin: danh sách
@@ -531,7 +533,6 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
             case SettlementStatus.Failed: autoBlockers.Add("Lần chuyển trước không thành công: Admin xử lý."); break;
             case SettlementStatus.OnHold: autoBlockers.Add("Admin đang tạm giữ khoản này."); break;
         }
-        if (openComplaints > 0) autoBlockers.Add($"Có {openComplaints} khiếu nại đang mở: Admin cần giải quyết với Agency rồi chuyển tay.");
         if (status is SettlementStatus.Ready or SettlementStatus.Unpaid)
         {
             if (row.AutoPayoutAt is null)
@@ -568,8 +569,6 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
 
     private static decimal ValidateAmount(decimal? requested, Evaluation eval, string? note)
     {
-        if (eval.OpenComplaints > 0 && note is null)
-            throw new BookingException(422, "Booking đang có khiếu nại mở: vui lòng ghi chú cách đã giải quyết với Agency trước khi chuyển tiền.");
         var amount = requested ?? eval.Net;
         if (amount != Money(amount) || amount <= 0)
             throw new BookingException(422, "Số tiền chuyển phải là số nguyên dương.");

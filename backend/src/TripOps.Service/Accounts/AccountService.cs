@@ -34,6 +34,7 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         {
             user.BankName = bank; user.BankAccountNumber = number; user.BankAccountHolder = holder;
             user.BankAccountUpdatedAt = DateTime.UtcNow;
+            await SyncOpenRefunds(userId, bank, number, holder, ct);
             await db.SaveChangesAsync(ct);
         }
         return BankAccount(user);
@@ -42,7 +43,22 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
     {
         var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
         user.BankName = null; user.BankAccountNumber = null; user.BankAccountHolder = null; user.BankAccountUpdatedAt = DateTime.UtcNow;
+        await SyncOpenRefunds(userId, null, null, null, ct);
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Khoản hoàn chưa chuyển của khách luôn theo tài khoản trong hồ sơ: khách đổi/xóa tài khoản thì cập nhật theo.</summary>
+    private async Task SyncOpenRefunds(string userId, string? bank, string? number, string? holder, CancellationToken ct)
+    {
+        var open = await db.RefundRequests
+            .Where(r => r.Booking.CustomerId == userId && (r.Status == RefundStatus.Pending || r.Status == RefundStatus.Reviewing))
+            .ToListAsync(ct);
+        foreach (var refund in open)
+        {
+            refund.RefundBankName = bank;
+            refund.RefundAccountNumber = number;
+            refund.RefundAccountHolder = holder;
+        }
     }
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
         u.BusinessProfile is null ? null : Profile(u.BusinessProfile), u.Avatar);

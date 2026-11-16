@@ -22,6 +22,7 @@ namespace TripOps.Tests;
 public sealed partial class TourFlowTests
 {
     private const string Root = "/api/v1/agency/tours";
+    private static readonly string RegionalDemoPassword = $"Demo-{Guid.NewGuid():N}aA1!";
     private sealed class TourImageCloudHandler : HttpMessageHandler
     {
         public int Calls { get; private set; }
@@ -52,10 +53,12 @@ public sealed partial class TourFlowTests
         {
             builder.UseEnvironment("Development");
             if (withCloudinary) builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret"
+                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "test", ["Cloudinary:ApiKey"] = "test-key", ["Cloudinary:ApiSecret"] = "test-secret",
+                ["RegionalDemo:Password"] = RegionalDemoPassword
             }));
             else builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> {
-                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = ""
+                ["OpenAI:ApiKey"] = "", ["Storage:UseLocal"] = "false", ["Cloudinary:CloudName"] = "", ["Cloudinary:ApiKey"] = "", ["Cloudinary:ApiSecret"] = "",
+                ["RegionalDemo:Password"] = RegionalDemoPassword
             }));
             builder.ConfigureServices(services => {
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();

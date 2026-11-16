@@ -12,7 +12,6 @@ import { AdminLayout } from "./AdminLayout";
 import { AdminDashboardOverview } from "./AdminDashboardOverview";
 import { AdminFinancialManagement } from "./AdminFinancialManagement";
 import { ServicePostApproval } from "./ServicePostApproval";
-import { ProviderManagement } from "./ProviderManagement";
 import { UserManagement } from "./UserManagement";
 import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
 import { AdminRefundManagement } from "./AdminRefundManagement";
@@ -208,15 +207,6 @@ export function AdminDashboard({
             onRejectService={onRejectService}
             onToggleHideService={onToggleHideService}
             onDeleteService={onDeleteService}
-          />
-        );
-      case "providers":
-        return (
-          <ProviderManagement
-            providers={providers.filter(
-              (p) => p.accountStatus === "approved",
-            )}
-            services={services}
           />
         );
       case "users":

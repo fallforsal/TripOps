@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -24,24 +25,28 @@ public sealed record ComplaintDto(int Id, string Type, string ReasonCode, string
     string CustomerId, string CustomerName, string? CustomerPhone, string? CustomerEmail,
     string? AdminNotes, DateTime CreatedAt, DateTime? UpdatedAt, DateTime? ResolvedAt);
 
-/// <summary>Theo dõi Agency hay bị khiếu nại (chỉ Admin thấy). Upheld = khiếu nại Admin kết luận đúng (Resolved).</summary>
+/// <summary>Theo dõi Agency hay bị khiếu nại (chỉ Admin thấy). Upheld = số khiếu nại đã giải quyết; Dismissed luôn 0 (không còn từ chối).</summary>
 public sealed record AgencyComplaintStatDto(string AgencyId, string AgencyName, int Total, int Open, int Upheld, int Dismissed);
 
 public sealed record CreateComplaintInput(string Type, int? BookingId, string ReasonCode, string Title, string Description);
 
+/// <param name="Outcome">Chỉ còn "Resolved" (bỏ trống cũng được). Khiếu nại không có trạng thái từ chối.</param>
+/// <param name="Note">Cách Admin đã giải quyết; gửi cho khách (và Agency nếu khiếu nại gắn booking).</param>
 public sealed record ResolveComplaintRequest(
-    [Required, AllowedValues("Resolved", "Rejected")] string Outcome,
+    [AllowedValues(null, "Resolved")] string? Outcome,
     [Required, StringLength(2000, MinimumLength = 5)] string Note);
 
 public sealed record UploadedImage(byte[] Bytes, string Mime);
 
 /// <summary>
 /// Khiếu nại: khách gửi về CHUYẾN ĐI (gắn booking đã hoàn thành, trong 1 ngày) hoặc về NỀN TẢNG (không gắn booking, không giới hạn).
-/// Admin xem khiếu nại, ghi phản hồi rồi chấp nhận (Resolved) hoặc không chấp nhận (Rejected). Không có nhắn tin qua lại trong khiếu nại:
-/// cần hỏi thêm thì Admin gọi điện hoặc dùng chat. Agency không thấy khiếu nại trên hệ thống.
-/// Khiếu nại chuyến đi đang chờ xử lý chặn việc tự chuyển tiền cho Agency.
+/// Chỉ có 2 trạng thái: Đang xử lý (Pending) và Đã giải quyết (Resolved); không từ chối. Admin trao đổi với khách / Agency qua chat
+/// (thẻ khiếu nại gắn trong khung chat), xong thì đánh dấu đã giải quyết: hệ thống gửi tin nhắn + thông báo cho khách và Agency.
+/// Agency xem được khiếu nại về booking của mình (không thấy khiếu nại về nền tảng). Khiếu nại không ảnh hưởng việc chuyển tiền quyết toán.
+/// Dữ liệu cũ Rejected / InReview được hiển thị là Resolved / Pending.
 /// </summary>
-public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, CloudinaryStorage storage)
+public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, CloudinaryStorage storage, Chat.ChatService chat,
+    ILogger<ComplaintService> logger)
 {
     public const int MaxImages = 5;
     public const long MaxImageBytes = 5 * 1024 * 1024;
@@ -54,6 +59,8 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
     private static DateTime Utc(DateTime? value) => DateTime.SpecifyKind(value ?? DateTime.UnixEpoch, DateTimeKind.Utc);
     private static DateTime? UtcOrNull(DateTime? value) => value is null ? null : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
     private static bool IsOpen(Complaint c) => c.Status is null or ComplaintStatus.Pending or ComplaintStatus.InReview;
+    /// <summary>Trạng thái hiển thị: chỉ Pending hoặc Resolved.</summary>
+    private static string StatusOf(Complaint c) => IsOpen(c) ? nameof(ComplaintStatus.Pending) : nameof(ComplaintStatus.Resolved);
 
     // ------------------------------------------------------------ Khách
 
@@ -158,7 +165,9 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
         if (!string.IsNullOrWhiteSpace(status))
         {
             if (!Enum.TryParse<ComplaintStatus>(status, true, out var parsed)) throw new BookingException(400, "Trạng thái lọc không hợp lệ.");
-            query = query.Where(c => c.Status == parsed);
+            query = parsed is ComplaintStatus.Pending or ComplaintStatus.InReview
+                ? query.Where(c => c.Status == null || c.Status == ComplaintStatus.Pending || c.Status == ComplaintStatus.InReview)
+                : query.Where(c => c.Status == ComplaintStatus.Resolved || c.Status == ComplaintStatus.Rejected);
         }
         if (!string.IsNullOrWhiteSpace(type)) query = query.Where(c => c.Type == type);
         var rows = await query.ToListAsync(ct);
@@ -168,27 +177,94 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
     public async Task<ComplaintDto> AdminDetail(int id, CancellationToken ct) =>
         Detail(await Query().SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new BookingException(404, "Không tìm thấy khiếu nại."));
 
+    /// <summary>Admin đánh dấu khiếu nại đã giải quyết; gửi tin nhắn (kèm thẻ khiếu nại) và thông báo cho khách và Agency liên quan.</summary>
     public async Task<ComplaintDto> Resolve(string adminId, int id, ResolveComplaintRequest request, CancellationToken ct)
     {
-        var complaint = await db.Complaints.SingleOrDefaultAsync(c => c.Id == id, ct)
+        var complaint = await db.Complaints.Include(c => c.Booking).ThenInclude(b => b!.BookingAgencies)
+            .Include(c => c.Booking).ThenInclude(b => b!.Tour)
+            .SingleOrDefaultAsync(c => c.Id == id, ct)
             ?? throw new BookingException(404, "Không tìm thấy khiếu nại.");
-        if (!IsOpen(complaint)) throw new BookingException(409, "Khiếu nại đã được kết luận.");
+        if (!IsOpen(complaint)) throw new BookingException(409, "Khiếu nại đã được giải quyết.");
         var now = clock.UtcNow;
-        complaint.Status = request.Outcome == "Resolved" ? ComplaintStatus.Resolved : ComplaintStatus.Rejected;
+        var note = request.Note.Trim();
+        complaint.Status = ComplaintStatus.Resolved;
         complaint.AdminId = adminId;
-        complaint.AdminNotes = request.Note.Trim();
+        complaint.AdminNotes = note;
         complaint.ResolvedAt = now;
         complaint.UpdatedAt = now;
+
+        var kind = ReasonName(complaint);
+        var message = $"Khiếu nại #{complaint.Id} ({kind}) đã được giải quyết. {note}";
+        var agencies = AgenciesOf(complaint);
         db.WorkflowNotifications.Add(new WorkflowNotification
         {
             UserId = complaint.ComplainantId,
             BookingId = complaint.BookingId,
-            Message = complaint.Status == ComplaintStatus.Resolved
-                ? $"Khiếu nại \"{complaint.Title}\" đã được chấp nhận. Xem phản hồi của Admin trong mục Khiếu nại của tôi."
-                : $"Khiếu nại \"{complaint.Title}\" không được chấp nhận. Xem phản hồi của Admin trong mục Khiếu nại của tôi."
+            Message = $"Khiếu nại #{complaint.Id} \"{complaint.Title}\" đã được giải quyết. Xem chi tiết trong mục Khiếu nại của tôi."
         });
+        foreach (var agency in agencies)
+            db.WorkflowNotifications.Add(new WorkflowNotification
+            {
+                UserId = agency,
+                BookingId = complaint.BookingId,
+                Message = $"Khiếu nại #{complaint.Id} về booking {complaint.Booking?.BookingCode} đã được Admin giải quyết. Xem trong mục Khiếu nại."
+            });
         await db.SaveChangesAsync(ct);
+
+        // Tin nhắn trong khung chat Admin–khách và Admin–Agency. Lỗi chat không làm hỏng việc đã lưu kết quả.
+        foreach (var recipient in agencies.Prepend(complaint.ComplainantId).Distinct())
+        {
+            try
+            {
+                var conversation = await chat.Create(adminId, recipient, ct);
+                await chat.Send(adminId, conversation, message.Length <= 2000 ? message : message[..2000],
+                    ResolvedMessageKey(complaint.Id, recipient), ct, new Chat.ChatContextInput("complaint", complaint.Id));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning("Không gửi được tin nhắn giải quyết khiếu nại #{Id} cho {User}: {Message}", complaint.Id, recipient, ex.Message);
+            }
+        }
         return await AdminDetail(id, ct);
+    }
+
+    // ------------------------------------------------------------ Agency
+
+    /// <summary>Khiếu nại khách gửi về booking của Agency (chủ trì hoặc đồng tổ chức). Khiếu nại về nền tảng không hiện.</summary>
+    public async Task<IReadOnlyList<ComplaintSummaryDto>> AgencyList(string agencyId, CancellationToken ct) =>
+        (await ForAgency(agencyId).OrderByDescending(c => c.CreatedAt).ToListAsync(ct))
+        .OrderBy(c => IsOpen(c) ? 0 : 1).ThenByDescending(c => c.CreatedAt).Select(Summary).ToList();
+
+    public async Task<ComplaintDto> AgencyDetail(string agencyId, int id, CancellationToken ct) =>
+        Detail(await ForAgency(agencyId).SingleOrDefaultAsync(c => c.Id == id, ct)
+            ?? throw new BookingException(404, "Không tìm thấy khiếu nại."));
+
+    private IQueryable<Complaint> ForAgency(string agencyId) => Query().Where(c => c.Type == ComplaintTypes.Trip && c.BookingId != null &&
+        (c.TargetId == agencyId || c.Booking!.Tour!.AgencyId == agencyId || c.Booking.BookingAgencies.Any(a => a.AgencyId == agencyId)));
+
+    private static List<string> AgenciesOf(Complaint c) =>
+        c.Type != ComplaintTypes.Trip || c.Booking is null ? [] :
+        new[] { c.TargetId, c.Booking.Tour?.AgencyId }.Concat(c.Booking.BookingAgencies.Select(a => a.AgencyId))
+            .OfType<string>().Where(a => a.Length > 0).Distinct().ToList();
+
+    private static string ReasonName(Complaint c) => c.ReasonCode switch
+    {
+        "accommodation_food" => "Khách sạn / bữa ăn không đúng cam kết",
+        "schedule_change" => "Thay đổi lịch trình / xe đón trễ",
+        "guide_attitude" => "Thái độ hoặc chất lượng hướng dẫn viên",
+        "service_quality" => "Chất lượng dịch vụ tham quan",
+        "pricing_billing" => "Chi phí / yêu cầu thanh toán không hợp lệ",
+        "payment_refund" => "Thanh toán / hoàn tiền bị lỗi",
+        "account" => "Tài khoản",
+        "app_error" => "Lỗi website / ứng dụng",
+        _ => "Vấn đề khác",
+    };
+
+    /// <summary>Khóa idempotency cố định cho tin nhắn "đã giải quyết" (bấm lặp không gửi hai lần).</summary>
+    private static Guid ResolvedMessageKey(int complaintId, string recipient)
+    {
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes($"complaint-resolved:{complaintId}:{recipient}"));
+        return new Guid(hash);
     }
 
     public async Task<IReadOnlyList<AgencyComplaintStatDto>> AgencyStats(CancellationToken ct)
@@ -202,7 +278,7 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
             {
                 var target = g.First().Target;
                 return new AgencyComplaintStatDto(g.Key, target?.BusinessProfile?.BusinessName ?? target?.Name ?? g.Key, g.Count(),
-                    g.Count(IsOpen), g.Count(c => c.Status == ComplaintStatus.Resolved), g.Count(c => c.Status == ComplaintStatus.Rejected));
+                    g.Count(IsOpen), g.Count(c => !IsOpen(c)), 0);
             })
             .OrderByDescending(s => s.Upheld).ThenByDescending(s => s.Total).ToList();
     }
@@ -211,6 +287,7 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
 
     private IQueryable<Complaint> Query() => db.Complaints.AsNoTracking()
         .Include(c => c.Booking).ThenInclude(b => b!.Tour)
+        .Include(c => c.Booking).ThenInclude(b => b!.BookingAgencies)
         .Include(c => c.Target).ThenInclude(u => u!.BusinessProfile)
         .Include(c => c.Complainant)
         .AsSplitQuery();
@@ -240,12 +317,12 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
 
     private static string AgencyName(Complaint c) => c.Target?.BusinessProfile?.BusinessName ?? c.Target?.Name ?? "";
 
-    private static ComplaintSummaryDto Summary(Complaint c) => new(c.Id, c.Type, c.ReasonCode, c.Title, (c.Status ?? ComplaintStatus.Pending).ToString(),
+    private static ComplaintSummaryDto Summary(Complaint c) => new(c.Id, c.Type, c.ReasonCode, c.Title, StatusOf(c),
         c.BookingId, c.Booking?.BookingCode, c.Booking?.Tour?.Name, c.TargetId, c.TargetId is null ? null : AgencyName(c),
         c.ComplainantId, c.Complainant?.Name ?? "", Utc(c.CreatedAt), UtcOrNull(c.UpdatedAt), UtcOrNull(c.ResolvedAt));
 
     private ComplaintDto Detail(Complaint c) => new(c.Id, c.Type, c.ReasonCode, c.Title, c.Description, Urls(c.EvidenceUrls),
-        (c.Status ?? ComplaintStatus.Pending).ToString(),
+        StatusOf(c),
         c.BookingId, c.Booking?.BookingCode, c.Booking?.Tour?.Name, c.Booking is null ? null : DateTime.SpecifyKind(c.Booking.StartDate, DateTimeKind.Utc),
         c.TargetId, c.TargetId is null ? null : AgencyName(c),
         c.ComplainantId, c.Complainant?.Name ?? "", c.Complainant?.Phone, c.Complainant?.Email,

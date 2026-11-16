@@ -475,7 +475,7 @@ export function CancelTourModal({
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn chỉ bị hủy sau khi Admin duyệt.</p>
+                  <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn được hủy ngay khi gửi yêu cầu; Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn.</p>
                 </div>
               </div>
 

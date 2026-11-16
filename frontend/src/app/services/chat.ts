@@ -1,7 +1,7 @@
 import { http } from '@/app/lib/http';
 import type { ApiTour } from './wf02Tours';
 export interface ChatContact { id: string; name: string; businessName?: string | null; role?: string | null; avatar?: string | null }
-export interface ChatContextInput { kind: 'tour' | 'service' | 'booking' | 'design-request'; id: number; version?: number }
+export interface ChatContextInput { kind: 'tour' | 'service' | 'booking' | 'design-request' | 'complaint'; id: number; version?: number }
 export interface ChatBusinessContext extends ChatContextInput { title: string; thumbnailUrl?: string | null; subtitle?: string | null }
 export interface ChatMessage { id: number; conversationId: number; senderId: string; content: string; createdAt: string | null; readAt: string | null; clientMessageId: string | null; context?: ChatBusinessContext | null }
 export interface Conversation { id: number; contact: ChatContact; lastMessage: ChatMessage | null; unreadCount: number }

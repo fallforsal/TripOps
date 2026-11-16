@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TripOps.Data;
 using TripOps.Data.Enums;
+using TripOps.Service.Accounts;
 using TripOps.Service.Bookings;
 using TripOps.Service.Payments;
 
@@ -69,11 +70,11 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Paid_booking_is_cancelled_only_after_admin_approves_the_refund_with_the_policy_fee()
+    public async Task Paid_booking_is_cancelled_at_once_and_admin_refunds_the_policy_amount_to_the_profile_account()
     {
         var clock = new TestClock { Fixed = DateTime.UtcNow };
         using var app = PayOsApp(new FakePayOs(), clock); await app.Initialize();
-        var (customer, _, booking) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(20) });
+        var (customer, agencyClient, booking) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(20) });
         await Read<BookingDto>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "DEP-C1", null)));
 
         // Qua 72 giờ, còn 15–16 ngày → phí 25% tổng giá trị (3.000.000đ) = 750.000đ; đã trả 1.500.000đ → hoàn 750.000đ.
@@ -88,13 +89,15 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests",
             new CustomerCancellationRequest("CUSTOMER_REQUEST", "Bận việc", null, null, null))).StatusCode); // thiếu tài khoản nhận tiền
         var requested = await Read<BookingDto>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests", CancelWithBank()));
-        Assert.Equal("Confirmed", requested.Status); // chưa hủy cho tới khi Admin duyệt
+        Assert.Equal("Cancelled", requested.Status); // hủy ngay khi khách gửi yêu cầu, Admin chỉ hoàn tiền
         Assert.Equal("Pending", requested.Cancellation!.Status);
         Assert.Equal(750000m, requested.Cancellation.SuggestedRefund);
         Assert.True(requested.Cancellation.HasRefundAccount);
-        // Đang chờ duyệt: khóa thanh toán và không gửi yêu cầu thứ hai.
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "BAL-C1", null))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests", CancelWithBank())).StatusCode);
+        // Đơn đã hủy: không thanh toán tiếp, không gửi yêu cầu thứ hai.
+        Assert.False((await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "BAL-C1", null))).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests", CancelWithBank())).StatusCode);
+        var agencyView = (await agencyClient.GetFromJsonAsync<BookingDto>($"/api/v1/agency/bookings/{booking.Id}"))!;
+        Assert.Equal("Cancelled", agencyView.Status); // Agency thấy đơn đã hủy
 
         // Phí tính theo lúc gửi yêu cầu: Admin duyệt muộn hơn vẫn giữ số gợi ý cũ.
         clock.Fixed = clock.Fixed.Value.AddDays(3);
@@ -104,6 +107,13 @@ public sealed partial class BookingFlowTests
         Assert.Equal(750000m, item.SuggestedRefund);
         Assert.Equal("0123456789", item.AccountNumber);
         Assert.Equal("NGUYEN VAN A", item.AccountHolder);
+        // Admin không từ chối được: đơn đã hủy, chỉ còn hoàn tiền.
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/reject", new RefundRejectionRequest("Admin không đồng ý hủy đơn"))).StatusCode);
+
+        // Khách đổi tài khoản trong hồ sơ: khoản hoàn chưa chuyển dùng tài khoản mới, không giữ tài khoản cũ.
+        await Read<BankAccountDto>(await customer.PutAsJsonAsync("/api/v1/me/bank-account", new BankAccountInput("Techcombank", "1903 5555 6666", "tran thi b")));
+        item = Assert.Single((await admin.GetFromJsonAsync<List<AdminRefundDto>>("/api/v1/admin/refunds?status=Pending"))!);
+        Assert.Equal(("Techcombank", "190355556666", "TRAN THI B"), (item.BankName, item.AccountNumber, item.AccountHolder));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/approve",
             new RefundApprovalRequest(750000, null, null))).StatusCode); // thiếu mã giao dịch
@@ -115,6 +125,7 @@ public sealed partial class BookingFlowTests
             new RefundApprovalRequest(750000, "FT26110312345", null)));
         Assert.Equal("Completed", approved.Status);
         Assert.Equal("FT26110312345", approved.RefundTransactionCode);
+        Assert.Equal("190355556666", approved.AccountNumber); // chuyển vào tài khoản hiện tại trong hồ sơ
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/approve",
             new RefundApprovalRequest(750000, "FT26110312345", null))).StatusCode);
 
@@ -144,7 +155,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Agency_cancellation_refunds_everything_and_rejection_keeps_the_booking()
+    public async Task Agency_cancellation_cancels_at_once_and_refunds_everything_to_the_customer_account()
     {
         using var app = PayOsApp(new FakePayOs(), new TestClock()); await app.Initialize();
         var (customer, agency, booking) = await ApprovedBooking(app, Sample() with { StartDate = DateTime.UtcNow.Date.AddDays(20) });
@@ -154,41 +165,31 @@ public sealed partial class BookingFlowTests
         Assert.Equal("agency", quote.Mode);
         Assert.Equal(1500000m, quote.RefundAmount);
         var requested = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/cancel", new BookingCancellationRequest("Không đủ khách khởi hành")));
-        Assert.Equal("Confirmed", requested.Status);
+        Assert.Equal("Cancelled", requested.Status); // hủy ngay
         Assert.Equal(BookingService.ReasonAgencyCancelled, requested.Cancellation!.Reason);
         Assert.Equal("agency", requested.Cancellation.RequestedByRole);
+        Assert.Equal("Pending", requested.Cancellation.Status);
         Assert.False(requested.Cancellation.HasRefundAccount);
 
         var admin = await app.Client("admin1@example.test");
         var item = Assert.Single((await admin.GetFromJsonAsync<List<AdminRefundDto>>("/api/v1/admin/refunds"))!);
         Assert.Equal(1500000m, item.SuggestedRefund);
-        // Chưa có tài khoản nhận tiền: chưa duyệt được.
+        // Chưa có tài khoản nhận tiền: chưa hoàn được; Admin cũng không từ chối được.
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/approve",
             new RefundApprovalRequest(1500000, "FT2", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/reject", new RefundRejectionRequest("Admin không đồng ý hủy đơn"))).StatusCode);
         var withAccount = await Read<BookingDto>(await customer.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests/refund-account",
             new RefundAccountRequest("MB Bank", "9876543210", "Nguyen Van A")));
         Assert.True(withAccount.Cancellation!.HasRefundAccount);
 
-        // Admin từ chối: đơn giữ nguyên, khách thanh toán tiếp được.
-        var rejected = await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/reject", new RefundRejectionRequest("Agency đã tìm đủ khách")));
-        Assert.Equal("Rejected", rejected.Status);
-        var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal("Confirmed", current.Status);
-        Assert.Equal("Rejected", current.Cancellation!.Status);
-        await Read<BookingDto>(await customer.PostAsJsonAsync($"/api/v1/bookings/{booking.Id}/deposit", new BookingDepositRequest(1500000, "BAL-C3", null)));
-
-        // Hủy lại lần hai và Admin duyệt hoàn đủ 100% số đã trả.
-        await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/cancel", new BookingCancellationRequest("Thiên tai")));
-        var second = (await admin.GetFromJsonAsync<List<AdminRefundDto>>("/api/v1/admin/refunds?status=Pending"))!.Single();
-        Assert.Equal(3000000m, second.SuggestedRefund);
-        await Read<BookingDto>(await customer.PutAsJsonAsync($"/api/v1/bookings/{booking.Id}/cancellation-requests/refund-account",
-            new RefundAccountRequest("MB Bank", "9876543210", "Nguyen Van A")));
-        await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{second.Id}/approve", new RefundApprovalRequest(3000000, "FT3", null)));
-        Assert.Equal("Cancelled", (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!.Status);
+        var done = await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/approve", new RefundApprovalRequest(1500000, "FT3", null)));
+        Assert.Equal(("Completed", "9876543210"), (done.Status, done.AccountNumber));
+        var after = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
+        Assert.Equal(("Cancelled", "Refunded"), (after.Status, after.PaymentStatus));
     }
 
     [Fact]
-    public async Task Customer_who_misses_the_balance_deadline_loses_what_was_paid_after_admin_approval()
+    public async Task Customer_who_misses_the_balance_deadline_loses_what_was_paid_and_nothing_is_left_for_admin()
     {
         var clock = new TestClock { Fixed = DateTime.UtcNow };
         using var app = PayOsApp(new FakePayOs(), clock); await app.Initialize();
@@ -203,10 +204,10 @@ public sealed partial class BookingFlowTests
         var requested = await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/cancel", new BookingCancellationRequest("Khách không thanh toán đợt 2")));
         Assert.Equal(BookingService.ReasonPaymentOverdue, requested.Cancellation!.Reason);
         Assert.Equal(0m, requested.Cancellation.SuggestedRefund);
+        Assert.Equal(("Cancelled", "Completed"), (requested.Status, requested.Cancellation.Status)); // không có gì để hoàn
 
         var admin = await app.Client("admin1@example.test");
-        var item = (await admin.GetFromJsonAsync<List<AdminRefundDto>>("/api/v1/admin/refunds?status=Pending"))!.Single();
-        await Read<AdminRefundDto>(await admin.PostAsJsonAsync($"/api/v1/admin/refunds/{item.Id}/approve", new RefundApprovalRequest(0, null, null)));
+        Assert.Empty((await admin.GetFromJsonAsync<List<AdminRefundDto>>("/api/v1/admin/refunds?status=Pending"))!);
         var after = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
         Assert.Equal("Cancelled", after.Status);
         Assert.DoesNotContain(after.PaymentTransactions!, t => t.PaymentMethod == "REFUND");

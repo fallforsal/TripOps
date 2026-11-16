@@ -443,31 +443,38 @@ public sealed partial class BookingFlowTests
         return (app, (await Complain(app, TripComplaint(bookingId))).Id);
     }
 
-    private static Task<ComplaintDto> Conclude(App app, int id, string outcome, string note = "  Đã xác minh với Agency  ") =>
+    private static Task<ComplaintDto> Conclude(App app, int id, string? outcome, string note = "  Đã xác minh với Agency  ") =>
         Use<ComplaintService, ComplaintDto>(app, s => s.Resolve("admin1", id, new ResolveComplaintRequest(outcome, note), default));
 
     [Fact]
-    public async Task F45_UTCID01_admin_accepts_complaint()
+    public async Task F45_UTCID01_admin_marks_complaint_resolved()
     {
         var (app, id) = await OpenComplaint();
         using (app)
         {
-            await Conclude(app, id, "Resolved");
+            var dto = await Conclude(app, id, "Resolved");
+            Assert.Equal("Resolved", dto.Status);
             var row = await InDb(app, db => db.Complaints.SingleAsync(c => c.Id == id));
             Assert.Equal((ComplaintStatus.Resolved, "Đã xác minh với Agency", "admin1"), (row.Status!.Value, row.AdminNotes, row.AdminId));
-            Assert.True(await InDb(app, db => db.WorkflowNotifications.AnyAsync(n => n.UserId == "customer1" && n.Message.Contains("đã được chấp nhận"))));
+            Assert.True(await InDb(app, db => db.WorkflowNotifications.AnyAsync(n => n.UserId == "customer1" && n.Message.Contains("đã được giải quyết"))));
+            Assert.True(await InDb(app, db => db.WorkflowNotifications.AnyAsync(n => n.UserId == "agency1" && n.Message.Contains("đã được Admin giải quyết"))));
         }
     }
 
     [Fact]
-    public async Task F45_UTCID02_admin_rejects_complaint()
+    public async Task F45_UTCID02_resolve_without_outcome_also_sends_chat_messages()
     {
         var (app, id) = await OpenComplaint();
         using (app)
         {
-            await Conclude(app, id, "Rejected", "Không đủ bằng chứng");
-            Assert.Equal(ComplaintStatus.Rejected, await InDb(app, db => db.Complaints.Where(c => c.Id == id).Select(c => c.Status!.Value).SingleAsync()));
-            Assert.True(await InDb(app, db => db.WorkflowNotifications.AnyAsync(n => n.UserId == "customer1" && n.Message.Contains("không được chấp nhận"))));
+            await Conclude(app, id, null, "Agency đã hoàn tiền phòng");
+            var messages = await InDb(app, db => db.ChatMessages.Where(m => m.SenderId == "admin1" && m.Content.Contains($"Khiếu nại #{id}"))
+                .Select(m => new { m.Content, m.ContextData, Members = new[] { m.Conversation.UserOneId, m.Conversation.UserTwoId } }).ToListAsync());
+            Assert.Equal(2, messages.Count);
+            Assert.All(messages, m => Assert.Contains("đã được giải quyết. Agency đã hoàn tiền phòng", m.Content));
+            Assert.All(messages, m => Assert.Contains("\"complaint\"", m.ContextData));
+            Assert.Contains(messages, m => m.Members.Contains("customer1"));
+            Assert.Contains(messages, m => m.Members.Contains("agency1"));
         }
     }
 
@@ -485,7 +492,7 @@ public sealed partial class BookingFlowTests
         using (app)
         {
             await Conclude(app, id, "Resolved");
-            Assert.Equal((409, "Khiếu nại đã được kết luận."), await Rejects(() => Conclude(app, id, "Rejected")));
+            Assert.Equal((409, "Khiếu nại đã được giải quyết."), await Rejects(() => Conclude(app, id, "Resolved")));
         }
     }
 }

@@ -111,7 +111,8 @@ class TripOpsApi {
   Future<Uint8List> imageBytes(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null ||
-        !(url.startsWith('/api/v1/files/guide-checkins/') ||
+        !((url.startsWith('/api/v1/files/guide-checkins/') ||
+          url.startsWith('/api/v1/files/guide-incidents/')) ||
           (uri.scheme == 'https' && uri.host.isNotEmpty))) {
       throw const ApiFailure('Đường dẫn ảnh check-in không hợp lệ.');
     }

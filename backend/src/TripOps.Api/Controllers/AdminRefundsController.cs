@@ -6,8 +6,8 @@ using TripOps.Service.Bookings;
 namespace TripOps.Api.Controllers;
 
 /// <summary>
-/// Admin xử lý yêu cầu hủy/hoàn tiền. Đơn chỉ bị hủy khi Admin duyệt. Tiền hoàn hiện chuyển khoản thủ công:
-/// Admin chuyển xong rồi nhập mã giao dịch ngân hàng để hệ thống ghi nhận.
+/// Admin hoàn tiền cho các đơn đã hủy (đơn hủy ngay khi khách/Agency gửi yêu cầu; Admin không duyệt/từ chối).
+/// Chi tự động qua payOS, hoặc chuyển khoản tay rồi nhập mã giao dịch ngân hàng để ghi nhận.
 /// </summary>
 [ApiController, Authorize(Roles = "admin"), Route("api/v1/admin/refunds")]
 [Tags("Refunds")]
