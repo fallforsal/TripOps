@@ -82,9 +82,11 @@ public sealed partial class BookingFlowTests
         Assert.True(detail!.CanCheckInLocations);
         Assert.Equal(firstId, detail.NextLocationCheckInId);
 
-        // Reject skipping, out-of-order and duplicate check-ins.
+        // Reject invalid statuses, out-of-order check-ins/skips, and duplicate check-ins.
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await guide.PostAsJsonAsync(Url(firstId), new { status = "Skipped" })).StatusCode);
+            (await guide.PostAsJsonAsync(Url(firstId), new { status = "InvalidStatus" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(Url(secondId), new { status = "Skipped" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await guide.PostAsJsonAsync(Url(secondId), request)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
