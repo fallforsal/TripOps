@@ -23,6 +23,10 @@ public sealed class CloudinaryStorage(HttpClient http, IConfiguration config, IH
     public Task<string> UploadGuideCheckinImage(string guideId, byte[] bytes, string mime, CancellationToken ct)
         => UploadImage(guideId, bytes, mime, "guide-checkins", authenticated: true, ct, allowWebp: true);
 
+    /// <summary>Private incident evidence, separate from location check-in photos.</summary>
+    public Task<string> UploadGuideIncidentImage(string guideId, byte[] bytes, string mime, CancellationToken ct)
+        => UploadImage(guideId, bytes, mime, "guide-incidents", authenticated: true, ct, allowWebp: true);
+
     /// <summary>Ảnh bằng chứng khiếu nại: riêng tư (chỉ khách đó và Admin xem), thư mục theo id khách.</summary>
     public Task<string> UploadComplaintImage(string customerId, byte[] bytes, string mime, CancellationToken ct)
         => UploadImage(customerId, bytes, mime, "complaints", authenticated: true, ct, allowWebp: true);

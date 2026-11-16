@@ -56,7 +56,7 @@ public sealed partial class TourFlowTests
             .Single(a => a.Email.EndsWith("@" + RegionalDemoSeed.Domain)).Evidence!;
         Assert.Equal(6, evidence.MatchedCompletedTrips); Assert.Equal(2, evidence.MatchedTourCount);
         using var customer = app.CreateClient();
-        (await customer.PostAsJsonAsync("/api/v1/auth/login", new { email = "customer.1.da-nang@" + RegionalDemoSeed.Domain, password = RegionalDemoSeed.Password })).EnsureSuccessStatusCode();
+        (await customer.PostAsJsonAsync("/api/v1/auth/login", new { email = "customer.1.da-nang@" + RegionalDemoSeed.Domain, password = RegionalDemoPassword })).EnsureSuccessStatusCode();
         await app.Inspect(async db => {
             var id = await db.Bookings.Where(b => b.BookingCode == "REG26-DA_NANG-1-B01").Select(b => b.Id).SingleAsync();
             (await customer.GetAsync($"/api/v1/bookings/{id}")).EnsureSuccessStatusCode();
