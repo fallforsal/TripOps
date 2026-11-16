@@ -53,6 +53,7 @@ import {
   Sparkles,
   Download,
   FileSpreadsheet,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -1632,6 +1633,306 @@ export function BookingFormPage({
                   </table>
                 </div>
               </div>
+
+              {/* LỘ TRÌNH & KHÁCH SẠN CHI TIẾT CỦA TOUR (LUÔN HIỂN THỊ ĐỂ KHÁCH XEM LẠI) */}
+              {(tour.hotels?.length || tour.itinerary?.length) ? (
+                <div className="bg-white rounded-2xl border border-[#CBD5E1] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-xs text-[#075985] uppercase flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-[#0284C7]" />
+                      Khách sạn &amp; Lịch trình chi tiết chuyến đi
+                    </h4>
+                    <span className="text-[11px] text-slate-500">
+                      {tour.duration || `${tour.itinerary?.length || 0} ngày`}
+                    </span>
+                  </div>
+
+                  {tour.hotels && tour.hotels.length > 0 && (
+                    <div className="bg-[#F8FAFC] rounded-xl p-3 border border-slate-200 space-y-1.5">
+                      <p className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#0284C7]" />
+                        Khách sạn lưu trú:
+                      </p>
+                      <div className="space-y-1 pl-5 text-xs">
+                        {tour.hotels.map((hotel, idx) => {
+                          const matchedChange = customHotelChanges?.find(
+                            (hc) =>
+                              (hotel.destination && hc.destination === hotel.destination) ||
+                              hc.originalHotelName === hotel.name,
+                          );
+                          const displayName = matchedChange ? matchedChange.newHotelName : hotel.name;
+                          const displayStars = matchedChange?.stars ?? hotel.stars;
+                          return (
+                            <div key={hotel.id || idx} className="flex flex-wrap items-center gap-1.5 text-slate-700">
+                              <span className="font-semibold text-slate-900">
+                                {hotel.destination ? `${hotel.destination}: ` : ""}
+                                {displayName}
+                              </span>
+                              {displayStars ? (
+                                <span className="text-amber-600 font-semibold">({displayStars}★)</span>
+                              ) : null}
+                              {hotel.nights ? (
+                                <span className="text-slate-500">· {hotel.nights} đêm</span>
+                              ) : null}
+                              {matchedChange && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-[#075985] border border-sky-200 font-medium">
+                                  Đã tùy chỉnh
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {tour.itinerary && tour.itinerary.length > 0 && (
+                    <div className="space-y-4">
+                      {tour.itinerary.map((day) => {
+                        const parseMinutes = (t?: string) => {
+                          if (!t) return 9999;
+                          const m = t.match(/(\d{1,2}):(\d{2})/);
+                          return m ? Number(m[1]) * 60 + Number(m[2]) : 9999;
+                        };
+                        const dayLocChanges = (locationChanges || []).filter(
+                          (lc) => lc.dayNumber === day.day,
+                        );
+                        type TimelineAct =
+                          | {
+                              kind: "location";
+                              key: string;
+                              time: string;
+                              name: string;
+                              customName?: string;
+                            }
+                          | {
+                              kind: "meal";
+                              key: string;
+                              time: string;
+                              label: string;
+                              name: string;
+                              defaultName: string;
+                              customized: boolean;
+                            };
+
+                        const activities: TimelineAct[] = [];
+                        (day.locations || []).forEach((loc, lIdx) => {
+                          const matched =
+                            dayLocChanges.find(
+                              (lc) =>
+                                (lc.locationId && lc.locationId === loc.id) ||
+                                (lc.originalLocationName &&
+                                  lc.originalLocationName === loc.name),
+                            ) ||
+                            (dayLocChanges.length === 1 &&
+                            (day.locations?.length || 0) === 1
+                              ? dayLocChanges[0]
+                              : undefined);
+                          activities.push({
+                            kind: "location",
+                            key: `loc-${loc.id || lIdx}`,
+                            time: loc.time || "08:00",
+                            name: loc.name,
+                            customName: matched?.requestedLocations,
+                          });
+                        });
+                        (day.meals || []).forEach((meal, mIdx) => {
+                          const mealChange = customMealChanges?.find(
+                            (mc) =>
+                              mc.dayNumber === day.day &&
+                              mc.mealType === meal.type,
+                          );
+                          const mealLabel =
+                            meal.type === "breakfast"
+                              ? "Bữa sáng"
+                              : meal.type === "lunch"
+                                ? "Bữa trưa"
+                                : "Bữa tối";
+                          const defaultTime =
+                            meal.type === "breakfast"
+                              ? "07:00"
+                              : meal.type === "lunch"
+                                ? "12:00"
+                                : "18:30";
+                          const defaultName =
+                            meal.serviceName ||
+                            meal.description ||
+                            "Nhà hàng theo tour";
+                          activities.push({
+                            kind: "meal",
+                            key: `meal-${meal.id || mIdx}`,
+                            time: meal.time || defaultTime,
+                            label: mealLabel,
+                            name: mealChange ? mealChange.newMealName : defaultName,
+                            defaultName,
+                            customized: !!mealChange,
+                          });
+                        });
+                        activities.sort(
+                          (a, b) => parseMinutes(a.time) - parseMinutes(b.time),
+                        );
+
+                        return (
+                          <div
+                            key={day.id || day.day}
+                            className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 rounded-full bg-[#F97316] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                  {day.day}
+                                </span>
+                                <p className="font-bold text-slate-900 text-sm">
+                                  {day.title}
+                                </p>
+                              </div>
+                              {day.destinationCity && (
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {day.destinationCity}
+                                </span>
+                              )}
+                            </div>
+
+                            {day.description && (
+                              <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                                {day.description}
+                              </div>
+                            )}
+
+                            {activities.length > 0 && (
+                              <div className="relative pl-1">
+                                <div className="absolute left-[95px] top-4 bottom-4 w-0.5 bg-gray-200" />
+                                <div className="space-y-3">
+                                  {activities.map((act) => {
+                                    if (act.kind === "location") {
+                                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                        (act.customName || act.name) +
+                                          (day.destinationCity
+                                            ? " " + day.destinationCity
+                                            : ""),
+                                      )}`;
+                                      return (
+                                        <div
+                                          key={act.key}
+                                          className="relative flex items-start gap-2.5"
+                                        >
+                                          <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                                              <Clock className="w-3 h-3 text-blue-500" />
+                                              {act.time}
+                                            </span>
+                                          </div>
+                                          <div
+                                            className={`relative z-10 flex-shrink-0 mt-2 w-7 h-7 rounded-full flex items-center justify-center border-2 ${
+                                              act.customName
+                                                ? "bg-amber-400 border-amber-400 text-white"
+                                                : "bg-white border-blue-400 text-blue-500"
+                                            }`}
+                                          >
+                                            <MapPin className="w-3.5 h-3.5" />
+                                          </div>
+                                          <div
+                                            className={`flex-1 rounded-xl border p-3 ${
+                                              act.customName
+                                                ? "border-amber-200 bg-amber-50"
+                                                : "border-gray-200 bg-white"
+                                            }`}
+                                          >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <div className="space-y-0.5">
+                                                {act.customName ? (
+                                                  <>
+                                                    <p className="text-xs text-gray-400 line-through">
+                                                      {act.name}
+                                                    </p>
+                                                    <a
+                                                      href={mapsUrl}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="font-semibold text-amber-800 text-sm hover:underline inline-flex items-center gap-1.5"
+                                                    >
+                                                      <span>→ {act.customName}</span>
+                                                      <ExternalLink className="w-3 h-3 text-amber-600" />
+                                                    </a>
+                                                  </>
+                                                ) : (
+                                                  <a
+                                                    href={mapsUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="font-medium text-gray-900 text-sm hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 group"
+                                                  >
+                                                    <span>{act.name}</span>
+                                                    <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-blue-600" />
+                                                  </a>
+                                                )}
+                                              </div>
+                                              {act.customName && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-semibold">
+                                                  Đã tùy chỉnh
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div
+                                        key={act.key}
+                                        className="relative flex items-start gap-2.5"
+                                      >
+                                        <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-orange-50 text-orange-700 border border-orange-200">
+                                            <Clock className="w-3 h-3 text-orange-500" />
+                                            {act.time}
+                                          </span>
+                                        </div>
+                                        <div className="relative z-10 flex-shrink-0 mt-2 w-7 h-7 rounded-full bg-white border-2 border-[#F97316] text-[#F97316] flex items-center justify-center">
+                                          <Utensils className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div
+                                          className={`flex-1 rounded-xl border p-3 ${
+                                            act.customized
+                                              ? "border-amber-200 bg-amber-50/70"
+                                              : "border-gray-200 bg-[#F8FAFC]"
+                                          }`}
+                                        >
+                                          <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                              <span className="w-7 h-7 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center shrink-0">
+                                                <Utensils className="w-3.5 h-3.5" />
+                                              </span>
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-900">
+                                                  {act.label}: {act.name}
+                                                </p>
+                                                <p className="text-[11px] text-slate-500">
+                                                  Mặc định: {act.defaultName}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            {act.customized && (
+                                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-[#075985] border border-sky-200 font-semibold">
+                                                Đã tùy chỉnh
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* CUSTOMIZATION HIGHLIGHTS (NẾU CÓ TÙY CHỈNH) */}
               {isCustomized && (

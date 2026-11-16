@@ -24,7 +24,7 @@ public sealed record ProviderRequestView(int Id, int BookingId, int? ServiceId, 
     int? ParentRequestId = null, string? ParticipantIndicesJson = null, string? OwnerAgencyId = null, bool IsSupplement = false, int? AgencySupplierId = null);
 /// <summary>Khách trong đoàn (chỉ thông tin cần cho xếp phòng/suất ăn, không có giấy tờ tùy thân).</summary>
 public sealed record ProviderGuestView(string FullName, string? Gender, string? TierName,
-    string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null);
+    string? RoommateNote, string? RestaurantNote, int? Age = null, string? PhoneNumber = null, string? IdentityNumber = null);
 /// <summary>Yêu cầu dịch vụ hiển thị cho Provider: các trường của ProviderRequestView kèm thông tin booking,
 /// công ty lữ hành và đoàn khách. Booking đã hủy/từ chối thì Status = "Cancelled" để Provider biết không cần xử lý nữa.</summary>
 public sealed record ProviderInboxView(int Id, int BookingId, int ServiceId, string SlotKey,
@@ -438,7 +438,9 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
                 closed ? b.CancelledAt : null,
                 RequestPassengers(b,r).OrderBy(p => p.ParticipantIndex)
                     .Select(p => new ProviderGuestView(p.FullName, p.Gender, p.TierName, p.RoommateNote, p.RestaurantNote,
-                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null, p.PhoneNumber))
+                        p.DateOfBirth.HasValue ? BookingAlliance.Age(p.DateOfBirth.Value,v.ServiceDateFrom ?? b.StartDate) : null,
+                        null,
+                        r.SlotKey.StartsWith("meal:") ? null : p.IdentityNumber))
                     .ToArray(), b.Timelines.SelectMany(day=>day.Meals).FirstOrDefault(meal=>r.SlotKey == $"meal:{meal.Id}")?.Time?.TimeOfDay,
                 AgencyId: agencyId, AgencyLogo: agency?.Logo, ParentRequestId: r.ParentRequestId, IsSupplement: v.IsSupplement);
         }).ToArray();

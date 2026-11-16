@@ -12,6 +12,7 @@ export interface ParticipantInput {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface CreateBookingRequest {
@@ -29,6 +30,12 @@ export interface CreateBookingRequest {
     mealType: string;
     name: string;
     serviceId?: number;
+  }[];
+  locationChoices?: {
+    dayNumber: number;
+    originalLocationName: string;
+    requestedLocationName: string;
+    note?: string;
   }[];
 }
 
@@ -53,6 +60,7 @@ export interface ParticipantDto {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface AssignedGuideDto {
@@ -78,7 +86,7 @@ export interface BookingDto {
   isPartnerView?: boolean;
   agencyDirectory?:{agencyId:string;agencyName:string}[];
   bookingAgencies?:BookingAgencyDto[];
-  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string}[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string;photoUrls?:string[]}[];
   id: number;
   bookingCode: string;
   customerId: string;
@@ -130,6 +138,7 @@ export interface BookingDto {
       attendanceStatus?: string;
       changeReason?: string;
       agencyId?:string;
+      photoUrls?: string[];
     }[];
     meals: {
       id: number;
@@ -433,6 +442,10 @@ export interface IncidentDto {
   resolutionNotes?: string;
   status: string;
   createdAt: string;
+  evidenceUrls?: string[];
+  reportedById?: string;
+  reportedByName?: string;
+  agencyId?: string;
 }
 
 // 1. Customer APIs (WF05)

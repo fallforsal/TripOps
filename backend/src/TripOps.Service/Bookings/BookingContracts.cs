@@ -10,10 +10,12 @@ public sealed record CreateBookingRequest(
     [Required, EmailAddress, StringLength(191)] string ContactEmail,
     [StringLength(1000)] string? SpecialRequests,
     [Required, MinLength(1)] ParticipantInput[] Participants,
-    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null, int? TourVersion = null, int? TourRevision = null);
+    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null, int? TourVersion = null, int? TourRevision = null,
+    LocationChoiceInput[]? LocationChoices = null);
 
 public sealed record HotelChoiceInput(string Destination, string Name, int? ServiceId = null);
 public sealed record MealChoiceInput(int DayNumber, string MealType, string Name, int? ServiceId = null);
+public sealed record LocationChoiceInput(int DayNumber, [Required, StringLength(255)] string OriginalLocationName, [Required, StringLength(255)] string RequestedLocationName, [StringLength(500)] string? Note = null);
 
 public sealed record ParticipantInput(
     [Required, StringLength(150)] string FullName,
@@ -45,13 +47,14 @@ public sealed record GuideAssignmentRequest(
 
 public sealed record AttendanceCheckinRequest(
     [Range(1, int.MaxValue)] int ParticipantId,
-    [Required, AllowedValues("CheckedIn", "Absent", "Pending")] string Status);
+    [Required, AllowedValues("CheckedIn", "Absent", "Pending")] string Status,
+    [StringLength(500)] string? Note = null);
 
 public sealed record ReportIncidentRequest(
-    [Required, StringLength(100)] string IncidentType,
+    [StringLength(100)] string? IncidentType,
     [Required, StringLength(255)] string Title,
     [Required, StringLength(2000)] string Description,
-    [StringLength(50)] string? Severity);
+    [StringLength(50)] string? Severity = null);
 
 public sealed record BookingDto(
     int Id,
@@ -224,7 +227,7 @@ public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus,
     string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null,
-    IReadOnlyList<string>? PhotoUrls = null);
+    IReadOnlyList<string>? PhotoUrls = null, string? CheckinNote = null);
 public sealed record BookingSupplierDto(
     string? Address,
     string? ContactPhone,
@@ -271,7 +274,7 @@ public sealed record ParticipantDto(
     int? ParticipantIndex = null,
     bool? IsPrimary = null,
     string? Note = null, string? RoommateNote = null, string? RestaurantNote = null,
-    string? CheckedBy = null, DateTime? CheckedAt = null, string? AssignedGuideId = null);
+    string? CheckedBy = null, DateTime? CheckedAt = null, string? AssignedGuideId = null, string? StatusNote = null);
 
 public sealed record AssignedGuideDto(
     int Id,
@@ -291,6 +294,10 @@ public sealed record IncidentDto(
     string Description,
     string? ResolutionNotes,
     string Status,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    IReadOnlyList<string>? EvidenceUrls = null,
+    string? ReportedById = null,
+    string? ReportedByName = null,
+    string? AgencyId = null);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

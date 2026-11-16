@@ -784,6 +784,7 @@ export interface BookingAttractionCheckin {
   attendanceStatus: AttractionAttendanceStatus;
   checkedAt?: string;
   photoProofUrl?: string;
+  photoProofUrls?: string[];
   notes?: string;
   createdAt?: string;
 }

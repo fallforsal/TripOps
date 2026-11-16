@@ -49,7 +49,10 @@ public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbCo
         var agency = User.IsInRole("agency");
         var allowed = await db.BookingAttractionCheckins.AsNoTracking().AnyAsync(c =>
             c.PhotoUrl != null && c.PhotoUrl.Contains(url) &&
-            (guide && c.GuideId == actor || agency && c.AgencyId == actor), ct);
+            (guide && c.GuideId == actor || agency && c.AgencyId == actor), ct)
+            || await db.BookingIncidents.AsNoTracking().AnyAsync(i =>
+                i.EvidenceUrls != null && i.EvidenceUrls.Contains(url) &&
+                (guide && i.ReportedBy == actor || agency && i.AgencyId == actor), ct);
         if (!allowed) return Forbid();
         Response.Headers.CacheControl = "private, no-store";
         return Read("guide-checkins", owner, name);

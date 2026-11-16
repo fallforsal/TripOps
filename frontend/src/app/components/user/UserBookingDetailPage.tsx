@@ -306,7 +306,7 @@ export function UserBookingDetailPage({
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                   Chi tiết đơn đặt tour #{booking.id}
                 </h1>
-                <ChatWithButton userId={booking.companyId || booking.tour.companyId} context={{kind:"booking",id:Number(booking.id),title:`Booking #${booking.id}`,thumbnailUrl:booking.tour.image}}>Chat với Agency</ChatWithButton>
+                <ChatWithButton userId={booking.companyId || booking.tour.companyId} context={{kind:"booking",id:Number(booking.id),title:`Booking ${booking.bookingCode || `#${booking.id}`}`,thumbnailUrl:booking.tour.image}}>Chat với Agency</ChatWithButton>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                   {st.label}
                 </span>
@@ -1068,7 +1068,7 @@ export function UserBookingDetailPage({
                                 };
 
                             const timelineItems: UnifiedItem[] = [
-                              ...(day.locations || []).map((loc, lIdx) => {
+                              ...(day.locations || []).filter((loc) => !loc.notes?.startsWith("[MEAL:")).map((loc, lIdx) => {
                                 const time = loc.time || "08:30";
                                 return {
                                   kind: "location" as const,
@@ -1157,15 +1157,14 @@ export function UserBookingDetailPage({
                                               <div className="flex-1 min-w-0">
                                                 {isLocChanged ? (
                                                   <>
-                                                    <p className="text-xs text-gray-500">Lúc đặt: {originalLocationName}</p>
-                                                    <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                                      {currentLocationName}
+                                                    <p className="text-xs text-gray-500">
+                                                      Địa điểm gốc: <del className="text-gray-400">{originalLocationName}</del>
                                                     </p>
-                                                    {locationReason && (
-                                                      <p className="text-xs text-amber-700 italic mt-0.5">
-                                                        Lý do đổi: {locationReason}
-                                                      </p>
-                                                    )}
+                                                    <p className="text-sm font-medium text-amber-800 mt-0.5">
+                                                      {locationReason === "__AGENCY_CHANGED__"
+                                                        ? `Địa điểm công ty đổi: ${currentLocationName}`
+                                                        : `Địa điểm khách đổi: ${currentLocationName}`}
+                                                    </p>
                                                   </>
                                                 ) : (
                                                   <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
@@ -1723,16 +1722,6 @@ export function UserBookingDetailPage({
                   <FileText className="w-4 h-4" />
                   Xem hợp đồng dịch vụ lữ hành
                 </Button>
-                {canCancel && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCancelModal(true)}
-                    className="w-full border-rose-300 text-rose-700 hover:bg-rose-50 text-xs h-9 font-semibold gap-2"
-                  >
-                    <XCircle className="w-4 h-4 text-rose-600" />
-                    Hủy đơn đặt tour này
-                  </Button>
-                )}
                 {cancelBlockedReason && (
                   <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed flex items-start gap-1.5">
                     <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
@@ -1744,65 +1733,59 @@ export function UserBookingDetailPage({
 
             </>}
 
-            {/* DEDICATED SUPPORT HOTLINES CARD */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <Phone className="w-4 h-4 text-teal-600" />
-                Đường dây nóng hỗ trợ đoàn
-              </h3>
-
-              <div className="space-y-2.5 text-xs">
-                {isCoHosted && coHosts.length > 0 ? (
-                  coHosts.map((ch) => (
-                    <div
-                      key={ch.id}
-                      className="p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-center justify-between"
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="font-bold text-gray-900 text-xs truncate">{ch.companyName}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
-                        </p>
+            {/* LIÊN HỆ CÔNG TY */}
+            {(() => {
+              const leadCoHost = isCoHosted ? coHosts.find((ch) => ch.role === "lead") : undefined;
+              const companyName = booking.tour.companyName || leadCoHost?.companyName || "Công ty lữ hành";
+              const companyPhone = booking.tour.companyPhone || leadCoHost?.companyPhone;
+              const companyEmail = booking.tour.companyEmail;
+              const companyId = booking.companyId || booking.tour.companyId;
+              return (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-2.5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Liên hệ công ty
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-gray-800">
+                    {booking.tour.companyLogo ? (
+                      <img src={booking.tour.companyLogo} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                    ) : (
+                      <Building2 className="w-5 h-5 text-[#075985] flex-shrink-0" />
+                    )}
+                    <span className="font-semibold">{companyName}</span>
+                  </div>
+                  <div className="space-y-1 text-xs text-gray-600 pl-0.5">
+                    {companyPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <span>
+                          SĐT: <strong className="text-gray-900 font-medium">{companyPhone}</strong>
+                        </span>
                       </div>
-                      <a
-                        href={`tel:${(ch.companyPhone || "19001234").replace(/\s+/g, "")}`}
-                        className="font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 hover:bg-teal-100 flex items-center gap-1 text-xs flex-shrink-0"
-                      >
-                        <Phone className="w-3 h-3 text-teal-600" />
-                        {ch.companyPhone || "1900 1234"}
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-gray-900 text-xs">
-                        {booking.tour.companyName || "Công ty lữ hành"}
-                      </p>
-                      <p className="text-[10px] text-gray-500">Đơn vị tổ chức tour</p>
-                    </div>
-                    <span className="font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 flex items-center gap-1 text-xs">
-                      <Phone className="w-3 h-3 text-teal-600" />
-                      1900 1234
-                    </span>
+                    )}
+                    {companyEmail && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <span className="break-all">
+                          Email: <strong className="text-gray-900 font-medium">{companyEmail}</strong>
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                <div className="p-2.5 rounded-xl border border-[#CBD5E1] bg-[#F0F9FF]/60 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-blue-950 text-xs">Sàn Du Lịch Việt Nam</p>
-                    <p className="text-[10px] text-[#075985]">Tổng đài bảo vệ & Ký quỹ 24/7</p>
-                  </div>
-                  <a
-                    href="tel:19006868"
-                    className="font-bold text-blue-800 bg-[#E0F2FE]/80 px-2.5 py-1 rounded-lg border border-blue-300 hover:bg-blue-200 flex items-center gap-1 text-xs flex-shrink-0"
+                  <ChatWithButton
+                    userId={companyId}
+                    context={{
+                      kind: "booking",
+                      id: Number(booking.id),
+                      title: `Booking ${booking.bookingCode || `#${booking.id}`}`,
+                      thumbnailUrl: booking.tour.image,
+                    }}
+                    className="w-full"
                   >
-                    <Phone className="w-3 h-3 text-[#075985]" />
-                    1900 6868
-                  </a>
+                    Tin nhắn
+                  </ChatWithButton>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       </div>

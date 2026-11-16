@@ -18,9 +18,12 @@ function Avatar({ name, image }: { name: string; image?: string | null }) {
   return <span className="chat-avatar" aria-hidden="true">{image && !failed ? <img src={image} alt="" onError={() => setFailed(true)} /> : initials.toLocaleUpperCase('vi') || '?'}</span>;
 }
 function BusinessCard({ context, onRemove, href }: { context: ChatBusinessContext; onRemove?: () => void; href?: string }) {
+  const headerLabel = context.kind === 'booking'
+    ? ''
+    : `${chatContextLabel(context.kind)}${context.version ? ` · v${context.version}` : ''}`;
   const details = <>
     {context.thumbnailUrl && <img src={context.thumbnailUrl} alt="" onError={e => { e.currentTarget.style.display = 'none'; }} />}
-    <div><small>{chatContextLabel(context.kind)}{context.version ? ` · v${context.version}` : ''}</small><strong>{context.title}</strong>{context.subtitle && <span>{context.subtitle}</span>}{href && <small className="chat-card-action">Xem chi tiết ↗</small>}</div>
+    <div>{headerLabel && <small>{headerLabel}</small>}<strong>{context.title}</strong>{context.subtitle && <span>{context.subtitle}</span>}{href && <small className="chat-card-action">Xem chi tiết ↗</small>}</div>
   </>;
   return <article className="chat-business-card">
     {href ? <a className="chat-card-open" href={href} target="_blank" rel="noopener noreferrer" aria-label={`Mở ${context.title} trong tab mới`}>{details}</a> : details}

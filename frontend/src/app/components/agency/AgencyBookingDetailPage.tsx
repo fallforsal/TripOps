@@ -140,6 +140,8 @@ interface AgencyBookingDetailPageProps {
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: "Chờ duyệt", color: "bg-amber-100 text-amber-800 border-amber-200" },
   confirmed: { label: "Đã xác nhận", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  deposited: { label: "Đã đặt cọc", color: "bg-sky-100 text-sky-800 border-sky-200" },
+  paid: { label: "Đã thanh toán", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   in_progress: { label: "Đang diễn ra", color: "bg-sky-100 text-sky-800 border-sky-200" },
   cancelled: { label: "Đã hủy", color: "bg-red-100 text-red-800 border-red-200" },
   completed: { label: "Hoàn thành", color: "bg-[#E0F2FE] text-blue-800 border-[#CBD5E1]" },
@@ -662,6 +664,10 @@ export function AgencyBookingDetailPage({
     return booking.incidents || [];
   });
 
+  useEffect(() => {
+    setIncidents(booking.incidents || []);
+  }, [booking.incidents]);
+
   // ----------------------------------------------------
   // ATTRACTION ASSIGNMENT MODAL STATES
   // ----------------------------------------------------
@@ -685,6 +691,7 @@ export function AgencyBookingDetailPage({
   const [proofPreviewData, setProofPreviewData] = useState<{
     title: string;
     image: string;
+    images?: string[];
     time?: string;
     note?: string;
     guideName?: string;
@@ -938,15 +945,15 @@ export function AgencyBookingDetailPage({
       setAmendmentError("Chỉ Agency tạo địa điểm này được thay đổi."); return;
     }
     const diff = canChangePrice ? Number(editPriceDiff) : 0;
-    if (!editNewName.trim() || editNewName.trim().length > 255 || editReason.trim().length < 3 ||
+    if (!editNewName.trim() || editNewName.trim().length > 255 ||
         !Number.isSafeInteger(diff) || booking.totalPrice + diff <= 0) {
-      setAmendmentError("Nhập tên điểm, lý do thay đổi và chênh lệch giá hợp lệ."); return;
+      setAmendmentError("Nhập tên điểm và chênh lệch giá hợp lệ."); return;
     }
     setAmendmentSaving(true); setAmendmentError("");
     try {
       const updated = await http<import("@/app/services/wf05Bookings").BookingDto>(`/agency/bookings/${booking.id}/location-changes`, {
         method: "POST", body: JSON.stringify({ itemId: Number(editItemId), name: editNewName.trim(),
-          reason: editReason.trim(), expectedTotal: booking.totalPrice, priceDifference: diff }),
+          reason: editReason.trim() || undefined, expectedTotal: booking.totalPrice, priceDifference: diff }),
       });
       onBookingChanged?.(updated);
       setServiceEditModalOpen(false);
@@ -1414,9 +1421,9 @@ export function AgencyBookingDetailPage({
             </button>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">
-                Chi tiết Booking #{booking.id}
+                Chi tiết Booking {booking.bookingCode ? booking.bookingCode : `#${booking.id}`}
               </h1>
-                <ChatWithButton userId={booking.userId} context={{kind:"booking",id:Number(booking.id),title:`Booking #${booking.id}`,thumbnailUrl:booking.tour.image}}>Chat với khách</ChatWithButton>
+                <ChatWithButton userId={booking.userId} context={{kind:"booking",id:Number(booking.id),title:`Booking ${booking.bookingCode || `#${booking.id}`}`,thumbnailUrl:booking.tour.image}}>Chat với khách</ChatWithButton>
               <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                 {st.label}
               </span>
@@ -1899,6 +1906,7 @@ export function AgencyBookingDetailPage({
                           </div>
                         )}
                         <BookingSupplierConfirmation state={currentQuotationState}
+                          bookingCode={booking.bookingCode}
                           slot={{ kind: "hotel", itemId: acc.itemId, serviceId: acc.serviceId }}
                           serviceName={acc.hotelName} stay={{from:acc.dateFrom,to:acc.dateTo}} stars={acc.stars}
                           supplierSource={acc.supplierSource} supplier={acc.supplier || { address: acc.address }}
@@ -2041,9 +2049,11 @@ export function AgencyBookingDetailPage({
                             <div className="flex items-start justify-between gap-2 flex-wrap">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${cat.style}`}>
-                                    {cat.icon} {cat.label}
-                                  </span>
+                                  {inc.incidentType !== "OTHER" && (
+                                    <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${cat.style}`}>
+                                      {cat.icon} {cat.label}
+                                    </span>
+                                  )}
                                   <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${st.color}`}>
                                     {st.label}
                                   </span>
@@ -2051,7 +2061,7 @@ export function AgencyBookingDetailPage({
                                 <h4 className="font-bold text-gray-900 text-sm mt-1">{inc.title}</h4>
                               </div>
                               <span className="text-[11px] text-gray-500 font-medium">
-                                {inc.reportedAt}
+                                {formatVietnamDateTime(inc.reportedAt)}
                               </span>
                             </div>
 
@@ -2310,6 +2320,11 @@ export function AgencyBookingDetailPage({
                                         <div className="flex items-start justify-between gap-2 flex-wrap">
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <h4 className="font-bold text-gray-900 text-sm">{loc.name}</h4>
+                                            {loc.notes?.startsWith("[MEAL:") && (
+                                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200">
+                                                <Utensils className="w-3 h-3" /> Nhà hàng
+                                              </span>
+                                            )}
                                           </div>
 
                                           {isAllianceBooking && (
@@ -2457,7 +2472,7 @@ export function AgencyBookingDetailPage({
                                                     {isChecked ? (
                                                       <span className="inline-flex items-center gap-1 font-bold text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                                                         <Check className="w-3 h-3 text-emerald-600" />
-                                                        Đã check-in {chk.checkedAt ? `(${chk.checkedAt})` : ""}
+                                                        Đã check-in {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
                                                       </span>
                                                     ) : isSkip ? (
                                                       <span
@@ -2465,7 +2480,7 @@ export function AgencyBookingDetailPage({
                                                         title={chk.notes || "Bỏ qua"}
                                                       >
                                                         <X className="w-3 h-3 text-rose-600" />
-                                                        Đã bỏ qua
+                                                        Đã bỏ qua {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
                                                       </span>
                                                     ) : (
                                                       <span className="inline-flex items-center gap-1 font-medium text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
@@ -2473,15 +2488,23 @@ export function AgencyBookingDetailPage({
                                                       </span>
                                                     )}
 
+                                                    {chk.notes && (
+                                                      <span className="text-[11px] text-slate-600 italic">
+                                                        · Ghi chú: {chk.notes}
+                                                      </span>
+                                                    )}
+
                                                     {/* Nút xem ảnh minh chứng (chỉ khi HDV đã upload ảnh từ app) */}
-                                                    {isChecked && chk.photoProofUrl && (
+                                                    {(isChecked || isSkip) && (chk.photoProofUrls?.length || chk.photoProofUrl) && (
                                                       <button
                                                         type="button"
                                                         onClick={() => {
+                                                          const imgs = chk.photoProofUrls?.length ? chk.photoProofUrls : [chk.photoProofUrl!];
                                                           setProofPreviewData({
                                                             title: `Minh chứng check-in: ${chk.locationName}`,
-                                                            image: chk.photoProofUrl!,
-                                                            time: chk.checkedAt,
+                                                            image: imgs[0],
+                                                            images: imgs,
+                                                            time: chk.checkedAt ? formatVietnamDateTime(providerResponseInstant(chk.checkedAt)) : undefined,
                                                             note: chk.notes,
                                                             guideName: chk.guideName,
                                                           });
@@ -2491,7 +2514,7 @@ export function AgencyBookingDetailPage({
                                                         title="Xem ảnh xác nhận check-in thực tế do HDV gửi lên"
                                                       >
                                                         <Camera className="w-3 h-3" />
-                                                        Xem ảnh
+                                                        Xem ảnh{(chk.photoProofUrls?.length ?? 0) > 1 ? ` (${chk.photoProofUrls!.length})` : ""}
                                                       </button>
                                                     )}
 
@@ -2703,7 +2726,7 @@ export function AgencyBookingDetailPage({
                               };
 
                           const timelineItems: UnifiedItem[] = [
-                            ...(day.locations || []).map((loc, lIdx) => {
+                            ...(day.locations || []).filter((loc) => !loc.notes?.startsWith("[MEAL:")).map((loc, lIdx) => {
                               const time = loc.time || "08:30";
                               return {
                                 kind: "location" as const,
@@ -2790,15 +2813,14 @@ export function AgencyBookingDetailPage({
                                             <div className="flex-1 min-w-0">
                                               {isLocChanged ? (
                                                 <>
-                                                  <p className="text-xs text-gray-500">Lúc đặt: {originalLocationName}</p>
-                                                  <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                                    {currentLocationName}
+                                                  <p className="text-xs text-gray-500">
+                                                    Địa điểm gốc: <del className="text-gray-400">{originalLocationName}</del>
                                                   </p>
-                                                  {locationReason && (
-                                                    <p className="text-xs text-amber-700 italic mt-0.5">
-                                                      Lý do đổi: {locationReason}
-                                                    </p>
-                                                  )}
+                                                  <p className="text-sm font-medium text-amber-800 mt-0.5">
+                                                    {locationReason === "__AGENCY_CHANGED__"
+                                                      ? `Địa điểm công ty đổi: ${currentLocationName}`
+                                                      : `Địa điểm khách đổi: ${currentLocationName}`}
+                                                  </p>
                                                 </>
                                               ) : (
                                                 <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
@@ -2819,7 +2841,7 @@ export function AgencyBookingDetailPage({
                                                   setEditOldName(currentLocationName);
                                                   setEditNewName(currentLocationName);
                                                   setEditPriceDiff("0");
-                                                  setEditReason("Đã liên hệ thống nhất với khách đổi điểm tham quan");
+                                                  setEditReason("");
                                                   setEditAddressOrNote("");
                                                   setServiceEditModalOpen(true);
                                                 }}
@@ -2981,6 +3003,7 @@ export function AgencyBookingDetailPage({
                                             </div>
                                           </div>
                                           <BookingSupplierConfirmation state={currentQuotationState}
+                                            bookingCode={booking.bookingCode}
                                             slot={{ kind: "meal", itemId: defaultMeal.id,
                                               serviceId: isChanged ? mealChange?.serviceId : defaultMeal.serviceId }}
                                             supplierSource={isChanged ? (mealChange?.isCustom || mealChange?.mode === "custom"
@@ -4213,12 +4236,16 @@ export function AgencyBookingDetailPage({
 
           {proofPreviewData && (
             <div className="space-y-3 pt-2 text-xs">
-              <div className="rounded-xl overflow-hidden border border-gray-200 bg-black/5 shadow-inner">
-                <img
-                  src={proofPreviewData.image}
-                  alt={proofPreviewData.title}
-                  className="w-full max-h-80 object-cover rounded-xl"
-                />
+              <div className="space-y-2">
+                {(proofPreviewData.images?.length ? proofPreviewData.images : [proofPreviewData.image]).map((imgUrl, idx) => (
+                  <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 bg-black/5 shadow-inner">
+                    <img
+                      src={imgUrl}
+                      alt={`${proofPreviewData.title} #${idx + 1}`}
+                      className="w-full max-h-80 object-cover rounded-xl"
+                    />
+                  </div>
+                ))}
               </div>
 
               <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-1.5">
@@ -4289,12 +4316,14 @@ export function AgencyBookingDetailPage({
                 {!canChangePrice && <p className="text-[11px] text-slate-600">Đây là đề nghị chờ chủ trì duyệt, chưa thay đổi tiền khách phải trả hoặc doanh thu phân bổ.</p>}
               </div>
               </>}
+              {serviceEditType !== "location" && (
               <div className="space-y-2">
                 <label htmlFor="service-change-reason" className="block font-semibold text-slate-700">Lý do thay đổi & thỏa thuận với khách *</label>
                 <Textarea id="service-change-reason" value={editReason} onChange={e => setEditReason(e.target.value)} rows={4} maxLength={2000}
                   placeholder="Ghi rõ lý do đổi dịch vụ và nội dung đã thống nhất với khách…" className="min-h-24 resize-y bg-white text-xs" />
                 <p className="text-[11px] text-slate-500">Lý do đổi được gửi đến khách; chênh lệch giá được ghi nhật ký tài chính.</p>
               </div>
+              )}
             </div>
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-900">Giá dịch vụ chỉ để tham khảo. Thay đổi được ghi nhật ký và gửi thông báo cho khách; booking đã duyệt giữ nguyên trạng thái và lịch thanh toán.</p>
             {amendmentError && <NotificationMessage tone="error" message={amendmentError} />}

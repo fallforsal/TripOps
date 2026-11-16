@@ -25,3 +25,27 @@ String? resolveTourImageUrl(
   }
   return base.resolve(value).toString();
 }
+
+String? resolveGuideAvatarUrl(
+  String? source, {
+  String apiBaseUrl = defaultApiUrl,
+}) {
+  final value = source?.trim();
+  if (value == null || value.isEmpty) return null;
+  final uri = Uri.tryParse(value);
+  if (uri == null) return null;
+
+  if ((uri.isScheme('https') || uri.isScheme('http')) && uri.host.isNotEmpty && uri.userInfo.isEmpty) {
+    return uri.toString();
+  }
+
+  if (!value.startsWith('/api/v1/files/')) return null;
+  final base = Uri.tryParse(apiBaseUrl.trim());
+  if (base == null ||
+      !(base.isScheme('http') || base.isScheme('https')) ||
+      base.host.isEmpty ||
+      base.userInfo.isNotEmpty) {
+    return null;
+  }
+  return base.resolve(value).toString();
+}

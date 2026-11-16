@@ -91,8 +91,25 @@ export function ProviderGroupBookingRequests({
   const [viewingRequestId, setViewingRequestId] = useState<string | null>(null);
 
   useEffect(()=>{
-    const bookingId=new URLSearchParams(window.location.hash.split("?")[1]).get("bookingId");
-    if(bookingId){const request=requests.find(r=>String(r.bookingId)===bookingId && r.status!=="cancelled");if(request)setViewingRequestId(request.id);}
+    const syncFromHash = () => {
+      const params = new URLSearchParams(window.location.hash.split("?")[1]);
+      const bookingId = params.get("bookingId");
+      const requestId = params.get("requestId");
+      if (requestId) {
+        const exact = requests.find(r => String(r.id) === requestId);
+        if (exact) {
+          setViewingRequestId(exact.id);
+          return;
+        }
+      }
+      if (bookingId) {
+        const request = requests.find(r => String(r.bookingId) === bookingId && r.status !== "cancelled");
+        if (request) setViewingRequestId(request.id);
+      }
+    };
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
   },[requests]);
 
   // Quick modals for list actions

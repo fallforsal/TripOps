@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
+import '../../../core/utils/tour_image_url.dart';
 import '../../auth/domain/guide_account.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -29,10 +30,28 @@ class ProfileScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(children: [
-          const CircleAvatar(
-            radius: 38, backgroundColor: Color(0xFFE6F6F2),
-            child: Icon(Icons.person_rounded, color: deepTeal, size: 40),
-          ),
+          () {
+            final avatarUrl = resolveGuideAvatarUrl(account.avatar);
+            return CircleAvatar(
+              radius: 38,
+              backgroundColor: const Color(0xFFE6F6F2),
+              child: avatarUrl == null
+                  ? const Icon(Icons.person_rounded, color: deepTeal, size: 40)
+                  : ClipOval(
+                      child: Image.network(
+                        avatarUrl,
+                        width: 76,
+                        height: 76,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.person_rounded,
+                          color: deepTeal,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+            );
+          }(),
           space(12),
           Text(account.name, textAlign: TextAlign.center,
             style: const TextStyle(

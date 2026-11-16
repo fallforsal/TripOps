@@ -3198,9 +3198,10 @@ export function TourFormPage(props: TourFormPageProps) {
       });
     }
 
-    const finalTourPrice = ownershipCollaboration
-      ? (priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? price)
-      : isCoHostedTour && calculatedFinalPrice > 0 ? calculatedFinalPrice : price;
+    const highestTierPrice = priceTable.length > 0 ? Math.max(...priceTable.map((row) => row.price || 0)) : price;
+    const finalTourPrice = isCoHostedTour && calculatedFinalPrice > 0 && !ownershipCollaboration
+      ? calculatedFinalPrice
+      : highestTierPrice;
 
     const tourData: Partial<Tour> = {
       planGuestCount: isCustom ? planGuestCount : undefined,
@@ -3224,9 +3225,7 @@ export function TourFormPage(props: TourFormPageProps) {
       highlights: highlights.filter((h) => h.trim().length > 0),
       hotels: preparedHotels,
       itinerary: preparedItinerary,
-      priceTable: priceTable.map((p) =>
-        !ownershipCollaboration && p.ageGroup === "adult" ? { ...p, price: finalTourPrice } : p,
-      ),
+      priceTable: priceTable,
       inclusions: inclusions.filter((i) => i.trim().length > 0),
       exclusions: exclusions.filter((e) => e.trim().length > 0),
       regulations: regulations.filter((r) => r.trim().length > 0),
@@ -3890,12 +3889,16 @@ export function TourFormPage(props: TourFormPageProps) {
                   <span className="text-red-500">*</span>
                 </Label>
                 <VietnameseMoneyInput
-                  value={String(ownershipCollaboration ? priceTable.find(row => (row.maxAge ?? 150) >= 100)?.price ?? 0 : price)}
-                  disabled={ownershipCollaboration}
-                  onValueChange={value => setPrice(Number(value) || 0)}
-                  className="mt-1 h-9 w-full rounded-md border border-[#CBD5E1] bg-white px-3 font-bold text-[#075985]"
+                  value={String(priceTable.length > 0 ? Math.max(...priceTable.map((row) => row.price || 0)) : price)}
+                  disabled={true}
+                  onValueChange={() => {}}
+                  className="mt-1 h-9 w-full rounded-md border border-[#CBD5E1] bg-slate-50 px-3 font-bold text-[#075985] cursor-not-allowed"
                 />
-                {ownershipCollaboration && <p className="mt-1 text-xs text-slate-500">Nhập giá phần của bạn tại tab Bảng giá vé.</p>}
+                <p className="mt-1 text-xs text-slate-500">
+                  {ownershipCollaboration
+                    ? "Nhập giá phần của bạn tại tab Bảng giá vé."
+                    : "Tự động lấy mức giá cao nhất từ tab 3. Bảng giá vé theo độ tuổi."}
+                </p>
               </div>
 
               <div>

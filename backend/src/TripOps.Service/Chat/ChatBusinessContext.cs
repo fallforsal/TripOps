@@ -76,7 +76,17 @@ public sealed partial class ChatService
             if (!await BookingContextAccess(actor, context.Id, ct) || !await BookingContextAccess(recipient, context.Id, ct))
                 throw new AccountException(403, "Chỉ chia sẻ booking với người tham gia booking đó.");
             var booking = await Db.Bookings.AsNoTracking().Include(b => b.Tour).SingleAsync(b => b.Id == context.Id, ct);
-            return new("booking", booking.Id, $"Booking {booking.BookingCode}", FirstImage(booking.Tour?.ThumbnailUrls) ?? FirstImage(booking.Tour?.Images), booking.Tour?.Name);
+            var serviceReq = context.Version is { } reqId
+                ? await (from r in Db.BookingSupplierRequests.AsNoTracking()
+                         where r.Id == reqId && r.BookingId == booking.Id
+                         join s in Db.Services.AsNoTracking() on r.ServiceId equals s.Id into sj
+                         from s in sj.DefaultIfEmpty()
+                         select new { r.Id, Name = s != null ? s.Name : null }).FirstOrDefaultAsync(ct)
+                : null;
+            var subtitle = serviceReq is not null && !string.IsNullOrWhiteSpace(serviceReq.Name)
+                ? $"{booking.Tour?.Name} · {serviceReq.Name}"
+                : booking.Tour?.Name;
+            return new("booking", booking.Id, $"Booking {booking.BookingCode}", FirstImage(booking.Tour?.ThumbnailUrls) ?? FirstImage(booking.Tour?.Images), subtitle, serviceReq?.Id);
         }
         if (context.Kind == "design-request")
         {
