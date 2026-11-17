@@ -123,7 +123,7 @@ export function AdminDashboard({
   }, []);
 
   const [activeSection, setActiveSection] =
-    useState<string>("partner-approvals");
+    useState<string>("dashboard");
 
   const [focusPartnerUserId, setFocusPartnerUserId] = useState<string | null>(null);
 
@@ -143,8 +143,11 @@ export function AdminDashboard({
             tours={tours}
             bookings={bookings}
             services={services}
-            guides={guides}
-            guideSchedules={guideSchedules}
+            refundRequests={refundRequests}
+            onNavigate={(section) => {
+              setActiveSection(section);
+              window.location.hash = "#/admin/" + section;
+            }}
           />
         );
       case "partner-approvals":
