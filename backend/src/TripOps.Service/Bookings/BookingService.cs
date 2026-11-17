@@ -630,7 +630,11 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 GuideLocationCheckinRules.OrderedStops([t]).Select(a=>new BookingLocationDto(a.Id,a.CurrentLocationName??a.OriginalLocationName,a.Time,a.AttendanceStatus,a.OriginalLocationName,a.CustomerNote,a.AgencyId,
                     a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.PhotoUrl))
                         .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray(),
-                    a.Checkins.OrderByDescending(c => c.CheckinTime).Select(c => c.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)))).ToList(),
+                    a.Checkins.OrderByDescending(c => c.CheckinTime).Select(c => c.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
+                    a.Checkins.SelectMany(c => GuideCheckinPhotoRules.Decode(c.CheckoutPhotoUrl))
+                        .Select(url => photoStorage.DeliveryUrl(url)!).Distinct().ToArray(),
+                    a.Checkins.OrderByDescending(c => c.CheckoutTime).Select(c => c.CheckoutNote).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
+                    a.Checkins.Select(c => c.CheckoutTime).Max())).ToList(),
                 t.Meals.Select(m=>new BookingMealDto(m.Id,m.MealType,m.CurrentRestaurantName??m.OriginalRestaurantName,m.DateService,m.Time,m.ServiceId,m.PriceDifference??0,
                     SupplierOfMeal(snapshots, bookedConfig, t.DayNumber, m),m.OriginalRestaurantName,m.AgencyId)).ToList())).ToList(),
             b.Accommodations.Select(h=>new BookingHotelDto(h.Id,h.Destination,h.CurrentHotelName??h.OriginalHotelName,h.CurrentStars??h.OriginalStars,h.NightsCount,h.ServiceId,h.PriceDifference??0,
