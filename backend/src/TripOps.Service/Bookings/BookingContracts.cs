@@ -227,7 +227,9 @@ public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus,
     string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null,
-    IReadOnlyList<string>? PhotoUrls = null, string? CheckinNote = null);
+    IReadOnlyList<string>? PhotoUrls = null, string? CheckinNote = null,
+    IReadOnlyList<string>? CheckoutPhotoUrls = null, string? CheckoutNote = null,
+    DateTime? CheckoutAt = null);
 public sealed record BookingSupplierDto(
     string? Address,
     string? ContactPhone,
