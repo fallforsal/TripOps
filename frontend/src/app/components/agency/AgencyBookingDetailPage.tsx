@@ -3,7 +3,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
 import { confirmAction } from "@/app/lib/notificationDialogs";
-import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
+import { bookingRefusalReason, agencyCancellationNotice } from "@/app/lib/bookingRefusal";
 import { PartnerBookingRevenue } from "./PartnerBookingRevenue";
 import { BookingSupplementRequests } from "./BookingSupplementRequests";
 import { BookingStagePassengers } from "./BookingStagePassengers";
@@ -1508,7 +1508,7 @@ export function AgencyBookingDetailPage({
 
       {isClosedBooking && <div role="status" className="rounded-2xl border border-rose-300 bg-rose-50 p-5 text-rose-900">
         <h2 className="font-bold">{isRejectedBooking ? "Đã từ chối tiếp nhận booking" : "Booking đã được hủy"}</h2>
-        <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : bookingCancellationReason(booking.bookingNotes, booking.cancellationReason)}</p>
+        <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : agencyCancellationNotice(booking.cancellation, booking.bookingNotes, booking.cancellationReason)}</p>
       </div>}
 
       {!isClosedBooking && (isCoHostedTour || (booking.bookingAgencies?.length ?? 0) > 1) && <BookingFinancialChangesPanel bookingId={booking.id} expectedTotal={booking.totalPrice} isHost={isCurrentCompanyLead} canAmend={canAmend} agencies={agenciesList} onChanged={onBookingChanged} refreshKey={booking.totalPrice} />}

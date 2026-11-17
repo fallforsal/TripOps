@@ -66,6 +66,15 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 
 // ------------------------------------------------------------ Admin
 
+/**
+ * Tour liên minh: mỗi Agency chỉ được chia một phần tiền khách trả (grossAmount < customerPaid).
+ * Trả về % phần chia để UI ghi "Phần chia 45% · khách trả 70.400đ"; tour 1 Agency trả null.
+ */
+export function settlementSharePercent(s: Pick<SettlementDto, "grossAmount" | "customerPaid">): number | null {
+  if (!(s.customerPaid > 0) || Math.round(s.grossAmount) >= Math.round(s.customerPaid)) return null;
+  return Math.round((s.grossAmount * 100) / s.customerPaid);
+}
+
 export const listSettlements = (status?: SettlementStatus) =>
   http<SettlementDto[]>(`/admin/settlements${status ? `?status=${status}` : ""}`);
 
