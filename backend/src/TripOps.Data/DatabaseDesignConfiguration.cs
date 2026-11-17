@@ -474,6 +474,9 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CheckinTime).HasColumnName("checked_at").HasColumnType("datetime2");
             entity.Property(e => e.PhotoUrl).HasColumnName("photo_proof_url").HasColumnType("nvarchar(max)");
             entity.Property(e => e.Note).HasColumnName("notes").HasColumnType("nvarchar(max)");
+            entity.Property(e => e.CheckoutTime).HasColumnName("checked_out_at").HasColumnType("datetime2");
+            entity.Property(e => e.CheckoutPhotoUrl).HasColumnName("checkout_photo_proof_url").HasColumnType("nvarchar(max)");
+            entity.Property(e => e.CheckoutNote).HasColumnName("checkout_notes").HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
             entity.HasIndex(e => new { e.BookingTimelineAttractionId, e.GuideId }).IsUnique();
