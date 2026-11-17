@@ -3719,7 +3719,7 @@ export function TourFormPage(props: TourFormPageProps) {
                         </div>
                       )}
                       {isCoHostedTour && (
-                        <div className="absolute bottom-1.5 left-1.5 rounded-full bg-white/90 p-0.5 shadow-sm">
+                        <div className="absolute bottom-1.5 left-1.5 inline-flex rounded-full shadow-md">
                           {renderOwnerLogo(imgOwnerId)}
                         </div>
                       )}
