@@ -69,10 +69,12 @@ public sealed partial class BookingFlowTests
             $"/api/v1/guide/bookings/{first.BookingId}/attendance",
             new AttendanceCheckinRequest(participantId, "CheckedIn"));
         Assert.Equal(HttpStatusCode.OK, attendanceResponse.StatusCode);
-        var checkInResponse = await guide.PostAsJsonAsync(
-            $"/api/v1/guide/bookings/{first.BookingId}/locations/{detail.NextLocationCheckInId}/check-in",
-            new { status = "CheckedIn", note = "No GPS required" });
-        checkInResponse.EnsureSuccessStatusCode();
+        using (var form = PhotoForm(1))
+        {
+            var response = await guide.PostAsync(
+                $"/api/v1/guide/bookings/{first.BookingId}/locations/{detail.NextLocationCheckInId}/check-in-with-images", form);
+            response.EnsureSuccessStatusCode();
+        }
 
         var again = await GuideCheckinDemoSeed.Run(app.Services, applyMigrations: false);
         Assert.False(again.Created);
@@ -80,6 +82,6 @@ public sealed partial class BookingFlowTests
             $"/api/v1/guide/bookings/{first.BookingId}");
         Assert.Equal("CheckedIn", after!.Participants[0].AttendanceStatus);
         Assert.Equal("CheckedIn", after.SnapshotDays![0].Locations[0].AttendanceStatus);
-        Assert.Equal(after.SnapshotDays[0].Locations[1].Id, after.NextLocationCheckInId);
+        Assert.Equal(after.SnapshotDays[0].Locations[0].Id, after.NextLocationCheckInId);
     }
 }
