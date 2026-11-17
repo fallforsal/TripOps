@@ -219,18 +219,22 @@ class _LocationScreenState extends State<LocationScreen> {
                 ...day.stops.map((stop) {
                   final skipped = stop.status == 'Skipped';
                   final checkedIn = stop.status == 'CheckedIn';
-                  final done = checkedIn || skipped;
-                  final isNext = nextId == stop.id && !done;
-                  final canCheck = enabledByDate && isNext && busy == null;
-                  final blockedReason = checkedIn
-                      ? 'Đã hoàn thành'
-                      : skipped
-                          ? 'Đã bỏ qua'
-                          : !enabledByDate
-                              ? 'Chưa đến ngày khởi hành'
-                              : !isNext
-                                  ? 'Cần check-out điểm trước đó'
-                                  : 'Sẵn sàng check-in';
+                  final checkedOut = stop.status == 'CheckedOut';
+                  final isNext = nextId == stop.id && !checkedOut;
+                  final canCheck = enabledByDate && isNext &&
+                      !checkedIn && !skipped && busy == null;
+                  final canCheckout = enabledByDate && isNext && checkedIn && busy == null;
+                  final blockedReason = checkedOut
+                      ? 'Đã hoàn thành check-out'
+                      : checkedIn
+                          ? 'Đang ở điểm này · cần check-out'
+                          : skipped
+                              ? 'Điểm bỏ qua trước đây cần hỗ trợ'
+                              : !enabledByDate
+                                  ? 'Chưa đến ngày khởi hành'
+                                  : !isNext
+                                      ? 'Cần check-out điểm trước đó'
+                                      : 'Sẵn sàng check-in';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(child: Padding(
@@ -270,19 +274,21 @@ class _LocationScreenState extends State<LocationScreen> {
                                 fontWeight: FontWeight.w800,
                               ))),
                             GuideStatusPill(
-                              checkedIn
-                                  ? 'Đã check-in'
+                              checkedOut
+                                  ? 'Đã check-out'
+                                  : checkedIn
+                                      ? 'Đã check-in'
                                   : skipped
                                       ? 'Đã bỏ qua'
                                       : isNext
                                           ? 'Đến lượt'
                                           : 'Đang khóa',
-                              background: checkedIn
+                              background: checkedIn || checkedOut
                                   ? paleTeal
                                   : skipped
                                       ? const Color(0xFFFFE8E8)
                                       : const Color(0xFFEEF2F8),
-                              foreground: checkedIn
+                              foreground: checkedIn || checkedOut
                                   ? deepTeal
                                   : skipped
                                       ? const Color(0xFFC05F5F)
@@ -339,6 +345,31 @@ class _LocationScreenState extends State<LocationScreen> {
                                   ),
                                 ),
                             ]),
+                          ],
+                          if (stop.checkoutPhotoUrls.isNotEmpty) ...[
+                            space(8),
+                            const Text('Ảnh check-out đã gửi', style: TextStyle(
+                              fontSize: 11, color: ink, fontWeight: FontWeight.w700)),
+                            Wrap(spacing: 7, runSpacing: 7, children: [
+                              for (final url in stop.checkoutPhotoUrls)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(9),
+                                  child: FutureBuilder<Uint8List>(
+                                    future: photoDownloads.putIfAbsent(url,
+                                        () => widget.guides.imageBytes(url)),
+                                    builder: (context, snapshot) => snapshot.hasData
+                                        ? Image.memory(snapshot.data!, width: 69, height: 69, fit: BoxFit.cover)
+                                        : Container(width: 69, height: 69, color: paleTeal,
+                                            child: Icon(snapshot.hasError
+                                                ? Icons.broken_image_outlined
+                                                : Icons.hourglass_bottom_outlined, color: muted)),
+                                  ),
+                                ),
+                            ]),
+                          ],
+                          if (stop.checkoutNote?.trim().isNotEmpty == true) ...[
+                            space(8),
+                            Text('Ghi chú check-out: ${stop.checkoutNote!}'),
                           ],
                           if (busy == stop.id) ...[
                             space(9),
