@@ -196,6 +196,9 @@ public AttractionCheckinStatus? AttendanceStatus { get; set; } = AttractionCheck
 public DateTime? CheckinTime { get; set; }
 public string? PhotoUrl { get; set; }
 public string? Note { get; set; }
+public DateTime? CheckoutTime { get; set; }
+public string? CheckoutPhotoUrl { get; set; }
+public string? CheckoutNote { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual BookingTimelineAttraction BookingTimelineAttraction { get; set; } = null!;
