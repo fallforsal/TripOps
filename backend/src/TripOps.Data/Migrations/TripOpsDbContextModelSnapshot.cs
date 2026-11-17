@@ -687,6 +687,18 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("checked_at");
 
+                    b.Property<DateTime?>("CheckoutTime")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("checked_out_at");
+
+                    b.Property<string>("CheckoutNote")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("checkout_notes");
+
+                    b.Property<string>("CheckoutPhotoUrl")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("checkout_photo_proof_url");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
