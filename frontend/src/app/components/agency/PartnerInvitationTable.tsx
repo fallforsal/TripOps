@@ -350,7 +350,7 @@ export function PartnerInvitationTable({ requests, company, tours, onChanged, on
                 </div>
 
                 {/* Cột 3: Phiên bản & Hành động */}
-                <div className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
+                <div className="flex flex-col justify-start gap-2.5 self-start rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
                   <div>
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-medium text-slate-500">

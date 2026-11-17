@@ -530,7 +530,7 @@ export function AgencyCustomRequests({
                   </div>
 
                   {/* Cột 3: Phương án & Thao tác */}
-                  <div className="flex flex-col justify-between gap-3">
+                  <div className="flex flex-col justify-start gap-2.5 self-start">
                     {tour ? (
                       <DesignVersionSelector
                         requestId={request.id}

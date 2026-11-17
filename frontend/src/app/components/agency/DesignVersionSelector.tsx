@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, EyeOff, ImageIcon, Loader2 } from "lucide-react";
+import { ImageIcon, Loader2 } from "lucide-react";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { http } from "@/app/lib/http";
 import type { Tour } from "@/app/types";
@@ -70,22 +70,12 @@ export function DesignVersionSelector({ requestId, tour, sharedVersion, shareAll
         </div>
       </div>
 
-      <p
-        role="status"
-        className={`mt-2 flex items-center gap-1.5 text-[11px] font-medium ${
-          updatingVersion != null ? "text-[#075985]" : sharedVersion ? "text-emerald-700" : "text-slate-500"
-        }`}
-      >
-        {updatingVersion != null ? (
-          <><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />Đang cập nhật quyền xem…</>
-        ) : shareAllVersions && sharedVersion ? (
-          <><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Khách đang xem toàn bộ ({rows.length} phiên bản)</>
-        ) : sharedVersion ? (
-          <><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Khách chỉ được xem v{sharedVersion}</>
-        ) : (
-          <><EyeOff className="h-3.5 w-3.5 shrink-0 text-slate-400" />Đang ẩn với khách hàng</>
-        )}
-      </p>
+      {updatingVersion != null && (
+        <p role="status" className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#075985]">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          Đang cập nhật quyền xem…
+        </p>
+      )}
       {error && <div className="mt-2"><NotificationMessage message={error} /></div>}
     </div>
   );
