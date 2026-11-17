@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +17,8 @@ public sealed partial class BookingFlowTests
     [Fact]
     public async Task GuideLocationCheckin_RequiresDepartureAndStrictItineraryOrder_WithoutGps()
     {
-        using var app = new App();
+        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
         await app.Initialize();
         var today = PaymentRules.VietnamDate(DateTime.UtcNow);
         int bookingId, firstId, secondId, thirdId;
@@ -104,7 +107,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await Check(thirdId)).StatusCode);
         (await Check(firstId)).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Conflict,
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await guide.PostAsJsonAsync(Url(firstId), request)).StatusCode);
         detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal(firstId, detail!.NextLocationCheckInId);
@@ -149,7 +152,7 @@ public sealed partial class BookingFlowTests
             await db.SaveChangesAsync();
         }
         Assert.Equal(HttpStatusCode.Conflict,
-            (await guide.PostAsJsonAsync(Url(thirdId), request)).StatusCode);
+            (await Check(thirdId)).StatusCode);
     }
 
     [Fact]
