@@ -519,7 +519,7 @@ export function CancelTourModal({
 
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                      <span>Mô tả chi tiết nguyên nhân (reason_detail) <span className="text-rose-600">*</span></span>
+                      <span>Mô tả chi tiết nguyên nhân <span className="text-rose-600">*</span></span>
                       <span className="text-[11px] text-slate-400 font-normal">Gửi tới Quản trị viên</span>
                     </Label>
                     <Textarea

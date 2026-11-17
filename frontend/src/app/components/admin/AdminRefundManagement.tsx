@@ -769,7 +769,7 @@ export function AdminRefundManagement({
 
                       <div>
                         <span className="text-[11px] text-slate-400 font-semibold block uppercase">
-                          Nội dung mô tả chi tiết (reason_detail)
+                          Nội dung mô tả chi tiết
                         </span>
                         <div className="mt-1 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 leading-relaxed">
                           "{selectedRefund.reasonDetail}"
@@ -1020,17 +1020,15 @@ export function AdminRefundManagement({
               <Label className="text-xs font-bold text-slate-900">
                 Số tiền thực hoàn (VND) <span className="text-rose-600">*</span>
               </Label>
+              {/* Số tiền cố định theo chính sách hoàn hủy; Admin không sửa. */}
               <Input
-                value={approveAmount}
-                inputMode="numeric"
-                onChange={(e) => {
-                  setApproveAmount(e.target.value.replace(/[^\d]/g, ""));
-                  setApprovalError("");
-                }}
-                className="text-xs h-10 font-bold"
+                value={Number(approveAmount || 0).toLocaleString("vi-VN")}
+                readOnly
+                tabIndex={-1}
+                className="text-xs h-10 font-bold bg-slate-50 cursor-not-allowed focus-visible:ring-0"
               />
               <p className="text-[11px] text-slate-500">
-                Đổi khác số gợi ý (ví dụ bất khả kháng) thì bắt buộc ghi lý do. Nhập 0 nếu không hoàn tiền.
+                Theo chính sách hoàn hủy, không chỉnh sửa.
               </p>
             </div>
 
@@ -1061,7 +1059,7 @@ export function AdminRefundManagement({
                 value={approvalNote}
                 onChange={(e) => setApprovalNote(e.target.value)}
                 rows={2}
-                placeholder="Bắt buộc khi số tiền khác số gợi ý (ví dụ bất khả kháng)..."
+                placeholder="Ghi chú thêm nếu cần..."
                 className="text-xs bg-slate-50 focus:bg-white resize-none"
               />
             </div>

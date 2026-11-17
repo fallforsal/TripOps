@@ -16,6 +16,7 @@ import {
   SETTLEMENT_STATUS_STYLE,
   type AgencyPayoutAccountDto,
   type SettlementDto,
+  settlementSharePercent,
 } from "@/app/services/settlements";
 
 /**
@@ -141,7 +142,7 @@ export function AgencyPayoutPanel() {
               <thead className="bg-slate-50 text-slate-700 font-bold text-[11px] border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Booking</th>
-                  <th className="py-2.5 px-3 text-right">Khách đã trả</th>
+                  <th className="py-2.5 px-3 text-right">Doanh thu</th>
                   <th className="py-2.5 px-3 text-right">Phí sàn</th>
                   <th className="py-2.5 px-3 text-right">Bạn nhận</th>
                   <th className="py-2.5 px-3">Trạng thái</th>
@@ -154,7 +155,14 @@ export function AgencyPayoutPanel() {
                       <p className="font-semibold text-slate-900">{s.bookingCode}</p>
                       <p className="text-[11px] text-slate-500 max-w-[220px] truncate">{s.tourName}</p>
                     </td>
-                    <td className="py-2.5 px-3 text-right">{formatVND(s.grossAmount)}</td>
+                    <td className="py-2.5 px-3 text-right">
+                      <p>{formatVND(s.grossAmount)}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {settlementSharePercent(s) !== null
+                          ? `Phần chia ${settlementSharePercent(s)}% · khách trả ${formatVND(s.customerPaid)}`
+                          : `Khách đã trả ${formatVND(s.customerPaid)}`}
+                      </p>
+                    </td>
                     <td className="py-2.5 px-3 text-right">
                       {formatVND(s.platformFee)} <span className="text-slate-400">({s.feePercent}%)</span>
                     </td>
