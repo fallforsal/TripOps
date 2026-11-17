@@ -1,9 +1,10 @@
 interface TourState { id?: string; status?: string; visibility?: string; createdAt?: string }
 
 export function publicTourSaveState(tour?: TourState | null) {
+  const isPublished = (tour?.status === "completed" || tour?.status === "published" || (tour && !tour.status)) && tour?.visibility !== "hidden";
   return {
-    status: tour?.status === "completed" || tour?.status === "published" ? "completed" : "draft",
-    visibility: tour && tour.status !== "draft" && tour.visibility !== "hidden" ? "public" : "hidden",
+    status: "completed",
+    visibility: isPublished ? "public" : "hidden",
   } as const;
 }
 
@@ -14,7 +15,8 @@ export function compareTourCreation(a: TourState, b: TourState): number {
 }
 
 export function tourStatusOrder(tour: TourState): number {
-  return tour.status === "draft" ? 2 : tour.visibility === "hidden" ? 1 : 0;
+  const isPublished = (tour.status === "completed" || tour.status === "published" || !tour.status) && tour.visibility !== "hidden";
+  return isPublished ? 0 : 1;
 }
 
 export function emptyTourDays(count: number, destination: string) {

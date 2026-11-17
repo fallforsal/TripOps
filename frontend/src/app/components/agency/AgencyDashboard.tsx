@@ -28,6 +28,7 @@ import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessPro
 import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
+import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
 
 import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
 import { toast } from "@/app/lib/notifications";
@@ -281,6 +282,9 @@ export function AgencyDashboard({
 
       case "reviews":
         return <AgencyReviewsPage />;
+
+      case "complaints":
+        return <AgencyComplaintsPage />;
 
       default:
         return null;

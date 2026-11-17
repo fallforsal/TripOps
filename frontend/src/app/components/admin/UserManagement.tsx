@@ -424,6 +424,53 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
             {loading ? "Đang tải..." : "Tải lại"}
           </Button>
         </div>
+        {totalPages > 1 && (
+          <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản người dùng">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || activePage === 1}
+              onClick={() => setPage(activePage - 1)}
+              className="h-8 gap-1 px-2 text-xs"
+              aria-label="Trang trước"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Trước</span>
+            </Button>
+            {visiblePages.map((p, index) => (
+              <div key={p} className="inline-flex items-center gap-1">
+                {index > 0 && p > visiblePages[index - 1] + 1 && (
+                  <span aria-hidden="true" className="px-1 text-gray-400">…</span>
+                )}
+                <Button
+                  type="button"
+                  variant={p === activePage ? "default" : "outline"}
+                  size="sm"
+                  aria-label={`Trang ${p}`}
+                  aria-current={p === activePage ? "page" : undefined}
+                  disabled={loading}
+                  onClick={() => setPage(p)}
+                  className={`h-8 min-w-8 px-2 text-xs ${p === activePage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                >
+                  {p}
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || activePage === totalPages}
+              onClick={() => setPage(activePage + 1)}
+              className="h-8 gap-1 px-2 text-xs"
+              aria-label="Trang sau"
+            >
+              <span className="hidden sm:inline">Sau</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </nav>
+        )}
       </div>
 
       {/* Chi tiết tài khoản */}

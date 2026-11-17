@@ -445,10 +445,7 @@ export interface IncidentDto {
   description: string;
   status: string;
   createdAt: string;
-  evidenceUrls?: string[];
   reportedById?: string;
-  reportedByName?: string;
-  agencyId?: string;
 }
 
 // 1. Customer APIs (WF05)

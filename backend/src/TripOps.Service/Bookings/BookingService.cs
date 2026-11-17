@@ -300,7 +300,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
                 AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
-            dto=dto with {Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
+            dto=dto with {Incidents=dto.Incidents?.Select(i=>i with {EvidenceUrls=[]}).ToArray(),
+                Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
                 var active=g.Where(p=>p.Status!="INACTIVE").ToArray();var first=active.FirstOrDefault()??g.First();
                 return first with {Price=active.Sum(p=>p.Price??0),IsPrimary=true,Status=active.Length>0?"ACTIVE":"INACTIVE"};
             }).ToArray()};
@@ -571,7 +572,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
         var assignment = booking.AssignedGuides.SingleOrDefault(ag => ag.GuideId == guideId)
             ?? throw new BookingException(403, "Chỉ Hướng dẫn viên được phân công cho chuyến này mới có quyền báo sự cố.");
 
-        var normalizedType = string.IsNullOrWhiteSpace(request.IncidentType) ? "OTHER" : request.IncidentType.Trim();
+        if (!IncidentTypeRules.IsAllowed(request.IncidentType))
+            throw new BookingException(422, "Loại sự cố không hợp lệ.");
+        var normalizedType = request.IncidentType!.Trim().ToUpperInvariant();
         var incident = new BookingIncident
         {
             BookingId = bookingId,
@@ -603,7 +606,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
             .ToArray(),
         i.ReportedBy,
         reporterName ?? i.Reporter?.Name,
-        i.AgencyId);
+        i.AgencyId,
+        i.IncidentType);
 
     private BookingDto ToDto(Booking b, string? tourName, string? agencyId, string? agencyName,
         Dictionary<string, TripOps.Service.Tours.SupplierSnapshotInput>? snapshots = null)

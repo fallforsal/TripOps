@@ -237,10 +237,10 @@ export function UserBookingDetailPage({
   const canCancel = cancellableStatus && !cancellationPending && !hasPendingGatewayPayment;
   const cancelBlockedReason = canCancel
     ? paidSoFar > 0
-      ? "Đơn đã có khoản thanh toán: bạn gửi yêu cầu hủy, phí hủy tính theo chính sách chung và đơn chỉ bị hủy sau khi Admin duyệt."
+      ? "Đơn đã có khoản thanh toán: đơn được hủy ngay khi bạn gửi yêu cầu, phí hủy tính theo chính sách chung và Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn."
       : null
     : cancellationPending
-      ? "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán."
+      ? "Đơn đã hủy, đang chờ Admin hoàn tiền."
       : hasPendingGatewayPayment && cancellableStatus
         ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
         : null;
@@ -304,7 +304,7 @@ export function UserBookingDetailPage({
 
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  Chi tiết đơn đặt tour #{booking.id}
+                  Chi tiết đơn đặt tour {booking.bookingCode || `#${booking.id}`}
                 </h1>
                 <ChatWithButton userId={booking.companyId || booking.tour.companyId} context={{kind:"booking",id:Number(booking.id),title:`Booking ${booking.bookingCode || `#${booking.id}`}`,thumbnailUrl:booking.tour.image}}>Chat với Agency</ChatWithButton>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
@@ -639,7 +639,9 @@ export function UserBookingDetailPage({
                               Gốc: {lc.originalLocations.join(", ")}
                             </p>
                           )}
-                          {lc.note && <p className="text-gray-500 italic">Lý do/Ghi chú: {lc.note}</p>}
+                          {lc.note && lc.note !== "__CUSTOMER_CHANGED__" && lc.note !== "__AGENCY_CHANGED__" && (
+                            <p className="text-gray-500 italic">Lý do/Ghi chú: {lc.note}</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1986,7 +1988,7 @@ export function UserBookingDetailPage({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <History className="w-5 h-5 text-teal-600" />
-              Nhật ký điều chỉnh giá từ công ty lữ hành #{booking.id}
+              Nhật ký điều chỉnh giá từ công ty lữ hành {booking.bookingCode || `#${booking.id}`}
             </DialogTitle>
           </DialogHeader>
 

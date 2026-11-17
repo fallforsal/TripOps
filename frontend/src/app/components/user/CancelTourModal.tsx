@@ -475,7 +475,7 @@ export function CancelTourModal({
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn chỉ bị hủy sau khi Admin duyệt.</p>
+                  <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn được hủy ngay khi gửi yêu cầu; Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn.</p>
                 </div>
               </div>
 
@@ -519,7 +519,7 @@ export function CancelTourModal({
 
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                      <span>Mô tả chi tiết nguyên nhân (reason_detail) <span className="text-rose-600">*</span></span>
+                      <span>Mô tả chi tiết nguyên nhân <span className="text-rose-600">*</span></span>
                       <span className="text-[11px] text-slate-400 font-normal">Gửi tới Quản trị viên</span>
                     </Label>
                     <Textarea

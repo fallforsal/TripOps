@@ -4,7 +4,6 @@ import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
   MessageSquareWarning,
   LayoutDashboard,
-  Package,
   Calendar,
   Settings,
   ChevronLeft,
@@ -57,6 +56,11 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
+      id: "users",
+      label: "Quản lý Người dùng",
+      icon: Users,
+    },
+    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
@@ -88,16 +92,6 @@ export function AdminLayout({
       id: "finance",
       label: "STK Sàn",
       icon: Landmark,
-    },
-    {
-      id: "providers",
-      label: "Mạng lưới Dịch vụ",
-      icon: Package,
-    },
-    {
-      id: "users",
-      label: "Quản lý Người dùng",
-      icon: Users,
     },
   ];
 

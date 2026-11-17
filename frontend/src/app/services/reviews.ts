@@ -183,18 +183,19 @@ export const PLATFORM_REASONS: Record<string, string> = {
 export const reasonLabel = (type: ComplaintType, code: string) =>
   (type === "Trip" ? TRIP_REASONS : PLATFORM_REASONS)[code] ?? code;
 
+/** Khiếu nại chỉ có 2 trạng thái hiển thị; InReview / Rejected là dữ liệu cũ (backend đã quy về Pending / Resolved). */
 export const COMPLAINT_STATUS_LABEL: Record<ComplaintStatus, string> = {
-  Pending: "Chờ Admin xem xét",
-  InReview: "Chờ Admin xem xét",
-  Resolved: "Được chấp nhận",
-  Rejected: "Không được chấp nhận",
+  Pending: "Đang xử lý",
+  InReview: "Đang xử lý",
+  Resolved: "Đã giải quyết",
+  Rejected: "Đã giải quyết",
 };
 
 export const COMPLAINT_STATUS_STYLE: Record<ComplaintStatus, string> = {
   Pending: "bg-amber-50 text-amber-800 border-amber-200",
-  InReview: "bg-sky-50 text-sky-800 border-sky-200",
+  InReview: "bg-amber-50 text-amber-800 border-amber-200",
   Resolved: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  Rejected: "bg-rose-50 text-rose-800 border-rose-200",
+  Rejected: "bg-emerald-50 text-emerald-800 border-emerald-200",
 };
 
 export const isComplaintOpen = (status: ComplaintStatus) => status === "Pending" || status === "InReview";
@@ -225,8 +226,13 @@ export const listAdminComplaints = (filter?: { status?: string; type?: string })
   return http<ComplaintSummary[]>(`/admin/complaints${qs ? `?${qs}` : ""}`);
 };
 export const getAdminComplaint = (id: number) => http<ComplaintDetail>(`/admin/complaints/${id}`);
-export const resolveComplaint = (id: number, outcome: "Resolved" | "Rejected", note: string) =>
-  http<ComplaintDetail>(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note: note.trim() }) });
+/** Admin đánh dấu đã giải quyết; khách và Agency nhận tin nhắn + thông báo kèm ghi chú. */
+export const resolveComplaint = (id: number, note: string) =>
+  http<ComplaintDetail>(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome: "Resolved", note: note.trim() }) });
+
+/** Khiếu nại khách gửi về booking của Agency (chỉ đọc; khiếu nại nền tảng không hiện). */
+export const listAgencyComplaints = () => http<ComplaintSummary[]>("/agency/complaints");
+export const getAgencyComplaint = (id: number) => http<ComplaintDetail>(`/agency/complaints/${id}`);
 export const listAgencyComplaintStats = () => http<AgencyComplaintStat[]>("/admin/complaints/agency-stats");
 
 export const formatDateTime = (value?: string | null) =>

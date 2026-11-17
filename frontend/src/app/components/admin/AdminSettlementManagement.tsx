@@ -39,6 +39,7 @@ import {
   syncSettlement,
   type SettlementDto,
   type SettlementStatus,
+  settlementSharePercent,
 } from "@/app/services/settlements";
 import { toast } from "sonner";
 
@@ -283,7 +284,7 @@ export function AdminSettlementManagement() {
                 <tr>
                   <th className="py-3 px-3">Booking / Tour</th>
                   <th className="py-3 px-3">Agency nhận</th>
-                  <th className="py-3 px-3 text-right">Khách đã trả</th>
+                  <th className="py-3 px-3 text-right">Doanh thu</th>
                   <th className="py-3 px-3 text-right">Phí sàn</th>
                   <th className="py-3 px-3 text-right">Agency nhận</th>
                   <th className="py-3 px-3">Trạng thái</th>
@@ -314,8 +315,12 @@ export function AdminSettlementManagement() {
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <p className="font-semibold">{formatVND(s.customerPaid)}</p>
-                      <p className="text-[11px] text-gray-400">/ {formatVND(s.bookingTotal)}</p>
+                      <p className="font-semibold">{formatVND(s.grossAmount)}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {settlementSharePercent(s) !== null
+                          ? `Phần chia ${settlementSharePercent(s)}% · khách trả ${formatVND(s.customerPaid)}`
+                          : `Khách đã trả ${formatVND(s.customerPaid)}`}
+                      </p>
                     </td>
                     <td className="py-3 px-3 text-right">
                       <p>{formatVND(s.platformFee)}</p>
@@ -376,7 +381,7 @@ export function AdminSettlementManagement() {
                               disabled={s.payoutBlockers.length > 0 || !s.accountNumber || !s.bankBin}
                               title={s.payoutBlockers.join(" ") || (!s.bankBin ? "Agency chưa có tài khoản ngân hàng hỗ trợ chi tự động" : "")}
                               onClick={() => open("payout", s)}
-                              className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              className="h-8 w-36 justify-center text-xs gap-1 border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 hover:border-emerald-700 text-white"
                             >
                               <Send className="w-3.5 h-3.5" /> Chuyển qua payOS
                             </Button>
@@ -385,7 +390,7 @@ export function AdminSettlementManagement() {
                               disabled={s.payoutBlockers.length > 0}
                               title={s.payoutBlockers.join(" ")}
                               onClick={() => open("manual", s)}
-                              className="h-8 text-xs gap-1"
+                              className="h-8 w-36 justify-center text-xs gap-1"
                             >
                               <Landmark className="w-3.5 h-3.5" /> Đã chuyển tay
                             </Button>
@@ -434,8 +439,13 @@ export function AdminSettlementManagement() {
               <div className="space-y-3 text-sm">
                 {action.mode !== "hold" && (
                   <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-1 text-xs">
+                    {settlementSharePercent(action.item) !== null && (
+                      <p className="text-gray-500">
+                        Phần chia {settlementSharePercent(action.item)}% của {formatVND(action.item.customerPaid)} khách trả
+                      </p>
+                    )}
                     <p>
-                      Khách đã trả: <strong>{formatVND(action.item.grossAmount)}</strong>
+                      Doanh thu: <strong>{formatVND(action.item.grossAmount)}</strong>
                     </p>
                     <p>
                       Phí sàn {action.item.feePercent}%: <strong>− {formatVND(action.item.platformFee)}</strong>
@@ -462,13 +472,15 @@ export function AdminSettlementManagement() {
                 {action.mode !== "hold" && (
                   <div className="space-y-1">
                     <Label htmlFor="settle-amount">Số tiền chuyển (đ)</Label>
+                    {/* Số tiền cố định = số Agency được nhận; Admin không sửa. */}
                     <Input
                       id="settle-amount"
-                      inputMode="numeric"
+                      readOnly
+                      tabIndex={-1}
                       value={Number(amount.replace(/\D/g, "") || 0).toLocaleString("vi-VN")}
-                      onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
+                      className="bg-slate-50 font-bold text-slate-900 cursor-not-allowed focus-visible:ring-0"
                     />
-                    <p className="text-[11px] text-gray-500">Muốn trừ bồi thường khiếu nại thì nhập số nhỏ hơn và ghi lý do.</p>
+                    <p className="text-[11px] text-gray-500">Bằng đúng số Agency được nhận, không chỉnh sửa.</p>
                   </div>
                 )}
                 <div className="space-y-1">

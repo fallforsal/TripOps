@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
@@ -15,7 +16,6 @@ public static class RegionalDemoSeed
 {
     public const string Domain = "regional-demo.tripops.test";
     public const string Prefix = "REG26-";
-    public const string Password = "TripOpsDemo2026!";
     private const string Notice = "[DỮ LIỆU MẪU REGIONAL-DEMO-2026] Tài khoản, giá, sức chứa, giao dịch và đánh giá đều giả lập; không có đặt dịch vụ hoặc chuyển tiền thật.";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = false };
     public sealed record Manifest(string Dataset, bool Synthetic, string BoundarySource, Province[] Provinces);
@@ -44,6 +44,7 @@ public static class RegionalDemoSeed
         Console.WriteLine($"Regional demo database: {db.Database.GetDbConnection().DataSource} / {db.Database.GetDbConnection().Database}");
         var tours = scope.ServiceProvider.GetRequiredService<TourService>();
         var quotations = scope.ServiceProvider.GetRequiredService<BookingQuotationService>();
+        var password = scope.ServiceProvider.GetRequiredService<IConfiguration>()["RegionalDemo:Password"];
         if (db.Database.IsSqlServer() && (await db.Database.GetPendingMigrationsAsync(ct)).Any()) throw new InvalidOperationException("Apply pending migrations before regional seeding.");
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var hasher = new PasswordHasher<User>();
@@ -62,13 +63,15 @@ public static class RegionalDemoSeed
             }
             else
             {
+                if (string.IsNullOrWhiteSpace(password) || password.Length < 12)
+                    throw new InvalidOperationException("Set RegionalDemo:Password (at least 12 characters) before creating demo accounts.");
                 var number = ++sequence;
                 user = new User { Id = Guid.NewGuid().ToString(), Name = name, Email = email, Role = role,
                     Status = UserStatus.Active, IsVerified = true, AgencyId = agency?.Id,
                     Phone = "000" + number.ToString("D7"), ProvinceCode = p?.AdministrativeCode, ProvinceName = p?.Name.Replace("TP. ", ""),
                     AddressLine = p is null ? "Tài khoản quản trị dữ liệu mẫu" : $"Địa chỉ giả lập tại {p.Name}",
                     CreatedAt = now.AddMonths(-9), Avatar = Logo(p?.Code ?? "ADMIN", number) };
-                user.PasswordHash = hasher.HashPassword(user, Password);
+                user.PasswordHash = hasher.HashPassword(user, password);
                 if (role is UserRole.TravelAgency or UserRole.Provider)
                     user.BusinessProfile = new BusinessProfile { UserId = user.Id, BusinessName = name,
                         TaxCode = "DEMO-" + key, BusinessAddress = p!.Name, Status = BusinessProfileStatus.Approved,

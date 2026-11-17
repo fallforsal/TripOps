@@ -211,19 +211,17 @@ public sealed class GuideBookingsController(BookingService bookings, CloudinaryS
         Ok(await bookings.RecordAttendance(Actor, id, request, ct));
 
     [HttpPost("{id:int}/incidents")]
-    [EndpointSummary("Report an operational incident during the trip")]
-    [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportIncident(int id, ReportIncidentRequest request, CancellationToken ct) =>
-        Ok(await bookings.ReportIncident(Actor, id, request, ct));
-
-    [HttpPost("{id:int}/incidents-with-images")]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(GuideCheckinPhotoRules.MaxTotalBytes + (1024 * 1024))]
     [RequestFormLimits(MultipartBodyLengthLimit = GuideCheckinPhotoRules.MaxTotalBytes + (1024 * 1024))]
-    [EndpointSummary("Report an operational incident with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
+    [EndpointSummary("Report an operational incident with optional JPEG/PNG/WebP evidence (up to 5 photos)")]
     [ProducesResponseType<IncidentDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportIncidentWithImages(int id, [FromForm] GuideIncidentImagesForm request, CancellationToken ct)
+    public async Task<IActionResult> ReportIncident(int id, [FromForm] GuideIncidentImagesForm request, CancellationToken ct)
     {
-        GuideCheckinPhotoRules.ValidateFiles(request.Images.Select(f => (f.Length, f.ContentType)).ToArray());
+        if (!IncidentTypeRules.IsAllowed(request.IncidentType))
+            throw new BookingException(422, "Loại sự cố không hợp lệ.");
+        if (request.Images.Count > 0)
+            GuideCheckinPhotoRules.ValidateFiles(request.Images.Select(f => (f.Length, f.ContentType)).ToArray());
         var photoUrls = new List<string>(request.Images.Count);
         foreach (var file in request.Images)
         {
@@ -232,7 +230,7 @@ public sealed class GuideBookingsController(BookingService bookings, CloudinaryS
             var bytes = stream.ToArray();
             if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
                 throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
-            photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
+            photoUrls.Add(await media.UploadGuideIncidentImage(Actor, bytes, file.ContentType, ct));
         }
         return Ok(await bookings.ReportIncident(
             Actor, id, new ReportIncidentRequest(request.IncidentType, request.Title, request.Description, request.Severity), ct, photoUrls));

@@ -136,7 +136,7 @@ public sealed class AdminComplaintsController(ComplaintService complaints) : Con
         Ok(await complaints.AdminList(status, type, ct));
 
     [HttpGet("agency-stats")]
-    [EndpointSummary("Trip complaints per Agency: total, open, upheld and dismissed (not used in star ratings)")]
+    [EndpointSummary("Trip complaints per Agency: total, open and resolved (not used in star ratings)")]
     [ProducesResponseType<IReadOnlyList<AgencyComplaintStatDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AgencyStats(CancellationToken ct) => Ok(await complaints.AgencyStats(ct));
 
@@ -146,10 +146,27 @@ public sealed class AdminComplaintsController(ComplaintService complaints) : Con
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await complaints.AdminDetail(id, ct));
 
     [HttpPost("{id:int}/resolve")]
-    [EndpointSummary("Admin accepts (Resolved) or rejects (Rejected) a complaint with a response to the customer")]
+    [EndpointSummary("Admin marks a complaint resolved with a note; the customer and the booking's Agency get a chat message and a notification")]
     [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Resolve(int id, ResolveComplaintRequest request, CancellationToken ct) =>
         Ok(await complaints.Resolve(Actor, id, request, ct));
+}
+
+[ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/complaints")]
+[Tags("Complaints")]
+public sealed class AgencyComplaintsController(ComplaintService complaints) : ControllerBase
+{
+    private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+    [HttpGet]
+    [EndpointSummary("Complaints customers filed about this Agency's bookings (platform complaints are not shown)")]
+    [ProducesResponseType<IReadOnlyList<ComplaintSummaryDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(CancellationToken ct) => Ok(await complaints.AgencyList(Actor, ct));
+
+    [HttpGet("{id:int}")]
+    [EndpointSummary("Read one complaint about this Agency's booking, including the Admin resolution note")]
+    [ProducesResponseType<ComplaintDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await complaints.AgencyDetail(Actor, id, ct));
 }
 
 [ApiController, Route("api/v1")]

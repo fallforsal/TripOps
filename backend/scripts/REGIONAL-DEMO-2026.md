@@ -26,7 +26,7 @@ Tour thứ nhất dùng khách sạn/nhà hàng từ Provider; tour thứ hai d�
 
 ## Đăng nhập
 
-Mật khẩu chung của **tài khoản mới trong bộ mẫu**: `TripOpsDemo2026!`. Không reset mật khẩu tài khoản đang có.
+Đặt mật khẩu chung cho **tài khoản mới trong bộ mẫu** bằng cấu hình `RegionalDemo:Password` (ít nhất 12 ký tự). Mật khẩu không nằm trong Git. Chạy lại seeder không reset mật khẩu tài khoản đang có.
 
 | Vai trò | Ví dụ email |
 |---|---|
@@ -48,6 +48,7 @@ Từ thư mục gốc, sau khi dừng tiến trình BE đang khóa file build:
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:RegionalDemo__Password = Read-Host 'Mật khẩu cho tài khoản regional demo mới'
 $regionalManifest = (Resolve-Path backend/scripts/data/regional-demo-2026.json).Path
 $regionalReport = Join-Path (Get-Location).Path 'tmp/regional-demo-result.json'
 dotnet run --project backend/src/TripOps.Api -- --SeedRegionalDemo=true "--RegionalDemo:Manifest=$regionalManifest" "--RegionalDemo:Report=$regionalReport"

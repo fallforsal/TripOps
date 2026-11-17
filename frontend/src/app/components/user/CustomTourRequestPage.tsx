@@ -1,6 +1,6 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { CustomerPlanEditor } from "@/app/components/customer/CustomerPlanEditor";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CustomTourRequest, TourCompany, User } from "@/app/types";
 import {
   Send,
@@ -13,6 +13,7 @@ import {
   Clock,
   Info,
   CheckCircle2,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
@@ -51,7 +52,7 @@ export function CustomTourRequestPage({
     returnDate: TODAY,
     numberOfPeople: "",
     budgetPerPerson: "",
-    hotelStars: "4",
+    hotelStars: "Khách sạn / Resort 4 sao",
     additionalInfo: "",
     targetCompanyId: sourceTour?.companyId || "",
   });
@@ -62,6 +63,17 @@ export function CustomTourRequestPage({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [chosenAgency, setChosenAgency] = useState<TourCompany | null>(null);
+  const [hotelDropdownOpen, setHotelDropdownOpen] = useState(false);
+  const hotelComboRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (hotelComboRef.current && !hotelComboRef.current.contains(e.target as Node)) {
+        setHotelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
   useEffect(() => {
     if (sourceTour?.companyId) { setForm((previous) => ({ ...previous, targetCompanyId: sourceTour.companyId! })); return; }
   }, [sourceTour?.companyId]);
@@ -417,20 +429,55 @@ export function CustomTourRequestPage({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={hotelComboRef}>
               <label className="text-xs font-semibold text-[#0F172A]">
                 Tiêu chuẩn khách sạn mong muốn
               </label>
-              <select
-                value={form.hotelStars}
-                onChange={set("hotelStars")}
-                className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              >
-                <option value="3">Khách sạn 3 sao</option>
-                <option value="4">Khách sạn / Resort 4 sao</option>
-                <option value="5">Resort 5 sao cao cấp</option>
-                <option value="homestay">Homestay / Trải nghiệm bản địa</option>
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={form.hotelStars}
+                  onFocus={() => setHotelDropdownOpen(true)}
+                  onChange={set("hotelStars")}
+                  placeholder="Chọn gợi ý hoặc tự nhập (VD: Khách sạn 4 sao, Villa...)"
+                  maxLength={100}
+                  className="w-full h-9 pl-2.5 pr-8 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+                />
+                <button
+                  type="button"
+                  aria-label="Mở danh sách tiêu chuẩn khách sạn"
+                  onClick={() => setHotelDropdownOpen((v) => !v)}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {hotelDropdownOpen && (
+                  <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[#CBD5E1] rounded-[6px] shadow-lg py-1 max-h-48 overflow-y-auto">
+                    {[
+                      "Khách sạn 3 sao",
+                      "Khách sạn / Resort 4 sao",
+                      "Resort 5 sao cao cấp",
+                      "Homestay / Trải nghiệm bản địa",
+                    ].map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setForm((f) => ({ ...f, hotelStars: opt }));
+                          setHotelDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-sky-50 transition-colors ${
+                          form.hotelStars === opt
+                            ? "bg-sky-50 font-semibold text-[#075985]"
+                            : "text-[#0F172A]"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

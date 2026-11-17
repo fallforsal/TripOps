@@ -1,7 +1,7 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
 import { Textarea } from "@/app/components/ui/textarea";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   parseDateString,
   calculateAge,
@@ -73,6 +73,7 @@ interface BookingFormPageProps {
   customHotelChanges?: CustomHotelChange[];
   customMealChanges?: CustomMealChange[];
   locationChanges?: CustomLocationChange[];
+  defaultStartDate?: string;
   onBack: () => void;
   onSubmit: (data: BookingSubmitData) => void | Promise<unknown>;
   onGoHome?: () => void;
@@ -158,6 +159,7 @@ export function BookingFormPage({
   customHotelChanges = [],
   customMealChanges = [],
   locationChanges = [],
+  defaultStartDate,
   onBack,
   onSubmit,
   onGoHome,
@@ -167,10 +169,17 @@ export function BookingFormPage({
 
   // Step 2 state
   const initialStartDate =
-    tour.departureDates && tour.departureDates.length > 0
+    defaultStartDate ||
+    (tour.departureDates && tour.departureDates.length > 0
       ? tour.departureDates[0].date
-      : new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+      : new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]);
   const [tourStartDate, setTourStartDate] = useState(initialStartDate);
+
+  useEffect(() => {
+    if (defaultStartDate) {
+      setTourStartDate(defaultStartDate);
+    }
+  }, [defaultStartDate]);
 
   const [passengers, setPassengers] = useState<BookingPassenger[]>([
     newPassenger("p1", tour),
