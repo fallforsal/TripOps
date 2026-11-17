@@ -19,7 +19,7 @@ interface AdminDashboardOverviewProps {
   onNavigate: (section: string) => void;
 }
 
-type Period = 7 | 30 | 90;
+type Period = 7 | 30 | 90 | 365 | "all";
 type QueueItem = {
   id: string;
   title: string;
@@ -33,6 +33,8 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: 7, label: "7 ngày" },
   { value: 30, label: "30 ngày" },
   { value: 90, label: "90 ngày" },
+  { value: 365, label: "1 năm" },
+  { value: "all", label: "Tất cả" },
 ];
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
@@ -51,7 +53,7 @@ function validDate(value?: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function periodStart(today: Date, period: Period) {
+function periodStart(today: Date, period: number) {
   return new Date(today.getFullYear(), today.getMonth(), today.getDate() - period + 1);
 }
 
@@ -128,11 +130,18 @@ export function AdminDashboardOverview({
   }, [reload]);
 
   const now = useMemo(() => new Date(), [reload]);
-  const start = useMemo(() => periodStart(now, period), [now, period]);
+  const start = useMemo(() => period === "all" ? null : periodStart(now, period), [now, period]);
 
+  // Only the KPI cards use the chosen period. "Tất cả" includes all historical records,
+  // even those without a creation date; the independent charts stay on a fixed 30-day window.
   const bookingPeriod = useMemo(
-    () => bookings.filter((b) => inPeriod(b.bookingDate, start, now)),
-    [bookings, start, now],
+    () => period === "all" ? bookings : bookings.filter((b) => inPeriod(b.bookingDate, start!, now)),
+    [bookings, period, start, now],
+  );
+  const chartStart = useMemo(() => periodStart(now, 30), [now]);
+  const chartBookings = useMemo(
+    () => bookings.filter((b) => inPeriod(b.bookingDate, chartStart, now)),
+    [bookings, chartStart, now],
   );
   const bookingValue = useMemo(() =>
     bookingPeriod
@@ -141,9 +150,9 @@ export function AdminDashboardOverview({
 
   // Only completed transfers count as platform fees earned and paid out.
   const platformFeeCollected = useMemo(() => settlements === null ? null :
-    settlements.filter((s) => s.status === "Paid" && inPeriod(s.transferredAt, start, now))
+    settlements.filter((s) => s.status === "Paid" && (period === "all" || inPeriod(s.transferredAt, start!, now)))
       .reduce((sum, s) => sum + Math.max(0, s.platformFee || 0), 0),
-  [settlements, start, now]);
+  [settlements, period, start, now]);
 
   // Unpaid means the tour is not yet eligible. Count only settlement rows awaiting payout.
   const pendingSettlement = useMemo(() => settlements === null ? null :
@@ -156,21 +165,21 @@ export function AdminDashboardOverview({
   const pendingRefunds = useMemo(() => refundRequests.filter((r) => waitingRefund(r.status)), [refundRequests]);
   const openComplaints = useMemo(() => complaints?.filter((c) => isComplaintOpen(c.status)) ?? [], [complaints]);
 
-  const trend = useMemo(() => trendByPeriod(bookingPeriod, period, start, now),
-    [bookingPeriod, period, start, now]);
+  const trend = useMemo(() => trendByPeriod(chartBookings, 30, chartStart, now),
+    [chartBookings, chartStart, now]);
 
   const statusBreakdown = useMemo(() => {
-    const pending = bookingPeriod.filter((b) => b.status === "pending").length;
-    const completed = bookingPeriod.filter((b) => b.status === "completed").length;
-    const cancelled = bookingPeriod.filter((b) => b.status === "cancelled" || b.status === "rejected").length;
-    const processing = bookingPeriod.length - pending - completed - cancelled;
+    const pending = chartBookings.filter((b) => b.status === "pending").length;
+    const completed = chartBookings.filter((b) => b.status === "completed").length;
+    const cancelled = chartBookings.filter((b) => b.status === "cancelled" || b.status === "rejected").length;
+    const processing = chartBookings.length - pending - completed - cancelled;
     return [
       { label: "Chờ xử lý", count: pending, color: "bg-amber-500" },
       { label: "Đang thực hiện", count: processing, color: "bg-sky-600" },
       { label: "Hoàn thành", count: completed, color: "bg-emerald-500" },
       { label: "Hủy / từ chối", count: cancelled, color: "bg-rose-500" },
     ];
-  }, [bookingPeriod]);
+  }, [chartBookings]);
 
   const tasks = useMemo(() => {
     const list: QueueItem[] = [
@@ -194,7 +203,7 @@ export function AdminDashboardOverview({
   const kpis = [
     { id: "bookings", title: "Booking trong kỳ", value: numberFormatter.format(bookingPeriod.length), note: "Theo ngày đặt", Icon: CalendarDays },
     { id: "value", title: "Giá trị đặt tour", value: shortMoney(bookingValue), note: "Không phải doanh thu sàn", Icon: ClipboardList },
-    { id: "payout", title: "Tiền chờ chi Agency", value: pendingSettlement === null ? "—" : shortMoney(pendingSettlement), note: "Tất cả khoản đủ điều kiện / đang xử lý", Icon: HandCoins },
+    { id: "payout", title: "Tiền chờ chi Agency (hiện tại)", value: pendingSettlement === null ? "—" : shortMoney(pendingSettlement), note: "Số dư chưa chi, không lọc theo thời gian", Icon: HandCoins },
     { id: "fees", title: "Phí sàn đã thu trong kỳ", value: platformFeeCollected === null ? "—" : shortMoney(platformFeeCollected), note: "Khoản quyết toán đã chuyển", Icon: Wallet },
   ];
 
@@ -207,20 +216,6 @@ export function AdminDashboardOverview({
           <p className="mt-1 text-xs text-slate-400">Dữ liệu nghiệp vụ theo danh sách hiện được tải; số liệu đối tác, khiếu nại, quyết toán lấy từ API.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1" role="group" aria-label="Khoảng thời gian thống kê">
-            {PERIODS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setPeriod(option.value)}
-                aria-pressed={period === option.value}
-                className={"rounded-lg px-3 py-2 text-xs font-semibold transition-colors " +
-                  (period === option.value ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-100")}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
           <Button type="button" variant="outline" size="sm" disabled={loading}
             onClick={() => setReload((value) => value + 1)} className="h-9 rounded-xl text-xs gap-1.5">
             <RefreshCw className={"h-3.5 w-3.5 " + (loading ? "animate-spin" : "")} />
@@ -260,7 +255,24 @@ export function AdminDashboardOverview({
       </section>
 
       <section className="space-y-3" aria-labelledby="admin-kpis">
-        <h2 id="admin-kpis" className="text-base font-bold text-slate-900">Chỉ số hoạt động</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 id="admin-kpis" className="text-base font-bold text-slate-900">Chỉ số hoạt động</h2>
+          <div className="inline-flex max-w-full flex-wrap gap-1 self-start rounded-xl border border-slate-200 bg-white p-1"
+            role="group" aria-label="Lọc thời gian chỉ số hoạt động">
+            {PERIODS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setPeriod(option.value)}
+                aria-pressed={period === option.value}
+                className={"rounded-lg px-3 py-2 text-xs font-semibold transition-colors " +
+                  (period === option.value ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-100")}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {kpis.map(({ id, title, value, note, Icon }) => (
             <div key={id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -280,9 +292,9 @@ export function AdminDashboardOverview({
           <div className="mb-4 flex items-start justify-between gap-2">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Xu hướng Booking</h2>
-              <p className="mt-1 text-xs text-slate-500">Số lượt đặt tour trong {period} ngày gần nhất</p>
+              <p className="mt-1 text-xs text-slate-500">Số lượt đặt tour trong 30 ngày gần nhất</p>
             </div>
-            <span className="rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-[#075985]">{numberFormatter.format(bookingPeriod.length)} booking</span>
+            <span className="rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-[#075985]">{numberFormatter.format(chartBookings.length)} booking</span>
           </div>
           <div className="h-64 w-full" role="img" aria-label="Biểu đồ số lượng booking theo thời gian">
             <ResponsiveContainer width="100%" height="100%">
@@ -305,10 +317,10 @@ export function AdminDashboardOverview({
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <h2 className="text-sm font-bold text-slate-900">Trạng thái Booking</h2>
-          <p className="mt-1 text-xs text-slate-500">Phân bổ các booking được tạo trong kỳ</p>
+          <p className="mt-1 text-xs text-slate-500">Phân bổ booking tạo trong 30 ngày gần nhất</p>
           <div className="mt-6 space-y-5">
             {statusBreakdown.map((item) => {
-              const percentage = bookingPeriod.length > 0 ? Math.round(item.count * 100 / bookingPeriod.length) : 0;
+              const percentage = chartBookings.length > 0 ? Math.round(item.count * 100 / chartBookings.length) : 0;
               return (
                 <div key={item.label} className="space-y-2">
                   <div className="flex items-center justify-between gap-3 text-xs">
@@ -322,7 +334,7 @@ export function AdminDashboardOverview({
               );
             })}
           </div>
-          {bookingPeriod.length === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong khoảng thời gian này.</p>}
+          {chartBookings.length === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong 30 ngày gần nhất.</p>}
         </div>
       </section>
 
