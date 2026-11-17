@@ -141,16 +141,17 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
   const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, pageSize);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const activePage = Math.min(page, totalPages);
-  const firstIndex = (activePage - 1) * pageSize;
   const visiblePages = useMemo(() => {
-    const candidates = new Set([1, totalPages, activePage - 1, activePage, activePage + 1]);
-    return [...candidates].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  }, [activePage, totalPages]);
+    const candidates = new Set([1, totalPages, page - 1, page, page + 1]);
+    return [...candidates].filter((value) => value >= 1 && value <= totalPages).sort((a, b) => a - b);
+  }, [page, totalPages]);
+  const firstItem = items.length > 0 ? (page - 1) * pageSize + 1 : 0;
+  const lastItem = items.length > 0 ? Math.min(total, (page - 1) * pageSize + items.length) : 0;
 
+  // Keep the current page valid when a ban/unban or server refresh reduces the result count.
   useEffect(() => {
-    setPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+    if (!loading && !error && page > totalPages) setPage(totalPages);
+  }, [loading, error, page, totalPages]);
 
   const [selected, setSelected] = useState<AdminAccount | null>(null);
   const [target, setTarget] = useState<AdminAccount | null>(null);
@@ -351,11 +352,11 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
         )}
       </div>
 
-      {/* Phân trang */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-gray-500 gap-3 shadow-xs">
+      {/* Phân trang - sử dụng dữ liệu đã được phân trang từ API */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-slate-600 gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            Hiển thị <strong>{total ? firstIndex + 1 : 0}–{firstIndex + items.length}</strong>
+            Hiển thị <strong>{firstItem}–{lastItem}</strong>
             {" / "}<strong>{total}</strong> tài khoản
           </span>
           <label className="inline-flex items-center gap-2">
@@ -364,12 +365,61 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
               aria-label="Số tài khoản mỗi trang"
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
             >
               {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs" disabled={loading} onClick={refresh}>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {totalPages > 1 && (
+            <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang trước"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Trước</span>
+              </Button>
+              {visiblePages.map((pageNumber, index) => (
+                <div key={pageNumber} className="inline-flex items-center gap-1">
+                  {index > 0 && pageNumber > visiblePages[index - 1] + 1 && (
+                    <span aria-hidden="true" className="px-1 text-slate-400">…</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={pageNumber === page ? "default" : "outline"}
+                    size="sm"
+                    disabled={loading}
+                    aria-label={`Trang ${pageNumber}`}
+                    aria-current={pageNumber === page ? "page" : undefined}
+                    onClick={() => setPage(pageNumber)}
+                    className={`h-8 min-w-8 px-2 text-xs ${pageNumber === page ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                  >
+                    {pageNumber}
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang sau"
+              >
+                <span className="hidden sm:inline">Sau</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </nav>
+          )}
+          <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 text-xs" disabled={loading} onClick={refresh}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             {loading ? "Đang tải..." : "Tải lại"}
           </Button>
