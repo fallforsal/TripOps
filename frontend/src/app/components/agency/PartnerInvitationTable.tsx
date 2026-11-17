@@ -521,7 +521,9 @@ export function PartnerInvitationTable({ requests, company, tours, onChanged, on
 
                 {inspectedDetails.rejectionReason && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800">
-                    <span className="block font-semibold">Lý do từ chối</span>
+                    <span className="block font-semibold">
+                      {inspectedInvite.status === "removed" || inspectedInvite.status === "revoked" ? "Lý do gỡ đối tác" : "Lý do từ chối"}
+                    </span>
                     <p className="mt-1 whitespace-pre-wrap text-sm">{inspectedDetails.rejectionReason}</p>
                   </div>
                 )}

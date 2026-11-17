@@ -24,9 +24,9 @@ public sealed class DesignCoHostsController(TourService tours, CloudinaryStorage
     [HttpDelete("co-hosts/{partner}")]
     [EndpointSummary("Lead Agency withdraws a co-host invitation or partnership")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] int? version=null,[FromQuery] bool terminate=false) {
+    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] int? version=null,[FromQuery] bool terminate=false,[FromQuery] string? reason=null) {
         if(terminate)throw new TourException(422,"Chỉ hỗ trợ gỡ đối tác theo phiên bản. Hãy chọn phiên bản cần gỡ.");
-        await tours.RemoveCoHost(Actor,id,partner,ct,version);return NoContent();
+        await tours.RemoveCoHost(Actor,id,partner,ct,version,reason);return NoContent();
     }
     [HttpGet("working-tour")]
     [EndpointSummary("Lead or accepted co-host reads the current private working tour")]

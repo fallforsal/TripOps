@@ -1,7 +1,6 @@
 import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { VietnameseMoneyInput } from "@/app/components/ui/VietnameseMoneyInput";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
-import { confirmAction } from "@/app/lib/notificationDialogs";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -34,6 +33,7 @@ import { AgencyDiscoveryPicker } from "@/app/components/common/AgencyDiscoveryPi
 import { fromApiTour, toConfiguration, type ApiTour } from "@/app/services/wf02Tours";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/app/components/ui/alert-dialog";
 import { TourFormPage } from "./AgencyTourManagement";
 import { PartnerInvitationTable } from "./PartnerInvitationTable";
 
@@ -81,6 +81,8 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"members" | "invite">("members");
   const [inspectingHost, setInspectingHost] = useState<TourCoHost | null>(null);
+  const [removingHost, setRemovingHost] = useState<TourCoHost | null>(null);
+  const [removeReason, setRemoveReason] = useState("");
   const [partner, setPartner] = useState("");
   const [partnerPreview, setPartnerPreview] = useState<TourCompany | null>(null);
   const [segment, setSegment] = useState("");
@@ -544,7 +546,11 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
                         )}
                       </div>
 
-                      {host.rejectionReason && <p className="text-xs text-rose-600">Lý do từ chối: {host.rejectionReason}</p>}
+                      {host.rejectionReason && (
+                        <p className="text-xs text-rose-600">
+                          {host.status === "removed" || host.status === "revoked" ? "Lý do bị gỡ" : "Lý do từ chối"}: {host.rejectionReason}
+                        </p>
+                      )}
 
                       {tiers.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -586,19 +592,9 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
                         size="sm"
                         className="border-rose-200 text-rose-700 hover:bg-rose-50"
                         disabled={busy || loading || !version}
-                        onClick={async () => {
-                          if (
-                            await confirmAction(
-                              `Gỡ ${host.companyName} khỏi phiên bản v${version}? Toàn bộ điểm tham quan, bữa ăn, khách sạn, hình ảnh, điểm nhấn và bảng giá do đối tác tạo sẽ bị gỡ trong bản này. Các phiên bản khác giữ nguyên. Đối tác vẫn thấy lời mời cũ với trạng thái đã bị chủ trì gỡ.`,
-                              { title: "Gỡ đối tác khỏi phiên bản", confirmLabel: "Gỡ đối tác", tone: "error" },
-                            )
-                          ) {
-                            void action(async () => {
-                              await http(`${root}/co-hosts/${host.companyId}?version=${version}`, { method: "DELETE" });
-                              await load();
-                              toast.success("Đã gỡ đối tác và nội dung khỏi phiên bản.");
-                            });
-                          }
+                        onClick={() => {
+                          setRemoveReason("");
+                          setRemovingHost(host);
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -784,7 +780,9 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
 
                 {inspectingHost.rejectionReason && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800">
-                    <span className="block font-semibold">Lý do từ chối</span>
+                    <span className="block font-semibold">
+                      {inspectingHost.status === "removed" || inspectingHost.status === "revoked" ? "Lý do gỡ đối tác" : "Lý do từ chối"}
+                    </span>
                     <p className="mt-1 whitespace-pre-wrap text-sm">{inspectingHost.rejectionReason}</p>
                   </div>
                 )}
@@ -793,6 +791,58 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
           )}
         </DialogContent>
       </Dialog>
+
+      {/* POPUP XÁC NHẬN GỠ ĐỐI TÁC KÈM LÝ DO BẮT BUỘC */}
+      <AlertDialog open={Boolean(removingHost)} onOpenChange={open => { if (!busy && !open) setRemovingHost(null); }}>
+        <AlertDialogContent tone="error" className="bg-white sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gỡ đối tác khỏi phiên bản v{version}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Gỡ <strong>{removingHost?.companyName}</strong> khỏi phiên bản v{version}? Toàn bộ điểm tham quan, bữa ăn, khách sạn, hình ảnh, điểm nhấn và bảng giá do đối tác tạo trong bản này sẽ bị gỡ; các phiên bản khác giữ nguyên.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+            Lý do gỡ đối tác <span className="text-rose-600">*</span>
+            <textarea
+              aria-label="Lý do gỡ đối tác"
+              rows={3}
+              maxLength={2000}
+              value={removeReason}
+              onChange={e => setRemoveReason(e.target.value)}
+              placeholder="Nhập lý do gửi cho đối tác (bắt buộc)…"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel asChild>
+              <Button data-slot="alert-dialog-cancel" variant="outline" disabled={busy} onClick={() => setRemovingHost(null)}>
+                Quay lại
+              </Button>
+            </AlertDialogCancel>
+            <Button
+              data-slot="alert-dialog-action"
+              disabled={busy || !removeReason.trim()}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              onClick={() => {
+                if (!removingHost || !removeReason.trim()) return;
+                const target = removingHost;
+                const clean = removeReason.trim();
+                void action(async () => {
+                  await http(`${root}/co-hosts/${target.companyId}?version=${version}&reason=${encodeURIComponent(clean)}`, {
+                    method: "DELETE",
+                  });
+                  setRemovingHost(null);
+                  setRemoveReason("");
+                  await load();
+                  toast.success("Đã gỡ đối tác và nội dung khỏi phiên bản.");
+                });
+              }}
+            >
+              Gỡ đối tác
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
