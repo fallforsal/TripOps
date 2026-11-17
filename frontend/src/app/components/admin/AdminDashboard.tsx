@@ -140,7 +140,6 @@ export function AdminDashboard({
       case "dashboard":
         return (
           <AdminDashboardOverview
-            tours={tours}
             bookings={bookings}
             services={services}
             refundRequests={refundRequests}
