@@ -46,6 +46,17 @@ public sealed partial class BookingFlowTests
             Assert.Equal(HttpStatusCode.UnprocessableEntity,
                 (await guide.PostAsync($"{prefix}/{first}/check-in-with-images", form)).StatusCode);
 
+        // A checkout must follow a successful check-in and must carry its own photo.
+        using (var form = PhotoForm(1))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
+        using (var form = new MultipartFormDataContent())
+            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+                (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await guide.PostAsJsonAsync($"{prefix}/{first}/check-in",
+                new { status = "CheckedIn" })).StatusCode);
+
         using (var form = PhotoForm(2))
             (await guide.PostAsync($"{prefix}/{first}/check-in-with-images", form))
                 .EnsureSuccessStatusCode();
@@ -67,6 +78,10 @@ public sealed partial class BookingFlowTests
         Assert.Equal(second, detail.NextLocationCheckInId);
         Assert.Equal("CheckedOut", detail.SnapshotDays![0].Locations[0].AttendanceStatus);
         Assert.Single(detail.SnapshotDays[0].Locations[0].CheckoutPhotoUrls!);
+        using (var form = PhotoForm(1))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
+
 
 
         using (var scope = app.Services.CreateScope())
