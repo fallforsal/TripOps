@@ -100,7 +100,8 @@ public enum AttractionCheckinStatus
 {
     Pending,
     CheckedIn,
-    Skipped
+    Skipped,
+    CheckedOut
 }
 
 public enum IncidentStatus
