@@ -54,7 +54,7 @@ function formatCreatedAt(value?: string): string {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
   const time = date.toLocaleTimeString("vi-VN", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   });
   return `${day} ${time}`;
 }

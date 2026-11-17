@@ -71,8 +71,8 @@ export function AgencyDiscoveryPicker({ value, onSelect, destination = "", initi
     {selected && <p className="flex items-center gap-2 text-xs text-[#075985]"><Check size={14} />Đã chọn: <strong>{selected.name}</strong></p>}
     {loading ? <p role="status" className="p-5 text-center text-slate-500">Đang tải hồ sơ Agency...</p> : error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">{error}<button type="button" onClick={() => setRetry(n => n + 1)} className="ml-3 underline">Tải lại</button></div> : <>
       {!rows.length && <p className="rounded-lg border border-dashed p-6 text-center text-slate-500">{tab === "matched" ? "Chưa có bằng chứng hoạt động tại địa bàn này. Bạn vẫn có thể chọn trong tab Tất cả Agency." : "Không có Agency phù hợp với tìm kiếm."}</p>}
-      <div className="grid max-h-[540px] grid-cols-1 gap-3 overflow-y-auto pr-1 lg:grid-cols-2">
-        {rows.map(a => { const e = a.evidence; return <article key={a.id} className={`rounded-lg border p-4 ${value === a.id ? "border-[#075985] bg-sky-50/60" : "border-slate-200 bg-white"}`}>
+      <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+        {rows.map(a => { const e = a.evidence; return <article key={a.id} className={`rounded-xl border p-4 transition ${value === a.id ? "border-[#075985] bg-sky-50/70 ring-2 ring-[#075985]/15" : "border-slate-200 bg-white hover:border-slate-300"}`}>
           <div className="flex gap-3"><Logo agency={a} /><div className="min-w-0 flex-1"><h3 className="font-semibold text-slate-900">{a.name}</h3><p className="mt-1 line-clamp-2 text-xs text-slate-500">{a.address || "Chưa cập nhật địa chỉ"}</p></div>{value === a.id && <Check size={16} className="shrink-0 text-[#075985]" />}</div>
           <div className="my-3 grid grid-cols-2 gap-2 border-y border-slate-100 py-3 text-xs">
             <div><strong className="text-base text-[#075985]">{codes.length ? e?.matchedCompletedTrips ?? 0 : e?.completedTrips ?? 0}</strong><p className="mt-1 text-slate-600">Chuyến hoàn thành{codes.length ? " tại điểm đến" : " toàn hệ thống"}</p></div>

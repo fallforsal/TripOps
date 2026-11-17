@@ -104,7 +104,7 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             var invitations=agencyView?await db.TourVersionAgencies.AsNoTracking()
                 .Where(a=>a.TourVersion.Tour.DesignRequestId==request.Id && !a.IsHost && a.Status!="uninvited" && (request.AgencyId==actor || a.AgencyId==actor))
                 .OrderByDescending(a=>a.TourVersion.VersionNumber)
-                .Select(a=>new DesignInvitationDto(a.AgencyId,a.TourVersion.VersionNumber,a.Status=="excluded" || a.Status=="cancelled" || db.TourDesignRequestAgencies.Any(g=>g.TourDesignRequestId==request.Id && g.AgencyId==a.AgencyId && g.Status=="cancelled")?"removed":a.Status,a.StageArea,a.AssignedAt,a.RespondedAt)).ToArrayAsync(ct):null;
+                .Select(a=>new DesignInvitationDto(a.AgencyId,a.TourVersion.VersionNumber,a.Status=="excluded" || a.Status=="cancelled" || db.TourDesignRequestAgencies.Any(g=>g.TourDesignRequestId==request.Id && g.AgencyId==a.AgencyId && g.Status=="cancelled")?"removed":a.Status,a.StageArea,a.AssignedAt,a.RespondedAt,a.SuggestedBudget,a.CommunicationNotes,a.Status=="rejected"?a.CommunicationNotes:null)).ToArrayAsync(ct):null;
             var status=booking.HasValue?"booked":request.Status==CustomRequestStatus.Booked?"closed":mapped.Status;
             mapped=mapped with {Status=status,BookingId=booking,ArchivedAt=membership?.ArchivedAt,ClosedAt=request.ClosedAt,
                 CloseReason=request.CloseReason??(request.Status==CustomRequestStatus.Booked && !booking.HasValue?"Booking đã hủy hoặc bị từ chối. Agency có thể mở lại yêu cầu.":null),
@@ -136,9 +136,12 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             ?? throw new TourException(404, "Yêu cầu không tồn tại.");
         Require(request.Status is CustomRequestStatus.Pending or CustomRequestStatus.InProgress, "Yêu cầu không thể thay đổi trạng thái.");
         Require(action.Action is "review" or "reject", "Thao tác không hợp lệ.");
-        if (action.Action == "reject")
+        if (action.Action == "reject") {
+            Require(request.Status == CustomRequestStatus.Pending,
+                "Yêu cầu đã tiếp nhận không thể từ chối. Hãy dùng Đóng yêu cầu nếu không thể tiếp tục.");
             Require(!await db.Tours.AnyAsync(t => t.DesignRequestId == id && t.Status != TourStatus.Deleted, ct),
                 "Yêu cầu đã có tour thiết kế.");
+        }
         Require(action.Action != "reject" || !string.IsNullOrWhiteSpace(action.Reason), "Vui lòng nhập lý do từ chối.");
         request.Status = action.Action == "review" ? CustomRequestStatus.InProgress : CustomRequestStatus.Rejected;
         request.RejectionReason = action.Action == "reject" ? action.Reason!.Trim() : null;

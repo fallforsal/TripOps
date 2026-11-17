@@ -2036,7 +2036,7 @@ export function UserBookingDetailPage({
                           </span>
                         </div>
                         <span className="text-[11px] text-gray-500 font-medium">
-                          {new Date(adj.createdAt).toLocaleString("vi-VN")}
+                          {new Date(adj.createdAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}
                         </span>
                       </div>
 

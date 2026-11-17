@@ -983,7 +983,7 @@ export interface CustomTourRequest {
   closeReason?: string;
   bookingId?: string;
   collaborationVersions?: number[];
-  collaborationInvitations?: {companyId:string;version:number;status:TourCoHost["status"];segment?:string;invitedAt:string;respondedAt?:string}[];
+  collaborationInvitations?: {companyId:string;version:number;status:TourCoHost["status"];segment?:string;invitedAt:string;respondedAt?:string;budget?:number;notes?:string;rejectionReason?:string}[];
   hasCollaborations?: boolean;
   sharedTourThumbnail?: string;
   sharedTourName?: string;

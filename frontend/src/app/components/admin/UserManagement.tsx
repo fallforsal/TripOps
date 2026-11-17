@@ -90,7 +90,7 @@ const asDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) || date.getFullYear() < 1971 ? null : date;
 };
 const formatDate = (value?: string | null) => asDate(value)?.toLocaleDateString("vi-VN") ?? "Chưa có";
-const formatDateTime = (value?: string | null) => asDate(value)?.toLocaleString("vi-VN") ?? "Chưa cập nhật";
+const formatDateTime = (value?: string | null) => asDate(value)?.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }) ?? "Chưa cập nhật";
 
 function Avatar({ account, size }: { account: AdminAccount; size: "sm" | "lg" }) {
   const box = size === "lg" ? "w-20 h-20 text-3xl" : "w-9 h-9 text-sm";

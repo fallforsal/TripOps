@@ -1437,7 +1437,7 @@ function Application() {
               departureRollCallCompleted: (booking.passengers || []).every(
                 (p) => p.attendanceStatus !== "PENDING",
               ),
-              departureRollCallTime: new Date().toLocaleTimeString("vi-VN"),
+              departureRollCallTime: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
             }
           : s,
       ),
