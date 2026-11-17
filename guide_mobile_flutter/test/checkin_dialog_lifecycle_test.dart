@@ -47,10 +47,12 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('confirm-checkin')));
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('confirm-checkin'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    await tester.tap(find.text('Hủy'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('checkin-note-field')), findsNothing);
-    expect(find.text('Đã đến điểm A'), findsOneWidget);
+    expect(find.text('Chưa gửi'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Mở check-in'));
@@ -62,6 +64,6 @@ void main() {
     await tester.tap(find.text('Hủy'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Đã đến điểm A'), findsOneWidget);
+    expect(find.text('Chưa gửi'), findsOneWidget);
   });
 }
