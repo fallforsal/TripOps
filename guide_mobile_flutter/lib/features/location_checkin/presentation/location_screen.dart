@@ -45,7 +45,7 @@ class _LocationScreenState extends State<LocationScreen> {
         !current.canCheckInLocations ||
         current.nextLocationCheckInId != stop.id ||
         stop.status == 'CheckedIn' ||
-        stop.status == 'Skipped') {
+        stop.status == 'CheckedOut') {
       return;
     }
 
@@ -61,9 +61,7 @@ class _LocationScreenState extends State<LocationScreen> {
 
     try {
       final note = submission.note.isEmpty ? null : submission.note;
-      final updated = submission.images.isEmpty
-          ? await widget.guides.checkIn(current.id, stop.id, 'CheckedIn', note)
-          : await widget.guides.checkInWithImages(
+      final updated = await widget.guides.checkInWithImages(
               current.id, stop.id, note, submission.images);
       if (!mounted) return;
       setState(() => current = updated);
@@ -87,34 +85,24 @@ class _LocationScreenState extends State<LocationScreen> {
     }
   }
 
-  Future<void> skip(TourStop stop) async {
-    if (busy != null ||
-        !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id ||
-        stop.status == 'CheckedIn' ||
-        stop.status == 'Skipped') {
-      return;
-    }
-
-    final reason = await showGuideTextInputDialog(
+  Future<void> checkout(TourStop stop) async {
+    if (busy != null || !current.canCheckInLocations ||
+        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') return;
+    final submission = await showDialog<CheckinSubmission>(
       context: context,
-      title: 'Bỏ qua · ${stop.name}',
-      hintText: 'Nhập lý do không thể check-in tại điểm này...',
-      confirmLabel: 'Xác nhận bỏ qua',
+      builder: (_) => CheckinPhotoDialog(stopName: stop.name, isCheckout: true),
     );
-    if (reason == null || !mounted) return;
-
-    setState(() {
-      busy = stop.id;
-      error = null;
-    });
+    if (submission == null || !mounted) return;
+    setState(() { busy = stop.id; error = null; });
     try {
-      final note = reason.trim().isEmpty ? null : reason.trim();
-      final updated = await widget.guides.checkIn(current.id, stop.id, 'Skipped', note);
+      final updated = await widget.guides.checkOutWithImages(
+        current.id, stop.id, submission.note.isEmpty ? null : submission.note,
+        submission.images,
+      );
       if (!mounted) return;
       setState(() => current = updated);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã ghi nhận bỏ qua điểm dừng.')),
+        const SnackBar(content: Text('Check-out thành công. Có thể đến điểm tiếp theo.')),
       );
     } catch (e) {
       if (e is ApiFailure && e.statusCode == 409) {
@@ -141,13 +129,13 @@ class _LocationScreenState extends State<LocationScreen> {
   @override
   Widget build(BuildContext context) {
     final stops = current.days.expand((d) => d.stops).toList();
-    final checked = stops.where((s) => s.status == 'CheckedIn' || s.status == 'Skipped').length;
+    final checked = stops.where((s) => s.status == 'CheckedOut').length;
     final nextId = current.nextLocationCheckInId;
     final enabledByDate = current.canCheckInLocations;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Check-in địa điểm'),
+        title: const Text('Check-in / Check-out địa điểm'),
         actions: [
           IconButton(
             tooltip: 'Tải lại trạng thái từ backend',
@@ -171,13 +159,13 @@ class _LocationScreenState extends State<LocationScreen> {
             const SizedBox(width: 9),
             Expanded(child: GuideMetric(
               icon: Icons.check_circle_outline, value: '$checked',
-              label: 'Đã check-in',
+              label: 'Đã check-out',
             )),
             const SizedBox(width: 9),
             Expanded(child: GuideMetric(
               icon: Icons.schedule_outlined,
               value: '${stops.length - checked}',
-              label: 'Chưa check-in',
+              label: 'Chưa hoàn thành',
               iconColor: const Color(0xFFB78330),
               tint: const Color(0xFFFFF3DF),
             )),
@@ -187,8 +175,8 @@ class _LocationScreenState extends State<LocationScreen> {
             icon: enabledByDate ? Icons.route_outlined : Icons.lock_clock_outlined,
             warning: !enabledByDate,
             message: enabledByDate
-                ? 'Đã đến ngày khởi hành. Chỉ được check-in điểm kế tiếp '
-                  'theo thứ tự lịch trình; không cần bật GPS.'
+                ? 'Chụp ảnh trực tiếp khi check-in và check-out. Chỉ sau '
+                  'check-out điểm hiện tại mới mở điểm tiếp theo; không cần GPS.'
                 : 'Chưa đến ngày khởi hành hoặc tour không còn cho phép check-in.',
           ),
           if (error != null) ...[
@@ -241,7 +229,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           : !enabledByDate
                               ? 'Chưa đến ngày khởi hành'
                               : !isNext
-                                  ? 'Cần check-in điểm trước đó'
+                                  ? 'Cần check-out điểm trước đó'
                                   : 'Sẵn sàng check-in';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -368,10 +356,10 @@ class _LocationScreenState extends State<LocationScreen> {
                             ),
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
-                              key: ValueKey('skip-${stop.id}'),
-                              onPressed: canCheck ? () => skip(stop) : null,
-                              icon: const Icon(Icons.skip_next_rounded, size: 18),
-                              label: const Text('Bỏ qua'),
+                              key: ValueKey('checkout-${stop.id}'),
+                              onPressed: canCheckout ? () => checkout(stop) : null,
+                              icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                              label: const Text('Check-out'),
                             ),
                             const SizedBox(width: 4),
                             IconButton(
