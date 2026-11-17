@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Booking, RefundRequest, Service, Tour } from "@/app/types";
+import type { Booking, RefundRequest, Service } from "@/app/types";
 import { partnerService, type PartnerPage } from "@/app/services/partnerService";
 import { isComplaintOpen, listAdminComplaints, type ComplaintSummary } from "@/app/services/reviews";
 import { listSettlements, type SettlementDto } from "@/app/services/settlements";
@@ -7,12 +7,11 @@ import { Button } from "@/app/components/ui/button";
 import {
   AlertCircle, ArrowRight, Building2, CalendarDays, ChevronRight,
   ClipboardList, FileText, HandCoins, MessageSquareWarning,
-  RefreshCw, Route, Wallet, Clock3,
+  RefreshCw, Wallet, Clock3,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface AdminDashboardOverviewProps {
-  tours: Tour[];
   bookings: Booking[];
   services: Service[];
   refundRequests: RefundRequest[];
@@ -93,7 +92,7 @@ const waitingRefund = (status: RefundRequest["status"]) =>
   status === "PENDING" || status === "REVIEWING";
 
 export function AdminDashboardOverview({
-  tours, bookings, services, refundRequests, onNavigate,
+  bookings, services, refundRequests, onNavigate,
 }: AdminDashboardOverviewProps) {
   const [period, setPeriod] = useState<Period>(30);
   const [reload, setReload] = useState(0);
@@ -160,7 +159,6 @@ export function AdminDashboardOverview({
       .reduce((sum, s) => sum + Math.max(0, s.netPayout || 0), 0),
   [settlements]);
 
-  const pendingTours = useMemo(() => tours.filter((t) => t.status === "pending_approval"), [tours]);
   const pendingServices = useMemo(() => services.filter((s) => s.status === "pending"), [services]);
   const pendingRefunds = useMemo(() => refundRequests.filter((r) => waitingRefund(r.status)), [refundRequests]);
   const openComplaints = useMemo(() => complaints?.filter((c) => isComplaintOpen(c.status)) ?? [], [complaints]);
@@ -183,18 +181,16 @@ export function AdminDashboardOverview({
 
   const tasks = useMemo(() => {
     const list: QueueItem[] = [
-      ...pendingTours.map((t) => ({ id: "tour-" + t.id, title: t.name, detail: t.companyName || "Tour", category: "Tour chờ duyệt", createdAt: t.createdAt, section: "approve-tours" })),
       ...pendingServices.map((s) => ({ id: "service-" + s.id, title: s.name, detail: s.providerName || "Dịch vụ", category: "Bài đăng chờ duyệt", createdAt: s.createdAt, section: "approve-posts" })),
       ...pendingRefunds.map((r) => ({ id: "refund-" + r.id, title: r.tourName || r.bookingCode || r.id, detail: r.customerName, category: "Yêu cầu hoàn tiền", createdAt: r.createdAt, section: "refund-requests" })),
       ...openComplaints.map((c) => ({ id: "complaint-" + c.id, title: c.title, detail: c.customerName, category: "Khiếu nại", createdAt: c.createdAt, section: "complaints" })),
       ...(partnerPage?.items ?? []).map((p) => ({ id: "partner-" + p.profile.id, title: p.profile.businessName, detail: p.name, category: "Đối tác chờ duyệt", createdAt: p.profile.createdAt, section: "partner-approvals" })),
     ];
     return list.sort((a, b) => (validDate(b.createdAt)?.getTime() ?? 0) - (validDate(a.createdAt)?.getTime() ?? 0)).slice(0, 7);
-  }, [pendingTours, pendingServices, pendingRefunds, openComplaints, partnerPage]);
+  }, [pendingServices, pendingRefunds, openComplaints, partnerPage]);
 
   const queueCards = [
     { key: "partners", label: "Đối tác chờ duyệt", count: partnerPage?.total ?? null, Icon: Building2, section: "partner-approvals", iconStyle: "bg-amber-50 text-amber-700" },
-    { key: "tours", label: "Tour chờ duyệt", count: pendingTours.length, Icon: Route, section: "approve-tours", iconStyle: "bg-sky-50 text-sky-700" },
     { key: "services", label: "Bài dịch vụ chờ duyệt", count: pendingServices.length, Icon: FileText, section: "approve-posts", iconStyle: "bg-indigo-50 text-indigo-700" },
     { key: "refunds", label: "Yêu cầu hoàn tiền", count: pendingRefunds.length, Icon: Wallet, section: "refund-requests", iconStyle: "bg-orange-50 text-orange-700" },
     { key: "complaints", label: "Khiếu nại chưa xử lý", count: complaints === null ? null : openComplaints.length, Icon: MessageSquareWarning, section: "complaints", iconStyle: "bg-rose-50 text-rose-700" },
