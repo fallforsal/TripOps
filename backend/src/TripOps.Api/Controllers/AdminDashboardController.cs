@@ -22,7 +22,7 @@ public sealed class AdminDashboardController(TripOpsDbContext db) : ControllerBa
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Overview([FromQuery] string period = "30d", CancellationToken ct = default)
     {
-        var selected = period.Trim().ToLowerInvariant();
+        var selected = (period ?? string.Empty).Trim().ToLowerInvariant();
         int? days = selected switch
         {
             "7d" => 7,
