@@ -64,13 +64,17 @@ class Passenger {
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const [], this.checkinNote});
+  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const [], this.checkinNote,
+    this.checkoutPhotoUrls = const [], this.checkoutNote, this.checkoutAt});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
   final List<String> photoUrls;
   final String? checkinNote;
+  final List<String> checkoutPhotoUrls;
+  final String? checkoutNote;
+  final DateTime? checkoutAt;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
@@ -78,6 +82,9 @@ class TourStop {
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
     photoUrls: (j['photoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
     checkinNote: j['checkinNote']?.toString(),
+    checkoutPhotoUrls: (j['checkoutPhotoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
+    checkoutNote: j['checkoutNote']?.toString(),
+    checkoutAt: j['checkoutAt'] is String ? DateTime.tryParse(j['checkoutAt'] as String) : null,
   );
 }
 
