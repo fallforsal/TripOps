@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +17,8 @@ public sealed partial class BookingFlowTests
     [Fact]
     public async Task GuideCheckinDemoSeed_IsRepeatable_AndTourIsReadyToday()
     {
-        using var app = new App();
+        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
         await app.Initialize();
 
         var first = await GuideCheckinDemoSeed.Run(app.Services, applyMigrations: false);
