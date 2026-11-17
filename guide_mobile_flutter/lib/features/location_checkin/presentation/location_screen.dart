@@ -222,14 +222,14 @@ class _LocationScreenState extends State<LocationScreen> {
                   final checkedOut = stop.status == 'CheckedOut';
                   final isNext = nextId == stop.id && !checkedOut;
                   final canCheck = enabledByDate && isNext &&
-                      !checkedIn && !skipped && busy == null;
+                      !checkedIn && busy == null;
                   final canCheckout = enabledByDate && isNext && checkedIn && busy == null;
                   final blockedReason = checkedOut
                       ? 'Đã hoàn thành check-out'
                       : checkedIn
                           ? 'Đang ở điểm này · cần check-out'
                           : skipped
-                              ? 'Điểm bỏ qua trước đây cần hỗ trợ'
+                              ? 'Điểm bỏ qua trước đây cần check-in lại'
                               : !enabledByDate
                                   ? 'Chưa đến ngày khởi hành'
                                   : !isNext
