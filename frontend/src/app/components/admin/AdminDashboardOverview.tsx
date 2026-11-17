@@ -232,7 +232,7 @@ export function AdminDashboardOverview({
           <h2 id="admin-work-queue" className="text-base font-bold text-slate-900">Công việc cần xử lý</h2>
           <span className="text-xs text-slate-500">Tình trạng hiện tại, không phụ thuộc bộ lọc thời gian</span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {queueCards.map(({ key, label, count, Icon, section, iconStyle }) => (
             <button type="button" key={key} onClick={() => onNavigate(section)}
               className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition-all hover:border-sky-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#075985]"
