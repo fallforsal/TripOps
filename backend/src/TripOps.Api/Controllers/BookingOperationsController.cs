@@ -109,6 +109,56 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         int id, int locationId, [FromForm] GuideCheckinImagesForm request, CancellationToken ct) =>
         CheckinInternal(id, locationId, new LocationCheckin(request.Status, request.Note), request.Images, ct);
 
+    [HttpPost("locations/{locationId:int}/check-out-with-images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(22 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
+    [EndpointSummary("Check out the active location with 1-5 photos")]
+    [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckoutWithImages(
+        int id, int locationId, [FromForm] GuideCheckoutImagesForm request, CancellationToken ct)
+    {
+        GuideCheckinPhotoRules.ValidateFiles(request.Images.Select(f => (f.Length, f.ContentType)).ToArray());
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var booking = await Assigned(id, ct);
+        var days = await db.BookingTimelines.Include(d => d.Attractions)
+            .Where(d => d.BookingId == id).ToListAsync(ct);
+        var location = GuideLocationCheckinRules.OrderedStops(days).SingleOrDefault(a => a.Id == locationId)
+            ?? throw new BookingException(404, "Booking location not found.");
+        var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
+        if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
+            throw new BookingException(403, "HDV chỉ check-out điểm thuộc chặng công ty mình.");
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+            throw new BookingException(409, "Tour chưa khởi hành hoặc đã đóng.");
+        if (location.AttendanceStatus != "CheckedIn" ||
+            GuideLocationCheckinRules.NextUncheckedStopId(days) != locationId)
+            throw new BookingException(409, "Chỉ được check-out điểm đang check-in.");
+        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
+            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
+        if (checkin is null || checkin.AttendanceStatus != AttractionCheckinStatus.CheckedIn ||
+            checkin.CheckoutTime.HasValue)
+            throw new BookingException(409, "HDV chưa check-in hoặc đã check-out điểm này.");
+
+        var urls = new List<string>();
+        foreach (var file in request.Images)
+        {
+            await using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            var bytes = stream.ToArray();
+            if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
+                throw new BookingException(422, "Ảnh không đúng định dạng.");
+            urls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
+        }
+        checkin.CheckoutPhotoUrl = GuideCheckinPhotoRules.Encode(urls);
+        checkin.CheckoutNote = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        checkin.CheckoutTime = DateTime.UtcNow;
+        checkin.AttendanceStatus = AttractionCheckinStatus.CheckedOut;
+        location.AttendanceStatus = "CheckedOut";
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
+    }
+
     private async Task<IActionResult> CheckinInternal(
         int id, int locationId, LocationCheckin request, IReadOnlyList<IFormFile>? images, CancellationToken ct)
     {
