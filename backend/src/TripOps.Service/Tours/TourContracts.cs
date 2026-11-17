@@ -22,7 +22,12 @@ public sealed record TourConfiguration(
     TimelineInput[]? Timelines = null,
     [StringLength(255)] string? DepartureLocation = null,
     [StringLength(50)] string? Code = null,
-    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null, DesignCoHostDto[]? CoHosts = null, AgencyPricingInput[]? AgencyPricing = null);
+    string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null, DesignCoHostDto[]? CoHosts = null, AgencyPricingInput[]? AgencyPricing = null,
+    OwnedTextItem[]? OwnedHighlights = null, OwnedTextItem[]? OwnedInclusions = null, OwnedTextItem[]? OwnedExclusions = null,
+    OwnedTextItem[]? OwnedCancellationPolicy = null, OwnedImageItem[]? OwnedImages = null, bool ShareAllVersions = false);
+
+public sealed record OwnedTextItem([Required, StringLength(2000)] string Text, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
+public sealed record OwnedImageItem([Required, StringLength(1000)] string Url, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 
 public sealed record PricingTierInput([Required, StringLength(100)] string Name,
     [Required, Range(0, 150)] int? MinAge, [Range(0, 150)] int? MaxAge,
@@ -133,4 +138,4 @@ public sealed class UnconfiguredItineraryDraftGenerator : IItineraryDraftGenerat
 public sealed record DesignCloneInput([Range(1, int.MaxValue)] int TourId);
 
 public sealed record SaveDesignTourInput(int? Revision, [Required] TourConfiguration Configuration, bool Complete = false, [StringLength(2000)] string? Reason = null, bool CreateNewVersion = false, int? Version = null);
-public sealed record ShareDesignVersionInput(int Revision, int? Version = null, bool Hidden = false);
+public sealed record ShareDesignVersionInput(int Revision, int? Version = null, bool Hidden = false, bool ShareAll = false);

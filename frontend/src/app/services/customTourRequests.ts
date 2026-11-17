@@ -8,7 +8,7 @@ type RequestDto = {
   archivedAt?: string; closedAt?: string; closeReason?: string; bookingId?: number; collaborationVersions?: number[]; hasCollaborations?: boolean;
   sharedTourThumbnail?: string | null; sharedTourName?: string | null;
   coHosts?: TourCoHost[]; collaborationInvitations?: CustomTourRequest["collaborationInvitations"];
-  rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null;
+  rejectionReason?: string | null; respondedAt?: string | null; sharedVersion?: number | null; shareAllVersions?: boolean;
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
   destination: string; departureDate: string; returnDate: string | null;
@@ -25,7 +25,7 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
   archivedAt:r.archivedAt,closedAt:r.closedAt,closeReason:r.closeReason,bookingId:r.bookingId?String(r.bookingId):undefined,collaborationVersions:r.collaborationVersions,collaborationInvitations:r.collaborationInvitations,hasCollaborations:r.hasCollaborations,
   sharedTourThumbnail:r.sharedTourThumbnail || undefined, sharedTourName:r.sharedTourName || undefined,
   coHosts: normalizeDesignHosts(r.coHosts,r.agencyId), isCoHosted: hasDesignPartners(normalizeDesignHosts(r.coHosts,r.agencyId)),
-  rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined,
+  rejectionReason: r.rejectionReason || undefined, responseAt: r.respondedAt || undefined, sharedVersion: r.sharedVersion ?? undefined, shareAllVersions: Boolean(r.shareAllVersions),
   id: String(r.id), userId: r.customerId, targetCompanyId: r.agencyId,
   targetCompanyName: r.agencyName, contactName: r.contactName,
   contactEmail: r.contactEmail, contactPhone: r.contactPhone,
@@ -74,8 +74,8 @@ export const customerRequestPlans = async (requestId: string) =>
   (await http<ApiTour[]>(`/tour-design-requests/${Number(requestId)}/plans`)).map((t) => ({ ...fromApiTour(t), customRequestId: requestId }));
 export const cloneDesignTour = async (requestId: string, tourId: string) =>
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/clone`, { method: "POST", body: JSON.stringify({ tourId: Number(tourId) }) }));
-export const shareDesignTour = async (requestId: string, revision: number, version: number | null) =>
-  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version, hidden: version === null }) }));
+export const shareDesignTour = async (requestId: string, revision: number, version: number | null, shareAll = false) =>
+  fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/share`, { method: "POST", body: JSON.stringify({ revision, version, hidden: version === null && !shareAll, shareAll }) }));
 export const getDesignVersion = async (requestId: string, version: number) =>
   fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${Number(requestId)}/versions/${version}`));
 export const saveDesignTour = async (requestId: string, tour: Partial<Tour>, revision?: number) => {

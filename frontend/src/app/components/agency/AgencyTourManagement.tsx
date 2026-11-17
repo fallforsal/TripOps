@@ -27,7 +27,30 @@ import {
   TourVersion,
   TourCoHost,
   CustomTourRequest,
+  OwnedTextItem,
 } from "@/app/types";
+
+function initOwnedText(
+  owned: OwnedTextItem[] | undefined,
+  fallback: string[] | undefined,
+  defaults: string[],
+  prefix: string,
+  defaultOwnerId: string,
+): OwnedTextItem[] {
+  if (owned && owned.length > 0) {
+    return owned.map((x, i) => ({
+      id: x.id || `${prefix}-${i}`,
+      text: x.text,
+      agencyId: x.agencyId || defaultOwnerId,
+    }));
+  }
+  const source = fallback && fallback.length > 0 ? fallback : defaults;
+  return source.map((text, i) => ({
+    id: `${prefix}-${i}`,
+    text,
+    agencyId: defaultOwnerId,
+  }));
+}
 import {
   Plus,
   Edit,
@@ -102,6 +125,7 @@ import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
+import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
 import { DesignTourPricingTable } from "./DesignTourPricingTable";
 
 // Legacy fixture IDs are not rows in the Provider catalogue (the API uses numeric IDs).
@@ -1298,6 +1322,9 @@ export function TourFormPage(props: TourFormPageProps) {
     tour?.numberOfNights ??
     (customRequest ? Math.max(0, customDays - 1) : 2),
   );
+  useEffect(() => {
+    setDuration(`${numberOfDays} ngày ${numberOfNights} đêm`);
+  }, [numberOfDays, numberOfNights]);
   const [price, setPrice] = useState(
     tour?.price ??
     (customRequest?.budgetPerPerson || customRequest?.estimatedBudget
@@ -1314,6 +1341,20 @@ export function TourFormPage(props: TourFormPageProps) {
         ? [tour.image]
         : [];
   const [images, setImages] = useState<string[]>(initialImages);
+  const [imageOwners, setImageOwners] = useState<Record<string, { id?: string | null; agencyId?: string | null }>>(() => {
+    const defaultOwner = customRequest?.targetCompanyId || tour?.companyId || company.id;
+    const map: Record<string, { id?: string | null; agencyId?: string | null }> = {};
+    if (tour?.ownedImages?.length) {
+      tour.ownedImages.forEach((item, i) => {
+        if (item.url) map[item.url] = { id: item.id || `img-${i}`, agencyId: item.agencyId || defaultOwner };
+      });
+    } else {
+      initialImages.forEach((url, i) => {
+        map[url] = { id: `img-${i}`, agencyId: defaultOwner };
+      });
+    }
+    return map;
+  });
   const [stagedImages] = useState(()=>new DeferredImageUploads());
   useEffect(()=>()=>stagedImages.dispose(),[stagedImages]);
   useEffect(()=>{stagedImages.retain(images);},[images,stagedImages]);
@@ -1339,15 +1380,21 @@ export function TourFormPage(props: TourFormPageProps) {
       ? `Tour thiết kế riêng theo yêu cầu của ${customCustomer}.\nYêu cầu đặc biệt: ${customSpecialRequests}`
       : ""),
   );
-  const [highlights, setHighlights] = useState<string[]>(
-    tour?.highlights && tour.highlights.length > 0
-      ? tour.highlights
-      : [
+  const defaultTextOwnerId = customRequest?.targetCompanyId || tour?.companyId || company.id;
+  const [highlightItems, setHighlightItems] = useState<OwnedTextItem[]>(() =>
+    initOwnedText(
+      tour?.ownedHighlights,
+      tour?.highlights,
+      [
         "Tham quan danh lam thắng cảnh đặc sắc nhất điểm đến",
         "Thưởng thức các bữa ăn đặc sản địa phương phong phú",
         "Nghỉ dưỡng tại hệ thống khách sạn/resort tiêu chuẩn cao",
       ],
+      "hl",
+      defaultTextOwnerId,
+    ),
   );
+  const highlights = highlightItems.map((h) => h.text);
   const [newHighlight, setNewHighlight] = useState("");
 
   // Co-Hosting Alliance & Segment Quotation States (Hỗ trợ liên minh đa công ty)
@@ -1363,9 +1410,45 @@ export function TourFormPage(props: TourFormPageProps) {
   const otherHosts = coHostsList.filter((ch) => ch.companyId !== company.id);
   const isLeadCompany =
     !isCoHostedTour || !leadHost || leadHost.companyId === company.id;
+  const isGeneralLocked = isCoHostedTour && !isLeadCompany;
+  const renderOwnerLogo = (ownerId?: string, ownerName?: string) => {
+    const matchedHost = ownerId
+      ? coHostsList.find((c) => c.companyId === ownerId)
+      : ownerName
+        ? coHostsList.find((c) => c.companyName === ownerName)
+        : undefined;
+    const name =
+      ownerName ||
+      matchedHost?.companyName ||
+      (ownerId === company.id || !ownerId ? company.name : "Đối tác");
+    const clean = name.replace(/^\[[^\]]+\]\s*/g, "").trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    const initials = words.length >= 2
+      ? (words[words.length - 2][0] + words[words.length - 1][0]).toLocaleUpperCase("vi")
+      : clean.slice(0, 2).toLocaleUpperCase("vi") || "AG";
+    const logo =
+      (ownerId === company.id || (!ownerId && name === company.name) ? company.logo : undefined) ||
+      matchedHost?.companyLogo;
+    return logo ? (
+      <img
+        src={logo}
+        alt={name}
+        title={name}
+        className="w-4 h-4 rounded-full object-cover border border-slate-200 inline-block shrink-0"
+      />
+    ) : (
+      <span
+        title={name}
+        className="w-4 h-4 rounded-full bg-sky-100 text-sky-800 border border-sky-200 text-[8px] font-bold inline-flex items-center justify-center shrink-0"
+      >
+        {initials}
+      </span>
+    );
+  };
 
   // State modal mời thêm đối tác lữ hành liên minh vào tour
   const [showAddCoHostModal, setShowAddCoHostModal] = useState(false);
+  const [showCustomerRequestModal, setShowCustomerRequestModal] = useState(false);
   const [newPartnerCompanyId, setNewPartnerCompanyId] = useState("");
   const [newPartnerSegment, setNewPartnerSegment] = useState("");
   const [newPartnerBudget, setNewPartnerBudget] = useState(2000000);
@@ -2861,10 +2944,11 @@ export function TourFormPage(props: TourFormPageProps) {
 
   // Tab 4: Quy định & Chính sách
   // Đây chỉ là bộ gợi ý cơ bản khi tạo tour mới. Mỗi Agency/tour tự thêm, sửa, xóa tùy ý; tour đã có nội dung thì giữ nguyên.
-  const [inclusions, setInclusions] = useState<string[]>(
-    tour?.inclusions && tour.inclusions.length > 0
-      ? tour.inclusions
-      : [
+  const [inclusionItems, setInclusionItems] = useState<OwnedTextItem[]>(() =>
+    initOwnedText(
+      tour?.ownedInclusions,
+      tour?.inclusions,
+      [
         "Xe du lịch máy lạnh đưa đón và tham quan theo chương trình.",
         "Khách sạn theo tiêu chuẩn trong chương trình (2 khách/phòng; khách lẻ có thể ghép 3 khách/phòng).",
         "Các bữa ăn theo chương trình.",
@@ -2873,22 +2957,32 @@ export function TourFormPage(props: TourFormPageProps) {
         "Bảo hiểm du lịch theo quy định.",
         "Nước suối 0,5 lít/khách/ngày.",
       ],
+      "inc",
+      defaultTextOwnerId,
+    ),
   );
-  const [exclusions, setExclusions] = useState<string[]>(
-    tour?.exclusions && tour.exclusions.length > 0
-      ? tour.exclusions
-      : [
+  const inclusions = inclusionItems.map((x) => x.text);
+  const [exclusionItems, setExclusionItems] = useState<OwnedTextItem[]>(() =>
+    initOwnedText(
+      tour?.ownedExclusions,
+      tour?.exclusions,
+      [
         "Chi phí cá nhân ngoài chương trình: giặt ủi, điện thoại, mua sắm, minibar…",
         "Đồ uống trong các bữa ăn.",
         "Phụ thu phòng đơn (nếu quý khách muốn ở riêng).",
         "Các dịch vụ, điểm tham quan tự chọn không có trong lịch trình.",
         "Thuế VAT (nếu quý khách cần xuất hóa đơn).",
       ],
+      "exc",
+      defaultTextOwnerId,
+    ),
   );
-  const [regulations, setRegulations] = useState<string[]>(
-    tour?.regulations && tour.regulations.length > 0
-      ? tour.regulations
-      : [
+  const exclusions = exclusionItems.map((x) => x.text);
+  const [regulationItems, setRegulationItems] = useState<OwnedTextItem[]>(() =>
+    initOwnedText(
+      tour?.ownedRegulations,
+      tour?.regulations,
+      [
         "Quý khách vui lòng có mặt tại điểm hẹn trước giờ khởi hành 15–30 phút.",
         "Mang theo CCCD hoặc hộ chiếu bản gốc còn hiệu lực; trẻ em dưới 14 tuổi mang giấy khai sinh (bản chính hoặc bản sao chứng thực).",
         "Trẻ em phải đi cùng cha mẹ hoặc người giám hộ.",
@@ -2897,7 +2991,11 @@ export function TourFormPage(props: TourFormPageProps) {
         "Dịch vụ không sử dụng trong chương trình không được hoàn lại.",
         "Thanh toán, đổi/hủy tour và hoàn tiền thực hiện theo hợp đồng và chính sách hiển thị khi đặt tour.",
       ],
+      "pol",
+      defaultTextOwnerId,
+    ),
   );
+  const regulations = regulationItems.map((x) => x.text);
   const [companyNote, setCompanyNote] = useState(
     tour?.companyNote ??
     `${(company?.name || "CÔNG TY LỮ HÀNH").toUpperCase()} KÍNH CHÚC QUÝ KHÁCH MỘT CHUYẾN ĐI THÚ VỊ VÀ Ý NGHĨA!`,
@@ -2929,6 +3027,10 @@ export function TourFormPage(props: TourFormPageProps) {
     setSaveError("");
     try {
       const urls=stagedImages.stage(files);
+      setImageOwners((prev) => ({
+        ...prev,
+        ...Object.fromEntries(urls.map((u, i) => [u, { id: `img-${Date.now()}-${i}`, agencyId: company.id }])),
+      }));
       setImages(prev=>[...prev,...urls]);
     } catch(error) { setSaveError(error instanceof Error ? error.message : "Không thể chọn ảnh"); }
     finally { e.target.value=""; }
@@ -3224,17 +3326,28 @@ export function TourFormPage(props: TourFormPageProps) {
       image: chosenThumbnail,
       pendingTourImages: stagedImages.entries(images),
       images,
+      ownedImages: (chosenThumbnail ? [chosenThumbnail, ...images.filter((u) => u !== chosenThumbnail)] : images)
+        .filter(Boolean)
+        .map((url, i) => ({
+          url,
+          id: imageOwners[url]?.id ?? `img-${i}`,
+          agencyId: imageOwners[url]?.agencyId ?? defaultTextOwnerId,
+        })),
       operationPeriod,
       minGuests,
       maxGuests,
       description,
       highlights: highlights.filter((h) => h.trim().length > 0),
+      ownedHighlights: highlightItems.filter((h) => h.text.trim().length > 0),
       hotels: preparedHotels,
       itinerary: preparedItinerary,
       priceTable: priceTable,
       inclusions: inclusions.filter((i) => i.trim().length > 0),
       exclusions: exclusions.filter((e) => e.trim().length > 0),
       regulations: regulations.filter((r) => r.trim().length > 0),
+      ownedInclusions: inclusionItems.filter((i) => i.text.trim().length > 0),
+      ownedExclusions: exclusionItems.filter((e) => e.text.trim().length > 0),
+      ownedRegulations: regulationItems.filter((r) => r.text.trim().length > 0),
       companyNote,
       rating: tour?.rating ?? 4.8,
       companyId: tour?.companyId || company.id,
@@ -3408,6 +3521,17 @@ export function TourFormPage(props: TourFormPageProps) {
             </label>
           )}
           {switchingVersion && <span role="status" className="text-xs text-sky-700">Đang mở phiên bản…</span>}
+          {isCustom && customRequest && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCustomerRequestModal(true)}
+              className="border-sky-200 text-sky-800 hover:bg-sky-50 gap-1.5"
+            >
+              <Eye className="w-4 h-4" />
+              Xem yêu cầu khách hàng
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -3470,18 +3594,6 @@ export function TourFormPage(props: TourFormPageProps) {
                 </span>
               </span>
             ))}
-
-            {isLeadCompany && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => (customRequest || tour?.is_request) ? (props.onManageCoHosts ? props.onManageCoHosts() : (window.location.hash = "#/agency/custom-requests")) : setShowAddCoHostModal(true)}
-                className="bg-amber-400 hover:bg-amber-300 text-purple-950 font-bold text-xs h-7 px-2.5 gap-1 shadow-sm"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                Mời thêm đối tác
-              </Button>
-            )}
           </div>
         </div>
       )}
@@ -3551,8 +3663,9 @@ export function TourFormPage(props: TourFormPageProps) {
                     Hình ảnh của Tour (Tải lên từ máy tính &amp; Chọn Thumbnail)
                   </Label>
                   <p className="text-xs text-[#075985] mt-0.5">
-                    Chọn ảnh từ máy tính. Nhấp vào ảnh để đặt làm{" "}
-                    <strong>Ảnh đại diện (Thumbnail)</strong> chính thức.
+                    {isGeneralLocked
+                      ? "Bạn có thể tải thêm ảnh của công ty mình. Chỉ Đơn vị chủ trì được chọn Ảnh đại diện (Thumbnail)."
+                      : <>Chọn ảnh từ máy tính. Nhấp vào ảnh để đặt làm <strong>Ảnh đại diện (Thumbnail)</strong> chính thức.</>}
                   </p>
                 </div>
                 <div>
@@ -3583,13 +3696,15 @@ export function TourFormPage(props: TourFormPageProps) {
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
                 {images.map((img, idx) => {
                   const isThumb = thumbnailIndex === idx;
+                  const imgOwnerId = imageOwners[img]?.agencyId || defaultTextOwnerId;
+                  const canDeleteImage = !isCoHostedTour || imgOwnerId === company.id;
                   return (
                     <div
                       key={idx}
-                      onClick={() => setThumbnailIndex(idx)}
-                      className={`relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all aspect-video group shadow-xs ${isThumb
+                      onClick={() => !isGeneralLocked && setThumbnailIndex(idx)}
+                      className={`relative rounded-2xl overflow-hidden border-2 ${isGeneralLocked ? "cursor-default" : "cursor-pointer"} transition-all aspect-video group shadow-xs ${isThumb
                           ? "border-[#075985] ring-2 ring-blue-500/50"
-                          : "border-[#CBD5E1] hover:border-blue-400"
+                          : isGeneralLocked ? "border-[#CBD5E1]" : "border-[#CBD5E1] hover:border-blue-400"
                         }`}
                     >
                       <img
@@ -3603,12 +3718,17 @@ export function TourFormPage(props: TourFormPageProps) {
                           Ảnh đại diện
                         </div>
                       )}
-                      {!isThumb && (
+                      {isCoHostedTour && (
+                        <div className="absolute bottom-1.5 left-1.5 rounded-full bg-white/90 p-0.5 shadow-sm">
+                          {renderOwnerLogo(imgOwnerId)}
+                        </div>
+                      )}
+                      {!isThumb && !isGeneralLocked && (
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[11px] font-medium">
                           Chọn làm Thumbnail
                         </div>
                       )}
-                      {images.length > 0 && (
+                      {canDeleteImage && images.length > 0 && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -3637,6 +3757,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   value={tourCode}
                   onChange={(e) => setTourCode(e.target.value)}
+                  disabled={isGeneralLocked}
                   placeholder="VD: ĐL3N2Đ-A hoặc T001"
                   className="mt-1 font-bold text-[#075985] uppercase"
                 />
@@ -3652,6 +3773,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  disabled={isGeneralLocked}
                   placeholder="VD: Khám Phá Đà Lạt – Xứ Sở Ngàn Hoa 3N2Đ"
                   className="mt-1 font-semibold"
                 />
@@ -3664,6 +3786,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
+                  disabled={isGeneralLocked}
                   placeholder="VD: Đà Lạt"
                   className="mt-1"
                 />
@@ -3676,7 +3799,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <div className="mt-1 space-y-1.5 relative">
                   {/* Các tỉnh/thành đã chọn hiển thị dạng tag */}
                   <div
-                    className={`min-h-[38px] p-1.5 rounded-xl border bg-white flex flex-wrap items-center gap-1.5 ${provinceFieldError
+                    className={`min-h-[38px] p-1.5 rounded-xl border ${isGeneralLocked ? "bg-slate-50" : "bg-white"} flex flex-wrap items-center gap-1.5 ${provinceFieldError
                         ? "border-red-500 ring-1 ring-red-500/30"
                         : "border-[#CBD5E1] focus-within:border-[#075985]"
                       }`}
@@ -3688,44 +3811,50 @@ export function TourFormPage(props: TourFormPageProps) {
                       >
                         <MapPin className="w-3 h-3 text-[#075985]" />
                         <span>{getProvinceName(code)}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleProvinceCode(code)}
-                          aria-label={`Bỏ chọn ${getProvinceName(code)}`}
-                          className="text-[#075985]/70 hover:text-red-600 rounded-full p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        {!isGeneralLocked && (
+                          <button
+                            type="button"
+                            onClick={() => toggleProvinceCode(code)}
+                            aria-label={`Bỏ chọn ${getProvinceName(code)}`}
+                            className="text-[#075985]/70 hover:text-red-600 rounded-full p-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </span>
                     ))}
-                    <input
-                      type="text"
-                      value={provinceSearchQuery}
-                      onFocus={() => setShowProvinceDropdown(true)}
-                      onChange={(e) => {
-                        setProvinceSearchQuery(e.target.value);
-                        setShowProvinceDropdown(true);
-                      }}
-                      placeholder={
-                        provinceCodes.length === 0
-                          ? "Tìm & chọn tỉnh/thành (VD: Lâm Đồng, Khánh Hòa)..."
-                          : "Thêm tỉnh/thành..."
-                      }
-                      aria-label="Tỉnh/thành tour đi qua"
-                      className="flex-1 min-w-[140px] text-xs px-1.5 py-1 focus:outline-none bg-transparent"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowProvinceDropdown((v) => !v)}
-                      aria-label="Mở danh sách tỉnh/thành"
-                      className="p-1 text-gray-400 hover:text-[#075985]"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
+                    {!isGeneralLocked && (
+                      <>
+                        <input
+                          type="text"
+                          value={provinceSearchQuery}
+                          onFocus={() => setShowProvinceDropdown(true)}
+                          onChange={(e) => {
+                            setProvinceSearchQuery(e.target.value);
+                            setShowProvinceDropdown(true);
+                          }}
+                          placeholder={
+                            provinceCodes.length === 0
+                              ? "Tìm & chọn tỉnh/thành (VD: Lâm Đồng, Khánh Hòa)..."
+                              : "Thêm tỉnh/thành..."
+                          }
+                          aria-label="Tỉnh/thành tour đi qua"
+                          className="flex-1 min-w-[140px] text-xs px-1.5 py-1 focus:outline-none bg-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowProvinceDropdown((v) => !v)}
+                          aria-label="Mở danh sách tỉnh/thành"
+                          className="p-1 text-gray-400 hover:text-[#075985]"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Dropdown danh mục chuẩn 63 tỉnh/thành */}
-                  {showProvinceDropdown && (
+                  {!isGeneralLocked && showProvinceDropdown && (
                     <div className="absolute z-30 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-[#CBD5E1] rounded-xl shadow-lg p-1.5 space-y-0.5">
                       <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100 text-[11px] text-slate-500">
                         <span>
@@ -3824,9 +3953,10 @@ export function TourFormPage(props: TourFormPageProps) {
                 </Label>
                 <Input
                   value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="VD: 3 ngày 2 đêm"
-                  className="mt-1"
+                  disabled
+                  readOnly
+                  placeholder="Tự động theo số ngày và số đêm"
+                  className="mt-1 bg-slate-50 text-slate-700 cursor-not-allowed"
                 />
               </div>
 
@@ -3840,6 +3970,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   value={operationPeriod}
                   onChange={(e) => setOperationPeriod(e.target.value)}
+                  disabled={isGeneralLocked}
                   placeholder="VD: Quanh năm (Tháng 1 – Tháng 12)"
                   className="mt-1"
                 />
@@ -3854,39 +3985,43 @@ export function TourFormPage(props: TourFormPageProps) {
                 <Input
                   value={departureLocation}
                   onChange={(e) => setDepartureLocation(e.target.value)}
+                  disabled={isGeneralLocked}
                   placeholder="VD: TP. Hồ Chí Minh / Hà Nội"
                   className="mt-1"
                 />
               </div>
 
-              <div>
-                <Label className="text-xs font-semibold text-gray-700">
-                  Số ngày
-                </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={numberOfDays}
-                  onChange={(e) =>
-                    setNumberOfDays(parseInt(e.target.value) || 1)
-                  }
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-semibold text-gray-700">
-                  Số đêm
-                </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={numberOfNights}
-                  onChange={(e) =>
-                    setNumberOfNights(parseInt(e.target.value) || 0)
-                  }
-                  className="mt-1"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs font-semibold text-gray-700">
+                    Số ngày
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={numberOfDays}
+                    disabled={isGeneralLocked}
+                    onChange={(e) =>
+                      setNumberOfDays(Math.max(1, parseInt(e.target.value, 10) || 1))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-700">
+                    Số đêm
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={numberOfNights}
+                    disabled={isGeneralLocked}
+                    onChange={(e) =>
+                      setNumberOfNights(Math.max(0, parseInt(e.target.value, 10) || 0))
+                    }
+                    className="mt-1"
+                  />
+                </div>
               </div>
 
               <div>
@@ -3916,6 +4051,7 @@ export function TourFormPage(props: TourFormPageProps) {
                     type="number"
                     min={1}
                     value={minGuests}
+                    disabled={isGeneralLocked}
                     onChange={(e) =>
                       setMinGuests(parseInt(e.target.value) || 2)
                     }
@@ -3925,6 +4061,7 @@ export function TourFormPage(props: TourFormPageProps) {
                     type="number"
                     min={1}
                     value={maxGuests}
+                    disabled={isGeneralLocked}
                     onChange={(e) =>
                       setMaxGuests(parseInt(e.target.value) || 20)
                     }
@@ -3936,33 +4073,47 @@ export function TourFormPage(props: TourFormPageProps) {
 
             {/* Highlights section */}
             <div className="border-t border-gray-100 pt-4 space-y-2">
-              <Label className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                Điểm nhấn nổi bật của Tour (ĐIỂM NỔI BẬT)
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  Điểm nhấn nổi bật của Tour (ĐIỂM NỔI BẬT)
+                </Label>
+                {isCoHostedTour && (
+                  <span className="text-[11px] font-medium text-slate-500">
+                    Ai tạo mục nào thì người đó được sửa/xóa
+                  </span>
+                )}
+              </div>
               <div className="space-y-1.5">
-                {highlights.map((hl, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={hl}
-                      onChange={(e) => {
-                        const updated = [...highlights];
-                        updated[idx] = e.target.value;
-                        setHighlights(updated);
-                      }}
-                      className="text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setHighlights(highlights.filter((_, i) => i !== idx))
-                      }
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                {highlightItems.map((hl, idx) => {
+                  const canEditItem = !isCoHostedTour || !hl.agencyId || hl.agencyId === company.id;
+                  return (
+                    <div key={hl.id || idx} className="flex items-center gap-2">
+                      {isCoHostedTour && renderOwnerLogo(hl.agencyId || defaultTextOwnerId)}
+                      <Input
+                        value={hl.text}
+                        disabled={!canEditItem}
+                        onChange={(e) => {
+                          const updated = [...highlightItems];
+                          updated[idx] = { ...hl, text: e.target.value };
+                          setHighlightItems(updated);
+                        }}
+                        className="text-xs"
+                      />
+                      {canEditItem && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setHighlightItems(highlightItems.filter((_, i) => i !== idx))
+                          }
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2 pt-1">
                 <Input
@@ -3974,7 +4125,7 @@ export function TourFormPage(props: TourFormPageProps) {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       if (newHighlight.trim()) {
-                        setHighlights([...highlights, newHighlight.trim()]);
+                        setHighlightItems([...highlightItems, { id: `hl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newHighlight.trim(), agencyId: company.id }]);
                         setNewHighlight("");
                       }
                     }
@@ -3986,7 +4137,7 @@ export function TourFormPage(props: TourFormPageProps) {
                   size="sm"
                   onClick={() => {
                     if (newHighlight.trim()) {
-                      setHighlights([...highlights, newHighlight.trim()]);
+                      setHighlightItems([...highlightItems, { id: `hl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newHighlight.trim(), agencyId: company.id }]);
                       setNewHighlight("");
                     }
                   }}
@@ -5415,7 +5566,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                           </div>
 
                                           {/* Location Name Input */}
-                                          <div className="flex items-center gap-2 flex-1 flex-wrap">
+                                          <div className="flex-1 min-w-0 space-y-1">
                                             <Input
                                               value={loc.name}
                                               disabled={isLocLocked}
@@ -5440,27 +5591,22 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 setItinerary(updated);
                                               }}
                                               placeholder="Tên điểm tham quan (VD: Hồ Xuân Hương)..."
-                                              className={`text-xs font-medium border-none shadow-none focus-visible:ring-1 flex-1 min-w-[120px] p-0 h-auto ${isLocLocked ? "text-gray-500 cursor-not-allowed bg-transparent" : "text-gray-900"}`}
+                                              className={`text-xs font-medium border-none shadow-none focus-visible:ring-1 w-full min-w-[120px] p-0 h-auto ${isLocLocked ? "text-gray-500 cursor-not-allowed bg-transparent" : "text-gray-900"}`}
                                             />
                                             {(loc.createdByCompanyName ||
                                               (isCoHostedTour &&
                                                 locOwnerName)) && (
-                                                <span
-                                                  className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 flex items-center gap-1 border ${isLocLocked
-                                                      ? "bg-amber-50 text-amber-900 border-amber-200"
-                                                      : "bg-[#F0F9FF] text-[#EA580C] border-[#F97316]/30 font-semibold"
-                                                    }`}
-                                                >
-                                                  {isLocLocked ? (
-                                                    <Lock className="w-2.5 h-2.5 text-amber-600" />
-                                                  ) : (
-                                                    <Building2 className="w-2.5 h-2.5 text-[#F97316]" />
-                                                  )}
-                                                  {isLocLocked
-                                                    ? locOwnerName
-                                                    : `${loc.createdByCompanyName || company.name} (Bạn)`}
-                                                </span>
-                                              )}
+                                              <p
+                                                title={isLocLocked ? locOwnerName : `${loc.createdByCompanyName || company.name} (Bạn)`}
+                                                className="flex items-center gap-1.5 text-xs text-slate-500"
+                                              >
+                                                <span>Phụ trách dẫn chặng:</span>
+                                                {isLocLocked && (
+                                                  <Lock className="w-3 h-3 text-amber-600" />
+                                                )}
+                                                {renderOwnerLogo(loc.createdByCompanyId, isLocLocked ? locOwnerName : loc.createdByCompanyName)}
+                                              </p>
+                                            )}
                                           </div>
 
                                           {/* Actions: Move Up, Move Down, Delete */}
@@ -5648,29 +5794,24 @@ export function TourFormPage(props: TourFormPageProps) {
                                                       {meal.serviceName || "Chưa chọn nhà hàng"}
                                                     </span>
                                                   </p>
-                                                  {(meal.createdByCompanyName ||
-                                                    (isCoHostedTour &&
-                                                      mealOwnerName)) && (
-                                                      <span
-                                                        className={`text-[10px] px-1.5 py-0.2 rounded font-normal flex items-center gap-1 border ${isMealLocked
-                                                            ? "bg-amber-100 text-amber-900 border-amber-300 font-semibold"
-                                                            : "text-[#EA580C] bg-[#F0F9FF] border-[#F97316]/30 font-semibold"
-                                                          }`}
-                                                      >
-                                                        {isMealLocked ? (
-                                                          <Lock className="w-2.5 h-2.5 text-amber-700" />
-                                                        ) : (
-                                                          <Building2 className="w-2.5 h-2.5 text-[#F97316]" />
-                                                        )}
-                                                        {isMealLocked
-                                                          ? `Khóa: ${mealOwnerName}`
-                                                          : `Tạo bởi: ${meal.createdByCompanyName || company.name} (Bạn)`}
-                                                      </span>
-                                                    )}
                                                 </div>
                                                 <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
                                                   {meal.serviceName ? `Tiêu chuẩn: ${meal.serviceName} (0đ chênh lệch)` : "Chọn dịch vụ cho bữa ăn bên dưới"}
                                                 </p>
+                                                {(meal.createdByCompanyName ||
+                                                  (isCoHostedTour &&
+                                                    mealOwnerName)) && (
+                                                  <p
+                                                    title={isMealLocked ? mealOwnerName : `${meal.createdByCompanyName || company.name} (Bạn)`}
+                                                    className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"
+                                                  >
+                                                    <span>Phụ trách dẫn chặng:</span>
+                                                    {isMealLocked && (
+                                                      <Lock className="w-3 h-3 text-amber-700" />
+                                                    )}
+                                                    {renderOwnerLogo(meal.createdByCompanyId, isMealLocked ? mealOwnerName : meal.createdByCompanyName)}
+                                                  </p>
+                                                )}
                                               </div>
                                             </div>
 
@@ -6862,17 +7003,6 @@ export function TourFormPage(props: TourFormPageProps) {
                         >
                           <Plus className="w-3.5 h-3.5" />+ Thêm khung giá vé
                         </Button>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => (customRequest || tour?.is_request) ? (props.onManageCoHosts ? props.onManageCoHosts() : (window.location.hash = "#/agency/custom-requests")) : setShowAddCoHostModal(true)}
-                          className="text-xs h-8 px-3 border-purple-300 text-[#EA580C] hover:bg-[#F97316]/15 font-bold gap-1 shadow-2xs"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Mời thêm đối tác
-                        </Button>
                       </>
                     ) : (
                       <span className="text-[11px] font-semibold text-gray-600 bg-gray-100 border border-[#CBD5E1] px-3 py-1 rounded-full flex items-center gap-1.5">
@@ -7459,6 +7589,14 @@ export function TourFormPage(props: TourFormPageProps) {
         {/* TAB 4: QUY ĐỊNH & CHÍNH SÁCH */}
         {activeTab === "regulations" && (
           <div className="space-y-6">
+            {isGeneralLocked && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-2.5 text-xs text-slate-700">
+                <Info className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span>
+                  Bạn có thể thêm và chỉnh sửa các mục do công ty bạn tạo; các mục của đơn vị khác chỉ xem. Lời nhắn kết thúc tour do Đơn vị chủ trì (<strong>{leadHost?.companyName || "Đơn vị chủ trì"}</strong>) quản lý.
+                </span>
+              </div>
+            )}
             {/* GIÁ BAO GỒM */}
             <div className="space-y-2">
               <Label className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 uppercase">
@@ -7466,28 +7604,35 @@ export function TourFormPage(props: TourFormPageProps) {
                 Giá tour bao gồm:
               </Label>
               <div className="space-y-1.5">
-                {inclusions.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={item}
-                      onChange={(e) => {
-                        const updated = [...inclusions];
-                        updated[idx] = e.target.value;
-                        setInclusions(updated);
-                      }}
-                      className="text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setInclusions(inclusions.filter((_, i) => i !== idx))
-                      }
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                {inclusionItems.map((item, idx) => {
+                  const canEditItem = !isCoHostedTour || !item.agencyId || item.agencyId === company.id;
+                  return (
+                    <div key={item.id || idx} className="flex items-center gap-2">
+                      {isCoHostedTour && renderOwnerLogo(item.agencyId || defaultTextOwnerId)}
+                      <Input
+                        value={item.text}
+                        disabled={!canEditItem}
+                        onChange={(e) => {
+                          const updated = [...inclusionItems];
+                          updated[idx] = { ...item, text: e.target.value };
+                          setInclusionItems(updated);
+                        }}
+                        className="text-xs"
+                      />
+                      {canEditItem && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setInclusionItems(inclusionItems.filter((_, i) => i !== idx))
+                          }
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Input
@@ -7502,7 +7647,7 @@ export function TourFormPage(props: TourFormPageProps) {
                   size="sm"
                   onClick={() => {
                     if (newInclusion.trim()) {
-                      setInclusions([...inclusions, newInclusion.trim()]);
+                      setInclusionItems([...inclusionItems, { id: `inc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newInclusion.trim(), agencyId: company.id }]);
                       setNewInclusion("");
                     }
                   }}
@@ -7519,28 +7664,35 @@ export function TourFormPage(props: TourFormPageProps) {
                 Giá tour không bao gồm:
               </Label>
               <div className="space-y-1.5">
-                {exclusions.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={item}
-                      onChange={(e) => {
-                        const updated = [...exclusions];
-                        updated[idx] = e.target.value;
-                        setExclusions(updated);
-                      }}
-                      className="text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExclusions(exclusions.filter((_, i) => i !== idx))
-                      }
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                {exclusionItems.map((item, idx) => {
+                  const canEditItem = !isCoHostedTour || !item.agencyId || item.agencyId === company.id;
+                  return (
+                    <div key={item.id || idx} className="flex items-center gap-2">
+                      {isCoHostedTour && renderOwnerLogo(item.agencyId || defaultTextOwnerId)}
+                      <Input
+                        value={item.text}
+                        disabled={!canEditItem}
+                        onChange={(e) => {
+                          const updated = [...exclusionItems];
+                          updated[idx] = { ...item, text: e.target.value };
+                          setExclusionItems(updated);
+                        }}
+                        className="text-xs"
+                      />
+                      {canEditItem && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExclusionItems(exclusionItems.filter((_, i) => i !== idx))
+                          }
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Input
@@ -7555,7 +7707,7 @@ export function TourFormPage(props: TourFormPageProps) {
                   size="sm"
                   onClick={() => {
                     if (newExclusion.trim()) {
-                      setExclusions([...exclusions, newExclusion.trim()]);
+                      setExclusionItems([...exclusionItems, { id: `exc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newExclusion.trim(), agencyId: company.id }]);
                       setNewExclusion("");
                     }
                   }}
@@ -7572,28 +7724,35 @@ export function TourFormPage(props: TourFormPageProps) {
                 Điều kiện &amp; Lưu ý khi đi tour:
               </Label>
               <div className="space-y-1.5">
-                {regulations.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={item}
-                      onChange={(e) => {
-                        const updated = [...regulations];
-                        updated[idx] = e.target.value;
-                        setRegulations(updated);
-                      }}
-                      className="text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setRegulations(regulations.filter((_, i) => i !== idx))
-                      }
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                {regulationItems.map((item, idx) => {
+                  const canEditItem = !isCoHostedTour || !item.agencyId || item.agencyId === company.id;
+                  return (
+                    <div key={item.id || idx} className="flex items-center gap-2">
+                      {isCoHostedTour && renderOwnerLogo(item.agencyId || defaultTextOwnerId)}
+                      <Input
+                        value={item.text}
+                        disabled={!canEditItem}
+                        onChange={(e) => {
+                          const updated = [...regulationItems];
+                          updated[idx] = { ...item, text: e.target.value };
+                          setRegulationItems(updated);
+                        }}
+                        className="text-xs"
+                      />
+                      {canEditItem && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRegulationItems(regulationItems.filter((_, i) => i !== idx))
+                          }
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Input
@@ -7608,7 +7767,7 @@ export function TourFormPage(props: TourFormPageProps) {
                   size="sm"
                   onClick={() => {
                     if (newRegulation.trim()) {
-                      setRegulations([...regulations, newRegulation.trim()]);
+                      setRegulationItems([...regulationItems, { id: `pol-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newRegulation.trim(), agencyId: company.id }]);
                       setNewRegulation("");
                     }
                   }}
@@ -7625,6 +7784,7 @@ export function TourFormPage(props: TourFormPageProps) {
               </Label>
               <Input
                 value={companyNote}
+                disabled={isGeneralLocked}
                 onChange={(e) => setCompanyNote(e.target.value)}
                 placeholder="VD: VIETTRAVEL KÍNH CHÚC QUÝ KHÁCH MỘT CHUYẾN ĐI VUI VẺ!"
                 className="text-sm font-semibold text-red-600"
@@ -7787,6 +7947,14 @@ export function TourFormPage(props: TourFormPageProps) {
         service={viewingServiceModal}
         isOpen={Boolean(viewingServiceModal)}
         onClose={() => setViewingServiceModal(null)}
+      />
+
+      {/* Modal xem lại yêu cầu thiết kế của khách hàng */}
+      <CustomRequestDetailModal
+        isOpen={showCustomerRequestModal}
+        onClose={() => setShowCustomerRequestModal(false)}
+        request={customRequest ?? null}
+        userRole="agency"
       />
     </div>
   );

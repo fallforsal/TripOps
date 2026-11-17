@@ -2463,37 +2463,6 @@ export function TourDetailPage({
               )}
             </div>
 
-            {/* Custom Tour Banner */}
-            {isCustomTour && (
-              <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white rounded-2xl p-4.5 shadow-md space-y-2 border border-purple-700">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-purple-500/40 text-purple-200 border border-purple-400/50 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🔒</span> TOUR THIẾT KẾ RIÊNG THEO YÊU CẦU
-                  </span>
-                  <span className="bg-purple-800 text-purple-200 text-xs px-2.5 py-0.5 rounded font-mono font-bold">
-                    Phiên bản: v{tour.version || 1}
-                  </span>
-                  {tour.targetCustomerName && (
-                    <span className="text-xs text-purple-200 font-semibold">
-                      Dành riêng cho: {tour.targetCustomerName}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-purple-200 leading-relaxed">
-                  {previewOnly ? "Bạn đang xem lại nội dung của phiên bản này. Các thao tác đặt tour không khả dụng tại đây." : "Đây là phiên bản Agency đã chọn cho bạn. Nếu muốn điều chỉnh hoặc dùng lại phiên bản trước, hãy mở yêu cầu và trao đổi với Agency."}
-                </p>
-                {onOpenRequest && <button type="button" onClick={onOpenRequest}
-                  className="rounded border border-purple-200 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
-                  Mở yêu cầu để trao đổi với Agency
-                </button>}
-                {tour.changeNote && (
-                  <div className="bg-black/30 rounded-lg p-2.5 text-xs text-amber-300 italic border border-white/10">
-                    Ghi chú phiên bản v{tour.version || 1}: "{tour.changeNote}"
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Co-Hosting Alliance Banner */}
             {tour.isCoHosted && tour.coHosts && tour.coHosts.length > 0 && (
               <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-blue-50 border border-purple-300 rounded-2xl p-4.5 space-y-3 shadow-xs">

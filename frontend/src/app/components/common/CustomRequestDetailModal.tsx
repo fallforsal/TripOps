@@ -116,9 +116,9 @@ function formatVND(n: number) {
 function formatDate(iso: string) {
   if (!iso) return "—";
   try {
-    const parts = iso.split("-");
-    if (parts.length === 3 && parts[0].length === 4) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, d] = iso.split("-");
+      return `${d}/${m}/${y}`;
     }
     const d = new Date(iso);
     return isNaN(d.getTime()) ? iso : d.toLocaleDateString("vi-VN");
@@ -393,62 +393,6 @@ export function CustomRequestDetailModal({
               </div>
             )}
           </div>
-
-          {/* SECTION 4: PHẢN HỒI HOẶC PHƯƠNG ÁN TỪ TRAVEL AGENCY */}
-          {(request.companyNote || request.quotedPricePerPerson || matchingTour) && (
-            <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#075985]">
-                <Sparkles className="w-4 h-4 text-[#075985]" />
-                <span>4. Phản hồi & Phương án thiết kế từ Agency</span>
-              </div>
-
-              {request.companyNote && (
-                <div className="bg-white p-3.5 rounded-lg border border-sky-100 text-xs text-[#075985] leading-relaxed">
-                  <strong className="block text-slate-900 mb-0.5">Phản hồi từ công ty lữ hành:</strong>
-                  {request.companyNote}
-                </div>
-              )}
-
-              {request.quotedPricePerPerson && (
-                <div className="bg-white p-3 rounded-lg border border-sky-100 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-medium">Báo giá đề xuất / khách:</span>
-                  <span className="text-sm font-extrabold text-emerald-700">
-                    {formatVND(request.quotedPricePerPerson)}
-                  </span>
-                </div>
-              )}
-
-              {matchingTour && (
-                <div className="bg-white p-3.5 rounded-lg border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">{matchingTour.name}</span>
-                      <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                        Phiên bản v{matchingTour.version || 1}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Đơn giá: <strong className="text-[#075985]">{formatVND(matchingTour.price)}</strong> / khách · Lịch trình {matchingTour.itinerary?.length || 0} ngày
-                    </p>
-                  </div>
-
-                  {onViewTour && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        onClose();
-                        onViewTour(matchingTour);
-                      }}
-                      className="bg-[#075985] hover:bg-[#F97316] text-white text-xs shrink-0"
-                    >
-                      Xem chi tiết tour
-                      <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Modal Actions Footer */}

@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Building2,
   PenSquare,
+  Handshake,
   Compass,
   BookUser,
   HandCoins,
@@ -27,6 +28,7 @@ interface AgencyLayoutProps {
   onNavigate: (section: string) => void;
   company: TourCompany;
   currentUser: User;
+  customRequestsBadgeCount?: number;
   coHostingBadgeCount?: number;
   onLogout?: () => void;
 }
@@ -37,6 +39,7 @@ export function AgencyLayout({
   onNavigate,
   company,
   currentUser,
+  customRequestsBadgeCount,
   coHostingBadgeCount,
   onLogout,
 }: AgencyLayoutProps) {
@@ -53,7 +56,8 @@ export function AgencyLayout({
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
     { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
-    { id: "custom-requests", label: "Thiết kế tour & Liên minh", icon: PenSquare, badge: coHostingBadgeCount },
+    { id: "custom-requests", label: "Thiết kế tour", icon: PenSquare, badge: customRequestsBadgeCount },
+    { id: "co-hosting", label: "Lời mời đối tác", icon: Handshake, badge: coHostingBadgeCount },
     { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 

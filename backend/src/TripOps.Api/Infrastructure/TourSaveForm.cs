@@ -14,10 +14,9 @@ public sealed class TourSaveForm
         try {return JsonSerializer.Deserialize<T>(Payload,new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new JsonException();}
         catch(JsonException) {throw new TourException(400,"Thông tin tour không hợp lệ.");}
     }
-    public async Task<TourConfiguration> Upload(TourConfiguration configuration,CloudinaryStorage storage,string actor,CancellationToken ct)
+    public async Task<Dictionary<string,string>> UploadImages(IEnumerable<string>? imageUrls,CloudinaryStorage storage,string actor,CancellationToken ct)
     {
-        if(configuration is null)throw new TourException(400,"Thiếu thông tin tour.");
-        var urls=configuration.Images ?? [];
+        var urls=(imageUrls ?? []).ToArray();
         if(Images.Count>20 || Images.Any(file=>file.Length is <=0 or >5*1024*1024 || file.ContentType is not ("image/png" or "image/jpeg")))
             throw new TourException(400,"Chỉ nhận tối đa 20 ảnh PNG/JPEG, mỗi ảnh tối đa 5 MB.");
         var expected=Enumerable.Range(0,Images.Count).Select(i=>$"upload:{i}").ToHashSet();
@@ -34,6 +33,16 @@ public sealed class TourSaveForm
         }
         var uploaded=new Dictionary<string,string>();
         for(var i=0;i<Images.Count;i++)uploaded[$"upload:{i}"]=await storage.UploadTourImage(actor,contents[i],Images[i].ContentType,ct);
-        return configuration with {Images=urls.Select(url=>uploaded.GetValueOrDefault(url,url)).ToArray()};
+        return uploaded;
+    }
+    public async Task<TourConfiguration> Upload(TourConfiguration configuration,CloudinaryStorage storage,string actor,CancellationToken ct)
+    {
+        if(configuration is null)throw new TourException(400,"Thiếu thông tin tour.");
+        var urls=configuration.OwnedImages?.Select(x=>x.Url).ToArray() ?? configuration.Images ?? [];
+        var uploaded=await UploadImages(urls,storage,actor,ct);
+        return configuration with {
+            Images=(configuration.Images ?? []).Select(url=>uploaded.GetValueOrDefault(url,url)).ToArray(),
+            OwnedImages=configuration.OwnedImages?.Select(x=>x with {Url=uploaded.GetValueOrDefault(x.Url,x.Url)}).ToArray()
+        };
     }
 }

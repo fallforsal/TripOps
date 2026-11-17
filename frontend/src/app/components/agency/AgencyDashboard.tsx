@@ -108,8 +108,13 @@ export function AgencyDashboard({
     const handleHash = () => {
       const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
       if (match) {
-        const sec = match[1] === "co-hosting" ? "custom-requests" : match[1];
-        if(match[1] === "co-hosting")window.history.replaceState(null,"",window.location.hash.replace("/co-hosting","/custom-requests"));
+        let sec = match[1];
+        if (sec === "custom-requests") {
+          const reqId = new URLSearchParams(window.location.hash.split("?")[1]).get("requestId");
+          if (reqId && customTourRequests.some(r => r.id === reqId && r.targetCompanyId !== company.id)) {
+            sec = "co-hosting";
+          }
+        }
         const bId = match[2] || null;
         setActiveSection(sec);
         if (bId) setSelectedBookingId(bId);
@@ -166,7 +171,6 @@ export function AgencyDashboard({
     : null;
 
   const handleNavigateSection = (section: string) => {
-    section = section === "co-hosting" ? "custom-requests" : section;
     setActiveSection(section);
     setSelectedBookingId(null);
     window.location.hash = `#/agency/${section}`;
@@ -258,9 +262,25 @@ export function AgencyDashboard({
           />
         );
       case "co-hosting":
+        return (
+          <AgencyDesignWorkspace
+            mode="partners"
+            onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
+            services={services}
+            requests={companyCustomRequests}
+            company={company}
+            tours={companyTours}
+            allCompanies={allCompanies || mockTourCompanies}
+            onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
+            onCreateTour={onCreateTour}
+            onEditTour={onEditTour}
+            onViewTour={onViewTour}
+          />
+        );
       case "custom-requests":
         return (
           <AgencyDesignWorkspace
+            mode="customers"
             onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
             services={services}
             requests={companyCustomRequests}
@@ -308,6 +328,7 @@ export function AgencyDashboard({
       onNavigate={handleNavigateSection}
       company={company}
       currentUser={currentUser}
+      customRequestsBadgeCount={pendingCustomRequestsCount}
       coHostingBadgeCount={pendingCoHostInvitesCount}
       onLogout={onLogout}
     >

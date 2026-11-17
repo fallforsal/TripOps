@@ -509,14 +509,32 @@ export interface TourReview {
   tourDate?: string;
 }
 
+export interface OwnedTextItem {
+  id?: string | null;
+  text: string;
+  agencyId?: string | null;
+}
+
+export interface OwnedImageItem {
+  id?: string | null;
+  url: string;
+  agencyId?: string | null;
+}
+
 export interface Tour {
   designReadOnly?: boolean;
   revision?: number;
   hasDraftChanges?: boolean;
   createNewVersion?: boolean;
   pendingTourImages?: { url: string; file: File }[];
+  ownedHighlights?: OwnedTextItem[];
+  ownedInclusions?: OwnedTextItem[];
+  ownedExclusions?: OwnedTextItem[];
+  ownedRegulations?: OwnedTextItem[];
+  ownedImages?: OwnedImageItem[];
   agencyPricing?: {agencyId:string;tiers:{key?:string|null;name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[]}[];
   sharedVersion?: number;
+  shareAllVersions?: boolean;
   planGuestCount?: number;
   updatedAt?: string;
   id: string;
@@ -965,12 +983,13 @@ export interface CustomTourRequest {
   closeReason?: string;
   bookingId?: string;
   collaborationVersions?: number[];
-  collaborationInvitations?: {companyId:string;version:number;status:TourCoHost["status"];segment?:string;invitedAt:string;respondedAt?:string}[];
+  collaborationInvitations?: {companyId:string;version:number;status:TourCoHost["status"];segment?:string;invitedAt:string;respondedAt?:string;budget?:number;notes?:string;rejectionReason?:string}[];
   hasCollaborations?: boolean;
   sharedTourThumbnail?: string;
   sharedTourName?: string;
   rejectionReason?: string;
   sharedVersion?: number;
+  shareAllVersions?: boolean;
   sourceTourId?: string;
   initialChanges?: { itinerary: Tour["itinerary"]; hotels: Tour["hotels"]; message: string };
   id: string;
