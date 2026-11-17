@@ -55,7 +55,19 @@ public sealed partial class BookingFlowTests
         var photos = detail.SnapshotDays![0].Locations[0].PhotoUrls!;
         Assert.Equal(2, photos.Count);
         Assert.All(photos, url => Assert.StartsWith("/api/v1/files/guide-checkins/guide1/", url));
+        Assert.Equal(first, detail.NextLocationCheckInId);
+        // Check-in alone must never unlock the next destination.
+        using (var form = PhotoForm(1))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"{prefix}/{second}/check-in-with-images", form)).StatusCode);
+        using (var form = PhotoForm(1))
+            (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).EnsureSuccessStatusCode();
+        detail = (await guide.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/guide/bookings/{bookingId}"))!;
         Assert.Equal(second, detail.NextLocationCheckInId);
+        Assert.Equal("CheckedOut", detail.SnapshotDays![0].Locations[0].AttendanceStatus);
+        Assert.Single(detail.SnapshotDays[0].Locations[0].CheckoutPhotoUrls!);
+
 
         using (var scope = app.Services.CreateScope())
         {
