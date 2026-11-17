@@ -74,6 +74,30 @@ class GuideRepository {
     ));
   }
 
+  Future<BookingDetail> checkOutWithImages(
+    int bookingId, int locationId, String? note, List<CheckinPhoto> photos,
+  ) async {
+    final validation = CheckinPhoto.validate(photos);
+    if (photos.isEmpty || validation != null) {
+      throw ApiFailure(validation ?? 'Vui lòng chụp ít nhất một ảnh.');
+    }
+    final form = FormData();
+    if (note != null && note.trim().isNotEmpty) {
+      form.fields.add(MapEntry('Note', note.trim()));
+    }
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path, filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    return BookingDetail.fromJson(await api.postForm(
+      'guide/bookings/$bookingId/locations/$locationId/check-out-with-images',
+      form,
+    ));
+  }
+
   Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
 
   Future<void> incident(int id, {
