@@ -66,10 +66,22 @@ public sealed partial class BookingFlowTests
         using var customer = await app.Client("customer1@example.test");
         string Url(int locationId) => $"/api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in";
         var request = new { status = "CheckedIn", note = "Arrived, no location data" };
+        async Task<HttpResponseMessage> Check(int locationId)
+        {
+            using var form = PhotoForm(1);
+            return await guide.PostAsync(
+                $"/api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in-with-images", form);
+        }
+        async Task<HttpResponseMessage> Checkout(int locationId)
+        {
+            using var form = PhotoForm(1);
+            return await guide.PostAsync(
+                $"/api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-out-with-images", form);
+        }
         var detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.False(detail!.CanCheckInLocations);
         Assert.Equal(firstId, detail.NextLocationCheckInId);
-        Assert.Equal(HttpStatusCode.Conflict, (await guide.PostAsJsonAsync(Url(firstId), request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Check(firstId)).StatusCode);
 
         using (var scope = app.Services.CreateScope())
         {
@@ -85,15 +97,20 @@ public sealed partial class BookingFlowTests
         // Reject invalid statuses, out-of-order check-ins/skips, and duplicate check-ins.
         Assert.Equal(HttpStatusCode.BadRequest,
             (await guide.PostAsJsonAsync(Url(firstId), new { status = "InvalidStatus" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await guide.PostAsJsonAsync(Url(secondId), new { status = "Skipped" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
-            (await guide.PostAsJsonAsync(Url(secondId), request)).StatusCode);
+            (await Check(secondId)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
-            (await guide.PostAsJsonAsync(Url(thirdId), request)).StatusCode);
-        (await guide.PostAsJsonAsync(Url(firstId), request)).EnsureSuccessStatusCode();
+            (await Check(thirdId)).StatusCode);
+        (await Check(firstId)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict,
             (await guide.PostAsJsonAsync(Url(firstId), request)).StatusCode);
+        detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.Equal(firstId, detail!.NextLocationCheckInId);
+        Assert.Equal("CheckedIn", detail.SnapshotDays![0].Locations[0].AttendanceStatus);
+        Assert.Equal(HttpStatusCode.Conflict, (await Check(secondId)).StatusCode);
+        (await Checkout(firstId)).EnsureSuccessStatusCode();
         detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal(secondId, detail!.NextLocationCheckInId);
 
@@ -105,13 +122,16 @@ public sealed partial class BookingFlowTests
             booking.StartDate = today.AddDays(-1);
             await db.SaveChangesAsync();
         }
-        (await guide.PostAsJsonAsync(Url(secondId), request)).EnsureSuccessStatusCode();
-        (await guide.PostAsJsonAsync(Url(thirdId), request)).EnsureSuccessStatusCode();
+        (await Check(secondId)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await Check(thirdId)).StatusCode);
+        (await Checkout(secondId)).EnsureSuccessStatusCode();
+        (await Check(thirdId)).EnsureSuccessStatusCode();
+        (await Checkout(thirdId)).EnsureSuccessStatusCode();
 
         detail = await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{bookingId}");
         Assert.Null(detail!.NextLocationCheckInId);
         Assert.All(detail.SnapshotDays!.SelectMany(d => d.Locations),
-            x => Assert.Equal("CheckedIn", x.AttendanceStatus));
+            x => Assert.Equal("CheckedOut", x.AttendanceStatus));
 
         using (var scope = app.Services.CreateScope())
         {
@@ -165,9 +185,10 @@ public sealed partial class BookingFlowTests
                 .Where(x => x.BookingTimeline.BookingId == bookingId).Select(x => x.Id).SingleAsync();
         }
         using var guide = await app.Client("guide1@example.test");
+        using var form = PhotoForm(1);
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await guide.PostAsJsonAsync(
-                $"/api/v1/guide/bookings/{bookingId}/locations/{otherAgencyStopId}/check-in",
-                new { status = "CheckedIn" })).StatusCode);
+            (await guide.PostAsync(
+                $"/api/v1/guide/bookings/{bookingId}/locations/{otherAgencyStopId}/check-in-with-images",
+                form)).StatusCode);
     }
 }
