@@ -140,7 +140,6 @@ export function AdminDashboard({
       case "dashboard":
         return (
           <AdminDashboardOverview
-            bookings={bookings}
             services={services}
             refundRequests={refundRequests}
             onNavigate={(section) => {

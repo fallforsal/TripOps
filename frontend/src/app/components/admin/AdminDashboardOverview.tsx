@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Booking, RefundRequest, Service } from "@/app/types";
+import type { RefundRequest, Service } from "@/app/types";
+import { getAdminBookingOverview, type AdminBookingOverview, type AdminDashboardPeriod } from "@/app/services/adminDashboardService";
 import { partnerService, type PartnerPage } from "@/app/services/partnerService";
 import { isComplaintOpen, listAdminComplaints, type ComplaintSummary } from "@/app/services/reviews";
 import { listSettlements, type SettlementDto } from "@/app/services/settlements";
@@ -12,7 +13,6 @@ import {
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface AdminDashboardOverviewProps {
-  bookings: Booking[];
   services: Service[];
   refundRequests: RefundRequest[];
   onNavigate: (section: string) => void;
@@ -35,6 +35,9 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: 365, label: "1 năm" },
   { value: "all", label: "Tất cả" },
 ];
+const API_PERIOD: Record<Period, AdminDashboardPeriod> = {
+  7: "7d", 30: "30d", 90: "90d", 365: "365d", all: "all",
+};
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
 const moneyFormatter = new Intl.NumberFormat("vi-VN", { notation: "compact", maximumFractionDigits: 2 });
@@ -69,30 +72,11 @@ function formatCount(value: number | null) {
   return value === null ? "—" : numberFormatter.format(value);
 }
 
-function trendByPeriod(bookings: Booking[], period: Period, start: Date, now: Date) {
-  const bucketCount = period === 7 ? 7 : 6;
-  const bucketDays = period / bucketCount;
-  const buckets = Array.from({ length: bucketCount }, (_, index) => {
-    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index * bucketDays);
-    return { label: dateFormatter.format(date), count: 0 };
-  });
-
-  for (const booking of bookings) {
-    const date = validDate(booking.bookingDate);
-    if (!date || date < start || date > now) continue;
-    const days = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
-      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86_400_000);
-    const index = Math.min(bucketCount - 1, Math.floor(days / bucketDays));
-    if (index >= 0) buckets[index].count += 1;
-  }
-  return buckets;
-}
-
 const waitingRefund = (status: RefundRequest["status"]) =>
   status === "PENDING" || status === "REVIEWING";
 
 export function AdminDashboardOverview({
-  bookings, services, refundRequests, onNavigate,
+  services, refundRequests, onNavigate,
 }: AdminDashboardOverviewProps) {
   const [period, setPeriod] = useState<Period>(30);
   const [reload, setReload] = useState(0);
@@ -102,6 +86,9 @@ export function AdminDashboardOverview({
   const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
+  const [bookingMetrics, setBookingMetrics] = useState<AdminBookingOverview | null>(null);
+  const [bookingLoading, setBookingLoading] = useState(true);
+  const [bookingError, setBookingError] = useState("");
 
   // These endpoints report totals from the server, not counts from one page of results.
   // All three requests are independent: an unavailable endpoint must not become a false zero.
@@ -128,24 +115,29 @@ export function AdminDashboardOverview({
     return () => { alive = false; };
   }, [reload]);
 
+  // Metrics are fetched independently of other admin queues and settlements.
+  // Cancel stale requests when a filter changes or the component unmounts.
+  useEffect(() => {
+    const controller = new AbortController();
+    setBookingLoading(true);
+    setBookingError("");
+    setBookingMetrics(null);
+    getAdminBookingOverview(API_PERIOD[period], controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setBookingMetrics(value);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setBookingError(error instanceof Error ? error.message : "Không thể tải thống kê Booking.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBookingLoading(false);
+      });
+    return () => controller.abort();
+  }, [period, reload]);
+
   const now = useMemo(() => new Date(), [reload]);
   const start = useMemo(() => period === "all" ? null : periodStart(now, period), [now, period]);
-
-  // Only the KPI cards use the chosen period. "Tất cả" includes all historical records,
-  // even those without a creation date; the independent charts stay on a fixed 30-day window.
-  const bookingPeriod = useMemo(
-    () => period === "all" ? bookings : bookings.filter((b) => inPeriod(b.bookingDate, start!, now)),
-    [bookings, period, start, now],
-  );
-  const chartStart = useMemo(() => periodStart(now, 30), [now]);
-  const chartBookings = useMemo(
-    () => bookings.filter((b) => inPeriod(b.bookingDate, chartStart, now)),
-    [bookings, chartStart, now],
-  );
-  const bookingValue = useMemo(() =>
-    bookingPeriod
-      .filter((b) => b.status !== "cancelled" && b.status !== "rejected")
-      .reduce((sum, b) => sum + Math.max(0, b.totalPrice || 0), 0), [bookingPeriod]);
 
   // Only completed transfers count as platform fees earned and paid out.
   const platformFeeCollected = useMemo(() => settlements === null ? null :
@@ -163,21 +155,14 @@ export function AdminDashboardOverview({
   const pendingRefunds = useMemo(() => refundRequests.filter((r) => waitingRefund(r.status)), [refundRequests]);
   const openComplaints = useMemo(() => complaints?.filter((c) => isComplaintOpen(c.status)) ?? [], [complaints]);
 
-  const trend = useMemo(() => trendByPeriod(chartBookings, 30, chartStart, now),
-    [chartBookings, chartStart, now]);
-
-  const statusBreakdown = useMemo(() => {
-    const pending = chartBookings.filter((b) => b.status === "pending").length;
-    const completed = chartBookings.filter((b) => b.status === "completed").length;
-    const cancelled = chartBookings.filter((b) => b.status === "cancelled" || b.status === "rejected").length;
-    const processing = chartBookings.length - pending - completed - cancelled;
-    return [
-      { label: "Chờ xử lý", count: pending, color: "bg-amber-500" },
-      { label: "Đang thực hiện", count: processing, color: "bg-sky-600" },
-      { label: "Hoàn thành", count: completed, color: "bg-emerald-500" },
-      { label: "Hủy / từ chối", count: cancelled, color: "bg-rose-500" },
-    ];
-  }, [chartBookings]);
+  const trend = bookingMetrics?.trend ?? [];
+  const chartBookingCount = bookingMetrics?.chartBookingCount ?? 0;
+  const statusBreakdown = [
+    { label: "Chờ xử lý", count: bookingMetrics?.statusBreakdown.pending ?? 0, color: "bg-amber-500" },
+    { label: "Đang thực hiện", count: bookingMetrics?.statusBreakdown.processing ?? 0, color: "bg-sky-600" },
+    { label: "Hoàn thành", count: bookingMetrics?.statusBreakdown.completed ?? 0, color: "bg-emerald-500" },
+    { label: "Hủy / từ chối", count: bookingMetrics?.statusBreakdown.cancelled ?? 0, color: "bg-rose-500" },
+  ];
 
   const tasks = useMemo(() => {
     const list: QueueItem[] = [
@@ -197,8 +182,8 @@ export function AdminDashboardOverview({
   ];
 
   const kpis = [
-    { id: "bookings", title: "Booking trong kỳ", value: numberFormatter.format(bookingPeriod.length), note: "Theo ngày đặt", Icon: CalendarDays },
-    { id: "value", title: "Giá trị đặt tour", value: shortMoney(bookingValue), note: "Không phải doanh thu sàn", Icon: ClipboardList },
+    { id: "bookings", title: "Booking trong kỳ", value: bookingLoading ? "Đang tải..." : bookingMetrics ? numberFormatter.format(bookingMetrics.bookingCount) : "—", note: "Theo ngày tạo trên hệ thống", Icon: CalendarDays },
+    { id: "value", title: "Giá trị đặt tour", value: bookingLoading ? "Đang tải..." : bookingMetrics ? shortMoney(bookingMetrics.bookingValue) : "—", note: "Không phải doanh thu sàn", Icon: ClipboardList },
     { id: "payout", title: "Tiền chờ chi Agency (hiện tại)", value: pendingSettlement === null ? "—" : shortMoney(pendingSettlement), note: "Số dư chưa chi, không lọc theo thời gian", Icon: HandCoins },
     { id: "fees", title: "Phí sàn đã thu trong kỳ", value: platformFeeCollected === null ? "—" : shortMoney(platformFeeCollected), note: "Khoản quyết toán đã chuyển", Icon: Wallet },
   ];
@@ -209,10 +194,10 @@ export function AdminDashboardOverview({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tổng quan hệ thống</h1>
           <p className="mt-1 text-sm text-slate-500">Theo dõi tình hình kinh doanh và các công việc cần xử lý trên TripOps.</p>
-          <p className="mt-1 text-xs text-slate-400">Dữ liệu nghiệp vụ theo danh sách hiện được tải; số liệu đối tác, khiếu nại, quyết toán lấy từ API.</p>
+          <p className="mt-1 text-xs text-slate-400">Thống kê Booking toàn hệ thống từ API; công việc và quyết toán lấy từ các phân hệ tương ứng.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={loading}
+          <Button type="button" variant="outline" size="sm" disabled={loading || bookingLoading}
             onClick={() => setReload((value) => value + 1)} className="h-9 rounded-xl text-xs gap-1.5">
             <RefreshCw className={"h-3.5 w-3.5 " + (loading ? "animate-spin" : "")} />
             Tải lại
@@ -227,12 +212,19 @@ export function AdminDashboardOverview({
         </div>
       )}
 
+      {bookingError && !bookingLoading && (
+        <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Không tải được thống kê Booking: {bookingError}. KPI và biểu đồ liên quan tạm thời chưa có dữ liệu.</span>
+        </div>
+      )}
+
       <section className="space-y-3" aria-labelledby="admin-work-queue">
         <div className="flex items-center justify-between">
           <h2 id="admin-work-queue" className="text-base font-bold text-slate-900">Công việc cần xử lý</h2>
           <span className="text-xs text-slate-500">Tình trạng hiện tại, không phụ thuộc bộ lọc thời gian</span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {queueCards.map(({ key, label, count, Icon, section, iconStyle }) => (
             <button type="button" key={key} onClick={() => onNavigate(section)}
               className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition-all hover:border-sky-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#075985]"
@@ -290,8 +282,13 @@ export function AdminDashboardOverview({
               <h2 className="text-sm font-bold text-slate-900">Xu hướng Booking</h2>
               <p className="mt-1 text-xs text-slate-500">Số lượt đặt tour trong 30 ngày gần nhất</p>
             </div>
-            <span className="rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-[#075985]">{numberFormatter.format(chartBookings.length)} booking</span>
+            <span className="rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-[#075985]">{bookingLoading ? "Đang tải..." : bookingMetrics ? numberFormatter.format(chartBookingCount) + " booking" : "—"}</span>
           </div>
+          {bookingLoading || !bookingMetrics ? (
+            <div className="flex h-64 items-center justify-center text-sm text-slate-500" role="status">
+              {bookingLoading ? "Đang tải thống kê Booking..." : "Không tải được dữ liệu biểu đồ."}
+            </div>
+          ) : (
           <div className="h-64 w-full" role="img" aria-label="Biểu đồ số lượng booking theo thời gian">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
@@ -309,14 +306,21 @@ export function AdminDashboardOverview({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <h2 className="text-sm font-bold text-slate-900">Trạng thái Booking</h2>
           <p className="mt-1 text-xs text-slate-500">Phân bổ booking tạo trong 30 ngày gần nhất</p>
+          {bookingLoading || !bookingMetrics ? (
+            <p className="mt-8 text-center text-sm text-slate-500" role="status">
+              {bookingLoading ? "Đang tải trạng thái Booking..." : "Không tải được dữ liệu trạng thái."}
+            </p>
+          ) : (
+          <>
           <div className="mt-6 space-y-5">
             {statusBreakdown.map((item) => {
-              const percentage = chartBookings.length > 0 ? Math.round(item.count * 100 / chartBookings.length) : 0;
+              const percentage = chartBookingCount > 0 ? Math.round(item.count * 100 / chartBookingCount) : 0;
               return (
                 <div key={item.label} className="space-y-2">
                   <div className="flex items-center justify-between gap-3 text-xs">
@@ -330,7 +334,9 @@ export function AdminDashboardOverview({
               );
             })}
           </div>
-          {chartBookings.length === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong 30 ngày gần nhất.</p>}
+          {chartBookingCount === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong 30 ngày gần nhất.</p>}
+          </>
+          )}
         </div>
       </section>
 
