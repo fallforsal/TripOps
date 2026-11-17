@@ -19,10 +19,12 @@ class CheckinPhotoDialog extends StatefulWidget {
     super.key,
     required this.stopName,
     this.imagePicker,
+    this.isCheckout = false,
   });
 
   final String stopName;
   final ImagePicker? imagePicker;
+  final bool isCheckout;
 
   @override
   State<CheckinPhotoDialog> createState() => _CheckinPhotoDialogState();
@@ -43,64 +45,44 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
     super.dispose();
   }
 
-  Future<void> _choosePhotos(ImageSource source) async {
+  Future<void> _choosePhotos() async {
     if (_picking || _selected.length >= CheckinPhotoLimits.maxFiles) return;
     setState(() {
       _picking = true;
       _photoError = null;
     });
-
     try {
-      late final List<XFile> files;
-      if (source == ImageSource.camera) {
-        final photo = await _picker.pickImage(
-          source: ImageSource.camera,
-          maxWidth: 1800,
-          maxHeight: 1800,
-          imageQuality: 78,
-          requestFullMetadata: false,
-        );
-        files = photo == null ? [] : [photo];
-      } else {
-        files = await _picker.pickMultiImage(
-          maxWidth: 1800,
-          maxHeight: 1800,
-          imageQuality: 78,
-          requestFullMetadata: false,
-          limit: CheckinPhotoLimits.maxFiles - _selected.length,
-        );
-      }
+      final photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1800,
+        maxHeight: 1800,
+        imageQuality: 78,
+        requestFullMetadata: false,
+      );
+      if (photo == null || !mounted) return;
+      final addition = CheckinPhoto(
+        path: photo.path,
+        name: photo.name,
+        mime: CheckinPhoto.mimeForFileName(photo.name) ?? '',
+        bytes: await photo.length(),
+      );
       if (!mounted) return;
-
-      final additions = <CheckinPhoto>[];
-      for (final file in files) {
-        additions.add(CheckinPhoto(
-          path: file.path,
-          name: file.name,
-          mime: CheckinPhoto.mimeForFileName(file.name) ?? '',
-          bytes: await file.length(),
-        ));
-      }
-      if (!mounted) return;
-
-      final validation = CheckinPhoto.validate([..._selected, ...additions]);
+      final validation = CheckinPhoto.validate([..._selected, addition]);
       setState(() {
         _photoError = validation;
-        if (validation == null) _selected.addAll(additions);
+        if (validation == null) _selected.add(addition);
       });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _photoError = 'Không thể mở camera hoặc thư viện ảnh.';
-        });
-      }
+      if (mounted) setState(() {
+        _photoError = 'Không thể mở camera để chụp ảnh.';
+      });
     } finally {
       if (mounted) setState(() => _picking = false);
     }
   }
 
   void _submit() {
-    if (_picking || _photoError != null) return;
+    if (_picking || _photoError != null || _selected.isEmpty) return;
     Navigator.of(context).pop<CheckinSubmission>((
       note: _noteController.text.trim(),
       images: List<CheckinPhoto>.unmodifiable(_selected),
@@ -109,7 +91,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('Check-in ${widget.stopName}'),
+    title: Text('${widget.isCheckout ? 'Check-out' : 'Check-in'} ${widget.stopName}'),
     content: SizedBox(
       width: 360,
       child: SingleChildScrollView(
@@ -117,9 +99,9 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Xác nhận đã đến địa điểm này. '
-                'Ảnh đính kèm không bắt buộc; chỉ được check-in '
-                'điểm kế tiếp trong lịch trình.'),
+            Text(widget.isCheckout
+                ? 'Chụp ảnh trực tiếp khi rời điểm này. Sau check-out mới được check-in điểm tiếp theo.'
+                : 'Chụp ảnh trực tiếp khi đến điểm này. Không thể sử dụng ảnh có sẵn trong thư viện.'),
             const SizedBox(height: 12),
             TextField(
               key: const ValueKey('checkin-note-field'),
@@ -131,7 +113,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Ảnh minh chứng (tối đa 5)',
+            const Text('Ảnh chụp trực tiếp (bắt buộc, tối đa 5)',
               style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             const Text('JPG, PNG, WebP · tối đa 5 MB/ảnh, 20 MB tổng',
@@ -140,18 +122,10 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (_selected.length < CheckinPhotoLimits.maxFiles) ...[
                 OutlinedButton.icon(
-                  key: const ValueKey('pick-checkin-gallery'),
-                  onPressed: _picking
-                      ? null
-                      : () => _choosePhotos(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library_outlined, size: 17),
-                  label: const Text('Thư viện'),
-                ),
-                OutlinedButton.icon(
                   key: const ValueKey('pick-checkin-camera'),
                   onPressed: _picking
                       ? null
-                      : () => _choosePhotos(ImageSource.camera),
+                      : _choosePhotos,
                   icon: const Icon(Icons.camera_alt_outlined, size: 17),
                   label: const Text('Chụp ảnh'),
                 ),
@@ -208,8 +182,8 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
       ),
       FilledButton(
         key: const ValueKey('confirm-checkin'),
-        onPressed: _picking || _photoError != null ? null : _submit,
-        child: const Text('Xác nhận check-in'),
+        onPressed: _picking || _photoError != null || _selected.isEmpty ? null : _submit,
+        child: Text(widget.isCheckout ? 'Xác nhận check-out' : 'Xác nhận check-in'),
       ),
     ],
   );
