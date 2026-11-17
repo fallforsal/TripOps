@@ -227,6 +227,26 @@ export function AgencyBookingDetailPage({
   const agencyNameFor=(id?:string)=>booking.agencyDirectory?.find(a=>a.agencyId===id)?.agencyName
     || booking.bookingAgencies?.find(a=>a.agencyId===id)?.agencyName
     || (id===booking.companyId?booking.companyName:undefined) || "Agency chưa xác định";
+  const agencyLogoFor=(id?:string)=>booking.coHosts?.find(c=>c.companyId===id)?.companyLogo
+    || booking.tour.coHosts?.find(c=>c.companyId===id)?.companyLogo
+    || (id===booking.companyId || !id ? booking.tour.companyLogo : undefined);
+  const agencyInitials=(name:string)=>{
+    const clean=name.replace(/^\[[^\]]+\]\s*/g,"").trim();
+    const words=clean.split(/\s+/).filter(Boolean);
+    if(words.length>=2) return (words[words.length-2][0]+words[words.length-1][0]).toLocaleUpperCase("vi");
+    return clean.slice(0,2).toLocaleUpperCase("vi") || "AG";
+  };
+  const renderAgencyBadge=(id?:string)=>{
+    const name=agencyNameFor(id);
+    const logo=agencyLogoFor(id);
+    return logo ? (
+      <img src={logo} alt={name} title={name} className="w-5 h-5 rounded-full object-cover border border-slate-200 inline-block shrink-0" />
+    ) : (
+      <span title={name} className="w-5 h-5 rounded-full bg-sky-100 text-sky-800 border border-sky-200 text-[9px] font-bold inline-flex items-center justify-center shrink-0">
+        {agencyInitials(name)}
+      </span>
+    );
+  };
   const ownsItem=(id?:string)=>!!companyId && (id||booking.companyId)===companyId;
   const currentQuotationState = useBookingSupplierState(booking.id);
   const [approvingBooking, setApprovingBooking] = useState(false);
@@ -1494,14 +1514,6 @@ export function AgencyBookingDetailPage({
               </>
             )}
 
-            {isCurrentCompanyLead&&<Button
-              variant="outline"
-              onClick={() => setContractModalOpen(true)}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 gap-1.5 text-sm"
-            >
-              <FileText className="w-4 h-4 text-[#075985]" />
-              Xem Hợp đồng
-            </Button>}
           </div>}
         </div>
       </div>
@@ -1711,16 +1723,6 @@ export function AgencyBookingDetailPage({
                       Công ty chủ trì chủ động duyệt booking. Khách ký hợp đồng và thanh toán theo lịch; phản hồi Provider được theo dõi riêng cho từng dịch vụ.
                     </p>
                   </div>
-                  {isCurrentCompanyLead && (
-                    <Button
-                      onClick={handleApproveHappyCase}
-                      disabled={approvingBooking} title="Agency chủ động duyệt booking, độc lập với phản hồi Provider"
-                      className="bg-[#075985] hover:bg-[#F97316] text-white text-xs font-bold h-9 px-4 shrink-0 shadow-sm flex items-center gap-1.5 rounded-xl"
-                    >
-                      <Zap className="w-4 h-4 text-yellow-300" />
-                      Duyệt Booking (Chủ trì)
-                    </Button>
-                  )}
                 </div>
               )}
 
@@ -2349,8 +2351,9 @@ export function AgencyBookingDetailPage({
                                           </div>
 
                                           {isAllianceBooking && (
-                                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${isMyLoc ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                              Phụ trách dẫn chặng: {locAgencyName}
+                                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded border ${isMyLoc ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                              <span>Phụ trách dẫn chặng:</span>
+                                              {renderAgencyBadge(loc.createdByCompanyId||booking.companyId)}
                                             </span>
                                           )}
                                         </div>
@@ -2847,7 +2850,7 @@ export function AgencyBookingDetailPage({
                                                 <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
                                               )}
                                               {isAllianceBooking && (
-                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3 w-3"/>Phụ trách dẫn chặng: <strong className="font-medium text-sky-800">{agencyNameFor(loc.createdByCompanyId||booking.companyId)}</strong></p>
+                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><span>Phụ trách dẫn chặng:</span>{renderAgencyBadge(loc.createdByCompanyId||booking.companyId)}</p>
                                               )}
                                             </div>
                                             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -3682,70 +3685,6 @@ export function AgencyBookingDetailPage({
                 {priceSaving ? "Đang lưu…" : "Lưu giá mới"}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL: HỢP ĐỒNG ĐIỆN TỬ */}
-      <Dialog open={contractModalOpen} onOpenChange={setContractModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#075985]" />
-              Hợp đồng Dịch vụ Du lịch – {contractNo}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 text-xs text-gray-700 pt-2">
-            <div className="text-center border-b pb-3">
-              <p className="font-bold text-sm text-gray-900 uppercase">{companyName}</p>
-              <p className="text-xs text-gray-500">Giấy phép kinh doanh lữ hành quốc tế</p>
-              <p className="text-base font-bold mt-2 text-blue-800">HỢP ĐỒNG DỊCH VỤ LỮ HÀNH</p>
-              <p className="text-[11px] text-gray-400">Số: {contractNo} – Ngày lập: {today}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 p-2.5 rounded-lg border">
-                <p className="font-bold text-gray-900 mb-1">BÊN A (CÔNG TY DU LỊCH):</p>
-                <p>Tên: <strong>{companyName}</strong></p>
-              </div>
-              <div className="bg-gray-50 p-2.5 rounded-lg border">
-                <p className="font-bold text-gray-900 mb-1">BÊN B (KHÁCH HÀNG):</p>
-                <p>Đại diện: <strong>{booking.contactName || booking.userName}</strong></p>
-                <p>SĐT: {booking.contactPhone || "—"}</p>
-              </div>
-            </div>
-
-            <div>
-              <p className="font-bold text-gray-900 mb-1">ĐIỀU 1: NỘI DUNG VÀ THỜI GIAN</p>
-              <p>Tour: <strong>{booking.tour.name}</strong> ({booking.tour.tourCode})</p>
-              <p>Khởi hành: <strong>{booking.tourStartDate || "Theo thỏa thuận"}</strong> · Thời gian: {booking.tour.duration}</p>
-              <p>Số lượng khách: <strong>{booking.numberOfGuests} người</strong></p>
-            </div>
-
-            <div>
-              <p className="font-bold text-gray-900 mb-1">ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN</p>
-              <p>Tổng giá trị hợp đồng: <strong className="text-[#075985]">{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></p>
-              <p>Trạng thái thanh toán: <strong>{pst.label}</strong></p>
-              {booking.remainingAmount !== undefined && booking.remainingAmount > 0 && (
-                <p>Số tiền còn lại: <strong className="text-amber-700">{formatVND(booking.remainingAmount)}</strong></p>
-              )}
-            </div>
-
-            {booking.hasLocationCustomization && (
-              <div className="bg-[#F0F9FF] p-2.5 rounded-lg border border-[#F97316]/30">
-                <p className="font-bold text-purple-900 mb-1">ĐIỀU KHOẢN TÙY CHỈNH LỊCH TRÌNH:</p>
-                <p>Các điều chỉnh về khách sạn và điểm đến theo thỏa thuận đính kèm trong phụ lục booking.</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t">
-            <Button variant="outline" onClick={() => setContractModalOpen(false)}>Đóng</Button>
-            <Button className="bg-[#075985] hover:bg-[#F97316] text-white gap-1.5" onClick={() => window.print()}>
-              <Printer className="w-4 h-4" />
-              In hợp đồng
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

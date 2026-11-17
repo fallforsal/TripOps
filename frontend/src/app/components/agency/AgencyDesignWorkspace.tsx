@@ -38,7 +38,7 @@ export function AgencyDesignWorkspace(props: Props) {
       </section>}
       {scope !== "customers" && focused !== "customers" && <section aria-label="Lời mời đối tác">
         {!focused && <div className="mb-3"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800"><Handshake className="h-4 w-4 text-teal-700"/>Lời mời đối tác</h2><p className="mt-1 text-sm text-slate-500">Các phiên bản bạn được Agency khác mời cùng thiết kế, gồm cả lời mời đã bị gỡ.</p></div>}
-        <AgencyDesignCoHosting requests={partners} company={props.company} embedded onDetailChange={focusPartners} onChanged={async () => { await props.onUpdateRequest("", {}); }}/>
+        <AgencyDesignCoHosting requests={partners} company={props.company} tours={props.tours} embedded onDetailChange={focusPartners} onChanged={async () => { await props.onUpdateRequest("", {}); }}/>
       </section>}
     </div>
   </div>;

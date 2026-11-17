@@ -7,6 +7,7 @@ import { Handshake, Plus, RefreshCw } from "lucide-react";
 import { toast } from "@/app/lib/notifications";
 import type { CustomTourRequest, Tour, TourCoHost, TourCompany } from "@/app/types";
 import { http } from "@/app/lib/http";
+import { tourSaveBody } from "@/app/lib/tourSaveBody";
 import { designPartnerStatusLabel } from "@/app/lib/designAlliance";
 import { designRequestLifecycle } from "@/app/services/customTourRequests";
 import { AgencyDiscoveryPicker } from "@/app/components/common/AgencyDiscoveryPicker";
@@ -15,9 +16,9 @@ import { Button } from "@/app/components/ui/button";
 import { TourFormPage } from "./AgencyTourManagement";
 import { PartnerInvitationTable } from "./PartnerInvitationTable";
 
-type Props = { request: CustomTourRequest; company: TourCompany; onChanged: () => void | Promise<void>; onClose: () => void; embedded?: boolean };
+type Props = { request: CustomTourRequest; company: TourCompany; onChanged: () => void | Promise<void>; onClose: () => void; embedded?: boolean; autoEdit?: boolean };
 const money = (n?: number) => n == null ? "Chưa báo giá" : `${n.toLocaleString("vi-VN")}đ`;
-export function DesignCollaborationPanel({ request, company, onChanged, onClose, embedded = false }: Props) {
+export function DesignCollaborationPanel({ request, company, onChanged, onClose, embedded = false, autoEdit = false }: Props) {
   const [version,setVersion] = useState<number|undefined>(()=>request.collaborationVersions?.includes(request.currentVersion||0)?request.currentVersion:request.collaborationVersions?.[0]);
   const [hosts, setHosts] = useState<TourCoHost[]>(request.coHosts || []);
   const [editing, setEditing] = useState<Tour | null>(null);
@@ -39,7 +40,13 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
       const rows=await http<TourCoHost[]>(`${root}/co-hosts${query}`);
       const tour=request.designedTourId && (lead || rows.some(h=>h.companyId===company.id && h.status==="accepted"))
         ? fromApiTour(await http<ApiTour>(`${root}/working-tour${query}`)) : null;
-      if(sequence===loadSequence.current){setHosts(rows);setWorking(tour);}
+      if(sequence===loadSequence.current){
+        setHosts(rows);
+        setWorking(tour);
+        if (autoEdit && tour && !lead && mutable && rows.some(h => h.companyId === company.id && h.status === "accepted")) {
+          setEditing({ ...tour, coHosts: rows, isCoHosted: true });
+        }
+      }
     }finally{if(sequence===loadSequence.current)setLoading(false);}
   };
   useEffect(()=>{let alive=true;setWorking(null);setError("");setPartner("");
@@ -48,8 +55,18 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
   if (editing) return <TourFormPage key={`${editing.id}-${editing.version}`} designVersions={request.collaborationVersions}
     onDesignVersionChange={async selected => { await action(async () => { const fresh=fromApiTour(await http<ApiTour>(`${root}/working-tour?version=${selected}`)); setVersion(selected); setEditing(fresh); }); }} company={company} tour={editing} customRequest={request} isCustomTour ownershipCollaboration onBack={()=>setEditing(null)} onManageCoHosts={()=>setEditing(null)} onSubmit={async data => {
     const config=toConfiguration({...editing,...data});
-    const saved=fromApiTour(await http<ApiTour>(`${root}/segment`,{method:"PUT",body:JSON.stringify({revision:editing.revision || 1,
-      version:editing.version,timelines:config.timelines,pricingTiers:config.pricingTiers})}));
+    const body=tourSaveBody({
+      revision:editing.revision || 1,
+      version:editing.version,
+      timelines:config.timelines,
+      pricingTiers:config.pricingTiers,
+      ownedHighlights:config.ownedHighlights,
+      ownedInclusions:config.ownedInclusions,
+      ownedExclusions:config.ownedExclusions,
+      ownedCancellationPolicy:config.ownedCancellationPolicy,
+      ownedImages:config.ownedImages,
+    },data);
+    const saved=fromApiTour(await http<ApiTour>(body instanceof FormData?`${root}/segment/with-images`:`${root}/segment`,{method:"PUT",body}));
     setEditing(null);await load();await onChanged();toast.success(`Đã lưu nháp chặng trong v${saved.version}. Agency chủ trì sẽ kiểm tra và chọn phiên bản cho khách xem.`);
   }}/>;
   return <div className={embedded ? "space-y-5 bg-white p-1" : "space-y-5 rounded-2xl border border-slate-200 bg-white p-5"}>
@@ -89,8 +106,8 @@ export function DesignCollaborationPanel({ request, company, onChanged, onClose,
   </div>;
 }
 
-export function AgencyDesignCoHosting({requests,company,onChanged,embedded=false,onDetailChange}:{requests:CustomTourRequest[];company:TourCompany;onChanged:()=>void|Promise<void>;embedded?:boolean;onDetailChange?:(open:boolean)=>void}) {
-  const [selected,setSelected]=useState<{id:string;version?:number}|null>(()=>{
+export function AgencyDesignCoHosting({requests,company,tours,onChanged,embedded=false,onDetailChange}:{requests:CustomTourRequest[];company:TourCompany;tours?:Tour[];onChanged:()=>void|Promise<void>;embedded?:boolean;onDetailChange?:(open:boolean)=>void}) {
+  const [selected,setSelected]=useState<{id:string;version?:number;edit?:boolean}|null>(()=>{
     const params=new URLSearchParams(window.location.hash.split("?")[1]);
     const id=params.get("requestId");
     const version=Number(params.get("version"));
@@ -100,7 +117,7 @@ export function AgencyDesignCoHosting({requests,company,onChanged,embedded=false
   const request=source && selected?.version?{...source,currentVersion:selected.version}:source;
   useEffect(()=>{onDetailChange?.(!!request);},[!!request,onDetailChange]);
   useEffect(()=>()=>onDetailChange?.(false),[onDetailChange]);
-  if(request)return <DesignCollaborationPanel key={`${request.id}-${selected?.version || "current"}`} request={request} company={company} onChanged={onChanged} onClose={()=>{
+  if(request)return <DesignCollaborationPanel key={`${request.id}-${selected?.version || "current"}-${selected?.edit ? "edit" : "view"}`} request={request} company={company} autoEdit={!!selected?.edit} onChanged={onChanged} onClose={()=>{
     setSelected(null);
     const [path,query]=window.location.hash.split("?");
     const params=new URLSearchParams(query);
@@ -108,6 +125,6 @@ export function AgencyDesignCoHosting({requests,company,onChanged,embedded=false
   }}/>;
   return <div className="space-y-5">
     {!embedded && <header className="space-y-2 px-1"><h1 className="text-2xl font-semibold text-slate-900">Lời mời đối tác</h1><p className="text-sm text-slate-500">Quản lý lời mời cùng thiết kế tour và quyền tham gia từng phiên bản.</p></header>}
-    <PartnerInvitationTable requests={requests} company={company} onOpen={(row,version)=>setSelected({id:row.id,version})}/>
+    <PartnerInvitationTable requests={requests} company={company} tours={tours} onOpen={(row,version)=>setSelected({id:row.id,version})} onDesign={(row,version)=>setSelected({id:row.id,version,edit:true})}/>
   </div>;
 }

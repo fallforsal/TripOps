@@ -87,6 +87,12 @@ export type TourConfiguration = {
   pricingTiers: Tier[];
   timelines: Day[];
   provinceCodes?: string[];
+  ownedHighlights?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
+  ownedInclusions?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
+  ownedExclusions?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
+  ownedCancellationPolicy?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
+  ownedImages?: { id?: string | null; url: string; agencyId?: string | null }[] | null;
+  shareAllVersions?: boolean;
 };
 export type TourAgencyContact = { id: string; name: string; logoUrl?: string | null; phone?: string | null; email?: string | null };
 export type ApiTour = {
@@ -332,6 +338,11 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
       ? [tour.image, ...(tour.images || []).filter((url) => url !== tour.image)]
       : tour.images || []
     ).filter(Boolean),
+    ownedHighlights: tour.ownedHighlights ?? null,
+    ownedInclusions: tour.ownedInclusions ?? null,
+    ownedExclusions: tour.ownedExclusions ?? null,
+    ownedCancellationPolicy: tour.ownedRegulations ?? null,
+    ownedImages: tour.ownedImages ?? null,
     pricingTiers: (tour.priceTable || []).map((row, displayOrder) => ({
       key: row.tierKey || null,
       name: row.ageGroupLabel.trim(),
@@ -497,6 +508,12 @@ export function fromConfiguration(
     description: c.description || "",
     image: c.images?.[0] || "",
     images: c.images || [],
+    ownedHighlights: c.ownedHighlights ?? undefined,
+    ownedInclusions: c.ownedInclusions ?? undefined,
+    ownedExclusions: c.ownedExclusions ?? undefined,
+    ownedRegulations: c.ownedCancellationPolicy ?? undefined,
+    ownedImages: c.ownedImages ?? undefined,
+    shareAllVersions: Boolean(c.shareAllVersions),
     rating: 0,
     planGuestCount: c.numberOfGuests || undefined,
     minGuests: c.minGuests || 0,

@@ -148,8 +148,24 @@ public sealed partial class TourService
             Message=$"Agency chủ trì đã gỡ bạn khỏi phiên bản v{version.VersionNumber} của yêu cầu #{id}. Nội dung và bảng giá của bạn trong phiên bản này đã được gỡ."});
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
     }
-    private static bool HasCoHostContent(TourConfiguration c,string partner)=>(c.Timelines??[]).Any(d=>(d.Activities??[]).Any(a=>a.AgencyId==partner)||(d.Meals??[]).Any(m=>m.AgencyId==partner)||(d.Accommodations??[]).Any(h=>h.AgencyId==partner));
-    private static TourConfiguration WithoutCoHost(TourConfiguration c,string partner)=>c with{CoHosts=c.CoHosts?.Where(h=>h.CompanyId!=partner).ToArray(),AgencyPricing=c.AgencyPricing?.Where(p=>p.AgencyId!=partner).ToArray(),Timelines=c.Timelines?.Select(d=>d with{Activities=d.Activities?.Where(a=>a.AgencyId!=partner).ToArray(),Meals=d.Meals?.Where(m=>m.AgencyId!=partner).ToArray(),Accommodations=d.Accommodations?.Where(h=>h.AgencyId!=partner).ToArray()}).ToArray()};
+    private static bool HasCoHostContent(TourConfiguration c,string partner)=>(c.Timelines??[]).Any(d=>(d.Activities??[]).Any(a=>a.AgencyId==partner)||(d.Meals??[]).Any(m=>m.AgencyId==partner)||(d.Accommodations??[]).Any(h=>h.AgencyId==partner))||(c.OwnedHighlights??[]).Any(x=>x.AgencyId==partner)||(c.OwnedInclusions??[]).Any(x=>x.AgencyId==partner)||(c.OwnedExclusions??[]).Any(x=>x.AgencyId==partner)||(c.OwnedCancellationPolicy??[]).Any(x=>x.AgencyId==partner)||(c.OwnedImages??[]).Any(x=>x.AgencyId==partner);
+    private static TourConfiguration WithoutCoHost(TourConfiguration c,string partner){
+        var hl=c.OwnedHighlights?.Where(x=>x.AgencyId!=partner).ToArray();
+        var inc=c.OwnedInclusions?.Where(x=>x.AgencyId!=partner).ToArray();
+        var exc=c.OwnedExclusions?.Where(x=>x.AgencyId!=partner).ToArray();
+        var pol=c.OwnedCancellationPolicy?.Where(x=>x.AgencyId!=partner).ToArray();
+        var imgs=c.OwnedImages?.Where(x=>x.AgencyId!=partner).ToArray();
+        return c with{
+            CoHosts=c.CoHosts?.Where(h=>h.CompanyId!=partner).ToArray(),
+            AgencyPricing=c.AgencyPricing?.Where(p=>p.AgencyId!=partner).ToArray(),
+            Timelines=c.Timelines?.Select(d=>d with{Activities=d.Activities?.Where(a=>a.AgencyId!=partner).ToArray(),Meals=d.Meals?.Where(m=>m.AgencyId!=partner).ToArray(),Accommodations=d.Accommodations?.Where(h=>h.AgencyId!=partner).ToArray()}).ToArray(),
+            OwnedHighlights=hl,Highlights=hl is not null?OwnedToText(hl):c.Highlights,
+            OwnedInclusions=inc,Inclusions=inc is not null?OwnedToText(inc):c.Inclusions,
+            OwnedExclusions=exc,Exclusions=exc is not null?OwnedToText(exc):c.Exclusions,
+            OwnedCancellationPolicy=pol,CancellationPolicy=pol is not null?OwnedToText(pol):c.CancellationPolicy,
+            OwnedImages=imgs,Images=imgs is not null?imgs.Select(x=>x.Url).ToArray():c.Images
+        };
+    }
     private async Task<TourConfiguration> CollaborationConfiguration(TourDesignRequest request,TourConfiguration config,CancellationToken ct,int? number=null)
     {
         var hosts=await CoHosts(request.Id,ct,number);var members=hosts.Where(h=>h.Status is "accepted" or "pending" or "uninvited").ToArray();
@@ -178,7 +194,16 @@ public sealed partial class TourService
         await using var tx=await db.Database.BeginTransactionAsync(ct);await LockDesignRequest(request.AgencyId!,id,ct);await db.Entry(request).ReloadAsync(ct);await MutableCollaboration(request,ct);
         var version=await VersionRow(id,input.Version,ct);await RequireVersionAccess(actor,request,version,ct);
         var(tour,current)=await EditableVersion(request,input.Version,ct);Expected(tour,input.Revision);
-        var config=await CollaborationConfiguration(request,MergeDesign(current,current with{Timelines=input.Timelines,PricingTiers=input.PricingTiers},actor,request.AgencyId!),ct,tour.Version);
+        var incoming=current with{
+            Timelines=input.Timelines,
+            PricingTiers=input.PricingTiers,
+            OwnedHighlights=input.OwnedHighlights??current.OwnedHighlights,
+            OwnedInclusions=input.OwnedInclusions??current.OwnedInclusions,
+            OwnedExclusions=input.OwnedExclusions??current.OwnedExclusions,
+            OwnedCancellationPolicy=input.OwnedCancellationPolicy??current.OwnedCancellationPolicy,
+            OwnedImages=input.OwnedImages??current.OwnedImages
+        };
+        var config=await CollaborationConfiguration(request,MergeDesign(current,incoming,actor,request.AgencyId!),ct,tour.Version);
         await Validate(config,false,ct,request.AgencyId,id);tour.Status=TourStatus.Draft;Apply(tour,config);var result=await Save(tour,actor,"Đối tác cập nhật chặng của phiên bản",ct);
         await tx.CommitAsync(ct);return result;
     }

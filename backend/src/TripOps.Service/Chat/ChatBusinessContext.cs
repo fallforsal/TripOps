@@ -135,7 +135,8 @@ public sealed partial class ChatService
                     throw new AccountException(403, "Người nhận không thuộc yêu cầu thiết kế của tour.");
                 var version = context.Version ?? tour.SharedVersion ?? tour.Version;
                 var customerInConversation = await Db.TourDesignRequests.AnyAsync(r => r.Id == requestId && (r.CustomerId == actor || r.CustomerId == recipient), ct);
-                if (customerInConversation && (!tour.SharedVersion.HasValue || !await Db.TourVersions.AnyAsync(v=>v.TourId==tour.Id && v.VersionNumber==version && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion),ct)))
+                var shareAll = !string.IsNullOrWhiteSpace(tour.ConfigurationData) && JsonDocument.Parse(tour.ConfigurationData).RootElement.TryGetProperty("shareAllVersions", out var sa) && sa.ValueKind == JsonValueKind.True;
+                if (customerInConversation && (!tour.SharedVersion.HasValue || (!shareAll && version != tour.SharedVersion)))
                     throw new AccountException(403, "Chỉ gửi phiên bản tour Agency đã cho phép khách xem.");
                 var snapshot = await Db.TourVersions.Where(v => v.TourId == tour.Id && v.VersionNumber == version).Select(v => v.SnapshotData).SingleOrDefaultAsync(ct)
                     ?? throw new AccountException(404, "Không tìm thấy phiên bản tour.");

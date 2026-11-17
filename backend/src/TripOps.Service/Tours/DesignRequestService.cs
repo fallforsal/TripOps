@@ -169,11 +169,14 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             _ => "pending"
         };
         var visibleTour = tour?.SharedVersion.HasValue == true;
+        var shareAll = visibleTour && !string.IsNullOrWhiteSpace(tour!.ConfigurationData)
+            && System.Text.Json.JsonDocument.Parse(tour.ConfigurationData).RootElement.TryGetProperty("shareAllVersions", out var sa)
+            && sa.ValueKind == System.Text.Json.JsonValueKind.True;
         return new DesignRequestDto(r.Id, r.CustomerId ?? "", r.AgencyId ?? "",
             agency?.BusinessProfile?.BusinessName ?? agency?.Name ?? "Agency",
             r.ContactName, r.ContactEmail, r.ContactPhone, r.Destination,
             r.StartDate, r.EndDate, r.NumberOfGuests ?? 0, r.BudgetPerPerson,
             r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, status, r.CreatedAt ?? DateTime.UnixEpoch,
-            tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion);
+            tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion, ShareAllVersions: shareAll);
     }
 }

@@ -42,7 +42,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   const [template, setTemplate] = useState<Tour | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Tour>>({});
   const [busy, setBusy] = useState(false); const lock = useRef(false);
-  const [updatingVersion, setUpdatingVersion] = useState<{ requestId: string; version: number } | null>(null);
+  const [updatingVersion, setUpdatingVersion] = useState<{ requestId: string; version: number | "all" } | null>(null);
   const [rejecting, setRejecting] = useState<CustomTourRequest | null>(null); const [reason, setReason] = useState("");
   const [cloning, setCloning] = useState<CustomTourRequest | null>(null); const [sourceId, setSourceId] = useState("");
   const [error, setError] = useState(""); const [revision, setRevision] = useState(0);
@@ -87,17 +87,25 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
   const openWorkspace = (request: CustomTourRequest) => {
     setError(""); setHistoryRequestId(request.id);
   };
-  const chooseVersion = async (request: CustomTourRequest, version: number | null) => perform(async () => {
-    setUpdatingVersion({ requestId: request.id, version: version ?? 0 });
+  const chooseVersion = async (request: CustomTourRequest, selection: number | "all" | null) => perform(async () => {
+    setUpdatingVersion({ requestId: request.id, version: selection ?? 0 });
     try {
-      const saved = version === null ? await shareDesignTour(request.id, (await getDesignVersion(request.id,currentTour(request)?.version || 1)).revision!, null) : await selectCustomerDesignVersion(version,
-        selected => getDesignVersion(request.id, selected),
-        (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected));
+      const shareAll = selection === "all";
+      const targetVersion = shareAll ? (currentTour(request)?.version || 1) : selection;
+      const saved = targetVersion === null
+        ? await shareDesignTour(request.id, (await getDesignVersion(request.id, currentTour(request)?.version || 1)).revision!, null, false)
+        : await selectCustomerDesignVersion(targetVersion,
+            selected => getDesignVersion(request.id, selected),
+            (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected, shareAll));
       setOverrides(previous => ({ ...previous, [request.id]: saved }));
       setRevision(value => value + 1);
       try { await onUpdateRequest(request.id, {}); }
       catch { toast.warning("Đã cập nhật phiên bản cho khách. Danh sách yêu cầu chưa tải lại được, vui lòng tải lại trang khi kết nối ổn định."); }
-      toast.success(version === null ? "Đã tạm ẩn tất cả phương án với khách. Các bản đã chia sẻ được giữ lại để mở xem sau." : `Khách hàng có thể xem và đặt phiên bản v${version} cùng các bản đã chia sẻ trước đó.`);
+      toast.success(selection === null
+        ? "Đã ẩn tất cả phương án với khách."
+        : shareAll
+          ? "Khách hàng có thể xem và đặt toàn bộ các phiên bản của tour."
+          : `Khách hàng chỉ được xem và đặt phiên bản v${selection}.`);
     } finally { setUpdatingVersion(null); }
   });
   const collaborationChanged = async (request: CustomTourRequest) => {
@@ -171,7 +179,7 @@ export function AgencyCustomRequests({ requests, company, tours, onUpdateRequest
                 {(request.closeReason || request.rejectionReason) && <p className="mt-3 text-xs text-rose-700">{request.closeReason || request.rejectionReason}</p>}
               </td>
               <td className="px-4 py-5">{request.budgetPerPerson ? <><p className="font-semibold tabular-nums text-slate-800">{money(Number(request.budgetPerPerson))}</p><p className="mt-0.5 text-xs text-slate-400">mỗi khách</p><p className="mt-3 text-xs text-slate-500">Tổng dự kiến</p><p className="mt-1 text-xs font-medium tabular-nums text-slate-600">{money(Number(request.budgetPerPerson) * Number(request.numberOfPeople))}</p></> : <span className="text-sm text-slate-500">Thỏa thuận</span>}</td>
-              <td className="px-4 py-5">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} sharedVersion={sharedVersion} reload={revision} disabled={busy || !editable}
+              <td className="px-4 py-5">{tour ? <DesignVersionSelector requestId={request.id} tour={tour} sharedVersion={sharedVersion} shareAllVersions={overrides[request.id]?.shareAllVersions ?? request.shareAllVersions} reload={revision} disabled={busy || !editable}
                 updatingVersion={updatingVersion?.requestId === request.id ? updatingVersion.version : undefined} onChange={version => void chooseVersion(request,version)}/>
                 : <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs leading-relaxed text-slate-400"><p className="font-medium text-slate-500">Chưa có phương án tour</p><p className="mt-1">{request.status === "pending" ? "Tiếp nhận yêu cầu để bắt đầu thiết kế." : editable ? "Thiết kế mới hoặc dùng một tour có sẵn." : "Yêu cầu đã đóng."}</p></div>}</td>
               <td className="px-4 py-5"><div className="flex flex-wrap items-center gap-2">
