@@ -783,7 +783,7 @@ export interface GuideSchedule {
   }[];
 }
 
-export type AttractionAttendanceStatus = "PENDING" | "CHECKED_IN" | "SKIPPED";
+export type AttractionAttendanceStatus = "PENDING" | "CHECKED_IN" | "CHECKED_OUT" | "SKIPPED";
 
 export interface BookingAttractionCheckin {
   id: string;
@@ -803,6 +803,9 @@ export interface BookingAttractionCheckin {
   photoProofUrl?: string;
   photoProofUrls?: string[];
   notes?: string;
+  checkoutAt?: string;
+  checkoutNote?: string;
+  checkoutPhotoProofUrls?: string[];
   createdAt?: string;
 }
 
