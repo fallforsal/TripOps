@@ -48,7 +48,8 @@ public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbCo
         var guide = User.IsInRole("guide");
         var agency = User.IsInRole("agency");
         var allowed = await db.BookingAttractionCheckins.AsNoTracking().AnyAsync(c =>
-            c.PhotoUrl != null && c.PhotoUrl.Contains(url) &&
+            (c.PhotoUrl != null && c.PhotoUrl.Contains(url) ||
+             c.CheckoutPhotoUrl != null && c.CheckoutPhotoUrl.Contains(url)) &&
             (guide && c.GuideId == actor || agency && c.AgencyId == actor), ct)
             || await db.BookingIncidents.AsNoTracking().AnyAsync(i =>
                 i.EvidenceUrls != null && i.EvidenceUrls.Contains(url) &&
