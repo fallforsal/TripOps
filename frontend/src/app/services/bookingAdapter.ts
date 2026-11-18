@@ -232,7 +232,7 @@ export function fromApiBooking(
               createdByCompanyId:l.agencyId,
               address: "",
               time: l.time?.slice(11, 16),
-              checkedIn: l.attendanceStatus === "CheckedIn",
+              checkedIn: l.attendanceStatus === "CheckedIn" || l.attendanceStatus === "CheckedOut",
             })),
             meals: d.meals.map((m) => ({
               id: String(m.id),
@@ -304,7 +304,40 @@ export function fromApiBooking(
     tourStartDate: dto.startDate
       ? dto.startDate.split("T")[0]
       : new Date().toISOString().split("T")[0],
-    attractionCheckins:dto.attractionCheckins?.map(c=>{const urls=c.photoUrls?.length?c.photoUrls:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.photoUrls;return {id:String(c.id),bookingId:String(dto.id),locationName:dto.snapshotDays?.flatMap(d=>d.locations).find(l=>l.id===c.locationId)?.name||"",dayNumber:dto.snapshotDays?.find(d=>d.locations.some(l=>l.id===c.locationId))?.dayNumber||1,bookingTimelineAttractionId:String(c.locationId),agencyId:c.agencyId,agencyName:dto.bookingAgencies?.find(a=>a.agencyId===c.agencyId)?.agencyName,guideId:c.guideId,guideName:c.guideName,guideAvatar:c.guideAvatar || dto.assignedGuides?.find(g=>g.guideId===c.guideId)?.guideAvatar,attendanceStatus:(c.status==="CheckedIn"?"CHECKED_IN":c.status==="Skipped"?"SKIPPED":"PENDING") as "CHECKED_IN"|"SKIPPED"|"PENDING",checkedAt:c.checkedAt,photoProofUrl:urls?.[0],photoProofUrls:urls,notes:c.note,createdAt:dto.createdAt};}),
+    attractionCheckins: dto.attractionCheckins?.map((c) => {
+      const location = dto.snapshotDays?.flatMap((d) => d.locations)
+        .find((l) => l.id === c.locationId);
+      const photos = c.photoUrls?.length ? c.photoUrls : location?.photoUrls;
+      const checkoutPhotos = c.checkoutPhotoUrls?.length
+        ? c.checkoutPhotoUrls : location?.checkoutPhotoUrls;
+      const status = c.status || location?.attendanceStatus;
+      const attendanceStatus =
+        status === "CheckedOut" ? "CHECKED_OUT" as const
+          : status === "CheckedIn" ? "CHECKED_IN" as const
+            : status === "Skipped" ? "SKIPPED" as const
+              : "PENDING" as const;
+      return {
+        id: String(c.id),
+        bookingId: String(dto.id),
+        locationName: location?.name || "",
+        dayNumber: dto.snapshotDays?.find((d) => d.locations.some((l) => l.id === c.locationId))?.dayNumber || 1,
+        bookingTimelineAttractionId: String(c.locationId),
+        agencyId: c.agencyId,
+        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
+        guideId: c.guideId,
+        guideName: c.guideName,
+        guideAvatar: c.guideAvatar || dto.assignedGuides?.find((g) => g.guideId === c.guideId)?.guideAvatar,
+        attendanceStatus,
+        checkedAt: c.checkedAt,
+        photoProofUrl: photos?.[0],
+        photoProofUrls: photos,
+        notes: c.note,
+        checkoutAt: c.checkoutAt || location?.checkoutAt,
+        checkoutNote: c.checkoutNote || location?.checkoutNote,
+        checkoutPhotoProofUrls: checkoutPhotos,
+        createdAt: dto.createdAt,
+      };
+    }),
     bookingAgencies:dto.bookingAgencies?.map(a=>({...a,id:String(a.id),bookingId:String(dto.id),settlementStatus:a.settlementStatus.toLowerCase() as "unpaid"|"ready"|"paid"})),
     coHosts:bookedCoHosts,
     isCoHosted:isBookedAlliance,
