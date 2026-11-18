@@ -103,23 +103,30 @@ public sealed partial class TourService
         Expected(tour, input.Revision);
         if(input.Hidden) {
             tour.SharedVersion=null;tour.Revision++;
+            Apply(tour,Configuration(tour) with {ShareAllVersions=false});
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Dto(tour);
         }
         var target = input.Version ?? tour.Version ?? 1;
         var version = await db.TourVersions.SingleOrDefaultAsync(v => v.TourId == tour.Id && v.VersionNumber == target, ct)
             ?? throw new TourException(404,"Không tìm thấy phiên bản tour.");
         // Existing data may have a working copy from the old draft model. Saving reconciles it first.
-        var configuration = target == tour.Version ? Configuration(tour) : JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!.Configuration;
+        var configuration = (target == tour.Version ? Configuration(tour) : JsonSerializer.Deserialize<TourSnapshot>(version.SnapshotData,Json)!.Configuration) with { ShareAllVersions = input.ShareAll };
         await ValidateVersionMembers(requestId,target,ct);
         await Validate(configuration, true, ct, actor, requestId);
         if (tour.HasDraftChanges && target == tour.Version) {
             version.SnapshotData=JsonSerializer.Serialize(new TourSnapshot(1,target,true,tour.IsAiGenerated==true,"completed","hidden",configuration),Json);
             tour.HasDraftChanges=false;
         }
-        if (tour.SharedVersion != target || version.SharedAt is null) {
+        var currentShareAll = Configuration(tour).ShareAllVersions;
+        if (tour.SharedVersion != target || version.SharedAt is null || currentShareAll != input.ShareAll) {
             version.SharedAt ??= DateTime.UtcNow; version.SharedBy = actor;
             tour.SharedVersion = target; tour.Revision++;
-            db.WorkflowNotifications.Add(new WorkflowNotification { UserId = request.CustomerId!, RequestId = requestId, Message = $"Agency đã chia sẻ phương án tour phiên bản {target}." });
+            Apply(tour, Configuration(tour) with { ShareAllVersions = input.ShareAll });
+            db.WorkflowNotifications.Add(new WorkflowNotification {
+                UserId = request.CustomerId!,
+                RequestId = requestId,
+                Message = input.ShareAll ? "Agency đã chia sẻ toàn bộ các phiên bản phương án tour." : $"Agency đã chia sẻ phương án tour phiên bản {target}."
+            });
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct); return Dto(tour) with {Version=target,Configuration=configuration,Status="completed"};
@@ -142,9 +149,12 @@ public sealed partial class TourService
     public async Task<Tour> BookingSnapshot(Tour identity, CancellationToken ct, int? selectedVersion = null)
     {
         if (identity.IsRequest != true) return identity;
-        var number=selectedVersion??identity.SharedVersion;
+        var shareAll = Configuration(identity).ShareAllVersions;
+        if (!shareAll && selectedVersion.HasValue && selectedVersion != identity.SharedVersion)
+            throw new TourException(409, "Phiên bản này hiện chưa được chia sẻ cho khách.");
+        var number = shareAll ? (selectedVersion ?? identity.SharedVersion) : identity.SharedVersion;
         await ValidateVersionMembers(identity.DesignRequestId!.Value,number??0,ct);
-        var version = await db.TourVersions.AsNoTracking().SingleOrDefaultAsync(v => v.TourId == identity.Id && v.VersionNumber == number && (v.SharedAt != null || v.VersionNumber==identity.SharedVersion), ct)
+        var version = await db.TourVersions.AsNoTracking().SingleOrDefaultAsync(v => v.TourId == identity.Id && v.VersionNumber == number && (shareAll || v.VersionNumber==identity.SharedVersion), ct)
             ?? throw new TourException(409, "Phương án chưa được chia sẻ.");
         return MaterializeSnapshot(identity, version);
     }

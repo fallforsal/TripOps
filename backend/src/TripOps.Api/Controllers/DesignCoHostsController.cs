@@ -1,12 +1,14 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TripOps.Api.Infrastructure;
+using TripOps.Service.Accounts;
 using TripOps.Service.Tours;
 namespace TripOps.Api.Controllers;
 
 [ApiController, Authorize(Roles="agency"), Route("api/v1/agency/tour-design-requests/{id:int}")]
 [Tags("Tour Co-hosting")]
-public sealed class DesignCoHostsController(TourService tours) : ControllerBase
+public sealed class DesignCoHostsController(TourService tours, CloudinaryStorage storage) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     [HttpGet("co-hosts")]
@@ -22,9 +24,9 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     [HttpDelete("co-hosts/{partner}")]
     [EndpointSummary("Lead Agency withdraws a co-host invitation or partnership")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] int? version=null,[FromQuery] bool terminate=false) {
+    public async Task<IActionResult> Remove(int id,string partner,CancellationToken ct,[FromQuery] int? version=null,[FromQuery] bool terminate=false,[FromQuery] string? reason=null) {
         if(terminate)throw new TourException(422,"Chỉ hỗ trợ gỡ đối tác theo phiên bản. Hãy chọn phiên bản cần gỡ.");
-        await tours.RemoveCoHost(Actor,id,partner,ct,version);return NoContent();
+        await tours.RemoveCoHost(Actor,id,partner,ct,version,reason);return NoContent();
     }
     [HttpGet("working-tour")]
     [EndpointSummary("Lead or accepted co-host reads the current private working tour")]
@@ -34,4 +36,13 @@ public sealed class DesignCoHostsController(TourService tours) : ControllerBase
     [HttpPut("segment")]
     [EndpointSummary("Accepted co-host saves its own content and age-price table; day metadata is shared")]
     public async Task<ActionResult<TourDto>> SaveSegment(int id,DesignSegmentInput input,CancellationToken ct) => Ok(await tours.SaveSegment(Actor,id,input,ct));
+    [HttpPut("segment/with-images"), RequestSizeLimit(TourSaveForm.MaxBytes), RequestFormLimits(MultipartBodyLengthLimit=TourSaveForm.MaxBytes)]
+    [EndpointSummary("Accepted co-host saves its own content with uploaded images")]
+    public async Task<ActionResult<TourDto>> SaveSegmentWithImages(int id,[FromForm] TourSaveForm form,CancellationToken ct)
+    {
+        var input=form.Read<DesignSegmentInput>();
+        var uploaded=await form.UploadImages(input.OwnedImages?.Select(x=>x.Url),storage,Actor,ct);
+        var updated=input with {OwnedImages=input.OwnedImages?.Select(x=>x with {Url=uploaded.GetValueOrDefault(x.Url,x.Url)}).ToArray()};
+        return Ok(await tours.SaveSegment(Actor,id,updated,ct));
+    }
 }

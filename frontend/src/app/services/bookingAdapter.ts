@@ -97,6 +97,7 @@ export function fromApiBooking(
 
   // Agency membership is frozen with the booking, independently of the tour's current version.
   const bookedCoHosts= (dto.bookingAgencies || []).map(a=>({companyId:a.agencyId,companyName:a.agencyName,
+    companyLogo: matchedTour?.coHosts?.find(h=>h.companyId===a.agencyId)?.companyLogo || (a.agencyId===dto.agencyId ? matchedTour?.companyLogo : undefined),
     role:a.isHost?"lead" as const:"partner" as const,status:"accepted" as const,assignedSegments:a.stageArea}));
   const isBookedAlliance=!!dto.isPartnerView || new Set(bookedCoHosts.map(h=>h.companyId)).size>1;
   const bookedTour:Tour={...(matchedTour || fallbackTour),coHosts:bookedCoHosts,isCoHosted:isBookedAlliance,

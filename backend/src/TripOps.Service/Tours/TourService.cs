@@ -430,7 +430,8 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         if(request.Status is not (CustomRequestStatus.InProgress or CustomRequestStatus.Closed or CustomRequestStatus.Booked))return [];
         var tour=await db.Tours.AsNoTracking().SingleOrDefaultAsync(t=>t.DesignRequestId==requestId && t.SharedVersion.HasValue && t.Status!=TourStatus.Deleted,ct);
         if(tour==null)return [];
-        var versions=await db.TourVersions.AsNoTracking().Where(v=>v.TourId==tour.Id && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion)).OrderByDescending(v=>v.VersionNumber==tour.SharedVersion).ThenByDescending(v=>v.VersionNumber).ToListAsync(ct);
+        var shareAll = Configuration(tour).ShareAllVersions;
+        var versions=await db.TourVersions.AsNoTracking().Where(v=>v.TourId==tour.Id && (shareAll || v.VersionNumber==tour.SharedVersion)).OrderByDescending(v=>v.VersionNumber==tour.SharedVersion).ThenByDescending(v=>v.VersionNumber).ToListAsync(ct);
         var result=new List<TourDto>();var agency=await AgencyContact(tour.AgencyId,ct);
         foreach(var v in versions) {
             var members=await CoHosts(requestId,ct,v.VersionNumber);

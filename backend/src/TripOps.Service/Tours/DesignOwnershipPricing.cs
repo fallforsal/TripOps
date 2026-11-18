@@ -8,12 +8,36 @@ public sealed partial class TourService
     private static TourConfiguration SingleAgencyConfiguration(TourConfiguration c,string actor) => c with {CoHosts=null,AgencyPricing=null,Timelines=c.Timelines?.Select(d=>d with {
         AgencyId=actor,Activities=d.Activities?.Select(a=>a with {AgencyId=actor}).ToArray(),Meals=d.Meals?.Select(a=>a with {AgencyId=actor}).ToArray(),Accommodations=d.Accommodations?.Select(a=>a with {AgencyId=actor}).ToArray()
     }).ToArray()};
+    private static OwnedTextItem[] LinesToOwned(string? text,string prefix,string owner) =>
+        (text??"").Split('\n',StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select((t,i)=>new OwnedTextItem(t,$"{prefix}-{i}",owner)).ToArray();
+
+    private static OwnedTextItem[] EnsureOwnedText(OwnedTextItem[]? items,string? text,string prefix,string lead) =>
+        items is not null
+            ? items.Select((x,i)=>x with {Id=x.Id??$"{prefix}-{i}",AgencyId=x.AgencyId??lead}).ToArray()
+            : LinesToOwned(text,prefix,lead);
+
+    private static OwnedImageItem[] EnsureOwnedImages(OwnedImageItem[]? items,string[]? urls,string lead) =>
+        items is not null
+            ? items.Select((x,i)=>x with {Id=x.Id??$"img-{i}",AgencyId=x.AgencyId??lead}).ToArray()
+            : (urls??[]).Where(u=>!string.IsNullOrWhiteSpace(u)).Select((u,i)=>new OwnedImageItem(u,$"img-{i}",lead)).ToArray();
+
+    private static string? OwnedToText(OwnedTextItem[]? items) {
+        var lines=(items??[]).Select(x=>x.Text.Trim()).Where(x=>x.Length>0).ToArray();
+        return lines.Length>0 ? string.Join("\n",lines) : null;
+    }
+
     private static TourConfiguration EnsureOwnership(TourConfiguration c,string lead) => c with {
         Timelines=c.Timelines?.Select(d=>d with {
             Activities=d.Activities?.Select((a,i)=>a with {Id=a.Id??$"activity-{d.DayNumber}-{i}",AgencyId=a.AgencyId??d.AgencyId??lead}).ToArray(),
             Meals=d.Meals?.Select((a,i)=>a with {Id=a.Id??$"meal-{d.DayNumber}-{i}",AgencyId=a.AgencyId??d.AgencyId??lead}).ToArray(),
             Accommodations=d.Accommodations?.Select((a,i)=>a with {Id=a.Id??$"hotel-{d.DayNumber}-{i}",AgencyId=a.AgencyId??d.AgencyId??lead}).ToArray()
-        }).ToArray()
+        }).ToArray(),
+        OwnedHighlights=EnsureOwnedText(c.OwnedHighlights,c.Highlights,"hl",lead),
+        OwnedInclusions=EnsureOwnedText(c.OwnedInclusions,c.Inclusions,"inc",lead),
+        OwnedExclusions=EnsureOwnedText(c.OwnedExclusions,c.Exclusions,"exc",lead),
+        OwnedCancellationPolicy=EnsureOwnedText(c.OwnedCancellationPolicy,c.CancellationPolicy,"pol",lead),
+        OwnedImages=EnsureOwnedImages(c.OwnedImages,c.Images,lead)
     };
     private static T[] MergeOwned<T>(T[] old,T[] incoming,string actor,Func<T,string?> id,Func<T,string?> owner,Func<T,string,string,T> stamp)
     {
@@ -44,7 +68,34 @@ public sealed partial class TourService
                 days.Add(day with {AgencyId=null,Activities=activities.Select((a,i)=>a with {OrderIndex=i}).ToArray(),Meals=meals,Accommodations=hotels});
         }
         var prices=MergeSharedPricing(current,input.PricingTiers??[],actor,lead);
-        var result=(actor==lead?input:current) with {Timelines=days.ToArray(),AgencyPricing=prices};
+        var highlights=MergeOwned(current.OwnedHighlights??[],input.OwnedHighlights??(actor==lead?LinesToOwned(input.Highlights,"hl",lead):current.OwnedHighlights??[]),actor,x=>x.Id,x=>x.AgencyId,(x,id,agency)=>x with {Id=id,AgencyId=agency});
+        var inclusions=MergeOwned(current.OwnedInclusions??[],input.OwnedInclusions??(actor==lead?LinesToOwned(input.Inclusions,"inc",lead):current.OwnedInclusions??[]),actor,x=>x.Id,x=>x.AgencyId,(x,id,agency)=>x with {Id=id,AgencyId=agency});
+        var exclusions=MergeOwned(current.OwnedExclusions??[],input.OwnedExclusions??(actor==lead?LinesToOwned(input.Exclusions,"exc",lead):current.OwnedExclusions??[]),actor,x=>x.Id,x=>x.AgencyId,(x,id,agency)=>x with {Id=id,AgencyId=agency});
+        var policies=MergeOwned(current.OwnedCancellationPolicy??[],input.OwnedCancellationPolicy??(actor==lead?LinesToOwned(input.CancellationPolicy,"pol",lead):current.OwnedCancellationPolicy??[]),actor,x=>x.Id,x=>x.AgencyId,(x,id,agency)=>x with {Id=id,AgencyId=agency});
+        var rawInImages=input.OwnedImages??(actor==lead?(input.Images??[]).Where(u=>!string.IsNullOrWhiteSpace(u)).Select((u,i)=>new OwnedImageItem(u,current.OwnedImages?.FirstOrDefault(o=>o.Url==u)?.Id??$"img-{i}",current.OwnedImages?.FirstOrDefault(o=>o.Url==u)?.AgencyId??lead)).ToArray():current.OwnedImages??[]);
+        var mergedImages=MergeOwned(current.OwnedImages??[],rawInImages,actor,x=>x.Id,x=>x.AgencyId,(x,id,agency)=>x with {Id=id,AgencyId=agency});
+        if(actor==lead && rawInImages.Length>0) {
+            var byId=mergedImages.ToDictionary(x=>x.Id!);
+            var ordered=new List<OwnedImageItem>();
+            foreach(var item in rawInImages) if(item.Id!=null && byId.Remove(item.Id,out var resolved)) ordered.Add(resolved);
+            ordered.AddRange(byId.Values);
+            mergedImages=ordered.ToArray();
+        }
+        var result=(actor==lead?input:current) with {
+            Timelines=days.ToArray(),
+            AgencyPricing=prices,
+            OwnedHighlights=highlights,
+            Highlights=OwnedToText(highlights),
+            OwnedInclusions=inclusions,
+            Inclusions=OwnedToText(inclusions),
+            OwnedExclusions=exclusions,
+            Exclusions=OwnedToText(exclusions),
+            OwnedCancellationPolicy=policies,
+            CancellationPolicy=OwnedToText(policies),
+            OwnedImages=mergedImages,
+            Images=mergedImages.Select(x=>x.Url).ToArray(),
+            ShareAllVersions=original.ShareAllVersions
+        };
         var lastNight=days.SelectMany(d=>(d.Accommodations??[]).Select(h=>d.DayNumber+h.NightsCount-1)).DefaultIfEmpty(0).Max();
         result=result with {DurationNights=Math.Max(result.DurationNights,lastNight),DurationDays=Math.Max(result.DurationDays,Math.Max(days.Select(d=>d.DayNumber).DefaultIfEmpty(1).Max(),lastNight+1))};
         foreach(var ids in new[]{days.SelectMany(d=>d.Activities??[]).Select(a=>a.Id),days.SelectMany(d=>d.Meals??[]).Select(a=>a.Id),days.SelectMany(d=>d.Accommodations??[]).Select(a=>a.Id)})

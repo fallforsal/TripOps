@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Building2,
   PenSquare,
+  Handshake,
   Compass,
   BookUser,
   HandCoins,
@@ -27,6 +28,7 @@ interface AgencyLayoutProps {
   onNavigate: (section: string) => void;
   company: TourCompany;
   currentUser: User;
+  customRequestsBadgeCount?: number;
   coHostingBadgeCount?: number;
   onLogout?: () => void;
 }
@@ -37,6 +39,7 @@ export function AgencyLayout({
   onNavigate,
   company,
   currentUser,
+  customRequestsBadgeCount,
   coHostingBadgeCount,
   onLogout,
 }: AgencyLayoutProps) {
@@ -53,7 +56,8 @@ export function AgencyLayout({
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
     { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
-    { id: "custom-requests", label: "Thiết kế tour & Liên minh", icon: PenSquare, badge: coHostingBadgeCount },
+    { id: "custom-requests", label: "Thiết kế tour", icon: PenSquare, badge: customRequestsBadgeCount },
+    { id: "co-hosting", label: "Lời mời đối tác", icon: Handshake, badge: coHostingBadgeCount },
     { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 
@@ -133,12 +137,19 @@ export function AgencyLayout({
                   isActive ? "text-white" : "text-[#475569] group-hover:text-[#075985]"
                 }`}
               />
+              {collapsed && item.badge !== undefined && item.badge > 0 && (
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+              )}
               {!collapsed && (
-                <div className="flex-1 flex items-center justify-between min-w-0">
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                   <span data-slot="sidebar-label" className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#EA580C] text-white">
-                      {item.badge}
+                    <span
+                      className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none tabular-nums ${
+                        isActive ? "bg-white text-[#075985]" : "bg-rose-500 text-white shadow-2xs"
+                      }`}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
                 </div>

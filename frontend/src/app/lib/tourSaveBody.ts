@@ -2,8 +2,10 @@ import type { Tour } from "@/app/types";
 
 export function tourSaveBody<T>(payload:T, tour:Partial<Tour>): string | FormData {
   const files=tour.pendingTourImages || [];
-  const images=(payload as {configuration?:{images?:string[]};images?:string[]}).configuration?.images
-    ?? (payload as {images?:string[]}).images ?? [];
+  const images=(payload as {configuration?:{images?:string[];ownedImages?:{url:string}[]};images?:string[];ownedImages?:{url:string}[]}).configuration?.images
+    ?? (payload as {images?:string[]}).images
+    ?? (payload as {ownedImages?:{url:string}[]}).ownedImages?.map(x=>x.url)
+    ?? [];
   const local=images.filter(url=>url.startsWith("blob:") || url.startsWith("data:"));
   if(!local.length)return JSON.stringify(payload);
   const form=new FormData();

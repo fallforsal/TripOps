@@ -10,5 +10,5 @@ export function mergeMessages(old: ChatMessage[], rows: ChatMessage[]): ChatMess
 }
 export function chatTime(value: string | null): string {
   if (!value) return '';
-  return new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`).toLocaleString('vi-VN');
+  return new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
