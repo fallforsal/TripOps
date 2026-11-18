@@ -2366,17 +2366,18 @@ export function AgencyBookingDetailPage({
 
                                   // Determine attraction check-in status
                                   const hasCheckins = locCheckins.length > 0;
-                                  const isAllCheckedIn = hasCheckins && locCheckins.every((c) => c.attendanceStatus === "CHECKED_IN");
-                                  const hasAnyCheckedIn = locCheckins.some((c) => c.attendanceStatus === "CHECKED_IN");
+                                  const isAllCheckedOut = hasCheckins && locCheckins.every((c) => c.attendanceStatus === "CHECKED_OUT");
+                                  const hasAnyVisit = locCheckins.some((c) =>
+                                    c.attendanceStatus === "CHECKED_IN" || c.attendanceStatus === "CHECKED_OUT");
                                   const isAllSkipped = hasCheckins && locCheckins.every((c) => c.attendanceStatus === "SKIPPED");
-                                  const isPartial = hasAnyCheckedIn && !isAllCheckedIn;
+                                  const isPartial = hasAnyVisit && !isAllCheckedOut;
 
                                   return (
                                     <div key={loc.id || lIdx} className="relative group">
                                       {/* Timeline Node on the line */}
                                       <div
                                         className={`absolute -left-[70px] sm:-left-[78px] top-0.5 w-14 h-7 rounded-lg flex items-center justify-center text-xs font-bold tabular-nums ring-4 ring-white transition-all shadow-xs ${
-                                          isAllCheckedIn
+                                          isAllCheckedOut
                                             ? "bg-emerald-500 text-white shadow-emerald-200"
                                             : isPartial
                                             ? "bg-blue-500 text-white shadow-blue-200"
@@ -2385,8 +2386,8 @@ export function AgencyBookingDetailPage({
                                             : "bg-white border-2 border-slate-300 text-slate-500"
                                         }`}
                                         title={
-                                          isAllCheckedIn
-                                            ? "Đã check-in đầy đủ"
+                                          isAllCheckedOut
+                                            ? "Đã check-out đầy đủ"
                                             : isPartial
                                             ? "Đang check-in (một số HDV đã đến)"
                                             : isAllSkipped
