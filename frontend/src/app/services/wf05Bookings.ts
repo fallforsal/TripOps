@@ -139,6 +139,10 @@ export interface BookingDto {
       changeReason?: string;
       agencyId?:string;
       photoUrls?: string[];
+      checkinNote?: string;
+      checkoutPhotoUrls?: string[];
+      checkoutNote?: string;
+      checkoutAt?: string;
     }[];
     meals: {
       id: number;
