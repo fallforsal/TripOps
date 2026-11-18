@@ -26,5 +26,7 @@ jobs:
         run: npm ci
       - name: TypeScript validation
         run: npm run typecheck
+      - name: Frontend regression tests
+        run: npm test
       - name: Vite production build
         run: npm run build
