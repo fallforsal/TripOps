@@ -96,7 +96,9 @@ public sealed record BookingDto(
     bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
-    IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null);
+    IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null,
+    DateTime? CheckoutAt = null, string? CheckoutNote = null,
+    IReadOnlyList<string>? CheckoutPhotoUrls = null);
 
 public sealed record BookingAgencyDto(int Id,string AgencyId,string AgencyName,bool IsHost,decimal OriginalAmount,decimal FinalAmount,decimal NetPayout,
     string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0,
