@@ -86,7 +86,7 @@ export interface BookingDto {
   isPartnerView?: boolean;
   agencyDirectory?:{agencyId:string;agencyName:string}[];
   bookingAgencies?:BookingAgencyDto[];
-  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string;photoUrls?:string[]}[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string;photoUrls?:string[];checkoutAt?:string;checkoutNote?:string;checkoutPhotoUrls?:string[]}[];
   id: number;
   bookingCode: string;
   customerId: string;
