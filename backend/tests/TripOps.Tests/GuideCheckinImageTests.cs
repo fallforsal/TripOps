@@ -78,6 +78,16 @@ public sealed partial class BookingFlowTests
         Assert.Equal(second, detail.NextLocationCheckInId);
         Assert.Equal("CheckedOut", detail.SnapshotDays![0].Locations[0].AttendanceStatus);
         Assert.Single(detail.SnapshotDays[0].Locations[0].CheckoutPhotoUrls!);
+        var agencyDetail = (await agency.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/agency/bookings/{bookingId}"))!;
+        var agencyCheckin = Assert.Single(agencyDetail.AttractionCheckins!,
+            c => c.LocationId == first);
+        Assert.Equal("CheckedOut", agencyCheckin.Status);
+        Assert.NotNull(agencyCheckin.CheckedAt);
+        Assert.NotNull(agencyCheckin.CheckoutAt);
+        Assert.Single(agencyCheckin.PhotoUrls!);
+        Assert.Single(agencyCheckin.CheckoutPhotoUrls!);
+        var checkoutPhotos = agencyCheckin.CheckoutPhotoUrls!;
         using (var form = PhotoForm(1))
             Assert.Equal(HttpStatusCode.Conflict,
                 (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
@@ -95,7 +105,7 @@ public sealed partial class BookingFlowTests
         var files = new List<string>();
         try
         {
-            foreach (var path in photos)
+            foreach (var path in photos.Concat(checkoutPhotos))
             {
                 Assert.Equal(HttpStatusCode.OK, (await guide.GetAsync(path)).StatusCode);
                 Assert.Equal(HttpStatusCode.OK, (await agency.GetAsync(path)).StatusCode);
