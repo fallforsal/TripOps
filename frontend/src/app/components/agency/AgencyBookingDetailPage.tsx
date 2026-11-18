@@ -4286,7 +4286,7 @@ export function AgencyBookingDetailPage({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <Camera className="w-5 h-5 text-emerald-600" />
-              Minh chứng Check-in Thực tế
+              Minh chứng Check-in / Check-out
             </DialogTitle>
           </DialogHeader>
 
