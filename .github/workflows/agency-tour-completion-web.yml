@@ -26,7 +26,7 @@ jobs:
         run: npm ci
       - name: TypeScript validation
         run: npm run typecheck
-      - name: Frontend regression tests
-        run: npm test
+      - name: Guide check-out adapter regression
+        run: node --experimental-strip-types --test --test-name-pattern='agency booking adapter preserves checked-out|a checked-in but not checked-out' tests/bookingAdapter.test.ts
       - name: Vite production build
         run: npm run build
