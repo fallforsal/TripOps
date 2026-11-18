@@ -2214,10 +2214,11 @@ export function AgencyBookingDetailPage({
               {/* VIEW 1: LIVE CHECK-IN TRACKER */}
               {itinerarySubTab === "live_checkin" && (() => {
                 const totalCheckins = attractionCheckins.length;
+                const checkedOutCount = attractionCheckins.filter((c) => c.attendanceStatus === "CHECKED_OUT").length;
                 const checkedInCount = attractionCheckins.filter((c) => c.attendanceStatus === "CHECKED_IN").length;
                 const pendingCount = attractionCheckins.filter((c) => c.attendanceStatus === "PENDING").length;
                 const skippedCount = attractionCheckins.filter((c) => c.attendanceStatus === "SKIPPED").length;
-                const percentDone = totalCheckins > 0 ? Math.round((checkedInCount / totalCheckins) * 100) : 0;
+                const percentDone = totalCheckins > 0 ? Math.round((checkedOutCount / totalCheckins) * 100) : 0;
 
                 // Unique guides present in attractionCheckins
                 const uniqueCheckinGuides = Array.from(
@@ -2240,6 +2241,28 @@ export function AgencyBookingDetailPage({
                         <SlidersHorizontal className="w-4 h-4 text-[#F97316]" />
                         Bộ lọc theo Dõi Tiến Độ:
                       </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-gray-600">
+                          <span className="font-semibold text-emerald-700">Đã check-out: {checkedOutCount}/{totalCheckins} ({percentDone}%)</span>
+                          <span>Đã check-in, chưa check-out: {checkedInCount}</span>
+                          <span>Chưa check-in: {pendingCount}</span>
+                          {skippedCount > 0 && <span>Đã bỏ qua (cũ): {skippedCount}</span>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void refreshLiveCheckins(true)}
+                          disabled={refreshingCheckins}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${refreshingCheckins ? "animate-spin" : ""}`} />
+                          {refreshingCheckins ? "Đang cập nhật..." : "Làm mới tiến độ"}
+                        </button>
+                      </div>
+                      {checkinRefreshError && (
+                        <p role="alert" className="text-[11px] text-rose-700">
+                          Không đồng bộ được tiến độ: {checkinRefreshError}
+                        </p>
+                      )}
 
                       {/* Filter by Tour Guide (STRICTLY NO BUS / XE!) */}
                       <div className="flex items-center gap-2 flex-wrap text-xs">
