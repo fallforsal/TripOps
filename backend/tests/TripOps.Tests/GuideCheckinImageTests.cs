@@ -51,7 +51,7 @@ public sealed partial class BookingFlowTests
             Assert.Equal(HttpStatusCode.Conflict,
                 (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
         using (var form = new MultipartFormDataContent())
-            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            Assert.Equal(HttpStatusCode.BadRequest,
                 (await guide.PostAsync($"{prefix}/{first}/check-out-with-images", form)).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await guide.PostAsJsonAsync($"{prefix}/{first}/check-in",
