@@ -2517,6 +2517,7 @@ export function AgencyBookingDetailPage({
                                             <>
                                               {locCheckins.map((chk) => {
                                                 const isChecked = chk.attendanceStatus === "CHECKED_IN";
+                                                const isCheckedOut = chk.attendanceStatus === "CHECKED_OUT";
                                                 const isSkip = chk.attendanceStatus === "SKIPPED";
                                                 const isPending = chk.attendanceStatus === "PENDING";
 
@@ -2528,8 +2529,10 @@ export function AgencyBookingDetailPage({
                                                     key={chk.id}
                                                     title={`HDV: ${chk.guideName}`}
                                                     className={`inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full text-xs border transition-all ${
-                                                      isChecked
+                                                      isCheckedOut
                                                         ? "bg-emerald-50/90 border-emerald-200 text-emerald-900 shadow-2xs"
+                                                        : isChecked
+                                                        ? "bg-sky-50 border-sky-200 text-sky-900 shadow-2xs"
                                                         : isSkip
                                                         ? "bg-rose-50/90 border-rose-200 text-rose-900"
                                                         : "bg-slate-50 border-slate-200 text-slate-700"
@@ -2553,10 +2556,15 @@ export function AgencyBookingDetailPage({
                                                     )}
 
                                                     {/* Badge trạng thái */}
-                                                    {isChecked ? (
+                                                    {isCheckedOut ? (
                                                       <span className="inline-flex items-center gap-1 font-bold text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                                        <Check className="w-3 h-3 text-emerald-600" />
-                                                        Đã check-in {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
+                                                        <CheckCheck className="w-3 h-3 text-emerald-600" />
+                                                        Đã check-out {chk.checkoutAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkoutAt))})` : ""}
+                                                      </span>
+                                                    ) : isChecked ? (
+                                                      <span className="inline-flex items-center gap-1 font-bold text-[11px] text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                                                        <Check className="w-3 h-3 text-sky-600" />
+                                                        Đã check-in · Chưa check-out {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
                                                       </span>
                                                     ) : isSkip ? (
                                                       <span
@@ -2574,12 +2582,12 @@ export function AgencyBookingDetailPage({
 
                                                     {chk.notes && (
                                                       <span className="text-[11px] text-slate-600 italic">
-                                                        · Ghi chú: {chk.notes}
+                                                        · Ghi chú check-in: {chk.notes}
                                                       </span>
                                                     )}
 
                                                     {/* Nút xem ảnh minh chứng (chỉ khi HDV đã upload ảnh từ app) */}
-                                                    {(isChecked || isSkip) && (chk.photoProofUrls?.length || chk.photoProofUrl) && (
+                                                    {(isChecked || isCheckedOut) && (chk.photoProofUrls?.length || chk.photoProofUrl) && (
                                                       <button
                                                         type="button"
                                                         onClick={() => {
@@ -2598,7 +2606,35 @@ export function AgencyBookingDetailPage({
                                                         title="Xem ảnh xác nhận check-in thực tế do HDV gửi lên"
                                                       >
                                                         <Camera className="w-3 h-3" />
-                                                        Xem ảnh{(chk.photoProofUrls?.length ?? 0) > 1 ? ` (${chk.photoProofUrls!.length})` : ""}
+                                                        Ảnh check-in{(chk.photoProofUrls?.length ?? 0) > 1 ? ` (${chk.photoProofUrls!.length})` : ""}
+                                                      </button>
+                                                    )}
+
+                                                    {isCheckedOut && chk.checkoutNote && (
+                                                      <span className="text-[11px] text-slate-600 italic">
+                                                        · Ghi chú check-out: {chk.checkoutNote}
+                                                      </span>
+                                                    )}
+                                                    {isCheckedOut && (chk.checkoutPhotoProofUrls?.length ?? 0) > 0 && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          const images = chk.checkoutPhotoProofUrls!;
+                                                          setProofPreviewData({
+                                                            title: `Minh chứng check-out: ${chk.locationName}`,
+                                                            image: images[0],
+                                                            images,
+                                                            time: chk.checkoutAt ? formatVietnamDateTime(providerResponseInstant(chk.checkoutAt)) : undefined,
+                                                            note: chk.checkoutNote,
+                                                            guideName: chk.guideName,
+                                                          });
+                                                          setPreviewProofModalOpen(true);
+                                                        }}
+                                                        className="text-emerald-800 hover:text-emerald-900 text-[11px] font-semibold underline flex items-center gap-0.5 ml-0.5"
+                                                        title="Xem ảnh xác nhận check-out do HDV gửi"
+                                                      >
+                                                        <Camera className="w-3 h-3" />
+                                                        Ảnh check-out{chk.checkoutPhotoProofUrls!.length > 1 ? ` (${chk.checkoutPhotoProofUrls!.length})` : ""}
                                                       </button>
                                                     )}
 
