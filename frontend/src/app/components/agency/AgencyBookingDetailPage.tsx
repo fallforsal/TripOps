@@ -713,6 +713,42 @@ export function AgencyBookingDetailPage({
   const [trackerGuideFilter, setTrackerGuideFilter] = useState<string>("all");
   const [trackerDayFilter, setTrackerDayFilter] = useState<string>("all");
 
+  // Keep the live tracker in sync while this tab is visible, without restarting
+  // polling every time the parent supplies a new onBookingChanged callback.
+  const [refreshingCheckins, setRefreshingCheckins] = useState(false);
+  const [checkinRefreshError, setCheckinRefreshError] = useState<string | null>(null);
+  const checkinRequestInFlight = useRef(false);
+  const bookingChangedRef = useRef(onBookingChanged);
+  bookingChangedRef.current = onBookingChanged;
+  const refreshLiveCheckins = useCallback(async (showToast = false) => {
+    if (checkinRequestInFlight.current) return;
+    checkinRequestInFlight.current = true;
+    setRefreshingCheckins(true);
+    try {
+      const dto = await http<import("@/app/services/wf05Bookings").BookingDto>(
+        `/agency/bookings/${booking.id}`,
+      );
+      bookingChangedRef.current?.(dto);
+      setCheckinRefreshError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể tải tiến độ mới nhất.";
+      setCheckinRefreshError(message);
+      if (showToast) toast.error(message);
+    } finally {
+      checkinRequestInFlight.current = false;
+      setRefreshingCheckins(false);
+    }
+  }, [booking.id]);
+
+  useEffect(() => {
+    if (itinerarySubTab !== "live_checkin") return;
+    void refreshLiveCheckins();
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void refreshLiveCheckins();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [itinerarySubTab, refreshLiveCheckins]);
+
   // ----------------------------------------------------
   // PROOF IMAGE PREVIEW MODAL
   // ----------------------------------------------------
@@ -1974,7 +2010,7 @@ export function AgencyBookingDetailPage({
                     <Navigation className="w-3.5 h-3.5 text-[#F97316]" />
                     Tiến độ Check-in Trực tiếp
                     <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-[#F97316]/15 text-purple-800">
-                      {attractionCheckins.filter((c) => c.attendanceStatus === "CHECKED_IN").length}/{attractionCheckins.length}
+                      {attractionCheckins.filter((c) => c.attendanceStatus === "CHECKED_OUT").length}/{attractionCheckins.length}
                     </span>
                   </button>
                   <button
