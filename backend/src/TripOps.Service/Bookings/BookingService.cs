@@ -288,10 +288,20 @@ public sealed partial class BookingService(BookingRepository repository, Account
 
         var snapshots = await quotations.SelectionSnapshots(id, ct);
         var dto=await quotations.AllianceDetails(booking,ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name, snapshots),isAgency||isAdmin,ct);
-        var checkinPhotos = booking.Timelines.SelectMany(d => d.Attractions).SelectMany(a => a.Checkins)
-            .ToDictionary(c => c.Id, c => (IReadOnlyList<string>)GuideCheckinPhotoRules.Decode(c.PhotoUrl).Select(url => photoStorage.DeliveryUrl(url)!).ToArray());
+        var proofPhotos = booking.Timelines.SelectMany(d => d.Attractions).SelectMany(a => a.Checkins)
+            .ToDictionary(c => c.Id, c => (
+                Checkin: (IReadOnlyList<string>)GuideCheckinPhotoRules.Decode(c.PhotoUrl)
+                    .Select(url => photoStorage.DeliveryUrl(url)!).ToArray(),
+                Checkout: (IReadOnlyList<string>)GuideCheckinPhotoRules.Decode(c.CheckoutPhotoUrl)
+                    .Select(url => photoStorage.DeliveryUrl(url)!).ToArray()));
         if (dto.AttractionCheckins is { Count: > 0 })
-            dto = dto with { AttractionCheckins = dto.AttractionCheckins.Select(c => checkinPhotos.TryGetValue(c.Id, out var urls) ? c with { PhotoUrls = urls } : c).ToArray() };
+            dto = dto with
+            {
+                AttractionCheckins = dto.AttractionCheckins.Select(c =>
+                    proofPhotos.TryGetValue(c.Id, out var photos)
+                        ? c with { PhotoUrls = photos.Checkin, CheckoutPhotoUrls = photos.Checkout }
+                        : c).ToArray()
+            };
         if(isAgency && booking.Tour!.AgencyId!=actorId && !isAdmin)
             return BookingAlliance.PartnerView(booking,dto,actorId);
         if(isGuide && !isAgency && !isAdmin) {
