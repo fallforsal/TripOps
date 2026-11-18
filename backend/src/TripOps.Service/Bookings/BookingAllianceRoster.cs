@@ -73,7 +73,8 @@ public sealed partial class BookingQuotationService
                 }).ToArray()
             }).ToArray();
         }
-        return dto with {SnapshotHotels=hotels,SnapshotDays=days,BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note,GuideAvatar:c.Guide?.Avatar))).ToArray()};
+        return dto with {SnapshotHotels=hotels,SnapshotDays=days,BookingAgencies=agencies,AgencyDirectory=agencies.Select(a=>new BookingAgencyIdentityDto(a.AgencyId,a.AgencyName)).ToArray(),AttractionCheckins=b.Timelines.SelectMany(d=>d.Attractions).SelectMany(a=>a.Checkins.Select(c=>new BookingCheckinDto(c.Id,a.Id,c.AgencyId,c.GuideId,c.Guide?.Name??"HDV",c.AttendanceStatus?.ToString()??"Pending",c.CheckinTime,c.Note,GuideAvatar:c.Guide?.Avatar,
+                    CheckoutAt:c.CheckoutTime,CheckoutNote:c.CheckoutNote))).ToArray()};
     }
 
     private void NotifyAgencies(Booking b,string message,string[]? affected=null)
