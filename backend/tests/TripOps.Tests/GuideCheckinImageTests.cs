@@ -85,7 +85,7 @@ public sealed partial class BookingFlowTests
         Assert.Equal("CheckedOut", agencyCheckin.Status);
         Assert.NotNull(agencyCheckin.CheckedAt);
         Assert.NotNull(agencyCheckin.CheckoutAt);
-        Assert.Single(agencyCheckin.PhotoUrls!);
+        Assert.Equal(2, agencyCheckin.PhotoUrls!.Count);
         Assert.Single(agencyCheckin.CheckoutPhotoUrls!);
         var checkoutPhotos = agencyCheckin.CheckoutPhotoUrls!;
         using (var form = PhotoForm(1))
