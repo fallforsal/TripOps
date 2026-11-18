@@ -316,3 +316,51 @@ test("assigned guides and check-in badges preserve avatars across reloads", () =
   assert.equal(booking.attractionCheckins?.[0].guideAvatar, assigned.guideAvatar);
   assert.equal(booking.attractionCheckins?.[1].guideAvatar, "/api/v1/files/avatars/b.jpg");
 });
+
+
+test("agency booking adapter preserves checked-out status, time and separate photo proofs", () => {
+  const booking = fromApiBooking({
+    ...dto,
+    snapshotDays: [{
+      id: 90, dayNumber: 1, title: "Đà Lạt", meals: [],
+      locations: [{
+        id: 501, name: "Hồ Xuân Hương", attendanceStatus: "CheckedOut",
+        photoUrls: ["/api/v1/files/guide-checkins/guide1/in.jpg"],
+        checkoutPhotoUrls: ["/api/v1/files/guide-checkins/guide1/out.jpg"],
+        checkoutAt: "2026-11-18T06:00:00Z",
+      }],
+    }],
+    attractionCheckins: [{
+      id: 60, locationId: 501, agencyId: "agency", guideId: "guide1",
+      guideName: "Hướng dẫn viên", status: "CheckedOut",
+      checkedAt: "2026-11-18T05:00:00Z",
+      checkoutAt: "2026-11-18T06:00:00Z",
+      note: "Đã đến", checkoutNote: "Đã rời điểm",
+    }],
+  });
+  const proof = booking.attractionCheckins?.[0];
+  assert.equal(proof?.attendanceStatus, "CHECKED_OUT");
+  assert.equal(proof?.checkedAt, "2026-11-18T05:00:00Z");
+  assert.equal(proof?.checkoutAt, "2026-11-18T06:00:00Z");
+  assert.equal(proof?.checkoutNote, "Đã rời điểm");
+  assert.equal(proof?.photoProofUrls?.[0], "/api/v1/files/guide-checkins/guide1/in.jpg");
+  assert.equal(proof?.checkoutPhotoProofUrls?.[0], "/api/v1/files/guide-checkins/guide1/out.jpg");
+  assert.equal(booking.tour.itinerary[0].locations[0].checkedIn, true);
+});
+
+test("a checked-in but not checked-out visit remains active rather than completed", () => {
+  const booking = fromApiBooking({
+    ...dto,
+    snapshotDays: [{
+      id: 90, dayNumber: 1, title: "Đà Lạt", meals: [],
+      locations: [{ id: 501, name: "Hồ Xuân Hương", attendanceStatus: "CheckedIn" }],
+    }],
+    attractionCheckins: [{
+      id: 60, locationId: 501, agencyId: "agency", guideId: "guide1",
+      guideName: "Hướng dẫn viên", status: "CheckedIn",
+    }],
+  });
+  assert.equal(booking.attractionCheckins?.[0].attendanceStatus, "CHECKED_IN");
+  assert.equal(booking.attractionCheckins?.[0].checkoutAt, undefined);
+  assert.equal(booking.tour.itinerary[0].locations[0].checkedIn, true);
+});
