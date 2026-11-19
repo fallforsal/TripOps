@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery)
+public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery, Contracts.ContractTemplateService contractTemplates)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -477,7 +477,8 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct));
+        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct),
+            Contracts.CancellationPolicyDto.Of(await contractTemplates.TermsFor(tour.AgencyId, ct)));
     }
     internal async Task<TourConfiguration> EnrichAgencyLogos(TourConfiguration c,CancellationToken ct) {
         if(c.CoHosts is not {Length:>0})return c;

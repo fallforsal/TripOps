@@ -21,7 +21,8 @@ public sealed record ContractData(
     IReadOnlyList<(string Name, string? Tier, decimal? Price)> Participants,
     IReadOnlyList<ContractDay> Days,
     decimal TotalAmount,
-    IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule);
+    IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule,
+    Contracts.ContractTerms? Terms = null);
 
 /// <summary>Chữ ký trực tuyến của Bên B (ảnh PNG khách vẽ) và thông tin xác thực ghi vào bản đã ký.</summary>
 public sealed record ContractSignature(byte[] Png, DateTime SignedAtVietnam, string MaskedEmail, string SessionRef);
@@ -48,7 +49,10 @@ public static class ContractPdf
     private static string Date(DateTime value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     private static string DateTimeText(DateTime value) => value.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    public static byte[] Generate(ContractData d, ContractSignature? signature = null) => Document.Create(document =>
+    public static byte[] Generate(ContractData d, ContractSignature? signature = null)
+    {
+        var terms = d.Terms ?? Contracts.ContractTerms.Default;
+        return Document.Create(document =>
     {
         document.Page(page =>
         {
@@ -146,18 +150,14 @@ public static class ContractPdf
                     cancellation.Item().Text(t =>
                     {
                         t.Span("a) Bên B hủy. ").Bold();
-                        t.Span("Phí hủy tính trên tổng giá trị tour, theo số ngày còn lại trước ngày khởi hành lúc gửi yêu cầu. " +
+                        t.Span($"Phí hủy theo chính sách hủy của {(terms.Equals(Contracts.ContractTerms.Default) ? "TripOps" : "Bên A")}, tính trên tổng giá trị tour, " +
+                            "theo số ngày còn lại trước ngày khởi hành lúc gửi yêu cầu. " +
                             "Miễn phí (0%) nếu gửi trong 72 giờ sau khi thanh toán và còn từ 15 ngày trở lên.");
                     });
-                    Table(cancellation, ["Thời điểm hủy trước ngày khởi hành", "Phí hủy (% tổng giá trị tour)"], [3, 2], new[]
-                    {
-                        new[] { "Từ 30 ngày trở lên", "0%" },
-                        new[] { "Từ 15 đến 29 ngày", "25%" },
-                        new[] { "Từ 8 đến 14 ngày", "50%" },
-                        new[] { "Từ 3 đến 7 ngày", "75%" },
-                        new[] { "Từ 1 đến 2 ngày", "90%" },
-                        new[] { "Ngày khởi hành hoặc không tham gia", "100%" }
-                    }, alignRightLast: true);
+                    Table(cancellation, ["Thời điểm hủy trước ngày khởi hành", "Phí hủy (% tổng giá trị tour)"], [3, 2],
+                        terms.TableRows().Select(r => new[] { r.Range, r.Fee }).ToArray(), alignRightLast: true);
+                    if (terms.CancellationNote is { } note)
+                        cancellation.Item().Text(t => { t.Span("Ghi chú của Bên A: ").Bold(); t.Span(note); });
                     cancellation.Item().Text(t =>
                     {
                         t.Span("Số tiền hoàn = Số tiền đã thanh toán − Phí hủy").Bold();
@@ -166,7 +166,7 @@ public static class ContractPdf
                 });
                 Lettered(col, "b) Bên A hủy tour:", "Bên B được hoàn 100% số tiền đã thanh toán.");
                 Lettered(col, "c) Bên B không thanh toán đủ đúng hạn:", "Bên A có quyền hủy hợp đồng và Bên B mất số tiền đã thanh toán.");
-                Lettered(col, "d)", "Hợp đồng chỉ chấm dứt khi Quản trị viên TripOps duyệt yêu cầu hủy. Tiền hoàn chuyển vào tài khoản Bên B khai báo trong 7 ngày làm việc kể từ khi duyệt.");
+                Lettered(col, "d)", "Hợp đồng chấm dứt ngay khi yêu cầu hủy được gửi trên TripOps. Tiền hoàn chuyển vào tài khoản ngân hàng Bên B khai báo trong hồ sơ trong 7 ngày làm việc.");
 
                 Section(col, "ĐIỀU 5. THAY ĐỔI DỊCH VỤ, BẤT KHẢ KHÁNG, BẢO HIỂM");
                 Numbered(col, [
@@ -180,10 +180,18 @@ public static class ContractPdf
                 Bulleted(col, "Bên B:", "cung cấp đúng thông tin từng thành viên; thanh toán đúng hạn; phổ biến hợp đồng cho cả đoàn; có mặt đúng giờ tập trung; tuân thủ hướng dẫn của hướng dẫn viên.");
                 Bulleted(col, "Trẻ em", "đi cùng người giám hộ có tên trong danh sách đoàn.");
 
+                if (terms.AdditionalTerms is { } extra)
+                {
+                    // Điều khoản riêng do Agency soạn trong mẫu hợp đồng; các điều khác giữ format chung.
+                    Section(col, "ĐIỀU 7. ĐIỀU KHOẢN BỔ SUNG CỦA BÊN A");
+                    foreach (var line in extra.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
+                        col.Item().Text(line);
+                }
+
                 col.Item().ShowEntire().Column(closing =>
                 {
                     closing.Spacing(6);
-                    Section(closing, "ĐIỀU 7. KHIẾU NẠI VÀ HIỆU LỰC");
+                    Section(closing, $"ĐIỀU {(terms.AdditionalTerms is null ? 7 : 8)}. KHIẾU NẠI VÀ HIỆU LỰC");
                     Numbered(closing, [
                         "Bên B gửi khiếu nại về chuyến đi trên TripOps trong 1 ngày sau khi tour kết thúc. Quản trị viên TripOps kết luận khiếu nại và báo kết quả cho các bên.",
                         "Tranh chấp giải quyết bằng thương lượng; không thành thì đưa ra Tòa án có thẩm quyền.",
@@ -243,6 +251,7 @@ public static class ContractPdf
             });
         });
     }).GeneratePdf();
+    }
 
     private static string? Join(string? first, string? second) =>
         string.Join(" · ", new[] { first, second }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } text ? text : null;

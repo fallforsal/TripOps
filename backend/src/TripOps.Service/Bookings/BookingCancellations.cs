@@ -33,7 +33,7 @@ public sealed partial class BookingService
         if (booking.CustomerId != customerId)
             throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
         EnsureCancellable(booking);
-        return CustomerQuote(booking, UtcNow);
+        return CustomerQuote(booking, UtcNow) with { Policy = Contracts.CancellationPolicyDto.Of(Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot)) };
     }
 
     public async Task<CancellationQuoteDto> AgencyCancellationQuote(string agencyId, int id, CancellationToken ct)
@@ -42,7 +42,7 @@ public sealed partial class BookingService
         if (booking.Tour?.AgencyId != agencyId)
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền hủy đơn này.");
         EnsureCancellable(booking);
-        return AgencyQuote(booking, UtcNow);
+        return AgencyQuote(booking, UtcNow) with { Policy = Contracts.CancellationPolicyDto.Of(Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot)) };
     }
 
     private CancellationQuoteDto CustomerQuote(Booking booking, DateTime now)
@@ -53,7 +53,8 @@ public sealed partial class BookingService
             return new(booking.Id, "immediate", days, false, 0, booking.TotalAmount, 0, 0, 0,
                 "Bạn chưa thanh toán khoản nào nên có thể hủy ngay, không mất phí và không cần Admin duyệt.");
         var coolingOff = CancellationPolicy.InCoolingOff(FirstPaidAt(booking), days, now);
-        var percent = CancellationPolicy.FeePercent(days, coolingOff);
+        // Phí theo chính sách hủy trong hợp đồng của đơn (Agency chủ trì soạn; đơn cũ không có thì dùng mặc định TripOps).
+        var percent = Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot).FeePercent(days, coolingOff);
         var fee = Money(booking.TotalAmount * percent / 100m);
         var refund = Math.Max(0, Money(paid - fee));
         var why = coolingOff

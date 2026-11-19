@@ -25,14 +25,7 @@ public static class CancellationPolicy
         && nowUtc - DateTime.SpecifyKind(paidAt, DateTimeKind.Utc) <= CoolingOff;
 
     /// <summary>Phần trăm phí hủy (trên tổng giá trị tour) khi khách hủy.</summary>
-    public static decimal FeePercent(int daysBeforeDeparture, bool coolingOff) => daysBeforeDeparture switch
-    {
-        <= 0 => 100m,
-        _ when coolingOff => 0m,
-        >= 30 => 0m,
-        >= 15 => 25m,
-        >= 8 => 50m,
-        >= 3 => 75m,
-        _ => 90m
-    };
+    /// <summary>Phí theo chính sách mặc định của TripOps; tour của Agency có mẫu hợp đồng riêng dùng ContractTerms của booking.</summary>
+    public static decimal FeePercent(int daysBeforeDeparture, bool coolingOff) =>
+        Contracts.ContractTerms.Default.FeePercent(daysBeforeDeparture, coolingOff);
 }

@@ -21,7 +21,8 @@ namespace TripOps.Service.Ai;
 /// chỉ tìm danh sách mới khi khách yêu cầu tìm mới hoặc đổi tiêu chí. Response trả lại ContextTourIds để frontend giữ.
 /// </summary>
 public sealed partial class GuestAssistantService(
-    PublicTourFinder finder, OpenAiChatClient openAi, AiAssistantOptions options, ILogger<GuestAssistantService> logger)
+    PublicTourFinder finder, OpenAiChatClient openAi, AiAssistantOptions options, ILogger<GuestAssistantService> logger,
+    Contracts.ContractTemplateService contractTemplates)
 {
     private const int MaxHistory = 10;
     private const int MaxQuestionLength = 1000;
@@ -178,7 +179,10 @@ public sealed partial class GuestAssistantService(
     private async Task<AiChatResponse> WithModel(List<AiChatMessage> history, GuestTourContext context, GuestIntent intent, bool useTools, CancellationToken ct)
     {
         var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt } };
-        if (ContextNote(context, intent) is { } note) messages.Add(new JsonObject { ["role"] = "system", ["content"] = note });
+        var policies = new Dictionary<int, Contracts.ContractTerms>();
+        if (intent == GuestIntent.FollowUp)
+            foreach (var t in context.Tours) policies[t.Id] = await contractTemplates.TermsFor(t.AgencyId, ct);
+        if (ContextNote(context, intent, policies) is { } note) messages.Add(new JsonObject { ["role"] = "system", ["content"] = note });
         foreach (var m in history) messages.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         // Hỏi tiếp về danh sách cũ: backend chặn search_tours và chỉ cho get_tour_details với id trong danh sách.
@@ -225,14 +229,14 @@ public sealed partial class GuestAssistantService(
     }
 
     /// <summary>Phần NGỮ CẢNH gửi model: danh sách tour vừa gợi ý (dữ liệu hệ thống vừa tải lại) và cách dùng theo ý định của câu hỏi.</summary>
-    private static string? ContextNote(GuestTourContext context, GuestIntent intent)
+    private static string? ContextNote(GuestTourContext context, GuestIntent intent, IReadOnlyDictionary<int, Contracts.ContractTerms> policies)
     {
         if (!context.HadList) return null;
         var text = new StringBuilder("NGỮ CẢNH - DANH SÁCH TOUR VỪA GỢI Ý CHO KHÁCH (dữ liệu hệ thống vừa kiểm tra lại, theo đúng thứ tự khách đã thấy):\n");
         // Hỏi tiếp thì gửi luôn chi tiết (lịch trình, địa điểm, giá theo độ tuổi) để model ít phải gọi công cụ.
         for (var i = 0; i < context.Tours.Count; i++)
             text.Append(i + 1).Append(". ").AppendLine(JsonSerializer.Serialize(
-                intent == GuestIntent.FollowUp ? PublicTourFinder.Details(context.Tours[i]) : PublicTourFinder.Summary(context.Tours[i]), Json));
+                intent == GuestIntent.FollowUp ? PublicTourFinder.Details(context.Tours[i], policies.GetValueOrDefault(context.Tours[i].Id)) : PublicTourFinder.Summary(context.Tours[i]), Json));
         if (context.Tours.Count == 0) text.AppendLine("(Không còn tour nào trong danh sách này đang mở bán.)");
         if (context.Removed > 0)
             text.AppendLine($"Có {context.Removed} tour trong danh sách khách đã thấy không còn mở bán: nói rõ với khách nếu liên quan, không giới thiệu như đang bán.");
@@ -280,7 +284,8 @@ public sealed partial class GuestAssistantService(
                     return ("""{"error":"Tour này không có trong danh sách vừa gợi ý."}""", new List<AiTourCard>(), false);
                 var tour = id > 0 ? await finder.Detail(id, ct) : null;
                 if (tour is null) return ("""{"error":"Không tìm thấy tour công khai với id này."}""", new List<AiTourCard>(), false);
-                return (JsonSerializer.Serialize(PublicTourFinder.Details(tour), Json), new List<AiTourCard> { PublicTourFinder.Card(tour) }, false);
+                var terms = await contractTemplates.TermsFor(tour.AgencyId, ct);
+                return (JsonSerializer.Serialize(PublicTourFinder.Details(tour, terms), Json), new List<AiTourCard> { PublicTourFinder.Card(tour) }, false);
             }
             default:
                 return ("""{"error":"Công cụ không tồn tại."}""", new List<AiTourCard>(), false);

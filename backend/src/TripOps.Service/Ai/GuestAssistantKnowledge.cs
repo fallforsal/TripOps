@@ -36,7 +36,9 @@ public static class GuestAssistantKnowledge
         """;
 
     public const string CancellationPolicy = """
-        CHÍNH SÁCH HỦY TOUR CHUNG CỦA NỀN TẢNG (khách chủ động hủy)
+        CHÍNH SÁCH HỦY MẶC ĐỊNH CỦA NỀN TẢNG (khách chủ động hủy)
+        Mỗi công ty lữ hành có thể soạn chính sách hủy riêng trong hợp đồng: khi khách hỏi về một tour cụ thể,
+        dùng trường cancellation_policy trong chi tiết tour đó; bảng dưới chỉ áp dụng cho tour của công ty chưa soạn chính sách riêng.
         Phí hủy tính theo % TỔNG GIÁ TRỊ TOUR, dựa trên số ngày còn lại trước ngày khởi hành tại lúc khách gửi yêu cầu hủy
         (trong ngoặc: phần được hoàn nếu khách đã thanh toán đủ 100%):
         - Từ 30 ngày trở lên: 0% (hoàn 100%)

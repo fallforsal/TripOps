@@ -63,6 +63,7 @@ public class TripOpsDbContext : DbContext
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Complaint> Complaints => Set<Complaint>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
+    public DbSet<AgencyContractTemplate> AgencyContractTemplates => Set<AgencyContractTemplate>();
 
     // 7. Chat & Subscription Extensions
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
