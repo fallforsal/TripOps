@@ -447,7 +447,6 @@ export interface IncidentDto {
   bookingId: number;
   title: string;
   description: string;
-  status: string;
   createdAt: string;
   reportedById?: string;
 }

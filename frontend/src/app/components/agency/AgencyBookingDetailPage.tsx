@@ -31,7 +31,6 @@ import {
   BookingIncident,
   AttractionAttendanceStatus,
   IncidentCategory,
-  IncidentStatus,
   Location,
 } from "@/app/types";
 import { formatVietnamDateTime, formatVietnamDeadline } from "@/app/services/payos";
@@ -2033,21 +2032,16 @@ export function AgencyBookingDetailPage({
               </div>
 
               {itinerarySubTab === "incidents" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2.5 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-rose-600" />
-                      <div>
-                        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                          Nhật ký sự cố Tour
-                          <span className="text-xs normal-case px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                            {incidents.length} sự cố
-                          </span>
-                        </h2>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Theo dõi sự cố phát sinh và báo cáo của hướng dẫn viên trong chuyến đi.
-                        </p>
-                      </div>
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                        Nhật ký sự cố Tour
+                        <span className="text-xs normal-case px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          {incidents.length} sự cố
+                        </span>
+                      </h2>
                     </div>
                     <Button
                       size="sm"
@@ -2055,7 +2049,7 @@ export function AgencyBookingDetailPage({
                       type="button"
                       disabled={refreshingIncidents}
                       onClick={() => void refreshIncidentHistory()}
-                      className="gap-1.5 text-xs"
+                      className="gap-1.5 text-xs h-8"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${refreshingIncidents ? "animate-spin" : ""}`} />
                       {refreshingIncidents ? "Đang tải…" : "Làm mới nhật ký"}
@@ -2063,7 +2057,7 @@ export function AgencyBookingDetailPage({
                   </div>
 
                   {incidents.length === 0 ? (
-                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 text-emerald-900 flex items-center gap-3">
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-emerald-900 flex items-center gap-3">
                       <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
                       <div className="text-xs space-y-0.5">
                         <p className="font-bold">Đoàn đang vận hành an toàn</p>
@@ -2073,7 +2067,7 @@ export function AgencyBookingDetailPage({
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       {incidents.map((inc) => {
                         const categoryLabels: Record<IncidentCategory, { label: string; icon: string; style: string }> = {
                           HEALTH: { label: "Y tế & Sức khỏe", icon: "🏥", style: "bg-rose-50 text-rose-800 border-rose-200" },
@@ -2087,122 +2081,101 @@ export function AgencyBookingDetailPage({
                         };
                         const cat = categoryLabels[inc.incidentType] || categoryLabels.OTHER;
 
-                        const statusBadges = {
-                          REPORTED: { label: "Mới báo cáo", color: "bg-amber-100 text-amber-800 border-amber-300" },
-                          IN_PROGRESS: { label: "Đang xử lý", color: "bg-[#E0F2FE] text-blue-800 border-blue-300" },
-                          RESOLVED: { label: "Đã giải quyết", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-                        };
-                        const st = statusBadges[inc.status];
+                        const reporterAvatar =
+                          inc.reportedByAvatar ||
+                          booking.assignedGuides?.find((g) => g.guideId === inc.reportedById)?.guideAvatar;
 
                         return (
                           <div
                             key={inc.id}
-                            className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
-                              inc.status === "RESOLVED"
-                                ? "bg-white border-gray-200"
-                                : inc.status === "IN_PROGRESS"
-                                ? "bg-[#F0F9FF]/30 border-[#CBD5E1] shadow-2xs"
-                                : "bg-amber-50/40 border-amber-300 shadow-2xs"
-                            }`}
+                            className="p-3 rounded-xl border text-xs space-y-2 transition-all bg-amber-50/40 border-amber-300 shadow-2xs"
                           >
-                            <div className="flex items-start justify-between gap-2 flex-wrap">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {inc.incidentType !== "OTHER" && (
-                                    <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${cat.style}`}>
-                                      {cat.icon} {cat.label}
-                                    </span>
+                            <div className="flex items-start justify-between gap-2.5">
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                {reporterAvatar ? (
+                                  <img
+                                    src={reporterAvatar}
+                                    alt={inc.reportedByName}
+                                    title={`HDV: ${inc.reportedByName}`}
+                                    className="w-8 h-8 rounded-full object-cover border border-slate-300 shadow-2xs shrink-0 mt-0.5"
+                                  />
+                                ) : (
+                                  <div
+                                    title={`HDV: ${inc.reportedByName}`}
+                                    aria-label={inc.reportedByName}
+                                    className="w-8 h-8 rounded-full bg-[#075985] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs mt-0.5"
+                                  >
+                                    {inc.reportedByName ? inc.reportedByName[0] : "H"}
+                                  </div>
+                                )}
+                                <div className="min-w-0 space-y-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <h4 className="font-bold text-gray-900 text-sm leading-tight">{inc.title}</h4>
+                                    {inc.incidentType !== "OTHER" && (
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${cat.style}`}>
+                                        {cat.icon} {cat.label}
+                                      </span>
+                                    )}
+                                    {inc.agencyName && (
+                                      <span className="text-[11px] font-semibold text-[#EA580C]">
+                                        • {inc.agencyName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {inc.description && (
+                                    <p className="text-gray-700 leading-snug text-xs">
+                                      {inc.description}
+                                    </p>
                                   )}
-                                  <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${st.color}`}>
-                                    {st.label}
-                                  </span>
                                 </div>
-                                <h4 className="font-bold text-gray-900 text-sm mt-1">{inc.title}</h4>
                               </div>
-                              <span className="text-[11px] text-gray-500 font-medium">
+                              <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap shrink-0">
                                 {formatVietnamDateTime(inc.reportedAt)}
                               </span>
                             </div>
 
-                            <p className="text-gray-700 leading-relaxed bg-white/90 p-3 rounded-lg border border-gray-100 text-xs">
-                              {inc.description}
-                            </p>
-
-                            {/* Evidence Photo Preview */}
                             {inc.evidenceUrls && inc.evidenceUrls.length > 0 && (
-                              <div className="space-y-1.5">
-                                <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
-                                  <Camera className="w-3.5 h-3.5 text-[#075985]" />
-                                  Ảnh minh chứng hiện trường ({inc.evidenceUrls.length}):
-                                </span>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {inc.evidenceUrls.map((url, idx) => (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={() => {
-                                        setProofPreviewData({
-                                          title: inc.title,
-                                          image: url,
-                                          time: inc.reportedAt,
-                                          note: inc.description,
-                                          guideName: inc.reportedByName,
-                                        });
-                                        setPreviewProofModalOpen(true);
-                                      }}
-                                      className="relative group w-20 h-16 rounded-lg overflow-hidden border border-gray-200 shadow-2xs"
-                                    >
-                                      <img src={url} alt="Minh chứng" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                        <Eye className="w-4 h-4 text-white" />
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
+                              <div className="flex items-center gap-2 flex-wrap pl-10">
+                                {inc.evidenceUrls.map((url, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setProofPreviewData({
+                                        title: inc.title,
+                                        image: url,
+                                        images: inc.evidenceUrls,
+                                        time: inc.reportedAt,
+                                        note: inc.description,
+                                        guideName: inc.reportedByName,
+                                      });
+                                      setPreviewProofModalOpen(true);
+                                    }}
+                                    className="relative group w-16 h-12 rounded-lg overflow-hidden border border-gray-200 shadow-2xs"
+                                  >
+                                    <img src={url} alt="Minh chứng" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <Eye className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                  </button>
+                                ))}
                               </div>
                             )}
 
-                            {/* Resolution Note if resolved */}
                             {inc.resolutionNote && (
-                              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-950 space-y-1 text-xs">
+                              <div className="ml-10 px-2.5 py-2 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-950 space-y-0.5 text-xs">
                                 <p className="font-bold flex items-center gap-1.5 text-emerald-900">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                  Kết quả xử lý &amp; khắc phục:
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  Kết quả xử lý:
                                   {inc.resolvedAt && (
                                     <span className="text-[11px] font-normal text-emerald-700 ml-auto">
-                                      (Hoàn thành lúc {inc.resolvedAt})
+                                      ({inc.resolvedAt})
                                     </span>
                                   )}
                                 </p>
-                                <p className="text-emerald-800 leading-relaxed text-[11px]">{inc.resolutionNote}</p>
+                                <p className="text-emerald-800 leading-snug text-[11px]">{inc.resolutionNote}</p>
                               </div>
                             )}
-
-                            {/* Footer Info & Quick Status Actions */}
-                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap text-[11px]">
-                              <div className="text-gray-500">
-                                Báo cáo bởi: <strong className="text-gray-800">{inc.reportedByName}</strong>
-                                {inc.agencyName && <> • Đơn vị: <strong className="text-[#EA580C]">{inc.agencyName}</strong></>}
-                              </div>
-
-                              <div className="flex items-center gap-1.5 ml-auto">
-                                {inc.status === "REPORTED" && (
-                                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                    ⏳ Đang chờ HDV hiện trường cập nhật
-                                  </span>
-                                )}
-                                {inc.status === "IN_PROGRESS" && (
-                                  <span className="text-[11px] font-semibold text-[#075985] bg-[#F0F9FF] px-2 py-0.5 rounded border border-[#CBD5E1]">
-                                    ⚙️ Đang xử lý tại hiện trường
-                                  </span>
-                                )}
-                                {inc.status === "RESOLVED" && (
-                                  <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                    <Check className="w-3.5 h-3.5" /> Đã hoàn tất xử lý
-                                  </span>
-                                )}
-                              </div>
-                            </div>
                           </div>
                         );
                       })}
@@ -2371,6 +2344,7 @@ export function AgencyBookingDetailPage({
                                     c.attendanceStatus === "CHECKED_IN" || c.attendanceStatus === "CHECKED_OUT");
                                   const isAllSkipped = hasCheckins && locCheckins.every((c) => c.attendanceStatus === "SKIPPED");
                                   const isPartial = hasAnyVisit && !isAllCheckedOut;
+                                  const canManageGuideRouting = isMyLoc && booking.status !== "completed" && !isClosedBooking;
 
                                   return (
                                     <div key={loc.id || lIdx} className="relative group">
@@ -2419,9 +2393,9 @@ export function AgencyBookingDetailPage({
                                         </div>
 
                                         {/* Assigned Guides & Check-in Status underneath the attraction */}
-                                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                                        <div className="space-y-2 pt-1">
                                           {locCheckins.length === 0 ? (
-                                            isMyLoc ? (
+                                            canManageGuideRouting ? (
                                               <Popover onOpenChange={open => { if (open) void loadGuideAvailability(); }}>
                                                 <PopoverTrigger asChild>
                                                   <button
@@ -2507,163 +2481,241 @@ export function AgencyBookingDetailPage({
                                                   </div>
                                                 </PopoverContent>
                                               </Popover>
+                                            ) : isMyLoc ? (
+                                              <span className="inline-block text-[11px] text-slate-400 italic">
+                                                Chưa phân công HDV
+                                              </span>
                                             ) : (
-                                              <div className="flex items-center gap-1.5 text-xs text-slate-400 italic bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
+                                              <div className="inline-flex items-center gap-1.5 text-xs text-slate-400 italic bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
                                                 <Lock className="w-3 h-3 text-slate-400" />
                                                 <span>Chặng đối tác: {locAgencyName} phụ trách</span>
                                               </div>
                                             )
                                           ) : (
                                             <>
-                                              {locCheckins.map((chk) => {
-                                                const isChecked = chk.attendanceStatus === "CHECKED_IN";
-                                                const isCheckedOut = chk.attendanceStatus === "CHECKED_OUT";
-                                                const isSkip = chk.attendanceStatus === "SKIPPED";
-                                                const isPending = chk.attendanceStatus === "PENDING";
+                                              <div className="flex flex-wrap items-start gap-2.5">
+                                                {locCheckins.map((chk) => {
+                                                  const isChecked = chk.attendanceStatus === "CHECKED_IN";
+                                                  const isCheckedOut = chk.attendanceStatus === "CHECKED_OUT";
+                                                  const isSkip = chk.attendanceStatus === "SKIPPED";
+                                                  const isPending = chk.attendanceStatus === "PENDING";
 
-                                                // Respect current filter
-                                                if (trackerGuideFilter !== "all" && chk.guideId !== trackerGuideFilter) return null;
+                                                  if (trackerGuideFilter !== "all" && chk.guideId !== trackerGuideFilter) return null;
 
-                                                return (
-                                                  <div
-                                                    key={chk.id}
-                                                    title={`HDV: ${chk.guideName}`}
-                                                    className={`inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full text-xs border transition-all ${
-                                                      isCheckedOut
-                                                        ? "bg-emerald-50/90 border-emerald-200 text-emerald-900 shadow-2xs"
-                                                        : isChecked
-                                                        ? "bg-sky-50 border-sky-200 text-sky-900 shadow-2xs"
-                                                        : isSkip
-                                                        ? "bg-rose-50/90 border-rose-200 text-rose-900"
-                                                        : "bg-slate-50 border-slate-200 text-slate-700"
-                                                    }`}
-                                                  >
-                                                    {/* Avatar HDV (Phóng to hơn, nhận diện trực quan qua ảnh) */}
-                                                    {chk.guideAvatar ? (
-                                                      <img
-                                                        src={chk.guideAvatar}
-                                                        alt={chk.guideName}
-                                                        title={`HDV: ${chk.guideName}`}
-                                                        className="w-7 h-7 rounded-full object-cover border border-slate-300 shadow-2xs shrink-0"
-                                                      />
-                                                    ) : (
-                                                      <div
-                                                        title={`HDV: ${chk.guideName}`}
-                                                        className="w-7 h-7 rounded-full bg-[#075985] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs"
-                                                      >
-                                                        {chk.guideName ? chk.guideName[0] : "H"}
+                                                  const hasCheckinImgs = !!(chk.photoProofUrls?.length || chk.photoProofUrl);
+                                                  const checkinImgs = chk.photoProofUrls?.length ? chk.photoProofUrls : (chk.photoProofUrl ? [chk.photoProofUrl] : []);
+                                                  const checkoutImgs = chk.checkoutPhotoProofUrls || [];
+
+                                                  return (
+                                                    <div
+                                                      key={chk.id}
+                                                      title={`HDV: ${chk.guideName}`}
+                                                      className={`w-full sm:w-fit sm:min-w-[295px] sm:max-w-[340px] rounded-xl border p-2.5 text-xs transition-all space-y-2 ${
+                                                        isCheckedOut
+                                                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                                                          : isChecked
+                                                          ? "bg-sky-50/80 border-sky-200 text-sky-950"
+                                                          : isSkip
+                                                          ? "bg-rose-50/70 border-rose-200 text-rose-950"
+                                                          : "bg-slate-50 border-slate-200 text-slate-800"
+                                                      }`}
+                                                    >
+                                                      {/* Guide Header Row */}
+                                                      <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          {chk.guideAvatar ? (
+                                                            <img
+                                                              src={chk.guideAvatar}
+                                                              alt={chk.guideName}
+                                                              title={`HDV: ${chk.guideName}`}
+                                                              className="w-7 h-7 rounded-full object-cover border border-slate-300 shadow-2xs shrink-0"
+                                                            />
+                                                          ) : (
+                                                            <div
+                                                              title={`HDV: ${chk.guideName}`}
+                                                              className="w-7 h-7 rounded-full bg-[#075985] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs"
+                                                            >
+                                                              {chk.guideName ? chk.guideName[0] : "H"}
+                                                            </div>
+                                                          )}
+                                                          <span className="font-semibold text-gray-900 truncate">
+                                                            {chk.guideName}
+                                                          </span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                          {isCheckedOut ? (
+                                                            <span className="inline-flex items-center gap-1 font-bold text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                                              <CheckCheck className="w-3 h-3 text-emerald-600" />
+                                                              Đã check-out
+                                                            </span>
+                                                          ) : isChecked ? (
+                                                            <span className="inline-flex items-center gap-1 font-bold text-[11px] text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                                                              <Check className="w-3 h-3 text-sky-600" />
+                                                              Đang ở điểm
+                                                            </span>
+                                                          ) : isSkip ? (
+                                                            <span className="inline-flex items-center gap-1 font-bold text-[11px] text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                                              <X className="w-3 h-3 text-rose-600" />
+                                                              Đã bỏ qua
+                                                            </span>
+                                                          ) : (
+                                                            <span className="inline-flex items-center gap-1 font-medium text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                                              Chưa check-in
+                                                            </span>
+                                                          )}
+
+                                                          {canManageGuideRouting && isPending && (
+                                                            <button
+                                                              type="button"
+                                                              disabled={guideRoutingBusy}
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleGuideForAttraction(
+                                                                  loc.id || loc.name,
+                                                                  loc.name,
+                                                                  day.day,
+                                                                  { guideId: chk.guideId, guideName: chk.guideName }
+                                                                );
+                                                              }}
+                                                              title={`Hủy gán HDV này khỏi điểm ${loc.name}`}
+                                                              className="w-5 h-5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors"
+                                                            >
+                                                              <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                          )}
+                                                        </div>
                                                       </div>
-                                                    )}
 
-                                                    {/* Badge trạng thái */}
-                                                    {isCheckedOut ? (
-                                                      <span className="inline-flex items-center gap-1 font-bold text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                                        <CheckCheck className="w-3 h-3 text-emerald-600" />
-                                                        Đã check-out {chk.checkoutAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkoutAt))})` : ""}
-                                                      </span>
-                                                    ) : isChecked ? (
-                                                      <span className="inline-flex items-center gap-1 font-bold text-[11px] text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
-                                                        <Check className="w-3 h-3 text-sky-600" />
-                                                        Đã check-in · Chưa check-out {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
-                                                      </span>
-                                                    ) : isSkip ? (
-                                                      <span
-                                                        className="inline-flex items-center gap-1 font-bold text-[11px] text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full"
-                                                        title={chk.notes || "Bỏ qua"}
-                                                      >
-                                                        <X className="w-3 h-3 text-rose-600" />
-                                                        Đã bỏ qua {chk.checkedAt ? `(${formatVietnamDateTime(providerResponseInstant(chk.checkedAt))})` : ""}
-                                                      </span>
-                                                    ) : (
-                                                      <span className="inline-flex items-center gap-1 font-medium text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                                        Chưa check-in
-                                                      </span>
-                                                    )}
+                                                      {/* Column-aligned Step Details */}
+                                                      {!isPending && (
+                                                        <div className="bg-white/80 rounded-lg border border-black/5 divide-y divide-slate-100 text-[11px]">
+                                                          {(isChecked || isCheckedOut || isSkip) && (
+                                                            <div className="grid grid-cols-[minmax(86px,auto)_24px_1fr] items-center gap-x-2 px-2.5 py-1.5">
+                                                              <div>
+                                                                {hasCheckinImgs ? (
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                      setProofPreviewData({
+                                                                        title: `${isSkip ? "Minh chứng bỏ qua" : "Minh chứng check-in"}: ${chk.locationName}`,
+                                                                        image: checkinImgs[0],
+                                                                        images: checkinImgs,
+                                                                        time: chk.checkedAt ? formatVietnamDateTime(providerResponseInstant(chk.checkedAt)) : undefined,
+                                                                        note: chk.notes,
+                                                                        guideName: chk.guideName,
+                                                                      });
+                                                                      setPreviewProofModalOpen(true);
+                                                                    }}
+                                                                    className={`font-semibold underline inline-flex items-center gap-1 whitespace-nowrap ${
+                                                                      isSkip
+                                                                        ? "text-rose-700 hover:text-rose-900"
+                                                                        : "text-[#075985] hover:text-blue-800"
+                                                                    }`}
+                                                                    title={isSkip ? "Xem ảnh minh chứng bỏ qua do HDV gửi lên" : "Xem ảnh xác nhận check-in thực tế do HDV gửi lên"}
+                                                                  >
+                                                                    <Camera className="w-3 h-3 shrink-0" />
+                                                                    {isSkip ? "Bỏ qua" : "Check-in"}{checkinImgs.length > 1 ? ` (${checkinImgs.length})` : ""}
+                                                                  </button>
+                                                                ) : (
+                                                                  <span className="font-semibold text-slate-600">
+                                                                    {isSkip ? "Bỏ qua" : "Check-in"}
+                                                                  </span>
+                                                                )}
+                                                              </div>
+                                                              <div className="flex justify-center">
+                                                                {chk.notes && (
+                                                                  <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                      <button
+                                                                        type="button"
+                                                                        title={isSkip ? "Xem lý do bỏ qua" : "Xem ghi chú check-in"}
+                                                                        aria-label={isSkip ? "Xem lý do bỏ qua" : "Xem ghi chú check-in"}
+                                                                        className="w-6 h-6 rounded-md inline-flex items-center justify-center text-slate-500 hover:text-[#075985] hover:bg-sky-50 transition-colors cursor-pointer"
+                                                                      >
+                                                                        <FileText className="w-3.5 h-3.5" />
+                                                                      </button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent align="start" sideOffset={6} className="w-64 p-2.5 text-xs bg-white rounded-xl shadow-lg border border-gray-200 z-50">
+                                                                      <p className="font-bold text-slate-700 text-[11px] mb-1">
+                                                                        {isSkip ? "Lý do bỏ qua" : "Ghi chú check-in"}
+                                                                      </p>
+                                                                      <p className="text-slate-800 break-words leading-snug">{chk.notes}</p>
+                                                                    </PopoverContent>
+                                                                  </Popover>
+                                                                )}
+                                                              </div>
+                                                              <span className="text-right text-slate-500 tabular-nums whitespace-nowrap">
+                                                                {chk.checkedAt ? formatVietnamDateTime(providerResponseInstant(chk.checkedAt)) : "—"}
+                                                              </span>
+                                                            </div>
+                                                          )}
 
-                                                    {chk.notes && (
-                                                      <span className="text-[11px] text-slate-600 italic">
-                                                        · Ghi chú check-in: {chk.notes}
-                                                      </span>
-                                                    )}
-
-                                                    {/* Nút xem ảnh minh chứng (chỉ khi HDV đã upload ảnh từ app) */}
-                                                    {(isChecked || isCheckedOut) && (chk.photoProofUrls?.length || chk.photoProofUrl) && (
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                          const imgs = chk.photoProofUrls?.length ? chk.photoProofUrls : [chk.photoProofUrl!];
-                                                          setProofPreviewData({
-                                                            title: `Minh chứng check-in: ${chk.locationName}`,
-                                                            image: imgs[0],
-                                                            images: imgs,
-                                                            time: chk.checkedAt ? formatVietnamDateTime(providerResponseInstant(chk.checkedAt)) : undefined,
-                                                            note: chk.notes,
-                                                            guideName: chk.guideName,
-                                                          });
-                                                          setPreviewProofModalOpen(true);
-                                                        }}
-                                                        className="text-[#075985] hover:text-blue-800 text-[11px] font-semibold underline flex items-center gap-0.5 ml-0.5"
-                                                        title="Xem ảnh xác nhận check-in thực tế do HDV gửi lên"
-                                                      >
-                                                        <Camera className="w-3 h-3" />
-                                                        Ảnh check-in{(chk.photoProofUrls?.length ?? 0) > 1 ? ` (${chk.photoProofUrls!.length})` : ""}
-                                                      </button>
-                                                    )}
-
-                                                    {isCheckedOut && chk.checkoutNote && (
-                                                      <span className="text-[11px] text-slate-600 italic">
-                                                        · Ghi chú check-out: {chk.checkoutNote}
-                                                      </span>
-                                                    )}
-                                                    {isCheckedOut && (chk.checkoutPhotoProofUrls?.length ?? 0) > 0 && (
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                          const images = chk.checkoutPhotoProofUrls!;
-                                                          setProofPreviewData({
-                                                            title: `Minh chứng check-out: ${chk.locationName}`,
-                                                            image: images[0],
-                                                            images,
-                                                            time: chk.checkoutAt ? formatVietnamDateTime(providerResponseInstant(chk.checkoutAt)) : undefined,
-                                                            note: chk.checkoutNote,
-                                                            guideName: chk.guideName,
-                                                          });
-                                                          setPreviewProofModalOpen(true);
-                                                        }}
-                                                        className="text-emerald-800 hover:text-emerald-900 text-[11px] font-semibold underline flex items-center gap-0.5 ml-0.5"
-                                                        title="Xem ảnh xác nhận check-out do HDV gửi"
-                                                      >
-                                                        <Camera className="w-3 h-3" />
-                                                        Ảnh check-out{chk.checkoutPhotoProofUrls!.length > 1 ? ` (${chk.checkoutPhotoProofUrls!.length})` : ""}
-                                                      </button>
-                                                    )}
-
-                                                    {/* Nút hủy gán nhanh nếu chưa check-in */}
-                                                    {isMyLoc && isPending && (
-                                                      <button
-                                                        type="button"
-                                                        disabled={guideRoutingBusy}
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          handleToggleGuideForAttraction(
-                                                            loc.id || loc.name,
-                                                            loc.name,
-                                                            day.day,
-                                                            { guideId: chk.guideId, guideName: chk.guideName }
-                                                          );
-                                                        }}
-                                                        title={`Hủy gán HDV này khỏi điểm ${loc.name}`}
-                                                        className="w-4 h-4 rounded-full hover:bg-slate-200 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors ml-0.5"
-                                                      >
-                                                        <X className="w-3 h-3" />
-                                                      </button>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })}
+                                                          {(isChecked || isCheckedOut) && (
+                                                            <div className="grid grid-cols-[minmax(86px,auto)_24px_1fr] items-center gap-x-2 px-2.5 py-1.5">
+                                                              <div>
+                                                                {isCheckedOut && checkoutImgs.length > 0 ? (
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                      setProofPreviewData({
+                                                                        title: `Minh chứng check-out: ${chk.locationName}`,
+                                                                        image: checkoutImgs[0],
+                                                                        images: checkoutImgs,
+                                                                        time: chk.checkoutAt ? formatVietnamDateTime(providerResponseInstant(chk.checkoutAt)) : undefined,
+                                                                        note: chk.checkoutNote,
+                                                                        guideName: chk.guideName,
+                                                                      });
+                                                                      setPreviewProofModalOpen(true);
+                                                                    }}
+                                                                    className="text-emerald-800 hover:text-emerald-900 font-semibold underline inline-flex items-center gap-1 whitespace-nowrap"
+                                                                    title="Xem ảnh xác nhận check-out do HDV gửi"
+                                                                  >
+                                                                    <Camera className="w-3 h-3 shrink-0" />
+                                                                    Check-out{checkoutImgs.length > 1 ? ` (${checkoutImgs.length})` : ""}
+                                                                  </button>
+                                                                ) : isCheckedOut ? (
+                                                                  <span className="font-semibold text-slate-600">Check-out</span>
+                                                                ) : (
+                                                                  <span className="text-sky-700 font-medium">Chưa check-out</span>
+                                                                )}
+                                                              </div>
+                                                              <div className="flex justify-center">
+                                                                {isCheckedOut && chk.checkoutNote && (
+                                                                  <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                      <button
+                                                                        type="button"
+                                                                        title="Xem ghi chú check-out"
+                                                                        aria-label="Xem ghi chú check-out"
+                                                                        className="w-6 h-6 rounded-md inline-flex items-center justify-center text-slate-500 hover:text-emerald-800 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                                                      >
+                                                                        <FileText className="w-3.5 h-3.5" />
+                                                                      </button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent align="start" sideOffset={6} className="w-64 p-2.5 text-xs bg-white rounded-xl shadow-lg border border-gray-200 z-50">
+                                                                      <p className="font-bold text-slate-700 text-[11px] mb-1">Ghi chú check-out</p>
+                                                                      <p className="text-slate-800 break-words leading-snug">{chk.checkoutNote}</p>
+                                                                    </PopoverContent>
+                                                                  </Popover>
+                                                                )}
+                                                              </div>
+                                                              <span className="text-right text-slate-500 tabular-nums whitespace-nowrap">
+                                                                {isCheckedOut
+                                                                  ? (chk.checkoutAt ? formatVietnamDateTime(providerResponseInstant(chk.checkoutAt)) : "—")
+                                                                  : "—"}
+                                                              </span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
 
                                               {/* Nút thêm HDV dẫn cùng điểm này */}
-                                              {isMyLoc && (
+                                              {canManageGuideRouting && (
                                                 <Popover onOpenChange={open => { if (open) void loadGuideAvailability(); }}>
                                                   <PopoverTrigger asChild>
                                                     <button

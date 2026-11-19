@@ -755,7 +755,6 @@ export interface IncidentReport {
   images?: string[];
   reportedAt: string;
   location?: string;
-  status: "reported" | "acknowledged" | "resolved";
   resolvedNote?: string;
 }
 
@@ -810,7 +809,6 @@ export interface BookingAttractionCheckin {
 }
 
 export type IncidentCategory = "HEALTH" | "VEHICLE" | "WEATHER" | "CUSTOMER" | "SECURITY" | "SERVICE_PROVIDER" | "SCHEDULE" | "OTHER";
-export type IncidentStatus = "REPORTED" | "IN_PROGRESS" | "RESOLVED";
 
 export interface BookingIncident {
   id: string;
@@ -819,11 +817,11 @@ export interface BookingIncident {
   agencyName?: string;
   reportedById: string;
   reportedByName: string;
+  reportedByAvatar?: string;
   incidentType: IncidentCategory;
   title: string;
   description?: string;
   evidenceUrls?: string[];
-  status: IncidentStatus;
   reportedAt: string;
   resolvedAt?: string;
   resolutionNote?: string;

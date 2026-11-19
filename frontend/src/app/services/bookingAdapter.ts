@@ -383,18 +383,13 @@ export function fromApiBooking(
       agencyName: dto.agencyName || undefined,
       reportedById: i.reportedById || "",
       reportedByName: i.reportedByName || "Hướng dẫn viên",
-      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER"].find(
+      reportedByAvatar: dto.assignedGuides?.find((g) => g.guideId === i.reportedById)?.guideAvatar || undefined,
+      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER"].find(
         (c) => (i.incidentType || "").toUpperCase() === c || i.title.toUpperCase().startsWith(`[${c}]`),
       ) || "OTHER") as import("../types/index.ts").IncidentCategory,
       title: i.title,
       description: i.description,
       evidenceUrls: i.evidenceUrls || [],
-      status:
-        i.status === "Resolved"
-          ? "RESOLVED"
-          : i.status === "Acknowledged"
-            ? "IN_PROGRESS"
-            : "REPORTED",
       reportedAt: i.createdAt,
     })),
     guideIncidents: (dto.incidents || []).map((i) => ({
@@ -417,12 +412,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      status:
-        i.status === "Resolved"
-          ? "resolved"
-          : i.status === "Acknowledged"
-            ? "acknowledged"
-            : "reported",
       reportedAt: i.createdAt,
     })),
     passengers: (dto.participants || []).map((p, index) => ({

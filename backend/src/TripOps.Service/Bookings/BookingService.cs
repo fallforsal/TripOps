@@ -594,7 +594,6 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 ? request.Title.Trim()
                 : $"[{normalizedType}] {request.Title.Trim()}",
             Description = IncidentDescription(request.Description, request.Severity),
-            Status = IncidentStatus.Reported,
             ReportedBy = guideId,
             EvidenceUrls = evidenceUrls is { Count: > 0 } ? GuideCheckinPhotoRules.Encode(evidenceUrls) : null,
         };
@@ -608,7 +607,6 @@ public sealed partial class BookingService(BookingRepository repository, Account
     private IncidentDto IncidentToDto(BookingIncident i, string? reporterName) => new(
         i.Id, i.BookingId,
         i.Title, i.Description, Severity(i.Description),
-        i.Status.GetValueOrDefault(IncidentStatus.Reported).ToString(),
         i.CreatedAt ?? DateTime.UnixEpoch,
         GuideCheckinPhotoRules.Decode(i.EvidenceUrls)
             .Select(url => photoStorage.DeliveryUrl(url)!)

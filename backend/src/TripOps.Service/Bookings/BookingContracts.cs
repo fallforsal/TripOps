@@ -297,7 +297,6 @@ public sealed record IncidentDto(
     string Title,
     string Description,
     string? ResolutionNotes,
-    string Status,
     DateTime CreatedAt,
     IReadOnlyList<string>? EvidenceUrls = null,
     string? ReportedById = null,

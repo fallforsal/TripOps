@@ -191,7 +191,6 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             Require(config.ProvinceCodes is { Length: > 0 }, "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua trước khi hoàn tất hoặc đăng bán tour.");
             Require(!string.IsNullOrWhiteSpace(config.CancellationPolicy), "Cancellation policy is required for publication.");
             Require(tiers.Length > 0, "Pricing tiers are required for publication.");
-            Require(days.Length == config.DurationDays, "An itinerary for every day is required for publication.");
             Require(config.MinGuests != null && config.MaxGuests != null, "Guest limits are required for publication.");
         }
     }

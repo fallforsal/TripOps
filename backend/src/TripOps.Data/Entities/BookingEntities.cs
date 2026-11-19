@@ -212,7 +212,6 @@ public string ReportedBy { get; set; } = string.Empty;
 public string? IncidentType { get; set; } = "OTHER";
 public string Title { get; set; } = string.Empty;
 public string Description { get; set; } = string.Empty;
-public IncidentStatus? Status { get; set; } = IncidentStatus.Reported;
 public string? EvidenceUrls { get; set; }
 public DateTime? ResolvedAt { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;

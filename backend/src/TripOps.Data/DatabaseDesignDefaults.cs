@@ -77,7 +77,6 @@ internal static class DatabaseDesignDefaults
         modelBuilder.Entity<BookingAttractionCheckin>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingAttractionCheckin>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingIncident>().Property(e => e.IncidentType).HasDefaultValue("OTHER");
-        modelBuilder.Entity<BookingIncident>().Property(e => e.Status).HasDefaultValue(IncidentStatus.Reported);
         modelBuilder.Entity<BookingIncident>().Property(e => e.CreatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<BookingIncident>().Property(e => e.UpdatedAt).HasDefaultValueSql(sqlServer ? "SYSUTCDATETIME()" : "CURRENT_TIMESTAMP");
         modelBuilder.Entity<PaymentRequest>().Property(e => e.Status).HasDefaultValue(PaymentRequestStatus.Pending);

@@ -105,17 +105,14 @@ class TourIncident {
   const TourIncident({
     required this.title,
     required this.description,
-    required this.status,
     this.evidenceUrls = const [],
   });
   final String title;
   final String description;
-  final String status;
   final List<String> evidenceUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
-    status: (j['status'] ?? '').toString(),
     evidenceUrls: (j['evidenceUrls'] as List? ?? const [])
         .map((e) => e.toString())
         .where((e) => e.isNotEmpty)

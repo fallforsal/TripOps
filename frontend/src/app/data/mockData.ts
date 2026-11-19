@@ -2854,7 +2854,6 @@ export const mockBookings: Booking[] = [
         evidenceUrls: [
           "https://images.unsplash.com/photo-1578844251758-2f71da64c96f?w=800",
         ],
-        status: "RESOLVED",
         reportedAt: "25/01/2026 15:15",
         resolvedAt: "25/01/2026 16:30",
         resolutionNote: "Đội cứu hộ đã thay lốp phụ hoàn tất lúc 16:15. Toàn bộ 20 khách nhóm 2 đã về khách sạn an toàn và hội quân ăn tối cùng nhóm 1 lúc 18:30.",
@@ -3803,7 +3802,6 @@ export const mockBookings: Booking[] = [
         evidenceUrls: [
           "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
         ],
-        status: "RESOLVED",
         reportedAt: "19/10/2026 12:20",
         resolvedAt: "19/10/2026 13:45",
         resolutionNote: "Đoàn xe qua đèo an toàn tuyệt đối lúc 13:40, toàn bộ đoàn đã bàn giao sang HDV Sùng A Lử (Hà Giang Discovery) tại TP. Nha Trang theo đúng kế hoạch.",
