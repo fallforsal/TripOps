@@ -740,6 +740,7 @@ export interface Booking {
   // Provider Confirmation & Approval status
   providerApprovalStatus?: "all_approved" | "pending_provider" | "has_rejection" | "not_required";
   providerConfirmations?: BookingProviderConfirmation[];
+  canStartTour?: boolean;
 }
 
 export interface IncidentReport {

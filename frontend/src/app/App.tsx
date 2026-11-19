@@ -1417,7 +1417,7 @@ function Application() {
       );
     }
     if (
-      new Date(schedule.booking.tourStartDate).getTime() <= Date.now() &&
+      schedule.booking.canStartTour &&
       ["confirmed", "paid"].includes(schedule.booking.status)
     )
       await http("/guide/bookings/" + schedule.booking.id + "/start", {

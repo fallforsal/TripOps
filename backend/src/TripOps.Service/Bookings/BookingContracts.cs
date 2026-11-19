@@ -93,7 +93,8 @@ public sealed record BookingDto(
     decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
     IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null,
     bool CanRecordAttendance = false, DateTime? AttendanceDate = null,
-    bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
+    bool CanCheckInLocations = false, int? NextLocationCheckInId = null,
+    bool CanStartTour = false);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
     IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null,
@@ -260,7 +261,8 @@ public sealed record BookingListItem(
     string Status,
     string PaymentStatus,
     DateTime CreatedAt,
-    string? ThumbnailUrl = null);
+    string? ThumbnailUrl = null,
+    DateTime? EndDate = null);
 
 public sealed record ParticipantDto(
     int Id,

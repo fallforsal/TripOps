@@ -114,7 +114,6 @@ void main() {
     expect(find.byKey(const ValueKey('checkout-1')), findsNothing);
     expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     expect(find.text('Cần check-out điểm trước đó'), findsWidgets);
-    expect(find.textContaining('GPS'), findsOneWidget);
     expect(find.textContaining('Phạm vi GPS'), findsNothing);
   });
 
@@ -152,12 +151,12 @@ void main() {
     expect(tester.widget<FilledButton>(
       find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
   });
-  testWidgets('check-in requires camera photo and never offers gallery',
+  testWidgets('check-in offers camera and gallery photo options',
       (tester) async {
     await showScreen(tester, _detail(dateAllowed: true, nextId: 1));
     await tester.tap(find.byKey(const ValueKey('checkin-1')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsOneWidget);
     expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
     expect(find.textContaining('20 MB'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('confirm-checkin'))).onPressed, isNull);
@@ -190,7 +189,7 @@ void main() {
     expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('checkout-1')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsOneWidget);
     expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
     expect(find.text('Xác nhận check-out'), findsOneWidget);
     await tester.tap(find.text('Hủy'));
@@ -232,7 +231,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('skip-3')));
     await tester.pumpAndSettle();
     expect(find.text('Bỏ qua · Điểm C'), findsOneWidget);
-    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsOneWidget);
     expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
     expect(find.text('Xác nhận bỏ qua'), findsOneWidget);
     expect(tester.widget<FilledButton>(

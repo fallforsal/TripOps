@@ -306,9 +306,22 @@ public sealed partial class BookingService(BookingRepository repository, Account
             return BookingAlliance.PartnerView(booking,dto,actorId);
         if(isGuide && !isAgency && !isAdmin) {
             var ownAgency=booking.AssignedGuides.Single(a=>a.GuideId==actorId).AgencyId;
-            dto=dto with {Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency),
-                CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,ownAgency,UtcNow),
-                AttendanceDate=GuideBookingRules.AttendanceDate(booking,ownAgency)};
+            var schedule=GuideBookingRules.Schedule(booking,actorId,ownAgency);
+            var ownedStopIds=GuideLocationCheckinRules.OrderedStopsForGuide(booking,actorId,ownAgency).Select(a=>a.Id).ToHashSet();
+            var guideDays=ownedStopIds.Count>0
+                ? dto.SnapshotDays?.Select(d=>d with {Locations=d.Locations.Where(l=>ownedStopIds.Contains(l.Id)).ToArray()}).Where(d=>d.Locations.Count>0).ToArray()
+                : dto.SnapshotDays;
+            var ownAgencyName=booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==ownAgency)?.Agency?.BusinessProfile?.BusinessName
+                ?? booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==ownAgency)?.Agency?.Name
+                ?? dto.AgencyName;
+            dto=dto with {
+                StartDate=schedule.StartDate,EndDate=schedule.EndDate,AgencyName=ownAgencyName,SnapshotDays=guideDays,
+                Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency),
+                CanStartTour=GuideBookingRules.CanStartTour(booking,actorId,ownAgency,UtcNow),
+                CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,actorId,ownAgency,UtcNow),
+                AttendanceDate=schedule.StartDate,
+                CanCheckInLocations=GuideLocationCheckinRules.CanCheckIn(booking,actorId,ownAgency,UtcNow),
+                NextLocationCheckInId=GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking,actorId,ownAgency)};
         } else if(isOwner && !isAgency && !isAdmin) {
             dto=dto with {Incidents=dto.Incidents?.Select(i=>i with {EvidenceUrls=[]}).ToArray(),
                 Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {
@@ -520,11 +533,24 @@ public sealed partial class BookingService(BookingRepository repository, Account
     public async Task<BookingPage<BookingListItem>> ListForGuide(string guideId, int page, int pageSize, CancellationToken ct)
     {
         var (rows, total) = await repository.ListForGuide(guideId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), ct);
-        var items = rows.Select(b => new BookingListItem(
-            b.Id, b.BookingCode, b.TourName, b.CustomerName, b.ContactPhone,
-            b.StartDate, b.Guests, b.TotalAmount, b.PaidAmount,
-            b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch,
-            TourThumbnailFromJson(b.ThumbnailUrls, b.TourImages))).ToList();
+        var bookingsById = await repository.GuideSchedules(rows.Select(r => r.Id), ct);
+        var items = rows.Select(b => {
+            var startDate = b.StartDate;
+            DateTime? endDate = null;
+            if (bookingsById.TryGetValue(b.Id, out var full) &&
+                full.AssignedGuides.FirstOrDefault(ag => ag.GuideId == guideId) is { } assignment)
+            {
+                var schedule = GuideBookingRules.Schedule(full, guideId, assignment.AgencyId);
+                startDate = schedule.StartDate;
+                endDate = schedule.EndDate;
+            }
+            return new BookingListItem(
+                b.Id, b.BookingCode, b.TourName, b.CustomerName, b.ContactPhone,
+                startDate, b.Guests, b.TotalAmount, b.PaidAmount,
+                b.Status.GetValueOrDefault(BookingStatus.Pending).ToString(), b.PaymentStatus.GetValueOrDefault(PaymentStatus.Unpaid).ToString(), b.CreatedAt ?? DateTime.UnixEpoch,
+                TourThumbnailFromJson(b.ThumbnailUrls, b.TourImages),
+                endDate);
+        }).ToList();
 
         return new BookingPage<BookingListItem>(items, total, page, pageSize);
     }
@@ -557,7 +583,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
             ?? throw new BookingException(404, "Không tìm thấy hành khách trong danh sách đoàn.");
 
         if(participant.AgencyId!=booking.AssignedGuides.Single(g=>g.GuideId==guideId).AgencyId || participant.Status=="INACTIVE")throw new BookingException(403,"HDV chỉ điểm danh hành khách đang tham gia chặng của công ty mình.");
-        if (!GuideBookingRules.CanRecordAttendance(booking, guideAgency, UtcNow))
+        if (!GuideBookingRules.CanRecordAttendance(booking, guideId, guideAgency, UtcNow))
             throw new BookingException(409, "Chỉ được điểm danh vào ngày khởi hành hoặc ngày bắt đầu chặng được phân công.");
         if (Enum.TryParse<AttendanceStatus>(request.Status, true, out var status))
             participant.AttendanceStatus = status;

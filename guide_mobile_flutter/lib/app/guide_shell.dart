@@ -143,7 +143,6 @@ class _GuideShellState extends State<GuideShell> {
                 inProgressEndDates: endDates,
                 onOpenTour: openTour,
                 onTourTab: () => setState(() => tab = 1),
-                onHistoryTab: () => setState(() => tab = 2),
               ),
               1 => TourListScreen(
                 bookings: bookings,

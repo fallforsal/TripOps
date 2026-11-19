@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
@@ -304,14 +305,15 @@ class _LocationScreenState extends State<LocationScreen> {
               tint: const Color(0xFFFFF3DF),
             )),
           ]),
-          space(15),
-          GuideInfoBanner(
-            icon: enabledByDate ? Icons.route_outlined : Icons.lock_clock_outlined,
-            warning: !enabledByDate,
-            message: enabledByDate
-                ? 'Chụp ảnh trực tiếp khi check-in, check-out hoặc bỏ qua. Hoàn thành check-out hoặc bỏ qua điểm hiện tại mới mở điểm tiếp theo; không cần GPS.'
-                : 'Chưa đến ngày khởi hành hoặc tour không còn cho phép check-in.',
-          ),
+          if (!enabledByDate) ...[
+            space(15),
+            GuideInfoBanner(
+              icon: Icons.lock_clock_outlined,
+              warning: true,
+              message:
+                  'Chưa đến ngày khởi hành chặng được giao (${vnDate(current.startDate)}) hoặc tour không còn cho phép check-in.',
+            ),
+          ],
           if (error != null) ...[
             space(10),
             GuideInfoBanner(
@@ -366,7 +368,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           : checkedIn
                               ? 'Đang ở điểm này · cần check-out'
                               : !enabledByDate
-                                  ? 'Chưa đến ngày khởi hành'
+                                  ? 'Chưa đến ngày khởi hành chặng (${vnDate(current.startDate)})'
                                   : !isNext
                                       ? 'Cần check-out điểm trước đó'
                                       : 'Sẵn sàng check-in hoặc bỏ qua';

@@ -7,6 +7,7 @@ import '../../assigned_tours/domain/booking_models.dart';
 import '../../assigned_tours/presentation/tour_card.dart';
 import '../../auth/domain/guide_account.dart';
 import '../domain/home_trip_picker.dart';
+import 'schedule_calendar_card.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -16,7 +17,6 @@ class HomeScreen extends StatelessWidget {
     required this.inProgressEndDates,
     required this.onOpenTour,
     required this.onTourTab,
-    required this.onHistoryTab,
   });
 
   final GuideAccount account;
@@ -24,7 +24,6 @@ class HomeScreen extends StatelessWidget {
   final Map<int, DateTime> inProgressEndDates;
   final ValueChanged<BookingSummary> onOpenTour;
   final VoidCallback onTourTab;
-  final VoidCallback onHistoryTab;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +32,9 @@ class HomeScreen extends StatelessWidget {
       bookings, today, inProgressEndDates: inProgressEndDates,
     );
     final chosen = picked.tour;
+    final nextTrips = selectNextHomeTrips(
+      bookings, today, inProgressEndDates: inProgressEndDates, limit: 3,
+    );
     final isUpcoming = picked.kind == HomeTripKind.upcoming;
     final active = bookings.where((b) => b.isActive).length;
     final completed = bookings.where((b) => b.isCompleted).length;
@@ -89,64 +91,29 @@ class HomeScreen extends StatelessWidget {
             tint: const Color(0xFFEAF3FC),
           )),
         ]),
-        space(24),
-        GuideSectionTitle('Hành trình của tôi',
+        space(22),
+        const GuideSectionTitle('Lịch dẫn tour'),
+        space(10),
+        ScheduleCalendarCard(
+          bookings: bookings,
+          inProgressEndDates: inProgressEndDates,
+          onOpenTour: onOpenTour,
+          today: today,
+        ),
+        space(22),
+        GuideSectionTitle('Lịch trình kế tiếp',
           trailing: 'Xem tất cả', onTap: onTourTab),
         space(10),
-        if (chosen == null)
+        if (nextTrips.isEmpty)
           const GuideEmptyState(
-            title: 'Chưa có tour được phân công',
-            message: 'Khi Agency phân công tour, hành trình sẽ hiển thị ở đây.',
+            title: 'Chưa có lịch trình kế tiếp',
+            message: 'Khi Agency phân công tour, lịch trình sẽ hiển thị ở đây.',
           )
         else
-          TourCard(
-            tour: chosen, featured: true,
-            label: isUpcoming ? 'Chuẩn bị cho chuyến đi sắp tới' : 'Tour đang ưu tiên',
-            onTap: () => onOpenTour(chosen),
-          ),
-        space(15),
-        GuideSectionTitle(
-          isUpcoming ? 'Chuẩn bị trước chuyến đi' : 'Truy cập nhanh',
-        ),
-        space(10),
-        if (isUpcoming)
-          const GuideInfoBanner(
-            icon: Icons.tips_and_updates_outlined,
-            message: 'Kiểm tra danh sách khách, lịch trình, giờ khởi hành và các điểm dừng trước ngày xuất phát.',
-          )
-        else if (chosen == null)
-          GuideInfoBanner(
-            icon: Icons.event_available_outlined,
-            message: 'Hãy vào mục Tour để xem các phân công mới.',
-          )
-        else
-          Row(children: [
-            Expanded(child: GuideActionTile(
-              icon: Icons.fact_check_outlined, title: 'Điểm danh',
-              subtitle: 'Mở chi tiết tour',
-              onTap: () => onOpenTour(chosen),
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideActionTile(
-              icon: Icons.location_on_outlined, title: 'Check-in',
-              subtitle: 'Mở lịch trình tour',
-              onTap: () => onOpenTour(chosen),
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideActionTile(
-              icon: Icons.warning_amber_rounded, title: 'Báo sự cố',
-              subtitle: 'Mở chi tiết tour',
-              onTap: () => onOpenTour(chosen),
-            )),
-          ]),
-        space(22),
-        GuideSectionTitle('Hoạt động & thông tin'),
-        space(10),
-        GuideActionTile(
-          icon: Icons.history_rounded, title: 'Lịch sử tour',
-          subtitle: 'Xem lại những hành trình đã hoàn tất',
-          onTap: onHistoryTab,
-        ),
+          ...nextTrips.map((tour) => TourCard(
+            tour: tour,
+            onTap: () => onOpenTour(tour),
+          )),
       ],
     );
   }

@@ -88,11 +88,31 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
 public sealed class GuideOperationsController(TripOpsDbContext db, BookingService bookings, CloudinaryStorage media) : ControllerBase
 {
     private string Actor => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    private async Task<Booking> Assigned(int id, CancellationToken ct) => await db.Bookings.Include(b => b.Tour).Include(b => b.AssignedGuides).SingleOrDefaultAsync(b => b.Id == id && b.AssignedGuides.Any(g => g.GuideId == Actor), ct) ?? throw new BookingException(403, "Guide is not assigned to this booking.");
+    private async Task<Booking> Assigned(int id, CancellationToken ct) => await db.Bookings
+        .Include(b => b.Tour)
+        .Include(b => b.BookingAgencies)
+        .Include(b => b.AssignedGuides)
+        .Include(b => b.Accommodations)
+        .Include(b => b.Timelines).ThenInclude(t => t.Attractions).ThenInclude(a => a.Checkins)
+        .Include(b => b.Timelines).ThenInclude(t => t.Meals)
+        .AsSplitQuery()
+        .SingleOrDefaultAsync(b => b.Id == id && b.AssignedGuides.Any(g => g.GuideId == Actor), ct)
+        ?? throw new BookingException(403, "Guide is not assigned to this booking.");
     [HttpPost("start")]
     [EndpointSummary("Start an assigned tour on or after its departure date")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow)) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
+    public async Task<IActionResult> Start(int id, CancellationToken ct)
+    {
+        var b = await Assigned(id, ct);
+        var ownAgency = b.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
+        if (!GuideBookingRules.IsAssignedToDayOne(b, Actor, ownAgency))
+            throw new BookingException(403, "Chỉ hướng dẫn viên được phân công vào Ngày 1 mới có quyền bắt đầu tour.");
+        if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow))
+            throw new BookingException(409, "Booking is not ready to depart.");
+        b.Status = BookingStatus.InProgress;
+        await db.SaveChangesAsync(ct);
+        return Ok(await bookings.Get(Actor, id, ct));
+    }
     [HttpPost("locations/{locationId:int}/check-in")]
     [EndpointSummary("Deprecated: photo-less check-in or skip is rejected")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
@@ -121,17 +141,19 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         GuideCheckinPhotoRules.ValidateFiles(request.Images.Select(f => (f.Length, f.ContentType)).ToArray());
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var booking = await Assigned(id, ct);
-        var days = await db.BookingTimelines.Include(d => d.Attractions)
+        var days = await db.BookingTimelines
+            .Include(d => d.Attractions).ThenInclude(a => a.Checkins)
+            .Include(d => d.Meals)
             .Where(d => d.BookingId == id).ToListAsync(ct);
         var location = GuideLocationCheckinRules.OrderedStops(days).SingleOrDefault(a => a.Id == locationId)
             ?? throw new BookingException(404, "Booking location not found.");
         var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
         if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
             throw new BookingException(403, "HDV chỉ check-out điểm thuộc chặng công ty mình.");
-        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Tour chưa khởi hành hoặc đã đóng.");
         if (location.AttendanceStatus != "CheckedIn" ||
-            GuideLocationCheckinRules.NextUncheckedStopId(days) != locationId)
+            GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId) != locationId)
             throw new BookingException(409, "Chỉ được check-out điểm đang check-in.");
         var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
             x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
@@ -174,7 +196,9 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
 
         // Read the complete itinerary rather than only the requested stop.
         // A guide from another Agency may not check in another Agency's stage.
-        var days = await db.BookingTimelines.Include(d => d.Attractions)
+        var days = await db.BookingTimelines
+            .Include(d => d.Attractions).ThenInclude(a => a.Checkins)
+            .Include(d => d.Meals)
             .Where(d => d.BookingId == id).ToListAsync(ct);
         var ordered = GuideLocationCheckinRules.OrderedStops(days);
         var location = ordered.SingleOrDefault(a => a.Id == locationId)
@@ -187,12 +211,12 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
                 ? "Bỏ qua điểm dừng bắt buộc có ảnh chụp camera."
                 : "Check-in bắt buộc có ảnh chụp camera.");
         // Check ownership before lifecycle rules, including before departure.
-        if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
         if (location.AttendanceStatus is "CheckedIn" or "CheckedOut" or "Skipped")
             throw new BookingException(409, "Điểm đến này đã được xử lý.");
 
-        var nextId = GuideLocationCheckinRules.NextUncheckedStopId(days);
+        var nextId = GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId);
         if (nextId != locationId)
             throw new BookingException(409, "Phải check-out hoặc bỏ qua điểm trước khi xử lý điểm tiếp theo.");
 
