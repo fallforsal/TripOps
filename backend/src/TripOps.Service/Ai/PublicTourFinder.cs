@@ -54,6 +54,21 @@ public sealed partial class PublicTourFinder(TourRepository tours)
 
     public Task<Tour?> Detail(int id, CancellationToken ct) => tours.Find(id, null, true, ct);
 
+    public static bool IsStopWord(string folded) => StopWords.Contains(folded);
+
+    /// <summary>
+    /// Tải lại các tour theo ID frontend gửi (danh sách vừa gợi ý). Chỉ lấy tour còn công khai, giữ đúng thứ tự cũ;
+    /// mọi giá và nội dung lấy từ hệ thống, không dùng dữ liệu client.
+    /// </summary>
+    public async Task<GuestTourContext> Context(IEnumerable<int>? ids, CancellationToken ct)
+    {
+        var wanted = (ids ?? []).Where(id => id > 0).Distinct().Take(8).ToList();
+        if (wanted.Count == 0) return GuestTourContext.Empty;
+        var found = (await tours.PublicByIds(wanted, ct)).ToDictionary(t => t.Id);
+        var ordered = wanted.Where(found.ContainsKey).Select(id => found[id]).ToList();
+        return new GuestTourContext(ordered, wanted.Count - ordered.Count);
+    }
+
     /// <summary>Câu có từ khóa thật để tìm tour không (khác lời chào, câu chung chung)?</summary>
     public static bool HasKeywords(string? text) =>
         GuestAssistantKnowledge.Fold(text).Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.Length >= 3 && !StopWords.Contains(w) && !w.All(char.IsDigit));

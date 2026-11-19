@@ -18,6 +18,15 @@ public static class GuestAssistantKnowledge
         5. Theo dõi trạng thái đơn, lịch thanh toán, hợp đồng và nhắn tin với Agency trong mục "Đơn của tôi".
         """;
 
+    public const string PricingPolicy = """
+        GIÁ TOUR VÀ GIÁ TRẺ EM
+        - Giá hiển thị "từ ...đ/khách" là giá cho MỖI KHÁCH, không phải giá cả đoàn.
+        - Mỗi tour có bảng "Giá theo độ tuổi" do công ty lữ hành (Agency) của tour đó đặt, ví dụ nhóm trẻ em và nhóm người lớn.
+          Độ tuổi và mức giá từng nhóm khác nhau giữa các tour, nên phải xem đúng bảng giá của tour.
+        - Mỗi hành khách được tính theo nhóm tuổi của mình; tuổi tính tại ngày khởi hành, theo ngày sinh khai khi đặt tour.
+        - Tổng giá đơn = cộng giá của từng hành khách trong đoàn.
+        """;
+
     public const string PaymentPolicy = """
         THANH TOÁN (áp dụng cho mọi tour)
         - Đợt 1: đặt cọc 50% tổng giá trị đơn, hạn 24 giờ kể từ lúc Agency duyệt đơn.
@@ -28,16 +37,24 @@ public static class GuestAssistantKnowledge
 
     public const string CancellationPolicy = """
         CHÍNH SÁCH HỦY TOUR CHUNG CỦA NỀN TẢNG (khách chủ động hủy)
-        Phí hủy tính theo % tổng giá trị tour, dựa trên số ngày còn lại trước ngày khởi hành tại lúc khách gửi yêu cầu hủy:
-        - Từ 30 ngày trở lên: 0%
-        - 15–29 ngày: 25%
-        - 8–14 ngày: 50%
-        - 3–7 ngày: 75%
-        - 1–2 ngày: 90%
-        - Ngày khởi hành trở đi: 100%
+        Phí hủy tính theo % TỔNG GIÁ TRỊ TOUR, dựa trên số ngày còn lại trước ngày khởi hành tại lúc khách gửi yêu cầu hủy
+        (trong ngoặc: phần được hoàn nếu khách đã thanh toán đủ 100%):
+        - Từ 30 ngày trở lên: 0% (hoàn 100%)
+        - 15–29 ngày: 25% (hoàn 75%)
+        - 8–14 ngày: 50% (hoàn 50%)
+        - 3–7 ngày: 75% (hoàn 25%)
+        - 1–2 ngày: 90% (hoàn 10%)
+        - Ngày khởi hành trở đi: 100% (không hoàn)
         - Trong 72 giờ sau lần thanh toán đầu tiên và còn ít nhất 15 ngày trước khởi hành: miễn phí hủy (0%).
-        Tiền hoàn = số tiền đã trả − phí hủy (không âm), chuyển về tài khoản ngân hàng khách cung cấp.
-        Nếu Agency hủy tour: khách được hoàn 100% số đã trả.
+        Ví dụ tour 10.000.000đ đã trả đủ, hủy trước 2 ngày: phí 9.000.000đ, hoàn 1.000.000đ.
+        """;
+
+    /// <summary>Chi tiết hoàn tiền: chỉ nêu khi khách hỏi đúng ý (cách tính, mới đặt cọc, Agency hủy), không kèm bảng phí hủy mặc định.</summary>
+    public const string RefundDetails = """
+        CHI TIẾT HOÀN TIỀN (CHỈ nêu khi khách hỏi đúng ý này)
+        - Cách tính: tiền hoàn = số tiền đã trả − phí hủy (không âm), chuyển về tài khoản ngân hàng trong hồ sơ của khách.
+        - Mới đặt cọc 50% mà hủy trong 3–7 ngày: phí 75% lớn hơn số đã trả nên không được hoàn.
+        - Agency hủy tour: khách được hoàn 100% số đã trả.
         """;
 
     public const string CustomTour = """
@@ -46,7 +63,7 @@ public static class GuestAssistantKnowledge
         công ty lữ hành gửi phương án lịch trình và báo giá để khách trao đổi, chỉnh sửa rồi đặt.
         """;
 
-    public static string All => string.Join("\n\n", BookingProcess, PaymentPolicy, CancellationPolicy, CustomTour);
+    public static string All => string.Join("\n\n", BookingProcess, PricingPolicy, PaymentPolicy, CancellationPolicy, RefundDetails, CustomTour);
 
     /// <summary>Chữ thường, bỏ dấu, đ → d, chỉ giữ chữ/số và một dấu cách.</summary>
     public static string Fold(string? value)

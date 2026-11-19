@@ -37,6 +37,44 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
+    public async Task Guest_chat_without_openai_key_lists_full_refund_schedule_for_late_cancellation()
+    {
+        using var app = new App(); await app.Initialize();
+        var answer = await Read<AiChatResponse>(await app.CreateClient().PostAsJsonAsync("/api/v1/ai/guest-chat", Ask("Nếu tôi hủy tour sát ngày khởi hành thì được hoàn bao nhiêu?")));
+        foreach (var row in new[] { "Từ 30 ngày trở lên: 0% (hoàn 100%)", "15–29 ngày: 25% (hoàn 75%)", "8–14 ngày: 50% (hoàn 50%)",
+                     "3–7 ngày: 75% (hoàn 25%)", "1–2 ngày: 90% (hoàn 10%)", "Ngày khởi hành trở đi: 100% (không hoàn)" })
+            Assert.Contains(row, answer.Reply);
+        Assert.Empty(answer.Tours);
+        // Không kèm công thức, trường hợp đặt cọc hay Agency hủy khi khách không hỏi.
+        Assert.DoesNotContain("số tiền đã trả − phí hủy", answer.Reply);
+        Assert.DoesNotContain("Agency hủy tour", answer.Reply);
+
+        var agency = await Read<AiChatResponse>(await app.CreateClient().PostAsJsonAsync("/api/v1/ai/guest-chat", Ask("Nếu Agency hủy tour thì tôi được hoàn bao nhiêu?")));
+        Assert.Contains("Agency hủy tour: khách được hoàn 100% số đã trả", agency.Reply);
+    }
+
+    [Fact]
+    public async Task Guest_chat_without_openai_key_explains_per_guest_and_child_pricing()
+    {
+        using var app = new App(); await app.Initialize();
+        var answer = await Read<AiChatResponse>(await app.CreateClient().PostAsJsonAsync("/api/v1/ai/guest-chat", Ask("Giá tour Đà Lạt là giá cho cả đoàn hay mỗi người? Trẻ em tính thế nào?")));
+        Assert.Contains("giá cho MỖI KHÁCH", answer.Reply);
+        Assert.Contains("tuổi tính tại ngày khởi hành", answer.Reply);
+        Assert.DoesNotContain("đặt cọc 50%", answer.Reply);
+    }
+
+    [Fact]
+    public void Guest_prompt_limits_policies_to_relevant_questions_and_requires_full_refund_table()
+    {
+        var prompt = typeof(GuestAssistantService).GetField("SystemPrompt", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null) as string;
+        Assert.Contains("Chỉ nói về đặt cọc, thanh toán, hủy tour khi khách HỎI", prompt);
+        Assert.Contains("LUÔN liệt kê đầy đủ bảng mức phí hủy", prompt);
+        Assert.Contains("KHÔNG tự đặt ví dụ độ tuổi hay mức giá", prompt);
+        Assert.Contains("1–2 ngày: 90% (hoàn 10%)", prompt);
+        Assert.Contains("KHÔNG thêm đoạn \"Lưu ý\"", prompt);
+    }
+
+    [Fact]
     public async Task Guest_chat_ignores_client_system_messages_and_requires_a_question()
     {
         using var app = new App(); await app.Initialize();

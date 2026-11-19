@@ -7,9 +7,14 @@ using System.Text.Json.Nodes;
 namespace TripOps.Service.Ai;
 
 /// <summary>Lỗi khi gọi OpenAI. Message không bao giờ chứa khóa API.</summary>
-public sealed class OpenAiException(string message, HttpStatusCode? status = null) : Exception(message)
+public sealed class OpenAiException(string message, HttpStatusCode? status = null, string? code = null) : Exception(message)
 {
+    /// <summary>Model sinh lệnh gọi công cụ hỏng hoặc gọi công cụ không có (Groq / gpt-oss trả HTTP 400 "tool_use_failed").</summary>
+    public const string ToolUseFailed = "tool_use_failed";
+
     public HttpStatusCode? Status { get; } = status;
+    /// <summary>Mã lỗi có cấu trúc của nhà cung cấp (vd tool_use_failed, model_not_found), nếu có.</summary>
+    public string? Code { get; } = code;
 }
 
 /// <summary>Một lệnh gọi công cụ do model yêu cầu.</summary>
@@ -47,11 +52,13 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
                 if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(attempt == 1 ? 1 : 3), ct);
                 try { return await Send(model, messages, tools, maxTokens, timeoutSeconds ?? options.TimeoutSeconds, ct); }
                 catch (OpenAiException ex) when (ex.Status is { } status && Transient.Contains(status)) { last = ex; }
+                // Model sinh lệnh gọi công cụ hỏng (ngẫu nhiên, hay gặp ở gpt-oss trên Groq): gọi lại là thường được.
+                catch (OpenAiException ex) when (ex.Code == OpenAiException.ToolUseFailed) { last = ex; }
                 // Model không tồn tại/không có quyền: không thử lại model này, chuyển sang model dự phòng (nếu có).
                 catch (OpenAiException ex) when (ex.Status == HttpStatusCode.NotFound && models.Count > 1) { last = ex; break; }
             }
         }
-        throw new OpenAiException($"{last?.Message ?? "OpenAI lỗi."} Đã thử các model: {string.Join(", ", models)}.", last?.Status);
+        throw new OpenAiException($"{last?.Message ?? "OpenAI lỗi."} Đã thử các model: {string.Join(", ", models)}.", last?.Status, last?.Code);
     }
 
     private async Task<OpenAiTurn> Send(string model, JsonArray messages, JsonArray? tools, int maxTokens, int timeoutSeconds, CancellationToken ct)
@@ -86,7 +93,10 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
         {
             var text = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
-                throw new OpenAiException($"Model '{model}' trả lỗi HTTP {(int)response.StatusCode}{ErrorCode(text)}.", response.StatusCode);
+            {
+                var code = ErrorCode(text);
+                throw new OpenAiException($"Model '{model}' trả lỗi HTTP {(int)response.StatusCode}{(code is null ? string.Empty : $" ({code})")}.", response.StatusCode, code);
+            }
             JsonNode? root;
             try { root = JsonNode.Parse(text); }
             catch (JsonException) { throw new OpenAiException("Phản hồi OpenAI không hợp lệ."); }
@@ -111,12 +121,12 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
     }
 
     /// <summary>Lấy mã lỗi có cấu trúc để ghi log; không ghi nội dung phản hồi hoặc khóa API.</summary>
-    private static string ErrorCode(string body)
+    private static string? ErrorCode(string body)
     {
         try
         {
             if (JsonNode.Parse(body) is not JsonObject root || root["error"] is not JsonObject error)
-                return string.Empty;
+                return null;
 
             // Google trả error.code dạng số và error.status dạng chuỗi; các API khác có thể dùng error.type.
             // Ưu tiên mã cụ thể (vd model_not_found, invalid_api_key) rồi mới tới loại lỗi chung (invalid_request_error).
@@ -126,9 +136,9 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
                 ?? (error["code"] as JsonValue)?.ToString();
             if (string.IsNullOrWhiteSpace(code) || code.Length > 64 ||
                 code.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-' or '.')))
-                return string.Empty;
-            return $" ({code})";
+                return null;
+            return code;
         }
-        catch (JsonException) { return string.Empty; }
+        catch (JsonException) { return null; }
     }
 }

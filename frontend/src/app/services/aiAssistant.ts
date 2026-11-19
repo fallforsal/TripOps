@@ -20,6 +20,11 @@ export interface AiChatResponse {
   tours: AiTourCard[];
   /** false = máy chủ chưa cấu hình AI (hoặc AI lỗi), câu trả lời do bộ quy tắc dự phòng tạo. */
   aiConfigured: boolean;
+  /**
+   * ID danh sách tour gợi ý gần nhất (theo thứ tự đã hiển thị) để gửi lại ở lượt sau.
+   * Máy chủ tự kiểm tra lại; rỗng = không còn danh sách nào.
+   */
+  contextTourIds?: number[] | null;
 }
 
 /**
@@ -37,10 +42,17 @@ export const askAgencyAssistant = (
     signal,
   });
 
-/** Hỏi trợ lý TripOps (không cần đăng nhập). Chỉ gửi nội dung hội thoại, không gửi thông tin tài khoản. */
-export const askGuestAssistant = (messages: { role: AiRole; content: string }[], signal?: AbortSignal) =>
+/**
+ * Hỏi trợ lý TripOps (không cần đăng nhập). Chỉ gửi nội dung hội thoại và ID các tour vừa gợi ý,
+ * không gửi thông tin tài khoản hay dữ liệu tour (máy chủ tự tải lại tour theo ID).
+ */
+export const askGuestAssistant = (
+  messages: { role: AiRole; content: string }[],
+  contextTourIds: number[],
+  signal?: AbortSignal,
+) =>
   http<AiChatResponse>("/ai/guest-chat", {
     method: "POST",
-    body: JSON.stringify({ messages: messages.slice(-10) }),
+    body: JSON.stringify({ messages: messages.slice(-10), contextTourIds: contextTourIds.slice(0, 8) }),
     signal,
   });
