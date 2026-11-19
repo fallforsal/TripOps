@@ -51,6 +51,10 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("cancellation_tiers");
 
+                    b.Property<string>("Clauses")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("clauses");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2")
                         .HasColumnName("created_at");

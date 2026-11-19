@@ -139,4 +139,55 @@ public sealed partial class BookingFlowTests
         // Hợp đồng của đơn đang hiệu lực tải được theo chính sách trong bản chụp của đơn đó.
         Assert.Equal(HttpStatusCode.OK, (await customer.GetAsync($"/api/v1/files/contracts/{second.Id}/document")).StatusCode);
     }
+
+    [Fact]
+    public void Clauses_keep_only_real_edits_and_fall_back_to_default()
+    {
+        var payment = ContractClauses.Get(ContractClauses.Payment).DefaultText;
+        var terms = ContractTerms.Validate(CustomTemplate().Tiers, null, null, new Dictionary<string, string?>
+        {
+            [ContractClauses.Duties] = "  • Bên A: đón khách tại khách sạn.\r\n• Bên B: đúng giờ.  ",
+            [ContractClauses.Payment] = payment + "\n",   // trùng bản mặc định → không lưu
+            [ContractClauses.Changes] = "   ",             // để trống → dùng mặc định
+        });
+        Assert.Equal(["duties"], terms.Clauses!.Keys);
+        Assert.Equal("• Bên A: đón khách tại khách sạn.\n• Bên B: đúng giờ.", terms.ClauseText(ContractClauses.Duties));
+        Assert.Equal(payment, terms.ClauseText(ContractClauses.Payment));
+        Assert.False(terms.IsCustomClause(ContractClauses.Changes));
+        var parsed = ContractTerms.Parse(terms.ToJson());
+        Assert.Equal(terms.ClauseText(ContractClauses.Duties), parsed.ClauseText(ContractClauses.Duties));
+        Assert.Null(ContractTerms.Validate(CustomTemplate().Tiers, null, null, new Dictionary<string, string?>()).Clauses);
+
+        Assert.Equal(422, Assert.Throws<BookingException>(() => ContractTerms.Validate(CustomTemplate().Tiers, null, null,
+            new Dictionary<string, string?> { ["parties"] = "x" })).Status);
+        Assert.Equal(422, Assert.Throws<BookingException>(() => ContractTerms.Validate(CustomTemplate().Tiers, null, null,
+            new Dictionary<string, string?> { [ContractClauses.Closing] = new string('a', ContractClauses.MaxLength + 1) })).Status);
+
+        var data = new ContractData("HD-2", 1, DateTime.UtcNow, null, "Agency", null, null, null, null, [],
+            "Khách", null, null, null, "BK2", "Tour", DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(2), 1,
+            [("Khách", "Người lớn", 1000000m)], [], 1000000m, [], terms);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(ContractPdf.Generate(data), 0, 4));
+    }
+
+    [Fact]
+    public async Task Agency_sees_all_clauses_edits_and_restores_them()
+    {
+        using var app = new App(); await app.Initialize();
+        var agency = await app.Client("agency1@example.test");
+        var initial = (await agency.GetFromJsonAsync<ContractTemplateDto>("/api/v1/agency/contract-template"))!;
+        Assert.Equal(["program", "price", "payment", "cancellation", "changes", "duties", "closing"], initial.Clauses.Select(c => c.Key));
+        Assert.All(initial.Clauses, c => { Assert.False(c.IsCustom); Assert.Equal(c.DefaultText, c.Text); });
+
+        var saved = await Read<ContractTemplateDto>(await agency.PutAsJsonAsync("/api/v1/agency/contract-template",
+            CustomTemplate() with { Clauses = new Dictionary<string, string?> { ["changes"] = "1. Bên A được đổi khách sạn cùng hạng." } }));
+        var changes = saved.Clauses.Single(c => c.Key == "changes");
+        Assert.True(changes.IsCustom);
+        Assert.Equal("1. Bên A được đổi khách sạn cùng hạng.", changes.Text);
+        Assert.False(saved.Clauses.Single(c => c.Key == "duties").IsCustom);
+
+        var restored = await Read<ContractTemplateDto>(await agency.PutAsJsonAsync("/api/v1/agency/contract-template", CustomTemplate()));
+        Assert.All(restored.Clauses, c => Assert.False(c.IsCustom));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PutAsJsonAsync("/api/v1/agency/contract-template",
+            CustomTemplate() with { Clauses = new Dictionary<string, string?> { ["unknown"] = "x" } })).StatusCode);
+    }
 }

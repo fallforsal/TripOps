@@ -23,7 +23,7 @@ public sealed class ContractTemplateService(TripOpsDbContext db)
 
     public async Task<ContractTemplateDto> Save(string agencyId, ContractTemplateRequest request, CancellationToken ct)
     {
-        var terms = ContractTerms.Validate(request.Tiers, request.CancellationNote, request.AdditionalTerms);
+        var terms = ContractTerms.Validate(request.Tiers, request.CancellationNote, request.AdditionalTerms, request.Clauses);
         var row = await db.AgencyContractTemplates.FirstOrDefaultAsync(t => t.AgencyId == agencyId, ct);
         var now = DateTime.UtcNow;
         if (row is null)
@@ -34,15 +34,18 @@ public sealed class ContractTemplateService(TripOpsDbContext db)
         row.CancellationTiers = terms.TiersJson();
         row.CancellationNote = terms.CancellationNote;
         row.AdditionalTerms = terms.AdditionalTerms;
+        row.Clauses = terms.ClausesJson();
         row.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         return Dto(terms, false, now);
     }
 
     private static ContractTerms Of(AgencyContractTemplate row) =>
-        new(ContractTerms.ParseTiers(row.CancellationTiers), row.CancellationNote, row.AdditionalTerms);
+        new(ContractTerms.ParseTiers(row.CancellationTiers), row.CancellationNote, row.AdditionalTerms, ContractTerms.ParseClauses(row.Clauses));
 
     private static ContractTemplateDto Dto(ContractTerms terms, bool isDefault, DateTime? updatedAt) =>
         new(terms.Tiers, terms.CancellationNote, terms.AdditionalTerms, isDefault, updatedAt,
-            terms.TableRows().Select(r => new ContractPolicyRow(r.Range, r.Fee)).ToList());
+            terms.TableRows().Select(r => new ContractPolicyRow(r.Range, r.Fee)).ToList(),
+            ContractClauses.All.Select(c => new ContractClauseDto(c.Key, c.Title, c.AutoContent, terms.ClauseText(c.Key), c.DefaultText,
+                terms.IsCustomClause(c.Key))).ToList());
 }

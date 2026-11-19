@@ -52,6 +52,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CancellationTiers).HasColumnName("cancellation_tiers").HasColumnType("nvarchar(max)").IsRequired();
             entity.Property(e => e.CancellationNote).HasColumnName("cancellation_note").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
             entity.Property(e => e.AdditionalTerms).HasColumnName("additional_terms").HasColumnType("nvarchar(max)");
+            entity.Property(e => e.Clauses).HasColumnName("clauses").HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2").IsRequired();
             entity.HasIndex(e => e.AgencyId).IsUnique();

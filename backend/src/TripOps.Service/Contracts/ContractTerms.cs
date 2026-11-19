@@ -8,13 +8,15 @@ namespace TripOps.Service.Contracts;
 public sealed record CancellationTier(int MinDays, decimal FeePercent);
 
 /// <summary>
-/// Phần hợp đồng do Agency tự soạn: bảng phí hủy (Điều 4), ghi chú chính sách hủy và điều khoản bổ sung.
-/// Các điều khác của hợp đồng giữ format chung của TripOps. Booking lưu bản chụp lúc đặt để Agency đổi mẫu sau
-/// không ảnh hưởng đơn cũ.
+/// Phần hợp đồng do Agency tự soạn: bảng phí hủy (Điều 4), ghi chú chính sách hủy, điều khoản bổ sung và nội dung
+/// các điều Agency sửa lại (<see cref="Clauses"/>, theo mã điều trong <see cref="ContractClauses"/>; điều không sửa dùng
+/// bản mặc định của TripOps). Booking lưu bản chụp lúc đặt để Agency đổi mẫu sau không ảnh hưởng đơn cũ.
+/// Phí và tiền hoàn luôn tính theo bảng mốc, không theo chữ trong các điều.
 /// Luật cố định của nền tảng (không do Agency chọn): ngày khởi hành trở đi phí 100%; hủy trong 72 giờ sau lần trả tiền
 /// đầu tiên và còn từ 15 ngày trở lên thì miễn phí.
 /// </summary>
-public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms)
+public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms,
+    IReadOnlyDictionary<string, string>? Clauses = null)
 {
     public const int MaxTiers = 10;
     public const int MaxMinDays = 365;
@@ -56,10 +58,17 @@ public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string
         return rows;
     }
 
+    /// <summary>Nội dung chữ của một điều: bản Agency sửa nếu có, không thì bản mặc định của TripOps.</summary>
+    public string ClauseText(string key) =>
+        Clauses is not null && Clauses.TryGetValue(key, out var text) ? text : ContractClauses.Get(key).DefaultText;
+
+    public bool IsCustomClause(string key) => Clauses?.ContainsKey(key) == true;
+
     public static string Percent(decimal value) => value.ToString("0.##", Vi) + "%";
 
     /// <summary>Kiểm tra dữ liệu Agency nhập; trả về chính sách đã chuẩn hóa (sắp xếp, cắt khoảng trắng).</summary>
-    public static ContractTerms Validate(IReadOnlyList<CancellationTier>? tiers, string? note, string? additionalTerms)
+    public static ContractTerms Validate(IReadOnlyList<CancellationTier>? tiers, string? note, string? additionalTerms,
+        IReadOnlyDictionary<string, string?>? clauses = null)
     {
         if (tiers is null || tiers.Count == 0)
             throw new BookingException(422, "Cần ít nhất một mốc phí hủy.");
@@ -83,10 +92,30 @@ public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string
             throw new BookingException(422, $"Ghi chú chính sách hủy tối đa {MaxNoteLength} ký tự.");
         if (additionalTerms?.Length > MaxAdditionalTermsLength)
             throw new BookingException(422, $"Điều khoản bổ sung tối đa {MaxAdditionalTermsLength} ký tự.");
-        return new(ordered, note, additionalTerms);
+        return new(ordered, note, additionalTerms, ValidateClauses(clauses));
     }
 
-    public string ToJson() => JsonSerializer.Serialize(new Stored(Tiers.ToList(), CancellationNote, AdditionalTerms), Json);
+    /// <summary>Chỉ giữ các điều Agency thực sự sửa; để trống hoặc trùng bản mặc định thì dùng bản mặc định.</summary>
+    private static IReadOnlyDictionary<string, string>? ValidateClauses(IReadOnlyDictionary<string, string?>? clauses)
+    {
+        if (clauses is null) return null;
+        var kept = new Dictionary<string, string>();
+        foreach (var (key, value) in clauses)
+        {
+            if (!ContractClauses.IsKnown(key))
+                throw new BookingException(422, $"Không có điều khoản '{key}' trong mẫu hợp đồng.");
+            if (value is null) continue;
+            var text = ContractClauses.Normalize(value);
+            if (text.Length == 0 || text == ContractClauses.Normalize(ContractClauses.Get(key).DefaultText)) continue;
+            if (text.Length > ContractClauses.MaxLength)
+                throw new BookingException(422, $"Mỗi điều tối đa {ContractClauses.MaxLength} ký tự.");
+            kept[key] = text;
+        }
+        return kept.Count == 0 ? null : kept;
+    }
+
+    public string ToJson() => JsonSerializer.Serialize(
+        new Stored(Tiers.ToList(), CancellationNote, AdditionalTerms, Clauses?.ToDictionary(c => c.Key, c => c.Value)), Json);
 
     /// <summary>Đọc bản chụp đã lưu; rỗng hoặc hỏng thì dùng chính sách mặc định của TripOps.</summary>
     public static ContractTerms Parse(string? json)
@@ -96,7 +125,7 @@ public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string
         {
             var stored = JsonSerializer.Deserialize<Stored>(json, Json);
             if (stored?.Tiers is not { Count: > 0 } tiers) return Default;
-            return new(tiers.OrderByDescending(t => t.MinDays).ToList(), stored.CancellationNote, stored.AdditionalTerms);
+            return new(tiers.OrderByDescending(t => t.MinDays).ToList(), stored.CancellationNote, stored.AdditionalTerms, Known(stored.Clauses));
         }
         catch (JsonException)
         {
@@ -126,16 +155,44 @@ public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string
         }
     }
 
-    private sealed record Stored(List<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms);
+    /// <summary>Cột clauses của mẫu hợp đồng (null khi Agency chưa sửa điều nào).</summary>
+    public string? ClausesJson() => Clauses is null ? null : JsonSerializer.Serialize(Clauses, Json);
+
+    public static IReadOnlyDictionary<string, string>? ParseClauses(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return Known(JsonSerializer.Deserialize<Dictionary<string, string>>(json, Json));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string>? Known(Dictionary<string, string>? clauses)
+    {
+        var kept = clauses?.Where(c => ContractClauses.IsKnown(c.Key) && !string.IsNullOrWhiteSpace(c.Value))
+            .ToDictionary(c => c.Key, c => c.Value);
+        return kept is { Count: > 0 } ? kept : null;
+    }
+
+    private sealed record Stored(List<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms,
+        Dictionary<string, string>? Clauses = null);
 }
 
 /// <summary>Mẫu hợp đồng Agency đang dùng. IsDefault = Agency chưa soạn, đang hiển thị chính sách mặc định của TripOps.</summary>
 public sealed record ContractTemplateDto(IReadOnlyList<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms,
-    bool IsDefault, DateTime? UpdatedAt, IReadOnlyList<ContractPolicyRow> Preview);
+    bool IsDefault, DateTime? UpdatedAt, IReadOnlyList<ContractPolicyRow> Preview, IReadOnlyList<ContractClauseDto> Clauses);
+
+/// <summary>Một điều trong mẫu: nội dung đang dùng, bản mặc định để khôi phục, phần hệ thống tự điền.</summary>
+public sealed record ContractClauseDto(string Key, string Title, string? AutoContent, string Text, string DefaultText, bool IsCustom);
 
 public sealed record ContractPolicyRow(string Range, string Fee);
 
-public sealed record ContractTemplateRequest(IReadOnlyList<CancellationTier>? Tiers, string? CancellationNote, string? AdditionalTerms);
+public sealed record ContractTemplateRequest(IReadOnlyList<CancellationTier>? Tiers, string? CancellationNote, string? AdditionalTerms,
+    IReadOnlyDictionary<string, string?>? Clauses = null);
 
 /// <summary>Chính sách hủy hiển thị cho khách (trang tour, báo giá hủy).</summary>
 public sealed record CancellationPolicyDto(IReadOnlyList<ContractPolicyRow> Rows, string? Note, bool IsDefault)
