@@ -2319,7 +2319,11 @@ export function AgencyBookingDetailPage({
 
                                   // Find all checkin records matching this attraction
                                   const locCheckins = attractionCheckins.filter(
-                                    (c) => c.bookingTimelineAttractionId === loc.id || (c.locationName === loc.name && c.dayNumber === day.day)
+                                    (c) =>
+                                      c.bookingTimelineAttractionId === loc.id ||
+                                      (c.agencyId === locAgencyId &&
+                                        c.locationName === loc.name &&
+                                        c.dayNumber === day.day)
                                   );
 
                                   // Filter checkins by guide

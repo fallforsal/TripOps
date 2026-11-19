@@ -323,7 +323,7 @@ export function fromApiBooking(
         dayNumber: dto.snapshotDays?.find((d) => d.locations.some((l) => l.id === c.locationId))?.dayNumber || 1,
         bookingTimelineAttractionId: String(c.locationId),
         agencyId: c.agencyId,
-        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
+        agencyName: dto.agencyDirectory?.find((a) => a.agencyId === c.agencyId)?.agencyName || dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
         guideId: c.guideId,
         guideName: c.guideName,
         guideAvatar: c.guideAvatar || dto.assignedGuides?.find((g) => g.guideId === c.guideId)?.guideAvatar,
