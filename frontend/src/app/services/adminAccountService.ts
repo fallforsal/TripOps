@@ -34,6 +34,20 @@ export interface AccountCounts {
   provider: number;
 }
 
+export interface CreateAdminAccountInput {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: AccountRole;
+  businessName?: string;
+  taxCode?: string;
+  businessAddress?: string;
+  businessLicenseUrl?: string;
+  description?: string;
+  agencyId?: string;
+}
+
 export interface AdminAccountPage {
   items: AdminAccount[];
   total: number;
@@ -43,6 +57,8 @@ export interface AdminAccountPage {
 }
 
 export const adminAccountService = {
+  create: (input: CreateAdminAccountInput) =>
+    http<AdminAccount>("/admin/accounts", { method: "POST", body: JSON.stringify(input) }),
   list: (query: URLSearchParams, signal?: AbortSignal) =>
     http<AdminAccountPage>(`/admin/accounts?${query}`, { signal }),
   ban: (id: string, reason: string) =>

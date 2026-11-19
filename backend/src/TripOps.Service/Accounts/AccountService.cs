@@ -232,6 +232,50 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         return Dto(user);
     }
 
+    public async Task<AdminAccountDto> CreateAdminAccount(CreateAdminAccountRequest request, CancellationToken ct)
+    {
+        var role = request.Role switch {
+            "user" => UserRole.Customer, "agency" => UserRole.TravelAgency,
+            "provider" => UserRole.Provider, "guide" => UserRole.TourGuide,
+            _ => throw new AccountException(400, "Vai trò không hợp lệ.") };
+        if (request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone)
+            || string.IsNullOrWhiteSpace(request.Password))
+            throw new AccountException(400, "Vui lòng điền đầy đủ thông tin tài khoản.");
+        var email = request.Email.Trim().ToLowerInvariant();
+        if (await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email.ToLower() == email, ct))
+            throw new AccountException(409, "Email đã được sử dụng.");
+        var user = new User { Id = Guid.NewGuid().ToString(), Name = request.Name.Trim(), Email = email,
+            Phone = request.Phone.Trim(), Role = role, Status = UserStatus.Active, IsVerified = false };
+        user.PasswordHash = hasher.HashPassword(user, request.Password);
+        if (role is UserRole.TravelAgency or UserRole.Provider)
+        {
+            if (new[] { request.BusinessName, request.TaxCode, request.BusinessAddress, request.BusinessLicenseUrl }.Any(string.IsNullOrWhiteSpace))
+                throw new AccountException(400, "Vui lòng nhập đủ tên doanh nghiệp, mã số thuế, địa chỉ và liên kết giấy phép.");
+            if (!Uri.TryCreate(request.BusinessLicenseUrl, UriKind.Absolute, out var license) || license.Scheme is not ("http" or "https"))
+                throw new AccountException(400, "Liên kết giấy phép phải là URL HTTP hoặc HTTPS.");
+            if (await db.BusinessProfiles.AnyAsync(p => p.TaxCode == request.TaxCode!.Trim(), ct))
+                throw new AccountException(409, "Mã số thuế đã được sử dụng.");
+            user.BusinessProfile = new BusinessProfile { UserId = user.Id, BusinessName = request.BusinessName!.Trim(),
+                TaxCode = request.TaxCode!.Trim(), BusinessAddress = request.BusinessAddress!.Trim(),
+                BusinessLicenseUrl = request.BusinessLicenseUrl!.Trim(), Description = request.Description?.Trim(),
+                Status = BusinessProfileStatus.Approved, ApprovedAt = DateTime.UtcNow };
+        }
+        if (role == UserRole.TourGuide)
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == request.AgencyId && u.Role == UserRole.TravelAgency
+                && u.Status == UserStatus.Active && u.BusinessProfile != null
+                && u.BusinessProfile.Status == BusinessProfileStatus.Approved, ct))
+                throw new AccountException(400, "Vui lòng chọn Agency đang hoạt động và đã được duyệt.");
+            user.AgencyId = request.AgencyId;
+            user.GuideProfile = new GuideProfile { UserId = user.Id };
+        }
+        db.Users.Add(user);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
+        { throw new AccountException(409, "Email hoặc mã số thuế đã được sử dụng."); }
+        return AdminDto(user);
+    }
+
     private AdminAccountDto AdminDto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
     u.Status.ToString().ToLowerInvariant(),
     null, // AvatarUrl: gán khi entity User có trường ảnh đại diện
