@@ -6,14 +6,17 @@ namespace TripOps.Service.Ai;
 /// <summary>Một lượt trong hội thoại: role chỉ nhận "user" hoặc "assistant" (client không được gửi "system").</summary>
 public sealed record AiChatMessage([Required, StringLength(12)] string Role, [Required, StringLength(4000)] string Content);
 
-public sealed record AiChatRequest([Required, MinLength(1), MaxLength(30)] List<AiChatMessage> Messages);
+/// <param name="ContextTourIds">ID các tour AI vừa gợi ý ở lượt trước (theo thứ tự đã hiển thị). Backend tự tải lại và kiểm tra.</param>
+public sealed record AiChatRequest([Required, MinLength(1), MaxLength(30)] List<AiChatMessage> Messages,
+    [MaxLength(8)] List<int>? ContextTourIds = null);
 
 /// <summary>Thẻ tour công khai hiển thị dưới câu trả lời (frontend mở #/tours/{Id}).</summary>
 public sealed record AiTourCard(int Id, string Name, string? Destination, int? DurationDays, int? DurationNights,
     decimal? Price, string? ImageUrl, string? AgencyName, int? MinGuests, int? MaxGuests);
 
 /// <param name="AiConfigured">false = chưa cấu hình khóa OpenAI hoặc AI lỗi, câu trả lời do bộ quy tắc dự phòng tạo.</param>
-public sealed record AiChatResponse(string Reply, IReadOnlyList<AiTourCard> Tours, bool AiConfigured);
+/// <param name="ContextTourIds">Danh sách tour gợi ý gần nhất mà frontend cần giữ và gửi lại ở lượt sau (rỗng = không còn danh sách).</param>
+public sealed record AiChatResponse(string Reply, IReadOnlyList<AiTourCard> Tours, bool AiConfigured, IReadOnlyList<int>? ContextTourIds = null);
 
 public sealed class AiAssistantException(int status, string message) : Exception(message)
 {

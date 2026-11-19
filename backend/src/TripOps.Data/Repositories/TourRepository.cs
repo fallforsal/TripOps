@@ -26,6 +26,11 @@ public sealed class TourRepository(TripOpsDbContext db)
         .OrderByDescending(t => t.CreatedAt).ThenBy(t => t.Id)
         .Take(take).AsSplitQuery().ToListAsync(ct);
 
+    /// <summary>Tour công khai theo danh sách ID (kèm lịch trình, giá, Agency) cho ngữ cảnh chatbot khách vãng lai.</summary>
+    public Task<List<Tour>> PublicByIds(IReadOnlyCollection<int> ids, CancellationToken ct) =>
+        Public(Details().Include(t => t.Agency).ThenInclude(a => a.BusinessProfile)).AsNoTracking()
+            .Where(t => ids.Contains(t.Id)).ToListAsync(ct);
+
     public Task<Tour?> Find(int id, string? owner, bool publicOnly, CancellationToken ct, bool includeDeleted = false)
     {
         var query = Details();
