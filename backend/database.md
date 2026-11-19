@@ -39,6 +39,21 @@ Table users {
   password_changed_at timestamp [note: 'Lần đổi/đặt lại mật khẩu gần nhất; phiên đăng nhập cũ hơn mốc này bị đăng xuất']
 }
 
+// Mẫu hợp đồng riêng của Travel Agency: hiện đủ các điều theo mẫu TripOps, Agency giữ nguyên hoặc sửa từng điều, tự soạn bảng phí hủy (Điều 4) và thêm điều khoản bổ sung.
+Table agency_contract_templates {
+  id int [pk, increment]
+  agency_id varchar(36) [unique, not null, note: 'FK tới users.id (role travel_agency); mỗi Agency một mẫu']
+  cancellation_tiers text [not null, note: 'JSON các mốc [{minDays, feePercent}]: còn từ minDays ngày trở lên thì phí feePercent% tổng giá trị tour']
+  cancellation_note varchar(2000) [note: 'Ghi chú thêm về chính sách hủy của Agency']
+  additional_terms text [note: 'Điều khoản bổ sung của Agency, in thành một điều riêng trong hợp đồng']
+  clauses text [note: 'JSON nội dung các điều Agency sửa lại theo mã điều (program, price, payment, cancellation, changes, duties, closing); điều không có trong JSON dùng bản mặc định TripOps']
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Ngày khởi hành trở đi phí 100% và miễn phí trong 72 giờ sau lần thanh toán đầu (còn ≥ 15 ngày) là luật chung của nền tảng.'
+}
+
+Ref: agency_contract_templates.agency_id > users.id
+
 // Mã OTP quên mật khẩu (gửi qua email). Chỉ lưu mã băm SHA-256.
 Table password_reset_codes {
   id int [pk, increment]
@@ -395,6 +410,7 @@ Table bookings {
   status varchar(20) [default: 'pending', note: 'pending, confirmed, completed, cancelled, rejected']
   cancel_reason text
   cancelled_at timestamp
+  contract_terms_snapshot text [note: 'Bản chụp JSON chính sách hủy (mốc ngày/% phí, ghi chú) và điều khoản bổ sung của Agency chủ trì lúc đặt; null = chính sách mặc định TripOps']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   Note: 'Khách đặt tour qua tour_id. BE kiểm tra design_request_id khớp yêu cầu nguồn của tour nếu có. tour_versions chỉ lưu lịch sử chỉnh sửa tour, không có FK từ booking tới version. Các bảng booking_timelines, booking_locations, booking_restaurants, booking_hotels và booking_participants giữ dữ liệu đã chốt khi đặt; không cập nhật theo tour gốc.'
@@ -572,10 +588,13 @@ Table booking_hotels {
       guide_id varchar(36) [not null, note: 'FK tới users.id - Hướng dẫn viên phụ trách dẫn điểm/xe này']
       agency_id varchar(36) [not null, note: 'FK tới users.id - Công ty trực tiếp quản lý HDV này']
 
-      attendance_status varchar(30) [default: 'PENDING', note: 'PENDING (Chưa đến) - CHECKED_IN (Đã đến điểm) -SKIPPED (Bỏ qua/sự cố)']
+      attendance_status varchar(30) [default: 'PENDING', note: 'PENDING (Chưa đến) - CHECKED_IN (Đã đến điểm) - CHECKED_OUT (Đã rời điểm) - SKIPPED (Bỏ qua/sự cố)']
       checked_at timestamp [note: 'Thời điểm check-in hoặc báo skip thực tế']
       photo_proof_url text [note: 'Ảnh chụp minh chứng đoàn đã tới điểm']
       notes text [note: 'Ghi chú của HDV: nổ lốp xe, kẹt xe, thời tiết xấu nên đổi điểm...']
+      checked_out_at timestamp [note: 'Thời điểm HDV check-out rời điểm tham quan']
+      checkout_photo_proof_url text [note: 'Ảnh minh chứng khi rời điểm']
+      checkout_notes text [note: 'Ghi chú của HDV khi check-out']
 
       created_at timestamp [default: `now()`]
       updated_at timestamp [default: `now()`]

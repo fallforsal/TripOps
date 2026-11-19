@@ -114,6 +114,7 @@ export type ApiTour = {
   updatedAt: string;
 };
 type PublicTour = { agencyId?: string; agency?: TourAgencyContact | null;
+  cancellationPolicy?: Tour["contractCancellationPolicy"];
   id: number;
   code: string | null;
   version: number;
@@ -560,8 +561,10 @@ export const fromApiTour = (tour: ApiTour): Tour => ({
   revision: tour.revision ?? 1, hasDraftChanges: tour.hasDraftChanges ?? false,
   customRequestId: tour.designRequestId == null ? undefined : String(tour.designRequestId),
 });
-const fromPublicTour = (tour: PublicTour) =>
-  fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, { agencyId: tour.agencyId, agency: tour.agency });
+const fromPublicTour = (tour: PublicTour): Tour => ({
+  ...fromConfiguration(tour.id, tour.code, tour.version, tour.configuration, { agencyId: tour.agencyId, agency: tour.agency }),
+  contractCancellationPolicy: tour.cancellationPolicy ?? null,
+});
 
 async function allPages(path: string): Promise<TourListItem[]> {
   const items: TourListItem[] = [];

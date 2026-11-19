@@ -29,6 +29,7 @@ import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccoun
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
 import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
+import { AgencyContractTemplatePage } from "@/app/components/agency/AgencyContractTemplatePage";
 
 import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
 import { toast } from "@/app/lib/notifications";
@@ -294,6 +295,9 @@ export function AgencyDashboard({
           />
         );
       
+      case "contract-template":
+        return <AgencyContractTemplatePage />;
+
       case "business-account":
         return <BusinessAccountContainer />;
 

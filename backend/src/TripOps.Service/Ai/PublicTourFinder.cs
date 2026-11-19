@@ -118,7 +118,8 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         agency = tour.Agency?.BusinessProfile?.BusinessName ?? tour.Agency?.Name,
     };
 
-    public static object Details(Tour tour) => new
+    /// <summary>Chi tiết tour cho AI; <paramref name="terms"/> là chính sách hủy của Agency chủ trì (null = mặc định TripOps).</summary>
+    public static object Details(Tour tour, Contracts.ContractTerms? terms = null) => new
     {
         id = tour.Id,
         name = tour.Name,
@@ -134,6 +135,7 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         inclusions = Clip(tour.Inclusions, 600),
         exclusions = Clip(tour.Exclusions, 400),
         agency_policy_note = Clip(tour.CancellationPolicy, 400),
+        cancellation_policy = (terms ?? Contracts.ContractTerms.Default).Describe(),
         itinerary = tour.Timelines.OrderBy(d => d.DayNumber)
             .Select(d => new { day = d.DayNumber, title = Clip(d.Title, 120), places = d.Attractions.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Take(6) }),
     };

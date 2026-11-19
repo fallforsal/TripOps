@@ -12,7 +12,7 @@ namespace TripOps.Service.Bookings;
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
     TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService,
-    CloudinaryStorage photoStorage)
+    CloudinaryStorage photoStorage, TripOps.Service.Contracts.ContractTemplateService contractTemplates)
 {
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingQuotationService quotationsForPayment => quotations;
@@ -212,6 +212,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
             TourVersion = tour.Version ?? 1,
             TourConfigurationData = System.Text.Json.JsonSerializer.Serialize(tourService.CurrentConfiguration(tour), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)),
             DesignRequestId = tour.DesignRequestId,
+            // Chính sách hủy và điều khoản bổ sung của Agency chủ trì tại lúc đặt: Agency sửa mẫu sau không đổi đơn này.
+            ContractTermsSnapshot = (await contractTemplates.TermsFor(tour.AgencyId, ct)).ToJson(),
             StartDate = request.StartDate.Date,
             TotalAmount = totalAmount,
             // Giá lúc khách đặt (đã gồm tùy chọn dịch vụ). Chỉ Agency điều chỉnh sau đó mới tạo chênh lệch.

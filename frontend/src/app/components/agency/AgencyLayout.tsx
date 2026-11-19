@@ -18,6 +18,7 @@ import {
   HandCoins,
   Star,
   MessageSquareWarning,
+  FileSignature,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
@@ -58,6 +59,7 @@ export function AgencyLayout({
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
     { id: "custom-requests", label: "Thiết kế tour", icon: PenSquare, badge: customRequestsBadgeCount },
     { id: "co-hosting", label: "Lời mời đối tác", icon: Handshake, badge: coHostingBadgeCount },
+    { id: "contract-template", label: "Mẫu hợp đồng", icon: FileSignature },
     { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 

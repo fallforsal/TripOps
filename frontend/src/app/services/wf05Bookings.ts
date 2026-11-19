@@ -1,4 +1,5 @@
 import { http } from "@/app/lib/http";
+import type { CancellationPolicyDto } from "@/app/services/contractTemplate";
 import type { PaymentOutcome } from "./payos";
 import { buildSignPageUrl } from "./contractSigning";
 
@@ -318,6 +319,8 @@ export interface CancellationQuoteDto {
   fee: number;
   refundAmount: number;
   explanation: string;
+  /** Chính sách hủy trong hợp đồng của đơn (của công ty lữ hành chủ trì, hoặc mặc định TripOps). */
+  policy?: CancellationPolicyDto | null;
 }
 
 export interface RefundAccountInput {

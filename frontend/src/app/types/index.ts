@@ -566,6 +566,8 @@ export interface Tour {
   inclusions?: string[];
   exclusions?: string[];
   regulations?: string[];
+  /** Chính sách hủy trong mẫu hợp đồng của công ty lữ hành (trang tour công khai). */
+  contractCancellationPolicy?: { rows: { range: string; fee: string }[]; note?: string | null; isDefault: boolean } | null;
   companyNote?: string;
   // Reviews
   reviews?: TourReview[];

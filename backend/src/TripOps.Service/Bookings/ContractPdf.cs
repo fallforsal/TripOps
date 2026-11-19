@@ -21,7 +21,8 @@ public sealed record ContractData(
     IReadOnlyList<(string Name, string? Tier, decimal? Price)> Participants,
     IReadOnlyList<ContractDay> Days,
     decimal TotalAmount,
-    IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule);
+    IReadOnlyList<(string Stage, decimal Amount, string Deadline)> Schedule,
+    Contracts.ContractTerms? Terms = null);
 
 /// <summary>Chữ ký trực tuyến của Bên B (ảnh PNG khách vẽ) và thông tin xác thực ghi vào bản đã ký.</summary>
 public sealed record ContractSignature(byte[] Png, DateTime SignedAtVietnam, string MaskedEmail, string SessionRef);
@@ -48,7 +49,11 @@ public static class ContractPdf
     private static string Date(DateTime value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     private static string DateTimeText(DateTime value) => value.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    public static byte[] Generate(ContractData d, ContractSignature? signature = null) => Document.Create(document =>
+    /// <param name="sample">Bản xem trước với dữ liệu mẫu (Agency soạn mẫu, khách xem trước khi đặt): in dòng cảnh báo ở đầu và cuối trang.</param>
+    public static byte[] Generate(ContractData d, ContractSignature? signature = null, bool sample = false)
+    {
+        var terms = d.Terms ?? Contracts.ContractTerms.Default;
+        return Document.Create(document =>
     {
         document.Page(page =>
         {
@@ -65,7 +70,10 @@ public static class ContractPdf
                     header.Item().AlignCenter().Text("Độc lập – Tự do – Hạnh phúc").Italic();
                     header.Item().PaddingTop(8).AlignCenter().Text("HỢP ĐỒNG DỊCH VỤ DU LỊCH THEO ĐOÀN").Bold().FontSize(15);
                     header.Item().AlignCenter().Text("(Hợp đồng lữ hành nội địa)").Italic();
-                    header.Item().PaddingBottom(6).AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
+                        if (sample)
+                        header.Item().PaddingTop(4).Border(0.5f).BorderColor(Colors.Red.Medium).Background(Colors.Red.Lighten5).Padding(4).AlignCenter()
+                            .Text("BẢN XEM TRƯỚC – thông tin khách, giá và lịch thanh toán là dữ liệu mẫu, không có giá trị pháp lý").FontSize(9).Bold().FontColor(Colors.Red.Darken2);
+                header.Item().PaddingBottom(6).AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
                 });
                 KeyValues(col, "Thông tin đơn", [
                     ("Mã đặt chỗ", d.BookingCode),
@@ -102,7 +110,7 @@ public static class ContractPdf
                         "không phải bên cung cấp dịch vụ du lịch.");
                 });
 
-                Section(col, "ĐIỀU 1. CHƯƠNG TRÌNH DU LỊCH");
+                Section(col, Heading(1, Contracts.ContractClauses.Program));
                 KeyValues(col, "Chi tiết tour", [
                     ("Tên tour", d.TourName),
                     ("Ngày khởi hành – ngày kết thúc", $"{Date(d.StartDate)} – {Date(d.EndDate)}"),
@@ -114,81 +122,54 @@ public static class ContractPdf
                     Table(col, ["Ngày", "Nội dung", "Bữa ăn", "Lưu trú"], [1.3f, 4, 1.6f, 2.6f],
                         d.Days.Select(x => new[] { $"{x.Day.ToString(CultureInfo.InvariantCulture)} – {x.Date:dd/MM}", x.Title, x.Meals ?? "–", x.Stay ?? "–" }));
                 }
-                col.Item().Text("Phương án khách đã chọn khác phương án mặc định (đổi khách sạn, đổi nhà hàng) được ghi trong lịch trình và tính vào giá tại Điều 2.");
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Program));
 
-                Section(col, "ĐIỀU 2. GIÁ TRỊ HỢP ĐỒNG");
+                Section(col, Heading(2, Contracts.ContractClauses.Price));
                 col.Item().Text(t => { t.Span("Tổng giá trị hợp đồng là "); t.Span(Money(d.TotalAmount)).Bold(); t.Span(" (đã gồm các dịch vụ nêu tại Điều 1), tính theo khung giá độ tuổi tại ngày khởi hành."); });
                 var groups = d.Participants.GroupBy(p => (Tier: p.Tier ?? "Khách", Price: p.Price ?? 0m))
                     .Select(g => new[] { g.Key.Tier, g.Count().ToString(CultureInfo.InvariantCulture), Number(g.Key.Price), Number(g.Key.Price * g.Count()) })
                     .ToList();
                 groups.Add(["Tổng cộng", d.Participants.Count.ToString(CultureInfo.InvariantCulture), "", Number(d.TotalAmount)]);
                 Table(col, ["Khung giá", "Số khách", "Đơn giá (đ/khách)", "Thành tiền (đ)"], [3, 1.3f, 2, 2], groups, alignRightLast: true, boldLastRow: true);
-                col.Item().Text("Đơn giá đã gồm phụ thu của phương án khách chọn. Phụ thu phát sinh sau khi ký (đổi dịch vụ, thêm khách) được lập thành khoản thu riêng " +
-                    "trên TripOps và Bên B xác nhận trước khi thanh toán.");
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Price));
 
-                Section(col, "ĐIỀU 3. PHƯƠNG THỨC VÀ TIẾN ĐỘ THANH TOÁN");
-                col.Item().Text("Bên B thanh toán qua cổng payOS trên TripOps (chuyển khoản QR), không chuyển thẳng cho Bên A. Giờ ghi theo giờ Việt Nam.");
+                Section(col, Heading(3, Contracts.ContractClauses.Payment));
                 if (d.Schedule.Count > 0)
                     Table(col, ["Đợt", "Số tiền (đ)", "Hạn thanh toán"], [3, 2, 3],
                         d.Schedule.Select(s => new[] { s.Stage, Number(s.Amount), s.Deadline }));
-                Numbered(col, [
-                    "Bên B phải ký hợp đồng trước khi thanh toán Đợt 1.",
-                    "Đợt 1 (đặt cọc) bằng 50% tổng giá trị, hạn 24 giờ kể từ khi Bên A duyệt. Đợt 2 (phần còn lại) hạn hết ngày trước ngày khởi hành 8 ngày. " +
-                        "Tour được duyệt khi còn dưới 8 ngày đến ngày khởi hành thì thanh toán một lần 100% trong 24 giờ.",
-                    "Quá hạn một đợt thì không thanh toán được đợt đó nữa và áp dụng mục c) Điều 4.",
-                    "Khoản thanh toán chỉ được ghi nhận khi payOS báo đã nhận đúng số tiền. Chuyển thiếu hoặc dư sẽ được Quản trị viên TripOps đối soát, không tự cộng vào đơn.",
-                    "TripOps chuyển tiền cho Bên A (đã trừ phí sàn) 2 ngày sau khi tour kết thúc, khi Bên B đã thanh toán đủ; khiếu nại đang mở phải được Quản trị viên giải quyết trước."]);
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Payment));
 
                 col.Item().ShowEntire().Column(cancellation =>
                 {
                     cancellation.Spacing(6);
-                    Section(cancellation, "ĐIỀU 4. HỦY HỢP ĐỒNG VÀ HOÀN TIỀN");
-                    cancellation.Item().Text(t =>
-                    {
-                        t.Span("a) Bên B hủy. ").Bold();
-                        t.Span("Phí hủy tính trên tổng giá trị tour, theo số ngày còn lại trước ngày khởi hành lúc gửi yêu cầu. " +
-                            "Miễn phí (0%) nếu gửi trong 72 giờ sau khi thanh toán và còn từ 15 ngày trở lên.");
-                    });
-                    Table(cancellation, ["Thời điểm hủy trước ngày khởi hành", "Phí hủy (% tổng giá trị tour)"], [3, 2], new[]
-                    {
-                        new[] { "Từ 30 ngày trở lên", "0%" },
-                        new[] { "Từ 15 đến 29 ngày", "25%" },
-                        new[] { "Từ 8 đến 14 ngày", "50%" },
-                        new[] { "Từ 3 đến 7 ngày", "75%" },
-                        new[] { "Từ 1 đến 2 ngày", "90%" },
-                        new[] { "Ngày khởi hành hoặc không tham gia", "100%" }
-                    }, alignRightLast: true);
-                    cancellation.Item().Text(t =>
-                    {
-                        t.Span("Số tiền hoàn = Số tiền đã thanh toán − Phí hủy").Bold();
-                        t.Span(" (tối thiểu 0 đ).");
-                    });
+                    Section(cancellation, Heading(4, Contracts.ContractClauses.Cancellation));
+                    cancellation.Item().Text($"Bảng phí hủy theo chính sách hủy của {(ReferenceEquals(terms, Contracts.ContractTerms.Default) ? "TripOps" : "Bên A")}:").Bold();
+                    Table(cancellation, ["Thời điểm hủy trước ngày khởi hành", "Phí hủy (% tổng giá trị tour)"], [3, 2],
+                        terms.TableRows().Select(r => new[] { r.Range, r.Fee }).ToArray(), alignRightLast: true);
+                    if (terms.CancellationNote is { } note)
+                        cancellation.Item().Text(t => { t.Span("Ghi chú của Bên A: ").Bold(); t.Span(note); });
                 });
-                Lettered(col, "b) Bên A hủy tour:", "Bên B được hoàn 100% số tiền đã thanh toán.");
-                Lettered(col, "c) Bên B không thanh toán đủ đúng hạn:", "Bên A có quyền hủy hợp đồng và Bên B mất số tiền đã thanh toán.");
-                Lettered(col, "d)", "Hợp đồng chỉ chấm dứt khi Quản trị viên TripOps duyệt yêu cầu hủy. Tiền hoàn chuyển vào tài khoản Bên B khai báo trong 7 ngày làm việc kể từ khi duyệt.");
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Cancellation));
 
-                Section(col, "ĐIỀU 5. THAY ĐỔI DỊCH VỤ, BẤT KHẢ KHÁNG, BẢO HIỂM");
-                Numbered(col, [
-                    "Bên A đổi dịch vụ (khách sạn, nhà hàng, điểm tham quan) phải báo Bên B và dùng dịch vụ cùng hạng trở lên; chênh lệch tăng giá do Bên A chịu.",
-                    "Thiên tai, dịch bệnh, quyết định của cơ quan nhà nước khiến tour không thực hiện được: các bên được miễn bồi thường; " +
-                        "TripOps quyết định hoàn 100% hoặc dời ngày, chỉ khấu trừ chi phí thực tế có chứng từ.",
-                    "Bên A mua bảo hiểm du lịch cho toàn bộ thành viên trong đoàn suốt hành trình."]);
+                Section(col, Heading(5, Contracts.ContractClauses.Changes));
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Changes));
 
-                Section(col, "ĐIỀU 6. QUYỀN VÀ NGHĨA VỤ");
-                Bulleted(col, "Bên A:", "thực hiện đúng chương trình và chất lượng đã cam kết; cử hướng dẫn viên; điểm danh khách mỗi ngày; báo ngay mọi thay đổi trên TripOps.");
-                Bulleted(col, "Bên B:", "cung cấp đúng thông tin từng thành viên; thanh toán đúng hạn; phổ biến hợp đồng cho cả đoàn; có mặt đúng giờ tập trung; tuân thủ hướng dẫn của hướng dẫn viên.");
-                Bulleted(col, "Trẻ em", "đi cùng người giám hộ có tên trong danh sách đoàn.");
+                Section(col, Heading(6, Contracts.ContractClauses.Duties));
+                Body(col, terms.ClauseText(Contracts.ContractClauses.Duties));
+
+                if (terms.AdditionalTerms is { } extra)
+                {
+                    // Điều khoản riêng do Agency soạn trong mẫu hợp đồng; các điều khác giữ format chung.
+                    Section(col, "ĐIỀU 7. ĐIỀU KHOẢN BỔ SUNG CỦA BÊN A");
+                    foreach (var line in extra.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
+                        col.Item().Text(line);
+                }
 
                 col.Item().ShowEntire().Column(closing =>
                 {
                     closing.Spacing(6);
-                    Section(closing, "ĐIỀU 7. KHIẾU NẠI VÀ HIỆU LỰC");
-                    Numbered(closing, [
-                        "Bên B gửi khiếu nại về chuyến đi trên TripOps trong 1 ngày sau khi tour kết thúc. Quản trị viên TripOps kết luận khiếu nại và báo kết quả cho các bên.",
-                        "Tranh chấp giải quyết bằng thương lượng; không thành thì đưa ra Tòa án có thẩm quyền.",
-                        "Hợp đồng lập bằng tiếng Việt, có hiệu lực khi Bên B ký (trực tuyến hoặc tải bản đã ký lên TripOps); mỗi bên lưu một bản điện tử. " +
-                            "Mỗi lần đổi giá trị hợp đồng lập phiên bản mới và ký lại."]);
+                    Section(closing, Heading(terms.AdditionalTerms is null ? 7 : 8, Contracts.ContractClauses.Closing));
+                    Body(closing, terms.ClauseText(Contracts.ContractClauses.Closing));
 
                     closing.Item().PaddingTop(16).Row(row =>
                     {
@@ -236,16 +217,27 @@ public static class ContractPdf
             page.Footer().AlignCenter().Text(t =>
             {
                 t.DefaultTextStyle(s => s.FontSize(8));
-                t.Span($"{d.ContractNo} · Trang ");
+                t.Span($"{(sample ? "Bản xem trước · " : "")}{d.ContractNo} · Trang ");
                 t.CurrentPageNumber();
                 t.Span(" / ");
                 t.TotalPages();
             });
         });
     }).GeneratePdf();
+    }
 
     private static string? Join(string? first, string? second) =>
         string.Join(" · ", new[] { first, second }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } text ? text : null;
+
+    private static string Heading(int number, string key) =>
+        $"ĐIỀU {number.ToString(CultureInfo.InvariantCulture)}. {Contracts.ContractClauses.Get(key).Title}";
+
+    /// <summary>Nội dung chữ của một điều (bản mặc định hoặc bản Agency sửa): mỗi dòng một đoạn.</summary>
+    private static void Body(ColumnDescriptor col, string text)
+    {
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
+            col.Item().PaddingLeft(char.IsDigit(line[0]) || line[0] == '•' ? 6 : 0).Text(line);
+    }
 
     private static void Section(ColumnDescriptor col, string title) =>
         col.Item().PaddingTop(6).Text(title).Bold().FontSize(11);
@@ -297,28 +289,4 @@ public static class ContractPdf
                 }
         });
     }
-
-    private static void Numbered(ColumnDescriptor col, string[] items)
-    {
-        for (var i = 0; i < items.Length; i++)
-        {
-            var number = (i + 1).ToString(CultureInfo.InvariantCulture);
-            var text = items[i];
-            col.Item().PaddingLeft(6).Row(row =>
-            {
-                row.ConstantItem(16).Text(number + ".");
-                row.RelativeItem().Text(text);
-            });
-        }
-    }
-
-    private static void Lettered(ColumnDescriptor col, string label, string text) =>
-        col.Item().Text(t => { t.Span(label + " ").Bold(); t.Span(text); });
-
-    private static void Bulleted(ColumnDescriptor col, string label, string text) =>
-        col.Item().PaddingLeft(6).Row(row =>
-        {
-            row.ConstantItem(12).Text("•");
-            row.RelativeItem().Text(t => { t.Span(label + " ").Bold(); t.Span(text); });
-        });
 }

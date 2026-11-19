@@ -229,6 +229,6 @@ public sealed partial class BookingService
             booking.Participants.Where(p => p.Status != "INACTIVE").GroupBy(p=>p.ParticipantIndex).OrderBy(g=>g.Key)
                 .Select(g => (g.First().FullName, g.First().TierName, (decimal?)g.Sum(p=>p.Price))).ToList(),
             days,
-            contract.TotalAmount, schedule);
+            contract.TotalAmount, schedule, Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot));
     }
 }
