@@ -18,7 +18,7 @@ public static class GuideLocationCheckinRules
                 .ThenBy(a => a.Id)).ToList();
 
     public static int? NextUncheckedStopId(IEnumerable<BookingTimeline> days) =>
-        OrderedStops(days).FirstOrDefault(a => a.AttendanceStatus != "CheckedOut")?.Id;
+        OrderedStops(days).FirstOrDefault(a => a.AttendanceStatus is not ("CheckedOut" or "Skipped"))?.Id;
 
     public static bool CanCheckIn(Booking booking, DateTime utcNow) =>
         booking.StartDate.Date <= PaymentRules.VietnamDate(utcNow) &&

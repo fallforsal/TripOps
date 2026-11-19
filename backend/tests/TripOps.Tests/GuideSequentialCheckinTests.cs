@@ -97,11 +97,14 @@ public sealed partial class BookingFlowTests
         Assert.True(detail!.CanCheckInLocations);
         Assert.Equal(firstId, detail.NextLocationCheckInId);
 
-        // Reject invalid statuses, out-of-order check-ins/skips, and duplicate check-ins.
+        // Reject invalid statuses, photo-less skips, out-of-order check-ins/skips, and duplicate check-ins.
         Assert.Equal(HttpStatusCode.BadRequest,
             (await guide.PostAsJsonAsync(Url(firstId), new { status = "InvalidStatus" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,
             (await guide.PostAsJsonAsync(Url(secondId), new { status = "Skipped" })).StatusCode);
+        using (var skipForm = PhotoForm(1, status: "Skipped"))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{secondId}/check-in-with-images", skipForm)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await Check(secondId)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
@@ -193,5 +196,100 @@ public sealed partial class BookingFlowTests
             (await guide.PostAsync(
                 $"/api/v1/guide/bookings/{bookingId}/locations/{otherAgencyStopId}/check-in-with-images",
                 form)).StatusCode);
+    }
+
+    [Fact]
+    public async Task GuideLocationSkip_AdvancesOrderWithoutPhoto_WhileCheckedInStillRequiresCheckout()
+    {
+        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
+        await app.Initialize();
+        var today = PaymentRules.VietnamDate(DateTime.UtcNow);
+        int bookingId, firstId, secondId, thirdId;
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var booking = new Booking
+            {
+                BookingCode = "SKIP-FLOW-" + Guid.NewGuid().ToString("N"),
+                TourId = 1, CustomerId = "customer1",
+                StartDate = today,
+                ContactName = "Test", ContactPhone = "0900000000",
+                ContactEmail = "customer1@example.test",
+                Status = BookingStatus.Confirmed, TotalAmount = 1000000m,
+                BookingAgencies = [new BookingAgency { AgencyId = "agency1", IsHost = true }],
+                AssignedGuides = [new BookingAssignedGuide { GuideId = "guide1", AgencyId = "agency1", Role = "lead_guide" }],
+                Timelines =
+                [
+                    new BookingTimeline
+                    {
+                        DayNumber = 1, Title = "Day one",
+                        Attractions =
+                        [
+                            new BookingTimelineAttraction { AgencyId = "agency1", OriginalLocationName = "Stop 1", CurrentLocationName = "Stop 1", AttendanceStatus = "Pending", Time = today.AddHours(8) },
+                            new BookingTimelineAttraction { AgencyId = "agency1", OriginalLocationName = "Stop 2", CurrentLocationName = "Stop 2", AttendanceStatus = "Pending", Time = today.AddHours(10) },
+                            new BookingTimelineAttraction { AgencyId = "agency1", OriginalLocationName = "Stop 3", CurrentLocationName = "Stop 3", AttendanceStatus = "Pending", Time = today.AddHours(12) }
+                        ]
+                    }
+                ]
+            };
+            db.Bookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+            var days = await db.BookingTimelines.Include(x => x.Attractions)
+                .Where(x => x.BookingId == bookingId).ToListAsync();
+            var ordered = GuideLocationCheckinRules.OrderedStops(days);
+            firstId = ordered[0].Id;
+            secondId = ordered[1].Id;
+            thirdId = ordered[2].Id;
+        }
+
+        using var guide = await app.Client("guide1@example.test");
+        string CheckinUrl(int locationId) => $"/api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in";
+        string CheckinWithImagesUrl(int locationId) => $"/api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in-with-images";
+
+        // Photo-less skip is rejected.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await guide.PostAsJsonAsync(CheckinUrl(firstId), new { status = "Skipped", note = "Đóng cửa bảo trì" })).StatusCode);
+
+        // Skip active stop 1 with photo & reason -> advances to stop 2.
+        HttpResponseMessage skippedFirst;
+        using (var form = PhotoForm(1, status: "Skipped", note: "Đóng cửa bảo trì"))
+            skippedFirst = await guide.PostAsync(CheckinWithImagesUrl(firstId), form);
+        skippedFirst.EnsureSuccessStatusCode();
+        var detail = await skippedFirst.Content.ReadFromJsonAsync<BookingDto>();
+        Assert.Equal(secondId, detail!.NextLocationCheckInId);
+        Assert.Equal("Skipped", detail.SnapshotDays![0].Locations[0].AttendanceStatus);
+        Assert.Equal("Đóng cửa bảo trì", detail.SnapshotDays[0].Locations[0].CheckinNote);
+        Assert.Single(detail.SnapshotDays[0].Locations[0].PhotoUrls!);
+
+        // Skipped stop cannot be skipped again, checked in, or checked out.
+        using (var form = PhotoForm(1, status: "Skipped"))
+            Assert.Equal(HttpStatusCode.Conflict, (await guide.PostAsync(CheckinWithImagesUrl(firstId), form)).StatusCode);
+        using (var form = PhotoForm(1))
+            Assert.Equal(HttpStatusCode.Conflict, (await guide.PostAsync(CheckinWithImagesUrl(firstId), form)).StatusCode);
+        using (var form = PhotoForm(1))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{firstId}/check-out-with-images", form)).StatusCode);
+
+        // Stop 2 photo check-in does NOT allow skipping stop 2 or stop 3 until stop 2 is checked out.
+        using (var form = PhotoForm(1))
+            (await guide.PostAsync(CheckinWithImagesUrl(secondId), form)).EnsureSuccessStatusCode();
+        using (var form = PhotoForm(1, status: "Skipped"))
+            Assert.Equal(HttpStatusCode.Conflict, (await guide.PostAsync(CheckinWithImagesUrl(secondId), form)).StatusCode);
+        using (var form = PhotoForm(1, status: "Skipped"))
+            Assert.Equal(HttpStatusCode.Conflict, (await guide.PostAsync(CheckinWithImagesUrl(thirdId), form)).StatusCode);
+        using (var form = PhotoForm(1))
+            (await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{secondId}/check-out-with-images", form)).EnsureSuccessStatusCode();
+
+        // Now stop 3 can be skipped with photo to finish the itinerary.
+        HttpResponseMessage skippedThird;
+        using (var form = PhotoForm(1, status: "Skipped", note: "Thời tiết xấu"))
+            skippedThird = await guide.PostAsync(CheckinWithImagesUrl(thirdId), form);
+        skippedThird.EnsureSuccessStatusCode();
+        detail = await skippedThird.Content.ReadFromJsonAsync<BookingDto>();
+        Assert.Null(detail!.NextLocationCheckInId);
+        Assert.Equal("Skipped", detail.SnapshotDays![0].Locations[2].AttendanceStatus);
+        Assert.Single(detail.SnapshotDays[0].Locations[2].PhotoUrls!);
     }
 }

@@ -16,15 +16,15 @@ namespace TripOps.Api.Controllers;
 public sealed record PassengerEdit(int Id, [Required, StringLength(150)] string FullName, DateTime? DateOfBirth,
     string? Gender, string? IdentityNumber, string? Note, string? RoommateNote, string? RestaurantNote, [Phone, StringLength(30)] string? PhoneNumber = null);
 public sealed record PassengerEdits([Required] PassengerEdit[] Participants);
-// The Guide confirms arrival. Skipping cannot advance the itinerary.
+// The Guide confirms arrival with photos, checks out with photos, or skips with a reason.
 public sealed record LocationCheckin(
     [Required, AllowedValues("CheckedIn", "Skipped")] string Status,
     [StringLength(500)] string? Note);
 
-/// <summary>One to five check-in photos, uploaded in the same action.</summary>
+/// <summary>One to five check-in or skip photos, uploaded in the same action.</summary>
 public sealed class GuideCheckinImagesForm
 {
-    [Required, AllowedValues("CheckedIn")]
+    [Required, AllowedValues("CheckedIn", "Skipped")]
     public string Status { get; set; } = "CheckedIn";
     [StringLength(500)]
     public string? Note { get; set; }
@@ -94,16 +94,16 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow)) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
     [HttpPost("locations/{locationId:int}/check-in")]
-    [EndpointSummary("Deprecated: photo-less check-in is rejected")]
+    [EndpointSummary("Deprecated: photo-less check-in or skip is rejected")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public IActionResult Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct) =>
-        throw new BookingException(422, "Check-in bắt buộc có ảnh chụp camera.");
+    public Task<IActionResult> Checkin(int id, int locationId, LocationCheckin request, CancellationToken ct) =>
+        CheckinInternal(id, locationId, request, null, ct);
 
     [HttpPost("locations/{locationId:int}/check-in-with-images")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(22 * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 22 * 1024 * 1024)]
-    [EndpointSummary("Check in next stop with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
+    [EndpointSummary("Check in or skip next stop with 1–5 JPEG/PNG/WebP photos (5 MB each, 20 MB total)")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
     public Task<IActionResult> CheckinWithImages(
         int id, int locationId, [FromForm] GuideCheckinImagesForm request, CancellationToken ct) =>
@@ -162,18 +162,15 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     private async Task<IActionResult> CheckinInternal(
         int id, int locationId, LocationCheckin request, IReadOnlyList<IFormFile>? images, CancellationToken ct)
     {
-        if (request.Status != "CheckedIn")
-            throw new BookingException(422, "Không thể bỏ qua điểm để mở khóa lịch trình.");
-        if (images is null)
-            throw new BookingException(422, "Check-in bắt buộc có ảnh chụp camera.");
-        GuideCheckinPhotoRules.ValidateFiles(images.Select(f => (f.Length, f.ContentType)).ToArray());
+        if (request.Status is not ("CheckedIn" or "Skipped"))
+            throw new BookingException(422, "Chỉ được xác nhận đã đến hoặc bỏ qua địa điểm.");
+        if (images is not null)
+            GuideCheckinPhotoRules.ValidateFiles(images.Select(f => (f.Length, f.ContentType)).ToArray());
 
         // Preserve the original sequential/date/Agency validation for JSON and multipart.
         // Serializable transaction prevents two parallel check-ins from racing forward.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var booking = await Assigned(id, ct);
-        if (request.Status != "CheckedIn")
-            throw new BookingException(422, "Chỉ được check-in điểm dừng.");
 
         // Read the complete itinerary rather than only the requested stop.
         // A guide from another Agency may not check in another Agency's stage.
@@ -185,15 +182,19 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
         if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
             throw new BookingException(403, "HDV chỉ check-in điểm thuộc chặng công ty mình.");
+        if (images is null)
+            throw new BookingException(422, request.Status == "Skipped"
+                ? "Bỏ qua điểm dừng bắt buộc có ảnh chụp camera."
+                : "Check-in bắt buộc có ảnh chụp camera.");
         // Check ownership before lifecycle rules, including before departure.
         if (!GuideLocationCheckinRules.CanCheckIn(booking, DateTime.UtcNow))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
-        if (location.AttendanceStatus is "CheckedIn" or "CheckedOut")
+        if (location.AttendanceStatus is "CheckedIn" or "CheckedOut" or "Skipped")
             throw new BookingException(409, "Điểm đến này đã được xử lý.");
 
         var nextId = GuideLocationCheckinRules.NextUncheckedStopId(days);
         if (nextId != locationId)
-            throw new BookingException(409, "Phải check-out điểm trước khi check-in điểm tiếp theo.");
+            throw new BookingException(409, "Phải check-out hoặc bỏ qua điểm trước khi xử lý điểm tiếp theo.");
 
         // No GPS, coordinates, location permission, or device-location payload.
         var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
@@ -208,25 +209,23 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
             };
             db.BookingAttractionCheckins.Add(checkin);
         }
-        if (images is not null)
+        var skipped = request.Status == "Skipped";
+        var photoUrls = new List<string>(images.Count);
+        foreach (var file in images)
         {
-            var photoUrls = new List<string>(images.Count);
-            foreach (var file in images)
-            {
-                await using var stream = new MemoryStream();
-                await file.CopyToAsync(stream, ct);
-                var bytes = stream.ToArray();
-                if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
-                    throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
-                photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
-            }
-            checkin.PhotoUrl = GuideCheckinPhotoRules.Encode(photoUrls);
+            await using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            var bytes = stream.ToArray();
+            if (bytes.Length != file.Length || !GuideCheckinPhotoRules.IsValidImage(bytes, file.ContentType))
+                throw new BookingException(422, "Ảnh không đúng định dạng JPEG, PNG hoặc WebP.");
+            photoUrls.Add(await media.UploadGuideCheckinImage(Actor, bytes, file.ContentType, ct));
         }
-        checkin.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
+        checkin.PhotoUrl = GuideCheckinPhotoRules.Encode(photoUrls);
+        checkin.AttendanceStatus = skipped ? AttractionCheckinStatus.Skipped : AttractionCheckinStatus.CheckedIn;
         checkin.CheckinTime = DateTime.UtcNow;
         checkin.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         location.GuideId = Actor;
-        location.AttendanceStatus = "CheckedIn";
+        location.AttendanceStatus = skipped ? "Skipped" : "CheckedIn";
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));

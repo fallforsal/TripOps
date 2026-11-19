@@ -5,35 +5,51 @@ import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart
 import 'package:tripops_guide/features/location_checkin/presentation/location_screen.dart';
 
 class _FakeGuides implements GuideRepository {
+  String? lastStatus;
+  String? lastNote;
+  int? lastLocationId;
+
+  @override
+  Future<BookingDetail> checkIn(
+    int bookingId,
+    int locationId,
+    String status,
+    String? note,
+  ) async {
+    lastLocationId = locationId;
+    lastStatus = status;
+    lastNote = note;
+    return BookingDetail(
+      id: bookingId,
+      code: 'BK-123',
+      name: 'Tour Vũng Tàu',
+      status: 'Confirmed',
+      startDate: DateTime(2026, 11, 12),
+      endDate: DateTime(2026, 11, 14),
+      totalGuests: 1,
+      passengers: const [],
+      incidents: const [],
+      canCheckInLocations: true,
+      nextLocationCheckInId: 2,
+      days: [
+        TourDay(dayNumber: 1, title: 'Ngày 1', stops: [
+          TourStop(
+            id: 1,
+            name: 'Điểm A',
+            status: status,
+            checkinNote: note,
+          ),
+          const TourStop(id: 2, name: 'Điểm B', status: 'Pending'),
+        ]),
+        TourDay(dayNumber: 2, title: 'Ngày 2', stops: [
+          const TourStop(id: 3, name: 'Điểm C', status: 'Pending'),
+        ]),
+      ],
+    );
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-  testWidgets('checked-in point requires checkout and keeps following point locked', (tester) async {
-    final booking = _detail(dateAllowed: true);
-    final active = BookingDetail(
-      id: booking.id, code: booking.code, name: booking.name,
-      status: booking.status, startDate: booking.startDate,
-      endDate: booking.endDate, totalGuests: booking.totalGuests,
-      passengers: booking.passengers, incidents: booking.incidents,
-      canCheckInLocations: true, nextLocationCheckInId: 1,
-      days: [TourDay(dayNumber: 1, title: 'Ngày 1', stops: [
-        const TourStop(id: 1, name: 'Điểm A', status: 'CheckedIn'),
-        const TourStop(id: 2, name: 'Điểm B', status: 'Pending'),
-      ])],
-    );
-    await showScreen(tester, active);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
-    expect(tester.widget<OutlinedButton>(
-      find.byKey(const ValueKey('checkout-1'))).onPressed, isNotNull);
-    await tester.tap(find.byKey(const ValueKey('checkout-1')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
-    expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
-    expect(find.text('Xác nhận check-out'), findsOneWidget);
-    await tester.tap(find.text('Hủy'));
-    await tester.pumpAndSettle();
-  });
-
 }
 
 BookingDetail _detail({
@@ -84,17 +100,22 @@ void main() {
     expect(find.textContaining('Chưa đến ngày khởi hành'), findsWidgets);
   });
 
-  testWidgets('on departure date only first itinerary stop is enabled',
+  testWidgets('on departure date pending stops show only checkin and skip',
       (tester) async {
     await showScreen(tester, _detail(dateAllowed: true));
     expect(tester.widget<FilledButton>(
       find.byKey(const ValueKey('checkin-1'))).onPressed, isNotNull);
+    expect(tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('skip-1'))).onPressed, isNotNull);
     expect(tester.widget<FilledButton>(
       find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('skip-2'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkout-1')), findsNothing);
+    expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     expect(find.text('Cần check-out điểm trước đó'), findsWidgets);
     expect(find.textContaining('GPS'), findsOneWidget);
     expect(find.textContaining('Phạm vi GPS'), findsNothing);
-    expect(find.text('Check-out'), findsWidgets);
   });
 
   testWidgets('server advancement unlocks the next stop even without GPS',
@@ -140,6 +161,82 @@ void main() {
     expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
     expect(find.textContaining('20 MB'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('confirm-checkin'))).onPressed, isNull);
+    await tester.tap(find.text('Hủy'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('checked-in point hides checkin/skip and shows checkout', (tester) async {
+    final booking = _detail(dateAllowed: true);
+    final active = BookingDetail(
+      id: booking.id, code: booking.code, name: booking.name,
+      status: booking.status, startDate: booking.startDate,
+      endDate: booking.endDate, totalGuests: booking.totalGuests,
+      passengers: booking.passengers, incidents: booking.incidents,
+      canCheckInLocations: true, nextLocationCheckInId: 1,
+      days: [TourDay(dayNumber: 1, title: 'Ngày 1', stops: [
+        const TourStop(id: 1, name: 'Điểm A', status: 'CheckedIn'),
+        const TourStop(id: 2, name: 'Điểm B', status: 'Pending'),
+      ])],
+    );
+    await showScreen(tester, active);
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-1')), findsNothing);
+    expect(tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('checkout-1'))).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('skip-2'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('checkout-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
+    expect(find.text('Xác nhận check-out'), findsOneWidget);
+    await tester.tap(find.text('Hủy'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('skip active stop requires camera photo and hides actions once skipped or checked out',
+      (tester) async {
+    final booking = _detail(dateAllowed: true);
+    final finished = BookingDetail(
+      id: booking.id, code: booking.code, name: booking.name,
+      status: booking.status, startDate: booking.startDate,
+      endDate: booking.endDate, totalGuests: booking.totalGuests,
+      passengers: booking.passengers, incidents: booking.incidents,
+      canCheckInLocations: true, nextLocationCheckInId: 3,
+      days: [TourDay(dayNumber: 1, title: 'Ngày 1', stops: [
+        const TourStop(
+          id: 1, name: 'Điểm A', status: 'CheckedOut',
+          checkinNote: 'Đã tới', checkoutNote: 'Đã rời',
+        ),
+        const TourStop(
+          id: 2, name: 'Điểm B', status: 'Skipped',
+          checkinNote: 'Đường sạt lở',
+        ),
+        const TourStop(id: 3, name: 'Điểm C', status: 'Pending'),
+      ])],
+    );
+    await showScreen(tester, finished);
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
+    expect(find.byKey(const ValueKey('checkout-1')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-1')), findsNothing);
+    expect(find.byKey(const ValueKey('checkin-2')), findsNothing);
+    expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-2')), findsNothing);
+    expect(find.text('Ghi chú check-in: Đã tới'), findsOneWidget);
+    expect(find.text('Ghi chú check-out: Đã rời'), findsOneWidget);
+    expect(find.text('Lý do bỏ qua: Đường sạt lở'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('skip-3')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bỏ qua · Điểm C'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-camera')), findsOneWidget);
+    expect(find.text('Xác nhận bỏ qua'), findsOneWidget);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('confirm-checkin'))).onPressed, isNull);
     await tester.tap(find.text('Hủy'));
     await tester.pumpAndSettle();
   });

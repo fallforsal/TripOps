@@ -20,11 +20,13 @@ class CheckinPhotoDialog extends StatefulWidget {
     required this.stopName,
     this.imagePicker,
     this.isCheckout = false,
+    this.isSkip = false,
   });
 
   final String stopName;
   final ImagePicker? imagePicker;
   final bool isCheckout;
+  final bool isSkip;
 
   @override
   State<CheckinPhotoDialog> createState() => _CheckinPhotoDialogState();
@@ -91,7 +93,11 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('${widget.isCheckout ? 'Check-out' : 'Check-in'} ${widget.stopName}'),
+    title: Text(widget.isCheckout
+        ? 'Check-out ${widget.stopName}'
+        : widget.isSkip
+            ? 'Bỏ qua · ${widget.stopName}'
+            : 'Check-in ${widget.stopName}'),
     content: SizedBox(
       width: 360,
       child: SingleChildScrollView(
@@ -101,15 +107,19 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
           children: [
             Text(widget.isCheckout
                 ? 'Chụp ảnh trực tiếp khi rời điểm này. Sau check-out mới được check-in điểm tiếp theo.'
-                : 'Chụp ảnh trực tiếp khi đến điểm này. Không thể sử dụng ảnh có sẵn trong thư viện.'),
+                : widget.isSkip
+                    ? 'Chụp ảnh trực tiếp làm minh chứng khi bỏ qua điểm này. Không thể sử dụng ảnh có sẵn trong thư viện.'
+                    : 'Chụp ảnh trực tiếp khi đến điểm này. Không thể sử dụng ảnh có sẵn trong thư viện.'),
             const SizedBox(height: 12),
             TextField(
               key: const ValueKey('checkin-note-field'),
               controller: _noteController,
               maxLines: 2,
               maxLength: 500,
-              decoration: const InputDecoration(
-                labelText: 'Ghi chú (không bắt buộc)',
+              decoration: InputDecoration(
+                labelText: widget.isSkip
+                    ? 'Lý do bỏ qua (không bắt buộc)'
+                    : 'Ghi chú (không bắt buộc)',
               ),
             ),
             const SizedBox(height: 8),
@@ -183,7 +193,11 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
       FilledButton(
         key: const ValueKey('confirm-checkin'),
         onPressed: _picking || _photoError != null || _selected.isEmpty ? null : _submit,
-        child: Text(widget.isCheckout ? 'Xác nhận check-out' : 'Xác nhận check-in'),
+        child: Text(widget.isCheckout
+            ? 'Xác nhận check-out'
+            : widget.isSkip
+                ? 'Xác nhận bỏ qua'
+                : 'Xác nhận check-in'),
       ),
     ],
   );
