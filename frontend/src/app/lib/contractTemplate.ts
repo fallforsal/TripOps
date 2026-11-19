@@ -9,6 +9,10 @@ export interface PolicyRow {
   fee: string;
 }
 
+export interface PolicyPreviewRow extends PolicyRow {
+  refundIfFullyPaid: string;
+}
+
 export const MAX_TIERS = 10;
 export const MAX_MIN_DAYS = 365;
 
@@ -42,17 +46,18 @@ export function validateTiers(tiers: CancellationTier[]): string | null {
 export const sortTiers = (tiers: CancellationTier[]) => [...tiers].sort((a, b) => b.minDays - a.minDays);
 
 /** Bảng hiển thị trong hợp đồng (giống backend ContractTerms.TableRows). */
-export function previewRows(tiers: CancellationTier[]): PolicyRow[] {
+export function previewRows(tiers: CancellationTier[]): PolicyPreviewRow[] {
   const ordered = sortTiers(tiers);
-  const rows: PolicyRow[] = ordered.map((t, i) => ({
+  const rows: PolicyPreviewRow[] = ordered.map((t, i) => ({
     range: i === 0 ? `Từ ${t.minDays} ngày trở lên`
       : ordered[i - 1].minDays - 1 === t.minDays ? `${t.minDays} ngày`
       : `Từ ${t.minDays} đến ${ordered[i - 1].minDays - 1} ngày`,
     fee: percent(t.feePercent),
+    refundIfFullyPaid: percent(100 - t.feePercent),
   }));
   const lowest = ordered.length ? ordered[ordered.length - 1].minDays : 1;
-  if (lowest > 1) rows.push({ range: lowest - 1 === 1 ? "1 ngày" : `Từ 1 đến ${lowest - 1} ngày`, fee: "100%" });
-  rows.push({ range: "Ngày khởi hành hoặc không tham gia", fee: "100%" });
+  if (lowest > 1) rows.push({ range: lowest - 1 === 1 ? "1 ngày" : `Từ 1 đến ${lowest - 1} ngày`, fee: "100%", refundIfFullyPaid: "0%" });
+  rows.push({ range: "Ngày khởi hành hoặc không tham gia", fee: "100%", refundIfFullyPaid: "0%" });
   return rows;
 }
 

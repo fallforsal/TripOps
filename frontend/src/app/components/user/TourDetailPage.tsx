@@ -64,6 +64,7 @@ import { mockUsers } from "@/app/data/mockData";
 import { ServiceBlogDetailModal } from "@/app/components/service/ServiceBlogDetailModal";
 import { getProvinceName } from "@/app/data/vietnamProvinces";
 import { mealAddress } from "@/app/lib/tourServiceAddress";
+import { contractSampleUrl } from "@/app/services/contractTemplate";
 
 export interface TourDetailCustomData {
   customHotelChanges?: CustomHotelChange[];
@@ -500,6 +501,10 @@ function RegulationsTab({ tour }: { tour: Tour }) {
             </tbody>
           </table>
           {tour.contractCancellationPolicy.note && <p className="mt-2 text-sm text-gray-600 italic">{tour.contractCancellationPolicy.note}</p>}
+          <a href={contractSampleUrl(tour.id)} target="_blank" rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[#075985] hover:underline">
+            <FileText className="w-4 h-4" />Xem mẫu hợp đồng của công ty (PDF)
+          </a>
         </section>
       )}
 

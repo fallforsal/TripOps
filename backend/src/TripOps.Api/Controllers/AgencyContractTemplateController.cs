@@ -6,8 +6,8 @@ using TripOps.Service.Contracts;
 namespace TripOps.Api.Controllers;
 
 /// <summary>
-/// Agency soạn mẫu hợp đồng của công ty: bảng phí hủy (Điều 4), ghi chú chính sách hủy và điều khoản bổ sung.
-/// Các điều còn lại theo format chung của TripOps. Áp dụng cho các đơn đặt sau khi lưu.
+/// Agency soạn mẫu hợp đồng của công ty: nội dung từng điều, bảng phí hủy (Điều 4), ghi chú và điều khoản bổ sung;
+/// xem trước bản PDF trước khi lưu. Áp dụng cho các đơn đặt sau khi lưu.
 /// </summary>
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/contract-template")]
 [Tags("Contract Template")]
@@ -26,4 +26,11 @@ public sealed class AgencyContractTemplateController(ContractTemplateService tem
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Save(ContractTemplateRequest request, CancellationToken ct) =>
         Ok(await templates.Save(Agency, request, ct));
+
+    [HttpPost("preview")]
+    [EndpointSummary("Render a sample contract PDF from the template being edited (not saved)")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Preview(ContractTemplateRequest request, CancellationToken ct) =>
+        File(await templates.Preview(Agency, request, ct), "application/pdf");
 }

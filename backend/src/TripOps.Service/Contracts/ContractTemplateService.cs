@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using TripOps.Data;
 using TripOps.Data.Entities;
+using TripOps.Service.Bookings;
+using TripOps.Service.Payments;
 
 namespace TripOps.Service.Contracts;
 
@@ -38,6 +40,35 @@ public sealed class ContractTemplateService(TripOpsDbContext db)
         row.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         return Dto(terms, false, now);
+    }
+
+    /// <summary>PDF hợp đồng mẫu theo nội dung Agency đang soạn (chưa cần lưu), cùng cách trình bày với hợp đồng thật.</summary>
+    public async Task<byte[]> Preview(string agencyId, ContractTemplateRequest request, CancellationToken ct) =>
+        await SamplePdf(agencyId, ContractTerms.Validate(request.Tiers, request.CancellationNote, request.AdditionalTerms, request.Clauses), null, ct);
+
+    /// <summary>PDF hợp đồng mẫu: thông tin Agency thật, chính sách và điều khoản theo <paramref name="terms"/>, khách/giá/lịch là dữ liệu mẫu.</summary>
+    public async Task<byte[]> SamplePdf(string agencyId, ContractTerms terms, string? tourName, CancellationToken ct)
+    {
+        var agency = await db.Users.AsNoTracking().Include(u => u.BusinessProfile).FirstOrDefaultAsync(u => u.Id == agencyId, ct);
+        var profile = agency?.BusinessProfile;
+        var vietnamNow = DateTime.UtcNow.Add(PaymentRules.VietnamOffset);
+        var start = vietnamNow.Date.AddDays(30);
+        const decimal adult = 3_000_000m, child = 1_500_000m, total = adult * 2 + child;
+        var data = new ContractData("HD-MAU", 1, vietnamNow, vietnamNow,
+            profile?.BusinessName ?? agency?.Name ?? "Công ty lữ hành", profile?.TaxCode, profile?.BusinessAddress, agency?.Email, agency?.Phone,
+            [],
+            "Nguyễn Văn A (khách mẫu)", "09xx xxx xxx", "khachmau@example.com", null,
+            "MAU-0001", tourName ?? "Tour mẫu 3 ngày 2 đêm", start, start.AddDays(2), 3,
+            [("Nguyễn Văn A", "Người lớn", adult), ("Trần Thị B", "Người lớn", adult), ("Nguyễn Văn C", "Trẻ em", child)],
+            [
+                new ContractDay(1, start, "Khởi hành – tham quan điểm thứ nhất", "Trưa, Tối", "Khách sạn theo chương trình"),
+                new ContractDay(2, start.AddDays(1), "Tham quan theo lịch trình", "Sáng, Trưa, Tối", "Khách sạn theo chương trình"),
+                new ContractDay(3, start.AddDays(2), "Tự do mua sắm – về điểm đón", "Sáng, Trưa", null),
+            ],
+            total,
+            [("Đợt 1 – đặt cọc", total / 2, "24 giờ sau khi Bên A duyệt đơn"), ("Đợt 2 – phần còn lại", total / 2, "hết ngày " + start.AddDays(-8).ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture))],
+            terms);
+        return ContractPdf.Generate(data, sample: true);
     }
 
     private static ContractTerms Of(AgencyContractTemplate row) =>

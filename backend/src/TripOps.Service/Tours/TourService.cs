@@ -480,6 +480,12 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct),
             Contracts.CancellationPolicyDto.Of(await contractTemplates.TermsFor(tour.AgencyId, ct)));
     }
+    /// <summary>Hợp đồng mẫu của tour công khai theo mẫu hợp đồng Agency đã lưu, để khách xem trước khi đặt.</summary>
+    public async Task<byte[]> PublicContractSample(int id, CancellationToken ct)
+    {
+        var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
+        return await contractTemplates.SamplePdf(tour.AgencyId, await contractTemplates.TermsFor(tour.AgencyId, ct), tour.Name, ct);
+    }
     internal async Task<TourConfiguration> EnrichAgencyLogos(TourConfiguration c,CancellationToken ct) {
         if(c.CoHosts is not {Length:>0})return c;
         var ids=c.CoHosts.Select(h=>h.CompanyId).Distinct().ToArray();

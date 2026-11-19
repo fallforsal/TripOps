@@ -1,4 +1,4 @@
-import { http } from "@/app/lib/http";
+import { ApiError, http } from "@/app/lib/http";
 import type { CancellationTier, PolicyRow } from "@/app/lib/contractTemplate";
 
 export interface ContractTemplateDto {
@@ -33,19 +33,38 @@ export interface CancellationPolicyDto {
 
 export const getContractTemplate = () => http<ContractTemplateDto>("/agency/contract-template");
 
-export const saveContractTemplate = (input: {
+export interface ContractTemplateInput {
   tiers: CancellationTier[];
   cancellationNote: string;
   additionalTerms: string;
   /** Mã điều → nội dung; null hoặc trùng bản mặc định thì dùng bản mặc định. */
   clauses: Record<string, string | null>;
-}) =>
-  http<ContractTemplateDto>("/agency/contract-template", {
-    method: "PUT",
-    body: JSON.stringify({
-      tiers: input.tiers,
-      cancellationNote: input.cancellationNote.trim() || null,
-      additionalTerms: input.additionalTerms.trim() || null,
-      clauses: input.clauses,
-    }),
+}
+
+const body = (input: ContractTemplateInput) => JSON.stringify({
+  tiers: input.tiers,
+  cancellationNote: input.cancellationNote.trim() || null,
+  additionalTerms: input.additionalTerms.trim() || null,
+  clauses: input.clauses,
+});
+
+export const saveContractTemplate = (input: ContractTemplateInput) =>
+  http<ContractTemplateDto>("/agency/contract-template", { method: "PUT", body: body(input) });
+
+const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+/** PDF hợp đồng mẫu theo nội dung đang soạn (chưa lưu), cùng cách trình bày với hợp đồng khách nhận. */
+export async function previewContractTemplate(input: ContractTemplateInput): Promise<Blob> {
+  const response = await fetch(`${apiBase}/api/v1/agency/contract-template/preview`, {
+    method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: body(input),
   });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    const errors = data?.errors ? Object.values(data.errors).flat().join(" ") : "";
+    throw new ApiError(response.status, errors || data?.title || data?.detail || `Không tạo được bản xem trước (${response.status})`);
+  }
+  return response.blob();
+}
+
+/** Hợp đồng mẫu của tour công khai theo mẫu Agency đã lưu (khách xem trước khi đặt). */
+export const contractSampleUrl = (tourId: number | string) => `${apiBase}/api/v1/tours/${tourId}/contract-sample`;

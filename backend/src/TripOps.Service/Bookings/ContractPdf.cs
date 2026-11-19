@@ -49,7 +49,8 @@ public static class ContractPdf
     private static string Date(DateTime value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     private static string DateTimeText(DateTime value) => value.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    public static byte[] Generate(ContractData d, ContractSignature? signature = null)
+    /// <param name="sample">Bản xem trước với dữ liệu mẫu (Agency soạn mẫu, khách xem trước khi đặt): in dòng cảnh báo ở đầu và cuối trang.</param>
+    public static byte[] Generate(ContractData d, ContractSignature? signature = null, bool sample = false)
     {
         var terms = d.Terms ?? Contracts.ContractTerms.Default;
         return Document.Create(document =>
@@ -69,7 +70,10 @@ public static class ContractPdf
                     header.Item().AlignCenter().Text("Độc lập – Tự do – Hạnh phúc").Italic();
                     header.Item().PaddingTop(8).AlignCenter().Text("HỢP ĐỒNG DỊCH VỤ DU LỊCH THEO ĐOÀN").Bold().FontSize(15);
                     header.Item().AlignCenter().Text("(Hợp đồng lữ hành nội địa)").Italic();
-                    header.Item().PaddingBottom(6).AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
+                        if (sample)
+                        header.Item().PaddingTop(4).Border(0.5f).BorderColor(Colors.Red.Medium).Background(Colors.Red.Lighten5).Padding(4).AlignCenter()
+                            .Text("BẢN XEM TRƯỚC – thông tin khách, giá và lịch thanh toán là dữ liệu mẫu, không có giá trị pháp lý").FontSize(9).Bold().FontColor(Colors.Red.Darken2);
+                header.Item().PaddingBottom(6).AlignCenter().Text($"Số: {d.ContractNo} · Phiên bản {d.Version.ToString(CultureInfo.InvariantCulture)} · Lập ngày {Date(d.IssuedAtVietnam)} trên nền tảng TripOps");
                 });
                 KeyValues(col, "Thông tin đơn", [
                     ("Mã đặt chỗ", d.BookingCode),
@@ -213,7 +217,7 @@ public static class ContractPdf
             page.Footer().AlignCenter().Text(t =>
             {
                 t.DefaultTextStyle(s => s.FontSize(8));
-                t.Span($"{d.ContractNo} · Trang ");
+                t.Span($"{(sample ? "Bản xem trước · " : "")}{d.ContractNo} · Trang ");
                 t.CurrentPageNumber();
                 t.Span(" / ");
                 t.TotalPages();
