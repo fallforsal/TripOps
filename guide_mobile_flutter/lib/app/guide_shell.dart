@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_theme.dart';
@@ -38,12 +39,21 @@ class _GuideShellState extends State<GuideShell> {
   List<BookingSummary> bookings = [];
   Map<int, DateTime> endDates = {};
   int unreadNotices = 0;
+  Timer? _notificationsPoll;
 
   @override
   void initState() {
     super.initState();
     refresh();
     refreshNotices();
+    _notificationsPoll = Timer.periodic(
+      const Duration(seconds: 15), (_) => refreshNotices());
+  }
+
+  @override
+  void dispose() {
+    _notificationsPoll?.cancel();
+    super.dispose();
   }
 
   Future<void> refreshNotices() async {
