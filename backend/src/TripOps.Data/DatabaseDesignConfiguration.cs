@@ -506,8 +506,6 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.IncidentType).HasColumnName("incident_type").HasColumnType("nvarchar(50)").HasMaxLength(50);
             entity.Property(e => e.Title).HasColumnName("title").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
             entity.Property(e => e.Description).HasColumnName("description").HasColumnType("nvarchar(max)").IsRequired();
-            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30);
-            entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.EvidenceUrls).HasColumnName("evidence_urls").HasColumnType("nvarchar(max)");
             entity.Property(e => e.ResolvedAt).HasColumnName("resolved_at").HasColumnType("datetime2");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");

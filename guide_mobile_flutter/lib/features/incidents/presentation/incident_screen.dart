@@ -167,8 +167,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GuideStatusPill(incident.status),
                       ],
                     ),
                     if (incident.evidenceUrls.isNotEmpty) ...[

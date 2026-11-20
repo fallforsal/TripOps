@@ -61,7 +61,7 @@ test("attendance survives reloading; an unknown date of birth remains empty", ()
 });
 
 test("guide schedule data retains persisted incidents and actual trip duration", () => {
-  const booking = fromApiBooking({ ...dto, incidents: [{ id: 3, bookingId: dto.id, title: "Traffic", description: "Late", resolutionNotes: "Critical", status: "Reported", createdAt: dto.createdAt }] });
+  const booking = fromApiBooking({ ...dto, incidents: [{ id: 3, bookingId: dto.id, title: "Traffic", description: "Late", createdAt: dto.createdAt }] });
   assert.equal(booking.guideIncidents?.[0].id, "3");
   assert.equal(booking.guideIncidents?.[0].severity, "critical");
   assert.equal(booking.tour.duration, "3 ngày");

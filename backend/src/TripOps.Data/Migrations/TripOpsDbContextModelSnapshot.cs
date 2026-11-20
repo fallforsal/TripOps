@@ -1013,13 +1013,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("resolved_at");
 
-                    b.Property<string>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasDefaultValue("Reported")
-                        .HasColumnName("status");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(255)

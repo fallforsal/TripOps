@@ -20,8 +20,6 @@ public static class BookingAlliance
             OriginalTotalPrice=share.OriginalAmount,SurchargeAmount=share.PaidSurchargeAmount+share.UnpaidSurchargeAmount,
             PaidAmount=0,DepositAmount=0,PaymentSchedule=[],PaymentTransactions=[],Contract=null,Cancellation=null,PriceAdjustments=[],
             SnapshotDays=days,SnapshotHotels=dto.SnapshotHotels?.Select(h=>(h.AgencyId??b.Tour!.AgencyId)==agency?h:h with {PriceDifference=0}).ToArray(),
-            AssignedGuides=dto.AssignedGuides.Where(g=>g.AgencyId==agency).ToArray(),
-            AttractionCheckins=dto.AttractionCheckins?.Where(c=>c.AgencyId==agency).ToArray(),
             Incidents=dto.Incidents?.Where(i=>b.Incidents.Any(x=>x.Id==i.Id && x.AgencyId==agency)).ToArray()
         };
     }

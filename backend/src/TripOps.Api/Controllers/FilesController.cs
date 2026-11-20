@@ -50,7 +50,9 @@ public sealed class FilesController(IWebHostEnvironment environment, TripOpsDbCo
         var allowed = await db.BookingAttractionCheckins.AsNoTracking().AnyAsync(c =>
             (c.PhotoUrl != null && c.PhotoUrl.Contains(url) ||
              c.CheckoutPhotoUrl != null && c.CheckoutPhotoUrl.Contains(url)) &&
-            (guide && c.GuideId == actor || agency && c.AgencyId == actor), ct)
+            (guide && c.GuideId == actor || agency && (c.AgencyId == actor
+                || c.BookingTimelineAttraction.BookingTimeline.Booking.Tour!.AgencyId == actor
+                || c.BookingTimelineAttraction.BookingTimeline.Booking.BookingAgencies.Any(a => a.AgencyId == actor))), ct)
             || await db.BookingIncidents.AsNoTracking().AnyAsync(i =>
                 i.EvidenceUrls != null && i.EvidenceUrls.Contains(url) &&
                 (guide && i.ReportedBy == actor || agency && i.AgencyId == actor), ct);

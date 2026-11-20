@@ -30,7 +30,6 @@ public sealed partial class BookingFlowTests
         var response = await guide.PostAsync($"/api/v1/guide/bookings/{id}/incidents", form);
         response.EnsureSuccessStatusCode();
         var incident = (await response.Content.ReadFromJsonAsync<IncidentDto>())!;
-        Assert.Equal("Reported", incident.Status);
         Assert.Equal("VEHICLE", incident.IncidentType);
         Assert.Equal(2, incident.EvidenceUrls!.Count);
         Assert.DoesNotContain("Mức độ:", incident.Description);

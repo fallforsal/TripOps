@@ -59,7 +59,7 @@ void main() {
     expect(detail.canCheckInLocations, isFalse);
     expect(detail.passengers.single.status, 'CheckedIn');
     expect(detail.days.single.stops.single.id, 25);
-    expect(detail.incidents.single.status, 'Reported');
+    expect(detail.incidents.single.title, 'Kẹt xe');
   });
 
   test('date parsing preserves backend calendar day regardless of timezone', () {

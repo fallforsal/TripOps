@@ -166,7 +166,6 @@ export function GuideDashboard({
         description:
           "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
         reportedAt: "09:30",
-        status: "resolved",
         location: "Bến phà Rạch Miễu",
       },
     ],
@@ -415,7 +414,6 @@ export function GuideDashboard({
         hour: "2-digit",
         minute: "2-digit",
       }),
-      status: "reported",
     };
     if (onReportIncident) {
       await onReportIncident(currentSchedule.id, {
@@ -428,7 +426,6 @@ export function GuideDashboard({
         category: incidentCategory,
         description: incidentDescription.trim(),
         location: incidentLocation.trim(),
-        status: "reported",
       });
     }
     setLocalIncidents([newInc, ...localIncidents]);
@@ -649,7 +646,7 @@ export function GuideDashboard({
                   }`}
                 >
                   ⚠️ Sự cố
-                  {localIncidents.some((i) => i.status === "reported") && (
+                  {localIncidents.length > 0 && (
                     <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-rose-400" />
                   )}
                 </button>
@@ -1390,28 +1387,6 @@ export function GuideDashboard({
                                 <span>{inc.location}</span>
                               </div>
                             )}
-
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                              <span
-                                className={`font-bold flex items-center gap-1 ${
-                                  inc.status === "resolved"
-                                    ? "text-emerald-600"
-                                    : "text-amber-600"
-                                }`}
-                              >
-                                {inc.status === "resolved" ? (
-                                  <>
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Đã xử lý xong
-                                  </>
-                                ) : (
-                                  <>
-                                    <Clock className="w-3.5 h-3.5" />
-                                    Đang phối hợp giải quyết
-                                  </>
-                                )}
-                              </span>
-                            </div>
                           </div>
                         ))}
                       </div>

@@ -170,10 +170,6 @@ export function SignContractPage({ token }: { token: string }) {
           >
             <FileText className="w-4 h-4" /> Mở hợp đồng (PDF)
           </a>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" className="mt-0.5 w-4 h-4" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-            <span>Tôi đã đọc, hiểu và đồng ý toàn bộ nội dung hợp đồng.</span>
-          </label>
         </div>
 
         <div className="space-y-2">
@@ -212,6 +208,10 @@ export function SignContractPage({ token }: { token: string }) {
         </div>
 
         {error && <NotificationMessage tone="error" message={error} />}
+        <label className="flex items-start gap-2 cursor-pointer pt-1">
+          <input type="checkbox" className="mt-0.5 w-4 h-4" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+          <span>Tôi đã đọc, hiểu và đồng ý toàn bộ nội dung hợp đồng.</span>
+        </label>
         <Button
           type="button"
           disabled={busy !== "" || !otpSent || !signature || !agreed || otp.length !== 6}

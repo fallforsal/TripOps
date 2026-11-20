@@ -49,14 +49,15 @@ class GuideRepository {
       ));
 
   Future<BookingDetail> checkInWithImages(
-    int bookingId, int locationId, String? note, List<CheckinPhoto> photos,
-  ) async {
+    int bookingId, int locationId, String? note, List<CheckinPhoto> photos, {
+    String status = 'CheckedIn',
+  }) async {
     final validation = CheckinPhoto.validate(photos);
     if (photos.isEmpty || validation != null) {
       throw ApiFailure(validation ?? 'Vui lòng chọn ảnh.');
     }
     final form = FormData();
-    form.fields.add(const MapEntry('Status', 'CheckedIn'));
+    form.fields.add(MapEntry('Status', status));
     if (note != null && note.trim().isNotEmpty) {
       form.fields.add(MapEntry('Note', note.trim()));
     }
@@ -107,11 +108,11 @@ class GuideRepository {
     String? severity,
     List<CheckinPhoto> photos = const [],
   }) async {
-    final validation = CheckinPhoto.validate(photos);
-    if (validation != null) throw ApiFailure(validation);
-
+    if (photos.isNotEmpty) {
+      final validation = CheckinPhoto.validate(photos);
+      if (validation != null) throw ApiFailure(validation);
+    }
     // The backend accepts one multipart endpoint with optional evidence images.
-    // Send the same content type even when no images are attached.
     final form = FormData();
     form.fields.add(MapEntry('IncidentType', type));
     form.fields.add(MapEntry('Title', title));

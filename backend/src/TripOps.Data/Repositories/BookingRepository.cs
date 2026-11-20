@@ -156,6 +156,23 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return (rows, total);
     }
 
+    public async Task<Dictionary<int, Booking>> GuideSchedules(IEnumerable<int> ids, CancellationToken ct)
+    {
+        var list = ids.ToArray();
+        if (list.Length == 0) return [];
+        return (await db.Bookings.AsNoTracking()
+            .Include(b => b.Tour)
+            .Include(b => b.BookingAgencies)
+            .Include(b => b.AssignedGuides)
+            .Include(b => b.Timelines).ThenInclude(t => t.Attractions).ThenInclude(a => a.Checkins)
+            .Include(b => b.Timelines).ThenInclude(t => t.Meals)
+            .Include(b => b.Accommodations)
+            .AsSplitQuery()
+            .Where(b => list.Contains(b.Id))
+            .ToListAsync(ct))
+            .ToDictionary(b => b.Id);
+    }
+
     public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>
         db.Tours.AsNoTracking().Include(t => t.PricingTiers)
             .Include(t => t.Agency)

@@ -138,11 +138,12 @@ public sealed partial class BookingFlowTests
             GuideCheckinPhotoRules.Encode(["https://example.com/1.jpg", "https://example.com/2.jpg"])).Count);
     }
 
-    private static MultipartFormDataContent PhotoForm(int count, string mime = "image/png")
+    private static MultipartFormDataContent PhotoForm(
+        int count, string mime = "image/png", string status = "CheckedIn", string note = "Reached stop")
     {
         var form = new MultipartFormDataContent();
-        form.Add(new StringContent("CheckedIn"), "Status");
-        form.Add(new StringContent("Reached stop"), "Note");
+        form.Add(new StringContent(status), "Status");
+        form.Add(new StringContent(note), "Note");
         for (var i = 0; i < count; i++)
         {
             var bytes = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3 };
