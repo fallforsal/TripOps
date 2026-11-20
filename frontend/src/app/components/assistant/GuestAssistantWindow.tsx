@@ -47,6 +47,11 @@ function plainText(text: string) {
     .replace(/^(\s*)[*•]\s+/gm, "$1- ");
 }
 
+/** Chữ "Lưu ý:" trong câu trả lời luôn in đậm để khách không bỏ sót. */
+function withBoldNotes(text: string) {
+  return text.split(/(lưu ý\s*:)/i).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
 /** Khung tour AI soạn gần nhất trong cửa sổ (để trợ lý Agency góp ý cho đúng tour đó). */
 function latestDraft(turns: Turn[]): TourConfiguration | null {
   for (let i = turns.length - 1; i >= 0; i--) {
@@ -327,7 +332,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
         )}
         {turns.map((turn) => (
           <div key={turn.id} className={`ai-turn ${turn.role}`}>
-            <p className="ai-bubble">{plainText(turn.content)}</p>
+            <p className="ai-bubble">{withBoldNotes(plainText(turn.content))}</p>
             {turn.tours && turn.tours.length > 0 && (
               <div className="ai-tour-list">
                 {turn.tours.map((tour) => <TourCard key={tour.id} tour={tour} onOpen={() => openTourCard(tour.id)} />)}
