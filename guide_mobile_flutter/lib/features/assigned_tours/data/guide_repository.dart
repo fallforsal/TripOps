@@ -107,32 +107,26 @@ class GuideRepository {
     String? severity,
     List<CheckinPhoto> photos = const [],
   }) async {
-    if (photos.isNotEmpty) {
-      final validation = CheckinPhoto.validate(photos);
-      if (validation != null) throw ApiFailure(validation);
-      final form = FormData();
-      form.fields.add(MapEntry('IncidentType', type));
-      form.fields.add(MapEntry('Title', title));
-      form.fields.add(MapEntry('Description', description));
-      if (severity != null && severity.isNotEmpty) {
-        form.fields.add(MapEntry('Severity', severity));
-      }
-      for (final photo in photos) {
-        final part = await MultipartFile.fromFile(
-          photo.path,
-          filename: photo.name,
-          contentType: DioMediaType.parse(photo.mime),
-        );
-        form.files.add(MapEntry('Images', part));
-      }
-      await api.postForm('guide/bookings/$id/incidents-with-images', form);
-      return;
+    final validation = CheckinPhoto.validate(photos);
+    if (validation != null) throw ApiFailure(validation);
+
+    // The backend accepts one multipart endpoint with optional evidence images.
+    // Send the same content type even when no images are attached.
+    final form = FormData();
+    form.fields.add(MapEntry('IncidentType', type));
+    form.fields.add(MapEntry('Title', title));
+    form.fields.add(MapEntry('Description', description));
+    if (severity != null && severity.isNotEmpty) {
+      form.fields.add(MapEntry('Severity', severity));
     }
-    await api.postMap('guide/bookings/$id/incidents', {
-      'incidentType': type,
-      'title': title,
-      'description': description,
-      if (severity != null && severity.isNotEmpty) 'severity': severity,
-    });
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path,
+        filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    await api.postForm('guide/bookings/$id/incidents', form);
   }
 }
