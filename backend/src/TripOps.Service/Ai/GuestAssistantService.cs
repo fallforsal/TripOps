@@ -23,7 +23,8 @@ namespace TripOps.Service.Ai;
 /// </summary>
 public sealed partial class GuestAssistantService(
     PublicTourFinder finder, OpenAiChatClient openAi, AiAssistantOptions options, ILogger<GuestAssistantService> logger,
-    Contracts.ContractTemplateService contractTemplates, IMemoryCache cache, CustomerBookingDigest customerBookings)
+    Contracts.ContractTemplateService contractTemplates, IMemoryCache cache, CustomerBookingDigest customerBookings,
+    CustomerProfileReply customerProfile)
 {
     private const int MaxHistory = 10;
     private const int MaxQuestionLength = 1000;
@@ -121,6 +122,9 @@ public sealed partial class GuestAssistantService(
         var question = history[^1].Content;
         // Chỉ tin ID; tour được tải lại từ hệ thống và chỉ giữ tour còn công khai.
         var context = await finder.Context(request.ContextTourIds, ct);
+        // "Thông tin cá nhân của tôi": máy chủ tự trả lời từ hồ sơ, không gửi dữ liệu cá nhân cho nhà cung cấp AI.
+        if (customerId is not null && CustomerProfileReply.IsProfileQuestion(question))
+            return new AiChatResponse(await customerProfile.Reply(customerId, ct), [], true, context.Ids.ToList(), Private: true);
         var intent = await Classify(question, context, ct);
 
         if (!options.Configured) return await Offline(question, context, intent, ct);

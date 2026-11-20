@@ -25,6 +25,8 @@ export interface AiChatResponse {
    * Máy chủ tự kiểm tra lại; rỗng = không còn danh sách nào.
    */
   contextTourIds?: number[] | null;
+  /** true = câu trả lời chứa thông tin cá nhân do máy chủ tự trả lời; chỉ hiển thị, không gửi lại trong lịch sử cho AI. */
+  private?: boolean;
 }
 
 /**

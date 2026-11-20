@@ -35,3 +35,23 @@ test("clause payload keeps only real edits", async () => {
   assert.equal(clausePayload("   ", "1. A"), null);
   assert.equal(clausePayload("1. A đã sửa \r\n", "1. A"), "1. A đã sửa");
 });
+
+test("supplier labels tell directory, AI suggestion and manual entries apart", async () => {
+  const { supplierLabel, draftSourceMessage } = await import("../src/app/lib/supplierLabel.ts");
+  assert.equal(supplierLabel({ agencySupplierId: 5 }), "Nhà cung cấp trong danh bạ");
+  assert.equal(supplierLabel({ description: "Gợi ý ngoài TripOps: cần xác minh…" }), "AI gợi ý · chưa có trong danh bạ");
+  assert.equal(supplierLabel({ description: "Quán quen" }), "Agency tự nhập ngoài sàn");
+  const msg = draftSourceMessage({ timelines: [{ meals: [{ serviceId: 3 }, {}], accommodations: [{ agencySupplierId: 1 }] }] });
+  assert.match(msg, /1 mục từ danh bạ/);
+  assert.match(msg, /1 mục là dịch vụ trên TripOps/);
+  assert.match(msg, /1 mục là gợi ý bên ngoài/);
+  assert.match(draftSourceMessage({ timelines: [{ meals: [{}] }] }), /Danh bạ của bạn chưa có/);
+});
+
+test("tour code is suggested from destination and duration", async () => {
+  const { suggestTourCode } = await import("../src/app/lib/tourCode.ts");
+  assert.equal(suggestTourCode("Đà Lạt", 4), "DL4N3D");
+  assert.equal(suggestTourCode("Nha Trang, Khánh Hòa", 3), "NT3N2D");
+  assert.equal(suggestTourCode("TP. Hồ Chí Minh", 2), "HCM2N1D");
+  assert.equal(suggestTourCode("", 1), "TOUR1N");
+});

@@ -54,6 +54,17 @@ public sealed partial class BookingFlowTests
         Assert.DoesNotContain(booking.BookingCode, handler.Bodies[2]);
         Assert.DoesNotContain("ĐƠN CỦA KHÁCH (dữ liệu hệ thống", handler.Bodies[2]);
 
+        // "Thông tin cá nhân của tôi": máy chủ tự trả lời từ hồ sơ, không gọi AI.
+        var calls = handler.Bodies.Count;
+        var profile = await Read<AiChatResponse>(await customer.PostAsJsonAsync("/api/v1/ai/customer-chat",
+            new AiChatRequest([new AiChatMessage("user", "Cho mình xem thông tin cá nhân của tôi")])));
+        Assert.True(profile.Private);
+        Assert.Contains("customer1@example.test", profile.Reply);
+        Assert.Contains("Thông tin tài khoản", profile.Reply);
+        Assert.Equal(calls, handler.Bodies.Count);
+        Assert.False(CustomerProfileReply.IsProfileQuestion("Tài khoản ngân hàng để nhận hoàn tiền khai ở đâu?"));
+        Assert.True(CustomerProfileReply.IsProfileQuestion("số điện thoại của tôi là gì"));
+
         Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().PostAsJsonAsync("/api/v1/ai/customer-chat", request)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await (await app.Client("agency1@example.test")).PostAsJsonAsync("/api/v1/ai/customer-chat", request)).StatusCode);
     }

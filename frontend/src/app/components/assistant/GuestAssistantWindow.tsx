@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { MapPin, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ApiError } from "@/app/lib/http";
+import { draftSourceMessage } from "@/app/lib/supplierLabel";
 import { askAgencyAssistant, askCustomerAssistant, askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
 import type { TourConfiguration } from "@/app/services/wf02Tours";
 import { openAiDraftEditor, previewAiTour, saveAiTour, type AiTourDraftRequest } from "@/app/services/aiTourDraft";
@@ -212,7 +213,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       setTurns((old) => [...old, {
         id: ++sequence.current,
         role: "assistant",
-        content: "Mình đã soạn xong khung tour kèm chỗ ở và ăn uống, ưu tiên nhà cung cấp đã liên kết với bạn, rồi đến dịch vụ trên TripOps. Bạn xem qua, ưng thì mở để chỉnh sửa, chưa ưng thì tạo lại:",
+        content: draftSourceMessage(result),
         design: { kind: "draft", request: input, draft: result },
         local: true,
       }]);
@@ -286,7 +287,11 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       retry.current = null;
       // Giữ ID danh sách tour gợi ý gần nhất (máy chủ đã kiểm tra lại) cho câu hỏi tiếp theo.
       if (!isAgency) contextTourIds.current = nextTourContext(contextTourIds.current, answer);
-      setTurns((old) => [...old, { id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured }]);
+      setTurns((old) => [...old, {
+        id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured,
+        // Thông tin cá nhân máy chủ tự trả lời: không gửi lại cho AI ở lượt sau.
+        local: answer.private || undefined,
+      }]);
     } catch (e) {
       if (request.current !== controller) return;
       // Bỏ câu hỏi vừa gửi khỏi lịch sử để "Thử lại" không bị lặp.

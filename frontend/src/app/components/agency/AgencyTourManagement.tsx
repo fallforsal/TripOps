@@ -1,4 +1,6 @@
 import { customerTourPreview } from "@/app/lib/tourEditorPreview";
+import { supplierKind, supplierLabel, supplierTag } from "@/app/lib/supplierLabel";
+import { suggestTourCode } from "@/app/lib/tourCode";
 import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { toast } from "@/app/lib/notifications";
@@ -1276,11 +1278,10 @@ export function TourFormPage(props: TourFormPageProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Tab 1: General Info
+  // Tour thường: để trống thì máy chủ tự tạo mã theo điểm đến + thời lượng (VD: DL4N3D).
   const [tourCode, setTourCode] = useState(
     tour?.tourCode ??
-    (isCustom
-      ? `TC-${Date.now().toString().slice(-4)}`
-      : `T${Date.now().toString().slice(-4)}`),
+    (isCustom ? `TC-${Date.now().toString().slice(-4)}` : ""),
   );
   const [name, setName] = useState(
     tour?.name ??
@@ -3243,9 +3244,7 @@ export function TourFormPage(props: TourFormPageProps) {
     const finalTourCode =
       tourCode.trim() ||
       tour?.tourCode ||
-      (isCustom
-        ? `TC-${Date.now().toString().slice(-4)}`
-        : `T${Date.now().toString().slice(-4)}`);
+      (isCustom ? `TC-${Date.now().toString().slice(-4)}` : "");
     const chosenThumbnail = images[thumbnailIndex] || images[0] || "";
 
     // Handle co-hosting quotes and dynamic revenue split calculation
@@ -3407,7 +3406,7 @@ export function TourFormPage(props: TourFormPageProps) {
   const previewTour = customerTourPreview({
     ...tour,
     id: tour?.id || "preview-tour",
-    tourCode: tourCode || "Chưa có mã",
+    tourCode: tourCode || suggestTourCode(destination, numberOfDays),
     name: name || "Chưa nhập tên tour",
     destination, provinceCodes, departureLocation, departureCity: departureLocation,
     duration, numberOfDays, numberOfNights, operationPeriod,
@@ -3494,7 +3493,7 @@ export function TourFormPage(props: TourFormPageProps) {
               {isCustom
                 ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
                 : tour
-                  ? `Mã tour: ${tourCode || "T-NEW"} · Cập nhật thông tin chi tiết`
+                  ? `Mã tour: ${tourCode || suggestTourCode(destination, numberOfDays)} · Cập nhật thông tin chi tiết`
                   : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá"}
             </p>
           </div>
@@ -3752,17 +3751,17 @@ export function TourFormPage(props: TourFormPageProps) {
               <div className="sm:col-span-1">
                 <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                   <Tag className="w-3.5 h-3.5 text-[#075985]" />
-                  Mã Tour (tour_code) <span className="text-red-500">*</span>
+                  Mã tour
                 </Label>
                 <Input
                   value={tourCode}
                   onChange={(e) => setTourCode(e.target.value)}
                   disabled={isGeneralLocked}
-                  placeholder="VD: ĐL3N2Đ-A hoặc T001"
+                  placeholder={suggestTourCode(destination, numberOfDays)}
                   className="mt-1 font-bold text-[#075985] uppercase"
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Mã định danh duy nhất (VD: ĐL3N2Đ-A, PQ4N3Đ...)
+                  Để trống thì hệ thống tự tạo theo điểm đến và số ngày (VD: Đà Lạt 4 ngày 3 đêm → DL4N3D).
                 </p>
               </div>
 
@@ -4702,8 +4701,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 />
                                                 {isCustomHotel ? (
                                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                                                    ⭐ Khách sạn Tiêu chuẩn (Tự
-                                                    nhập ngoài sàn)
+                                                    ⭐ Khách sạn Tiêu chuẩn ({supplierTag(hotel)})
                                                   </span>
                                                 ) : (
                                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
@@ -4727,7 +4725,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                       <Building2 className="w-5 h-5" />
                                                     </div>
                                                     <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
-                                                      Danh bạ
+                                                      {supplierTag(hotel)}
                                                     </span>
                                                   </div>
                                                 ) : (
@@ -4752,7 +4750,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   }`}
                                                 >
                                                   {isCustomHotel
-                                                    ? "Nhà cung cấp của agency"
+                                                    ? supplierLabel(hotel)
                                                     : hotel.providerName ||
                                                       servObj.providerName ||
                                                       "Tổ hợp Dịch vụ Du lịch Đối tác"}
@@ -4776,7 +4774,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     "Đà Lạt, Lâm Đồng"}
                                                 </p>
                                                 <p className="text-xs font-bold text-[#075985] mt-1">
-                                                  {formatVND(
+                                                  {supplierKind(hotel) === "ai" && !(customRefPrice || hotel.pricePerNight) ? "Chưa có giá, cần nhập" : formatVND(
                                                     getHotelRefPricePerPerson(
                                                       servObj,
                                                       customRefPrice ||
@@ -4926,7 +4924,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     <Building2 className="w-5 h-5" />
                                                   </div>
                                                   <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
-                                                    Danh bạ
+                                                    {supplierTag(alt)}
                                                   </span>
                                                 </div>
                                               ) : (
@@ -4951,7 +4949,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 }`}
                                               >
                                                 {isCustomHotel
-                                                  ? "Nhà cung cấp của agency"
+                                                  ? supplierLabel(alt)
                                                   : alt.providerName ||
                                                     servObj.providerName ||
                                                     "Tổ hợp Dịch vụ Du lịch Đối tác"}
@@ -4975,7 +4973,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   "Đà Lạt, Lâm Đồng"}
                                               </p>
                                               <p className="text-xs font-bold text-[#075985] mt-1">
-                                                {formatVND(
+                                                {supplierKind(alt) === "ai" && !(customAltPrice || alt.pricePerNight || (alt as any).price) ? "Chưa có giá, cần nhập" : formatVND(
                                                   getHotelRefPricePerPerson(
                                                     servObj,
                                                     customAltPrice ||
@@ -6460,12 +6458,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                     />
                                                                     {isCustomMeal ? (
                                                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                                                                        🍴 Thực
-                                                                        đơn Tiêu
-                                                                        chuẩn
-                                                                        (Tự nhập
-                                                                        ngoài
-                                                                        sàn)
+                                                                        🍴 Thực đơn Tiêu chuẩn ({supplierTag(meal)})
                                                                       </span>
                                                                     ) : (
                                                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
@@ -6494,7 +6487,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           <Utensils className="w-5 h-5" />
                                                                         </div>
                                                                         <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
-                                                                          Danh bạ
+                                                                          {supplierTag(meal)}
                                                                         </span>
                                                                       </div>
                                                                     ) : (
@@ -6518,7 +6511,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       }`}
                                                                     >
                                                                       {isCustomMeal
-                                                                        ? "Nhà cung cấp của agency"
+                                                                        ? supplierLabel(meal)
                                                                         : meal.providerName ||
                                                                           servObj.providerName ||
                                                                           "Tổ hợp Dịch vụ Du lịch Đối tác"}
@@ -6534,7 +6527,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       }
                                                                     </h5>
                                                                     <p className="text-xs font-bold text-emerald-900 mt-1">
-                                                                      {formatVND(
+                                                                      {supplierKind(meal) === "ai" && !(customMealPrice || meal.pricePerPerson) ? "Chưa có giá, cần nhập" : formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
                                                                           customMealPrice ||
@@ -6730,7 +6723,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           <Utensils className="w-5 h-5" />
                                                                         </div>
                                                                         <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
-                                                                          Danh bạ
+                                                                          {supplierTag(alt)}
                                                                         </span>
                                                                       </div>
                                                                     ) : (
@@ -6754,7 +6747,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       }`}
                                                                     >
                                                                       {isCustomMeal
-                                                                        ? "Nhà cung cấp của agency"
+                                                                        ? supplierLabel(alt)
                                                                         : alt.providerName ||
                                                                           servObj.providerName ||
                                                                           "Tổ hợp Dịch vụ Du lịch Đối tác"}
@@ -6770,7 +6763,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       }
                                                                     </h5>
                                                                     <p className="text-xs font-bold text-emerald-900 mt-1">
-                                                                      {formatVND(
+                                                                      {supplierKind(alt) === "ai" && !(customAltMealPrice || meal.pricePerPerson) ? "Chưa có giá, cần nhập" : formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
                                                                           customAltMealPrice ||
