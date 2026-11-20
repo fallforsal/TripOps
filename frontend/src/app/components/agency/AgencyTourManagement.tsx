@@ -4161,7 +4161,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <button
                   type="button"
                   onClick={addHotel}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-blue-300 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] font-medium transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-sky-300 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] font-medium transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Thêm khách sạn
@@ -4361,7 +4361,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                 placeholder="-- Click chọn khách sạn đối tác để thêm vào danh sách thẻ bên dưới --"
                                 selectClass="border-sky-300 focus:ring-[#075985]"
                                 formatLabel={(serv) =>
-                                  `🏨 ${serv.name} — ${serv.stars || 4}★ (${serv.location || serv.province || "Khác"}) — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
+                                  `${serv.name} — ${serv.stars || 4} sao (${serv.location || serv.province || "Khác"}) — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
                                 }
                                 onSelect={(foundServ) =>
                                   handleAddHotelFromService(hotel.id || "", foundServ)
@@ -4370,17 +4370,17 @@ export function TourFormPage(props: TourFormPageProps) {
 
                               {/* Form thêm khách sạn ngoài sàn */}
                               {showCustomHotelForm && (
-                                <div className="p-3 bg-purple-50/60 rounded-xl border-2 border-purple-300 space-y-2.5 animate-in fade-in">
+                                <div className="p-3 bg-sky-50/60 rounded-xl border-2 border-sky-300 space-y-2.5 animate-in fade-in">
                                   {!props.customerMode && <select aria-label="Chọn khách sạn từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
                                     onChange={(e) => { const supplier = savedHotels.find((s) => s.id === Number(e.target.value)); setSelectedHotelSupplierId(supplier?.id); if (supplier) setCustomHotelInputs({ name: supplier.name, address: supplier.address || "", stars: supplier.starRating || 3, price: supplier.referencePrice || 0, contactPhone: supplier.contactPhone || "", conditions: supplier.conditions || "" }); }}>
                                     <option value="">Chọn khách sạn đã lưu trong danh bạ...</option>
                                     {savedHotels.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.area || s.address}</option>)}
                                   </select>}
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 border border-purple-400">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-200 text-sky-900 border border-sky-400">
                                       Nhà cung cấp của agency
                                     </span>
-                                    <p className="text-[11px] font-bold text-purple-950">
+                                    <p className="text-[11px] font-bold text-sky-950">
                                       Nhập thông tin khách sạn ngoài hệ thống
                                       TripOps:
                                     </p>
@@ -4396,7 +4396,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                             name: e.target.value,
                                           })
                                         }
-                                        className="text-xs h-8 bg-white border-purple-300"
+                                        className="text-xs h-8 bg-white border-sky-300"
                                       />
                                     </div>
                                     <div className="sm:col-span-4">
@@ -4409,7 +4409,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                             address: e.target.value,
                                           })
                                         }
-                                        className="text-xs h-8 bg-white border-purple-300"
+                                        className="text-xs h-8 bg-white border-sky-300"
                                       />
                                     </div>
                                     <div className="sm:col-span-3">
@@ -4422,23 +4422,23 @@ export function TourFormPage(props: TourFormPageProps) {
                                               parseInt(e.target.value) || 4,
                                           })
                                         }
-                                        className="w-full h-8 px-2 rounded-lg border border-purple-300 bg-white text-xs font-medium text-gray-700"
+                                        className="w-full h-8 px-2 rounded-lg border border-sky-300 bg-white text-xs font-medium text-gray-700"
                                       >
-                                        <option value={3}>3 sao ★★★</option>
-                                        <option value={4}>4 sao ★★★★</option>
-                                        <option value={5}>5 sao ★★★★★</option>
+                                        <option value={3}>3 sao</option>
+                                        <option value={4}>4 sao</option>
+                                        <option value={5}>5 sao</option>
                                       </select>
                                     </div>
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    {!props.customerMode && <VietnameseMoneyInput placeholder="Giá tham khảo/đêm" value={String(customHotelInputs.price || 0)} onValueChange={(raw) => setCustomHotelInputs({ ...customHotelInputs, price: Number(raw) || 0 })} className="h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />}
+                                    {!props.customerMode && <VietnameseMoneyInput placeholder="Giá tham khảo/đêm" value={String(customHotelInputs.price || 0)} onValueChange={(raw) => setCustomHotelInputs({ ...customHotelInputs, price: Number(raw) || 0 })} className="h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400" />}
                                     <Input placeholder="Điện thoại liên hệ" value={customHotelInputs.contactPhone} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, contactPhone: e.target.value })} />
                                     <Input placeholder="Điều kiện tham khảo" value={customHotelInputs.conditions} onChange={(e) => setCustomHotelInputs({ ...customHotelInputs, conditions: e.target.value })} />
                                   </div>
-                                  <p className="text-[11px] text-purple-900">Giá chỉ để tham khảo; agency cần tự xác nhận phòng và điều kiện với nhà cung cấp.</p>
+                                  <p className="text-[11px] text-sky-900">Giá chỉ để tham khảo; agency cần tự xác nhận phòng và điều kiện với nhà cung cấp.</p>
                                   <div className="flex justify-end gap-2">
                                     {!props.customerMode && <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveHotelToDirectory} onChange={(e) => setSaveHotelToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>}
-                                    {!props.customerMode && selectedHotelSupplierId && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
+                                    {!props.customerMode && selectedHotelSupplierId && <button type="button" className="text-xs text-sky-800 underline" onClick={async () => {
                                       try { const updated = await updateAgencySupplier(selectedHotelSupplierId, { type: "HOTEL", name: customHotelInputs.name.trim(), address: customHotelInputs.address.trim(), area: hotel.destination || destination, starRating: customHotelInputs.stars, referencePrice: customHotelInputs.price, contactPhone: customHotelInputs.contactPhone, conditions: customHotelInputs.conditions }); setSavedHotels((prev) => prev.map((s) => s.id === updated.id ? updated : s)); }
                                       catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể cập nhật danh bạ"); }
                                     }}>Cập nhật danh bạ</button>}
@@ -4503,7 +4503,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                         setSaveHotelToDirectory(false);
                                         setSelectedHotelSupplierId(undefined);
                                       }}
-                                      className="text-[11px] font-bold px-3 py-1 bg-purple-700 text-white rounded-lg hover:bg-purple-800 cursor-pointer shadow-2xs"
+                                      className="text-[11px] font-bold px-3 py-1 bg-sky-700 text-white rounded-lg hover:bg-sky-800 cursor-pointer shadow-2xs"
                                     >
                                       Thêm vào danh sách thẻ
                                     </button>
@@ -4671,8 +4671,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                               isCardSelected
                                                 ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                 : isCustomHotel
-                                                  ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
-                                                  : "border-emerald-300 bg-white hover:border-emerald-400 shadow-2xs"
+                                                  ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
+                                                  : "border-[#075985]/40 bg-white hover:border-[#075985] shadow-2xs"
                                             }`}
                                           >
                                             {/* Header thẻ: Checkbox & Badge tiêu chuẩn */}
@@ -4700,12 +4700,12 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                                 />
                                                 {isCustomHotel ? (
-                                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                                                    ⭐ Khách sạn Tiêu chuẩn ({supplierTag(hotel)})
+                                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-900 border border-sky-300 flex items-center gap-1 shadow-2xs">
+                                                    Khách sạn Tiêu chuẩn ({supplierTag(hotel)})
                                                   </span>
                                                 ) : (
-                                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                                                    ⭐ Khách sạn Tiêu chuẩn (Mặc
+                                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F0F9FF] text-[#075985] border border-[#075985]/30 flex items-center gap-1 shadow-2xs">
+                                                    Khách sạn Tiêu chuẩn (Mặc
                                                     định)
                                                   </span>
                                                 )}
@@ -4720,11 +4720,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                             <div className="flex gap-3">
                                               <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                                 {isCustomHotel || !thumbUrl ? (
-                                                  <div className="w-full h-full bg-gradient-to-br from-purple-100 via-indigo-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
-                                                    <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                  <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                    <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                       <Building2 className="w-5 h-5" />
                                                     </div>
-                                                    <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                    <span className="text-[9px] font-bold text-sky-800 leading-none tracking-tight">
                                                       {supplierTag(hotel)}
                                                     </span>
                                                   </div>
@@ -4737,7 +4737,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 )}
                                                 {hotel.stars && (
                                                   <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-amber-400 font-bold text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                                    {hotel.stars}★
+                                                    {hotel.stars} sao
                                                   </span>
                                                 )}
                                               </div>
@@ -4745,8 +4745,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 <span
                                                   className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
                                                     isCustomHotel
-                                                      ? "text-purple-700 bg-purple-100"
-                                                      : "text-indigo-700 bg-indigo-100"
+                                                      ? "text-sky-700 bg-sky-100"
+                                                      : "text-sky-700 bg-sky-100"
                                                   }`}
                                                 >
                                                   {isCustomHotel
@@ -4799,9 +4799,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     servObj,
                                                   )
                                                 }
-                                                className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white hover:bg-indigo-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                                className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-sky-300 bg-white hover:bg-sky-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                                               >
-                                                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                                                <FileText className="w-3.5 h-3.5 text-sky-600" />
                                                 Xem bài viết &amp; Bản đồ
                                               </button>
                                               {!isHotelLocked && (
@@ -4863,8 +4863,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                             isCardSelected
                                               ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                               : isCustomHotel
-                                                ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
-                                                : "border-amber-200 bg-white hover:border-amber-300 shadow-2xs"
+                                                ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
+                                                : "border-slate-200 bg-white hover:border-[#075985]/50 shadow-2xs"
                                           }`}
                                         >
                                           {/* Header thẻ: Checkbox, Badge Option & Nút Đặt làm mặc định */}
@@ -4889,11 +4889,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                               <span
                                                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
                                                   isCustomHotel
-                                                    ? "bg-purple-100 text-purple-900 border-purple-300"
-                                                    : "bg-amber-100 text-amber-900 border-amber-300"
+                                                    ? "bg-sky-100 text-sky-900 border-sky-300"
+                                                    : "bg-slate-100 text-slate-700 border-slate-300"
                                                 }`}
                                               >
-                                                ✨ Phương án thay thế (Option{" "}
+                                                Phương án thay thế (Option{" "}
                                                 {aIdx + 2})
                                               </span>
                                             </div>
@@ -4906,10 +4906,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     aIdx,
                                                   )
                                                 }
-                                                className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                className="text-[10px] font-bold text-[#075985] hover:text-[#0C4A6E] bg-white hover:bg-[#F0F9FF] border border-[#075985]/40 px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                                                 title="Đưa khách sạn này lên làm Mặc định tiêu chuẩn"
                                               >
-                                                <Star className="w-3 h-3 text-amber-500" />
+                                                <Star className="w-3 h-3 text-[#075985]" />
                                                 Đặt làm mặc định
                                               </button>
                                             )}
@@ -4919,11 +4919,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                           <div className="flex gap-3">
                                             <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                               {isCustomHotel || !thumbUrl ? (
-                                                <div className="w-full h-full bg-gradient-to-br from-purple-100 via-indigo-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
-                                                  <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                  <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                     <Building2 className="w-5 h-5" />
                                                   </div>
-                                                  <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                  <span className="text-[9px] font-bold text-sky-800 leading-none tracking-tight">
                                                     {supplierTag(alt)}
                                                   </span>
                                                 </div>
@@ -4936,7 +4936,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                               )}
                                               {alt.stars && (
                                                 <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-amber-400 font-bold text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                                  {alt.stars}★
+                                                  {alt.stars} sao
                                                 </span>
                                               )}
                                             </div>
@@ -4944,8 +4944,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                               <span
                                                 className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
                                                   isCustomHotel
-                                                    ? "text-purple-700 bg-purple-100"
-                                                    : "text-indigo-700 bg-indigo-100"
+                                                    ? "text-sky-700 bg-sky-100"
+                                                    : "text-sky-700 bg-sky-100"
                                                 }`}
                                               >
                                                 {isCustomHotel
@@ -5018,7 +5018,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   <span
                                                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${(alt.priceDifference ||
                                                         0) > 0
-                                                        ? "text-amber-800 bg-amber-100 border border-amber-300"
+                                                        ? "text-slate-700 bg-slate-100 border border-slate-300"
                                                         : (alt.priceDifference ||
                                                           0) < 0
                                                           ? "text-emerald-800 bg-emerald-100 border border-emerald-300"
@@ -5045,9 +5045,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                               onClick={() =>
                                                 setViewingServiceModal(servObj)
                                               }
-                                              className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white hover:bg-indigo-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                              className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-sky-300 bg-white hover:bg-sky-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                                             >
-                                              <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                                              <FileText className="w-3.5 h-3.5 text-sky-600" />
                                               Xem bài viết &amp; Bản đồ
                                             </button>
                                             {!isHotelLocked && (
@@ -5297,19 +5297,19 @@ export function TourFormPage(props: TourFormPageProps) {
                                   <button
                                     type="button"
                                     onClick={() => handleSortDayByTime(dIdx)}
-                                    className="px-2.5 py-1 text-xs rounded-lg border border-purple-300 bg-[#F0F9FF] text-[#EA580C] hover:bg-[#F97316]/15 font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                    className="px-2.5 py-1 text-xs rounded-lg border border-[#F97316]/40 bg-white text-[#EA580C] hover:bg-[#F97316]/10 font-semibold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                                     title="Tự động sắp xếp các điểm tham quan và bữa ăn theo thứ tự thời gian tăng dần"
                                   >
                                     <Sparkles className="w-3.5 h-3.5 text-[#F97316]" />
-                                    ⚡ Sắp xếp theo giờ
+                                    Sắp xếp theo giờ
                                   </button>
 
                                   <button
                                     type="button"
                                     onClick={() => addLocationToDay(dIdx)}
-                                    className="px-2.5 py-1 text-xs rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                    className="px-2.5 py-1 text-xs rounded-lg border border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] font-medium transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                                   >
-                                    <Plus className="w-3 h-3" />+ Điểm tham quan
+                                    <Plus className="w-3 h-3" />Điểm tham quan
                                   </button>
 
                                   {/* + Bữa sáng (Disable nếu đã có) */}
@@ -5321,7 +5321,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     }
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasBreakfast
                                         ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 cursor-pointer"
+                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasBreakfast
@@ -5336,7 +5336,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     )}
                                     {hasBreakfast
                                       ? "Đã có bữa sáng"
-                                      : "+ Bữa sáng"}
+                                      : "Bữa sáng"}
                                   </button>
 
                                   {/* + Bữa trưa (Disable nếu đã có) */}
@@ -5346,7 +5346,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     onClick={() => addMealToDay(dIdx, "lunch")}
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasLunch
                                         ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasLunch
@@ -5359,7 +5359,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     ) : (
                                       <Plus className="w-3 h-3" />
                                     )}
-                                    {hasLunch ? "Đã có bữa trưa" : "+ Bữa trưa"}
+                                    {hasLunch ? "Đã có bữa trưa" : "Bữa trưa"}
                                   </button>
 
                                   {/* + Bữa tối (Disable nếu đã có) */}
@@ -5369,7 +5369,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     onClick={() => addMealToDay(dIdx, "dinner")}
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasDinner
                                         ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-purple-300 bg-[#F0F9FF] text-[#EA580C] hover:bg-[#F97316]/15 cursor-pointer"
+                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasDinner
@@ -5382,7 +5382,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                     ) : (
                                       <Plus className="w-3 h-3" />
                                     )}
-                                    {hasDinner ? "Đã có bữa tối" : "+ Bữa tối"}
+                                    {hasDinner ? "Đã có bữa tối" : "Bữa tối"}
                                   </button>
                                 </div>
                               </div>
@@ -5536,16 +5536,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                         </div>
 
                                         {/* Dot icon */}
-                                        <div className="relative z-10 w-7 h-7 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center flex-shrink-0 shadow-2xs">
-                                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                        <div className="relative z-10 w-7 h-7 rounded-full bg-white border-2 border-sky-400 flex items-center justify-center flex-shrink-0 shadow-2xs">
+                                          <MapPin className="w-3.5 h-3.5 text-sky-500" />
                                         </div>
 
                                         {/* Location Card with Drag Handle & Swap Controls */}
                                         <div
                                           className={`flex-1 flex items-center justify-between p-2.5 rounded-2xl border bg-white transition-all ${isBeingDragged
-                                              ? "border-dashed border-purple-400 bg-[#F0F9FF]/50 opacity-60"
+                                              ? "border-dashed border-sky-400 bg-[#F0F9FF]/50 opacity-60"
                                               : isDropTarget
-                                                ? "border-purple-500 bg-[#F0F9FF] ring-2 ring-purple-300"
+                                                ? "border-sky-500 bg-[#F0F9FF] ring-2 ring-sky-300"
                                                 : isLocLocked
                                                   ? "border-[#CBD5E1] bg-[#F0F9FF]/60 shadow-2xs"
                                                   : "border-[#CBD5E1] hover:border-gray-300 shadow-2xs"
@@ -5782,7 +5782,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                         ? "bg-amber-100 text-amber-800 border-amber-300"
                                                         : mealType === "lunch"
                                                           ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                          : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
+                                                          : "bg-[#F97316]/15 text-[#EA580C] border-sky-300"
                                                       }`}
                                                   >
                                                     {mealLabel}
@@ -5951,9 +5951,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     )}
                                                     initialDest={day.destinationCity || destination || ""}
                                                     placeholder="-- Click chọn quán ăn / nhà hàng để thêm vào danh sách thẻ bên dưới --"
-                                                    selectClass="border-emerald-300 focus:ring-emerald-600"
+                                                    selectClass="border-emerald-300 focus:ring-[#075985]"
                                                     formatLabel={(serv) =>
-                                                      `🍴 ${serv.name} (${serv.location || serv.province || "Khác"}) — ${
+                                                      `${serv.name} (${serv.location || serv.province || "Khác"}) — ${
                                                         serv.priceFrom && serv.priceTo
                                                           ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
                                                           : `${formatVND(serv.pricePerPerson || serv.price)}/người`
@@ -5968,17 +5968,17 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   {showCustomMealForm[
                                                     mealKey
                                                   ] && (
-                                                      <div className="p-3 bg-purple-50/60 rounded-xl border-2 border-purple-300 space-y-2.5 animate-in fade-in">
+                                                      <div className="p-3 bg-sky-50/60 rounded-xl border-2 border-sky-300 space-y-2.5 animate-in fade-in">
                                                         {!props.customerMode && <select aria-label="Chọn nhà hàng từ danh bạ agency" className="w-full rounded border p-2 text-xs" defaultValue=""
                                                           onChange={(e) => { const supplier = savedRestaurants.find((s) => s.id === Number(e.target.value)); setSelectedMealSupplierIds((prev) => ({ ...prev, [mealKey]: supplier?.id || 0 })); if (supplier) setCustomMealInputs((prev) => ({ ...prev, [mealKey]: { restaurantName: supplier.name, description: supplier.conditions || "", price: supplier.referencePrice || 0, address: supplier.address || "", contactPhone: supplier.contactPhone || "" } })); }}>
                                                           <option value="">Chọn nhà hàng đã lưu trong danh bạ...</option>
                                                           {savedRestaurants.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.area || s.address}</option>)}
                                                         </select>}
                                                         <div className="flex items-center gap-2">
-                                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 border border-purple-400">
+                                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-200 text-sky-900 border border-sky-400">
                                                             Nhà cung cấp của agency
                                                           </span>
-                                                          <p className="text-[11px] font-bold text-purple-950">
+                                                          <p className="text-[11px] font-bold text-sky-950">
                                                             Nhập thông tin quán ăn
                                                             ngoài hệ thống
                                                             TripOps:
@@ -6023,7 +6023,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   }),
                                                                 );
                                                               }}
-                                                              className="text-xs h-8 bg-white border-purple-300"
+                                                              className="text-xs h-8 bg-white border-sky-300"
                                                             />
                                                           </div>
                                                           <div className="sm:col-span-4">
@@ -6063,7 +6063,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   }),
                                                                 );
                                                               }}
-                                                              className="text-xs h-8 bg-white border-purple-300"
+                                                              className="text-xs h-8 bg-white border-sky-300"
                                                             />
                                                           </div>
 {!props.customerMode &&                                                           <div className="sm:col-span-3">
@@ -6104,7 +6104,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   }),
                                                                 );
                                                               }}
-                                                              className="w-full px-3 rounded-md border text-xs h-8 bg-white border-purple-300 font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                                              className="w-full px-3 rounded-md border text-xs h-8 bg-white border-sky-300 font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                             />
                                                           </div>}
                                                         </div>
@@ -6112,10 +6112,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                                           <Input placeholder="Địa chỉ nhà hàng" value={customMealInputs[mealKey]?.address || ""} onChange={(e) => setCustomMealInputs((prev) => ({ ...prev, [mealKey]: { ...prev[mealKey], address: e.target.value } }))} />
                                                           <Input placeholder="Điện thoại liên hệ" value={customMealInputs[mealKey]?.contactPhone || ""} onChange={(e) => setCustomMealInputs((prev) => ({ ...prev, [mealKey]: { ...prev[mealKey], contactPhone: e.target.value } }))} />
                                                         </div>
-                                                        <p className="text-[11px] text-purple-900">Giá chỉ để tham khảo; agency cần tự xác nhận bàn và điều kiện với nhà cung cấp.</p>
+                                                        <p className="text-[11px] text-sky-900">Giá chỉ để tham khảo; agency cần tự xác nhận bàn và điều kiện với nhà cung cấp.</p>
                                                         <div className="flex justify-end gap-2">
                                                           {!props.customerMode && <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={saveMealToDirectory} onChange={(e) => setSaveMealToDirectory(e.target.checked)} /> Lưu vào danh bạ để dùng lại</label>}
-                                                          {!props.customerMode && selectedMealSupplierIds[mealKey] && <button type="button" className="text-xs text-purple-800 underline" onClick={async () => {
+                                                          {!props.customerMode && selectedMealSupplierIds[mealKey] && <button type="button" className="text-xs text-sky-800 underline" onClick={async () => {
                                                             const input = customMealInputs[mealKey]; if (!input) return;
                                                             try { const updated = await updateAgencySupplier(selectedMealSupplierIds[mealKey], { type: "RESTAURANT", name: input.restaurantName.trim(), address: input.address, area: day.destinationCity || destination, referencePrice: input.price, contactPhone: input.contactPhone, conditions: input.description.trim() }); setSavedRestaurants((prev) => prev.map((s) => s.id === updated.id ? updated : s)); }
                                                             catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể cập nhật danh bạ"); }
@@ -6197,7 +6197,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               setSaveMealToDirectory(false);
                                                               setSelectedMealSupplierIds((prev) => ({ ...prev, [mealKey]: 0 }));
                                                             }}
-                                                            className="text-[11px] font-bold px-3 py-1 bg-purple-700 text-white rounded-lg hover:bg-purple-800 cursor-pointer shadow-2xs"
+                                                            className="text-[11px] font-bold px-3 py-1 bg-sky-700 text-white rounded-lg hover:bg-sky-800 cursor-pointer shadow-2xs"
                                                           >
                                                             Thêm vào danh sách thẻ
                                                           </button>
@@ -6266,7 +6266,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               );
                                                             }
                                                           }}
-                                                          className="w-4 h-4 rounded text-emerald-600 border-gray-300 cursor-pointer"
+                                                          className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                                         />
                                                         <label
                                                           htmlFor={`select-all-meals-${mealKey}`}
@@ -6410,8 +6410,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
-                                                                      ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
-                                                                      : "border-emerald-300 bg-white hover:border-emerald-400 shadow-2xs"
+                                                                      ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
+                                                                      : "border-[#075985]/40 bg-white hover:border-[#075985] shadow-2xs"
                                                                 }`}
                                                               >
                                                                 {/* Header thẻ */}
@@ -6454,15 +6454,15 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           },
                                                                         );
                                                                       }}
-                                                                      className="w-4 h-4 rounded text-emerald-600 border-gray-300 cursor-pointer"
+                                                                      className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                                                     />
                                                                     {isCustomMeal ? (
-                                                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                                                                        🍴 Thực đơn Tiêu chuẩn ({supplierTag(meal)})
+                                                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-900 border border-sky-300 flex items-center gap-1 shadow-2xs">
+                                                                        Thực đơn Tiêu chuẩn ({supplierTag(meal)})
                                                                       </span>
                                                                     ) : (
-                                                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                                                                        🍴 Thực
+                                                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F0F9FF] text-[#075985] border border-[#075985]/30 flex items-center gap-1 shadow-2xs">
+                                                                        Thực
                                                                         đơn Tiêu
                                                                         chuẩn
                                                                         (Mặc
@@ -6482,11 +6482,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                                                     {isCustomMeal ||
                                                                     !thumbUrl ? (
-                                                                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
-                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                                      <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                                           <Utensils className="w-5 h-5" />
                                                                         </div>
-                                                                        <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                                        <span className="text-[9px] font-bold text-sky-800 leading-none tracking-tight">
                                                                           {supplierTag(meal)}
                                                                         </span>
                                                                       </div>
@@ -6506,8 +6506,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                     <span
                                                                       className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
                                                                         isCustomMeal
-                                                                          ? "text-purple-700 bg-purple-100"
-                                                                          : "text-emerald-700 bg-emerald-100"
+                                                                          ? "text-sky-700 bg-sky-100"
+                                                                          : "text-[#075985] bg-[#F0F9FF]"
                                                                       }`}
                                                                     >
                                                                       {isCustomMeal
@@ -6526,7 +6526,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         meal.serviceName
                                                                       }
                                                                     </h5>
-                                                                    <p className="text-xs font-bold text-emerald-900 mt-1">
+                                                                    <p className="text-xs font-bold text-[#075985] mt-1">
                                                                       {supplierKind(meal) === "ai" && !(customMealPrice || meal.pricePerPerson) ? "Chưa có giá, cần nhập" : formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
@@ -6554,9 +6554,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         servObj,
                                                                       )
                                                                     }
-                                                                    className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                                                    className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-sky-300 bg-white hover:bg-sky-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                                                                   >
-                                                                    <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <FileText className="w-3.5 h-3.5 text-[#075985]" />
                                                                     Xem bài viết
                                                                     &amp; Bản đồ
                                                                   </button>
@@ -6632,8 +6632,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
-                                                                      ? "border-2 border-purple-400 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 hover:border-purple-500 shadow-sm ring-1 ring-purple-200"
-                                                                      : "border-amber-200 bg-white hover:border-amber-300 shadow-2xs"
+                                                                      ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
+                                                                      : "border-slate-200 bg-white hover:border-[#075985]/50 shadow-2xs"
                                                                 }`}
                                                               >
                                                                 {/* Header thẻ */}
@@ -6676,16 +6676,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           },
                                                                         );
                                                                       }}
-                                                                      className="w-4 h-4 rounded text-emerald-600 border-gray-300 cursor-pointer"
+                                                                      className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                                                     />
                                                                     <span
                                                                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
                                                                         isCustomMeal
-                                                                          ? "bg-purple-100 text-purple-900 border-purple-300"
-                                                                          : "bg-amber-100 text-amber-900 border-amber-300"
+                                                                          ? "bg-sky-100 text-sky-900 border-sky-300"
+                                                                          : "bg-slate-100 text-slate-700 border-slate-300"
                                                                       }`}
                                                                     >
-                                                                      ✨ Lựa
+                                                                      Lựa
                                                                       chọn đổi
                                                                       món
                                                                       (Option{" "}
@@ -6703,10 +6703,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           aIdx,
                                                                         )
                                                                       }
-                                                                      className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                                                      className="text-[10px] font-bold text-[#075985] hover:text-[#0C4A6E] bg-white hover:bg-[#F0F9FF] border border-[#075985]/40 px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                                                                       title="Đưa nhà hàng này lên làm Mặc định tiêu chuẩn"
                                                                     >
-                                                                      <Star className="w-3 h-3 text-amber-500" />
+                                                                      <Star className="w-3 h-3 text-[#075985]" />
                                                                       Đặt làm
                                                                       mặc định
                                                                     </button>
@@ -6718,11 +6718,11 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                                                     {isCustomMeal ||
                                                                     !thumbUrl ? (
-                                                                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
-                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-1">
+                                                                      <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
+                                                                        <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                                           <Utensils className="w-5 h-5" />
                                                                         </div>
-                                                                        <span className="text-[9px] font-bold text-purple-800 leading-none tracking-tight">
+                                                                        <span className="text-[9px] font-bold text-sky-800 leading-none tracking-tight">
                                                                           {supplierTag(alt)}
                                                                         </span>
                                                                       </div>
@@ -6742,8 +6742,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                     <span
                                                                       className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
                                                                         isCustomMeal
-                                                                          ? "text-purple-700 bg-purple-100"
-                                                                          : "text-emerald-700 bg-emerald-100"
+                                                                          ? "text-sky-700 bg-sky-100"
+                                                                          : "text-[#075985] bg-[#F0F9FF]"
                                                                       }`}
                                                                     >
                                                                       {isCustomMeal
@@ -6762,7 +6762,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         alt.restaurantName
                                                                       }
                                                                     </h5>
-                                                                    <p className="text-xs font-bold text-emerald-900 mt-1">
+                                                                    <p className="text-xs font-bold text-[#075985] mt-1">
                                                                       {supplierKind(alt) === "ai" && !(customAltMealPrice || meal.pricePerPerson) ? "Chưa có giá, cần nhập" : formatVND(
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
@@ -6813,7 +6813,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               },
                                                                             );
                                                                           }}
-                                                                          className="w-24 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-600 flex-shrink-0 tabular-nums"
+                                                                          className="w-24 h-6 px-1.5 text-xs font-bold text-gray-900 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#075985] flex-shrink-0 tabular-nums"
                                                                           placeholder="0"
                                                                         />
                                                                         <span className="text-[10px] text-gray-500 flex-shrink-0">
@@ -6823,7 +6823,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${(alt.priceDifference ||
                                                                               0) >
                                                                               0
-                                                                              ? "text-amber-800 bg-amber-100 border border-amber-300"
+                                                                              ? "text-slate-700 bg-slate-100 border border-slate-300"
                                                                               : (alt.priceDifference ||
                                                                                 0) <
                                                                                 0
@@ -6855,9 +6855,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         servObj,
                                                                       )
                                                                     }
-                                                                    className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                                                    className="flex-1 py-1.5 px-2.5 rounded-lg border border-gray-200 hover:border-sky-300 bg-white hover:bg-sky-50 text-[11px] font-semibold text-gray-700 flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                                                                   >
-                                                                    <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <FileText className="w-3.5 h-3.5 text-[#075985]" />
                                                                     Xem bài viết
                                                                     &amp; Bản đồ
                                                                   </button>
@@ -6910,7 +6910,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <button
                   type="button"
                   onClick={addDay}
-                  className="w-full py-3.5 border-2 border-dashed border-purple-300 rounded-2xl text-[#EA580C] bg-[#F0F9FF]/50 hover:bg-[#F97316]/15/70 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                  className="w-full py-3.5 border-2 border-dashed border-sky-300 rounded-2xl text-[#EA580C] bg-[#F0F9FF]/50 hover:bg-[#F97316]/15/70 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-4 h-4" />
                   Thêm ngày mới vào lịch trình tour (Ngày {itinerary.length + 1}
