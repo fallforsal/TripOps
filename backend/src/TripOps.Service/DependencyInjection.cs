@@ -65,6 +65,7 @@ public static class DependencyInjection
         // Thời gian chờ từng lần gọi do OpenAI:TimeoutSeconds quyết định (OpenAiChatClient), nên không đặt giới hạn cứng ở đây.
         services.AddHttpClient<Ai.OpenAiChatClient>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddScoped<Ai.PublicTourFinder>();
+        services.AddScoped<Ai.CustomerBookingDigest>();
         services.AddScoped<Ai.GuestAssistantService>();
         services.AddScoped<Ai.AgencyAssistantService>();
         return services;
