@@ -30,6 +30,34 @@ public sealed class AiAssistantController(GuestAssistantService assistant) : Con
 }
 
 /// <summary>
+/// Chatbot AI cho khách hàng đã đăng nhập: như chatbot khách vãng lai, thêm trả lời về đơn của chính khách
+/// (trạng thái, thanh toán, hợp đồng, phí hủy). Chỉ đọc dữ liệu đơn của tài khoản đang đăng nhập.
+/// </summary>
+[ApiController, Authorize(Roles = "user"), Route("api/v1/ai/customer-chat"), Tags("AI Assistant")]
+public sealed class CustomerAssistantController(GuestAssistantService assistant) : ControllerBase
+{
+    [HttpPost]
+    [EnableRateLimiting("ai-chat")]
+    [EndpointSummary("Ask the TripOps assistant as a signed-in customer, including questions about the customer's own bookings")]
+    [ProducesResponseType<AiChatResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> Chat(AiChatRequest request, CancellationToken ct)
+    {
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(customerId)) return Unauthorized();
+        try
+        {
+            return Ok(await assistant.ReplyForCustomer(request, customerId, ct));
+        }
+        catch (AiAssistantException ex)
+        {
+            return Problem(statusCode: ex.Status, title: ex.Message);
+        }
+    }
+}
+
+/// <summary>
 /// UC-038: trợ lý AI cho Agency trong cùng cửa sổ chat. Góp ý thiết kế tour (chỗ ở, ăn uống, lịch trình) cho khung tour
 /// AI vừa soạn, thay vì trả lời như đang tư vấn khách mua tour.
 /// </summary>

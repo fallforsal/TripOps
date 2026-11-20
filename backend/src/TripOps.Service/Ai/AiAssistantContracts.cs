@@ -16,7 +16,11 @@ public sealed record AiTourCard(int Id, string Name, string? Destination, int? D
 
 /// <param name="AiConfigured">false = chưa cấu hình khóa OpenAI hoặc AI lỗi, câu trả lời do bộ quy tắc dự phòng tạo.</param>
 /// <param name="ContextTourIds">Danh sách tour gợi ý gần nhất mà frontend cần giữ và gửi lại ở lượt sau (rỗng = không còn danh sách).</param>
-public sealed record AiChatResponse(string Reply, IReadOnlyList<AiTourCard> Tours, bool AiConfigured, IReadOnlyList<int>? ContextTourIds = null);
+/// <param name="Private">
+/// true = câu trả lời chứa thông tin cá nhân do máy chủ tự trả lời (không qua AI); frontend chỉ hiển thị, không gửi lại trong lịch sử hội thoại.
+/// </param>
+public sealed record AiChatResponse(string Reply, IReadOnlyList<AiTourCard> Tours, bool AiConfigured, IReadOnlyList<int>? ContextTourIds = null,
+    bool Private = false);
 
 public sealed class AiAssistantException(int status, string message) : Exception(message)
 {

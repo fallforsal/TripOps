@@ -22,7 +22,8 @@ public sealed class TourRepository(TripOpsDbContext db)
     /// <summary>Danh sách tour đang mở bán công khai (kèm Agency và giá theo độ tuổi) cho chatbot khách vãng lai.</summary>
     public Task<List<Tour>> PublicCatalogue(int take, CancellationToken ct) => Public(db.Tours.AsNoTracking()
             .Include(t => t.Agency).ThenInclude(a => a.BusinessProfile)
-            .Include(t => t.PricingTiers))
+            .Include(t => t.PricingTiers)
+            .Include(t => t.Provinces))
         .OrderByDescending(t => t.CreatedAt).ThenBy(t => t.Id)
         .Take(take).AsSplitQuery().ToListAsync(ct);
 

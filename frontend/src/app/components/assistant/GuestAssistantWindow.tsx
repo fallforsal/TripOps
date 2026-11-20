@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { MapPin, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ApiError } from "@/app/lib/http";
-import { askAgencyAssistant, askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
+import { draftSourceMessage } from "@/app/lib/supplierLabel";
+import { askAgencyAssistant, askCustomerAssistant, askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
 import type { TourConfiguration } from "@/app/services/wf02Tours";
 import { openAiDraftEditor, previewAiTour, saveAiTour, type AiTourDraftRequest } from "@/app/services/aiTourDraft";
 import { AiTourDesignForm, AiTourDraftCard } from "./AiTourDesigner";
@@ -28,6 +29,16 @@ const SUGGESTIONS = [
   "Gợi ý tour cho đoàn 20 người",
   "Chính sách hủy tour thế nào?",
   "Đặt tour và đặt cọc ra sao?",
+];
+
+const CUSTOMER_WELCOME =
+  "Xin chào! Mình là Trợ lý TripOps. Ngoài gợi ý tour và giải thích chính sách, mình có thể xem giúp đơn của bạn: trạng thái, số tiền còn phải trả, hạn thanh toán, hợp đồng và phí nếu hủy.";
+
+const CUSTOMER_SUGGESTIONS = [
+  "Đơn của tôi còn phải trả bao nhiêu?",
+  "Hạn thanh toán đợt tiếp theo là khi nào?",
+  "Nếu hủy đơn bây giờ mất phí bao nhiêu?",
+  "Tour Đà Lạt 3 ngày dưới 5 triệu",
 ];
 
 const DESIGN_TOUR = "Lên thiết kế tour";
@@ -110,6 +121,8 @@ function TourCard({ tour, onOpen }: { tour: AiTourCard; onOpen: () => void }) {
 export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
   const isAgency = user?.role === "agency" || user?.role === "company_admin";
+  /** Khách hàng đã đăng nhập: trợ lý trả lời được cả về đơn của chính khách. */
+  const isCustomer = user?.role === "user";
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -200,7 +213,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       setTurns((old) => [...old, {
         id: ++sequence.current,
         role: "assistant",
-        content: "Mình đã soạn xong khung tour kèm chỗ ở và ăn uống, ưu tiên nhà cung cấp đã liên kết với bạn, rồi đến dịch vụ trên TripOps. Bạn xem qua, ưng thì mở để chỉnh sửa, chưa ưng thì tạo lại:",
+        content: draftSourceMessage(result),
         design: { kind: "draft", request: input, draft: result },
         local: true,
       }]);
@@ -267,12 +280,18 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       // Agency hỏi trợ lý dành cho Agency, kèm khung tour mới nhất trong cửa sổ để góp ý đúng tour đó.
       const answer = isAgency
         ? await askAgencyAssistant(chat, latestDraft(history), controller.signal)
-        : await askGuestAssistant(chat, contextTourIds.current, controller.signal);
+        : isCustomer
+          ? await askCustomerAssistant(chat, contextTourIds.current, controller.signal)
+          : await askGuestAssistant(chat, contextTourIds.current, controller.signal);
       if (request.current !== controller) return;
       retry.current = null;
       // Giữ ID danh sách tour gợi ý gần nhất (máy chủ đã kiểm tra lại) cho câu hỏi tiếp theo.
       if (!isAgency) contextTourIds.current = nextTourContext(contextTourIds.current, answer);
-      setTurns((old) => [...old, { id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured }]);
+      setTurns((old) => [...old, {
+        id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured,
+        // Thông tin cá nhân máy chủ tự trả lời: không gửi lại cho AI ở lượt sau.
+        local: answer.private || undefined,
+      }]);
     } catch (e) {
       if (request.current !== controller) return;
       // Bỏ câu hỏi vừa gửi khỏi lịch sử để "Thử lại" không bị lặp.
@@ -306,7 +325,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
           <span className="ai-floating-avatar" aria-hidden="true"><Sparkles size={17} /></span>
           <div>
             <strong>Trợ lý TripOps</strong>
-            <small>{isAgency ? "Soạn tour, góp ý chỗ ở, ăn uống cho Agency" : "Tư vấn tour và chính sách"}</small>
+            <small>{isAgency ? "Soạn tour, góp ý chỗ ở, ăn uống cho Agency" : isCustomer ? "Tư vấn tour, chính sách và đơn của bạn" : "Tư vấn tour và chính sách"}</small>
           </div>
         </div>
         <div className="ai-floating-actions">
@@ -321,11 +340,11 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
 
       <div className="ai-messages" ref={listRef} aria-live="polite">
         <div className="ai-turn assistant">
-          <p className="ai-bubble">{isAgency ? AGENCY_WELCOME : WELCOME}</p>
+          <p className="ai-bubble">{isAgency ? AGENCY_WELCOME : isCustomer ? CUSTOMER_WELCOME : WELCOME}</p>
         </div>
         {turns.length === 0 && (
           <div className="ai-suggestions" aria-label="Câu hỏi gợi ý">
-            {(isAgency ? AGENCY_SUGGESTIONS : SUGGESTIONS).map((s) => (
+            {(isAgency ? AGENCY_SUGGESTIONS : isCustomer ? CUSTOMER_SUGGESTIONS : SUGGESTIONS).map((s) => (
               <button key={s} type="button" onClick={() => void send(s)} disabled={sending}>{s}</button>
             ))}
           </div>
@@ -389,7 +408,6 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
             <Send size={17} />
           </button>
         </div>
-        <small>{isAgency ? "AI có thể nhầm, hãy kiểm tra lại lịch trình và dịch vụ trước khi đăng tour." : "AI có thể nhầm, hãy xem kỹ thông tin tour trước khi đặt."} Không nhập số điện thoại, CCCD hay số tài khoản.</small>
       </form>
     </section>
   );

@@ -448,7 +448,11 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         config = SingleAgencyConfiguration(config,actor);
         await Validate(config, false, ct, actor);
         if(!string.IsNullOrWhiteSpace(config.Code) && await repository.CodeExists(config.Code.Trim().ToUpperInvariant(),0,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
-        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}", IsAiGenerated = aiGenerated };
+        // Không nhập mã: tự tạo mã dễ đọc theo điểm đến + thời lượng (VD: Đà Lạt 4N3Đ → DL4N3D), trùng thì thêm "-2", "-3"...
+        var code = string.IsNullOrWhiteSpace(config.Code)
+            ? await TourCodes.Unique(TourCodes.Suggest(config.Destination, config.DurationDays, config.DurationNights), c => repository.CodeExists(c, 0, ct))
+            : config.Code.Trim().ToUpperInvariant();
+        var tour = new Tour { AgencyId = actor, Code = code, IsAiGenerated = aiGenerated };
         Apply(tour, config); repository.Add(tour);
         return await Save(tour, actor, "Created draft", ct);
     }

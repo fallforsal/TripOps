@@ -61,7 +61,7 @@ public sealed partial class TourFlowTests
         await using var app = await TourApp();
         var tour = await NewTour(app);
         Assert.Equal(("draft", "hidden", "agency", "Da Lat tour"), (tour.Status, tour.Visibility, tour.AgencyId, tour.Configuration.Name));
-        Assert.StartsWith("TOUR-", tour.Code);
+        Assert.Equal("DL2N1D", tour.Code); // mã tự tạo theo điểm đến "Da Lat" + 2 ngày 1 đêm
     }
 
     [Fact]

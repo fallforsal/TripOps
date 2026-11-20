@@ -171,7 +171,7 @@ export function AiTourDraftCard({
         </ul>
       )}
       <p className="ai-draft-note">
-        Chỗ ở, ăn uống ưu tiên đối tác của bạn, sau đó là dịch vụ trên TripOps. Mục "bên ngoài" cần xác minh và nhập giá tham khảo; giá tour bạn tự nhập trước khi đăng.
+        Chỗ ở, ăn uống lấy từ danh bạ nhà cung cấp của bạn trước, sau đó là dịch vụ trên TripOps; khu vực chưa có thì AI gợi ý bên ngoài (ghi rõ "AI gợi ý · chưa có trong danh bạ", cần xác minh và nhập giá). Giá tour bạn tự nhập trước khi đăng.
       </p>
       <div className="ai-draft-actions">
         {savedTourId ? (

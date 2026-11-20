@@ -25,6 +25,8 @@ export interface AiChatResponse {
    * Máy chủ tự kiểm tra lại; rỗng = không còn danh sách nào.
    */
   contextTourIds?: number[] | null;
+  /** true = câu trả lời chứa thông tin cá nhân do máy chủ tự trả lời; chỉ hiển thị, không gửi lại trong lịch sử cho AI. */
+  private?: boolean;
 }
 
 /**
@@ -52,6 +54,21 @@ export const askGuestAssistant = (
   signal?: AbortSignal,
 ) =>
   http<AiChatResponse>("/ai/guest-chat", {
+    method: "POST",
+    body: JSON.stringify({ messages: messages.slice(-10), contextTourIds: contextTourIds.slice(0, 8) }),
+    signal,
+  });
+
+/**
+ * Khách hàng đã đăng nhập: như trợ lý khách vãng lai, máy chủ tự thêm dữ liệu đơn của chính tài khoản đang đăng nhập
+ * để trả lời "đơn của tôi" (trạng thái, thanh toán, hợp đồng, phí hủy). Frontend không gửi dữ liệu đơn.
+ */
+export const askCustomerAssistant = (
+  messages: { role: AiRole; content: string }[],
+  contextTourIds: number[],
+  signal?: AbortSignal,
+) =>
+  http<AiChatResponse>("/ai/customer-chat", {
     method: "POST",
     body: JSON.stringify({ messages: messages.slice(-10), contextTourIds: contextTourIds.slice(0, 8) }),
     signal,
