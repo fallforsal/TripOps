@@ -481,3 +481,8 @@ backend/src/TripOps.Api/App_Data/
 /mobile/**/.gradle/
 /mobile/**/*.iml
 /mobile/**/GeneratedPluginRegistrant.*
+
+# Firebase credentials/configuration files are provided per environment.
+**/google-services.json
+**/GoogleService-Info.plist
+**/service-account*.json

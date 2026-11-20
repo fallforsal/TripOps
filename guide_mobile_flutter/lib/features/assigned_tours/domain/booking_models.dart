@@ -109,11 +109,16 @@ class TourIncident {
     required this.title,
     required this.description,
     this.evidenceUrls = const [],
+    this.incidentType = '',
   });
+  final String incidentType;
   final String title;
   final String description;
   final List<String> evidenceUrls;
+  // Compatibility with older consumers of the incident evidence DTO.
+  List<String> get photoUrls => evidenceUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
+    incidentType: (j['incidentType'] ?? '').toString(),
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
     evidenceUrls: (j['evidenceUrls'] as List? ?? const [])

@@ -21,6 +21,18 @@ public sealed record ProfileDto(int Id, string UserId, string? BusinessName, str
     string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt, string? LogoUrl);
 
 //admin user management
+public sealed record CreateAdminAccountRequest(
+    [Required, StringLength(150, MinimumLength = 2)] string Name,
+    [Required, EmailAddress, StringLength(191)] string Email,
+    [Required, Phone, StringLength(30)] string Phone,
+    [Required, StringLength(128, MinimumLength = 8)] string Password,
+    [Required] string Role,
+    [StringLength(255)] string? BusinessName = null,
+    [StringLength(50)] string? TaxCode = null,
+    [StringLength(2000)] string? BusinessAddress = null,
+    [Url, StringLength(2000)] string? BusinessLicenseUrl = null,
+    [StringLength(5000)] string? Description = null,
+    [StringLength(36)] string? AgencyId = null);
 public sealed record AdminAccountBusinessDto(int ProfileId, string BusinessName, string? LogoUrl,
     string? Address, string? Status, DateTime? CreatedAt);
 public sealed record AdminAccountDto(string Id, string Name, string Email, string? Phone, string Role,

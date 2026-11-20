@@ -7,6 +7,13 @@ public sealed class WorkflowNotificationService(TripOpsDbContext db)
     public async Task<IReadOnlyList<WorkflowNotification>> List(string actor, CancellationToken ct) =>
         await db.WorkflowNotifications.AsNoTracking().Where(n => n.UserId == actor)
             .OrderByDescending(n => n.CreatedAt).Take(100).ToListAsync(ct);
+    public Task<int> UnreadCount(string actor, CancellationToken ct) =>
+        db.WorkflowNotifications.AsNoTracking().CountAsync(n => n.UserId == actor && n.ReadAt == null, ct);
+
+    public async Task<int> ReadAll(string actor, CancellationToken ct) =>
+        await db.WorkflowNotifications.Where(n => n.UserId == actor && n.ReadAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAt, DateTime.UtcNow), ct);
+
     public async Task<bool> Read(string actor, int id, CancellationToken ct)
     {
         var n = await db.WorkflowNotifications.SingleOrDefaultAsync(n => n.Id == id && n.UserId == actor, ct);

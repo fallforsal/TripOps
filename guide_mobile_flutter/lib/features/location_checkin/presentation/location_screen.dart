@@ -138,7 +138,7 @@ class _LocationScreenState extends State<LocationScreen> {
 
   Future<void> checkout(TourStop stop) async {
     if (busy != null || !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') return;
+        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') { return; }
     final submission = await showDialog<CheckinSubmission>(
       context: context,
       builder: (_) => CheckinPhotoDialog(stopName: stop.name, isCheckout: true),

@@ -79,7 +79,11 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
             location.GuideId=null;
         }
         foreach (var p in b.Participants.Where(p => p.AssignedGuideId == guideId)) p.AssignedGuideId = null;
-        await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
+        db.BookingAssignedGuides.Remove(assignment);
+        WorkflowNotice.Queue(db, guideId, $"Agency đã hủy phân công booking {b.BookingCode}.",
+            id, actorId: Actor);
+        await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
 }
@@ -110,6 +114,7 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow))
             throw new BookingException(409, "Booking is not ready to depart.");
         b.Status = BookingStatus.InProgress;
+        WorkflowNotice.Queue(db, b.Tour!.AgencyId, $"Hướng dẫn viên đã bắt đầu tour booking {b.BookingCode}.", id, actorId: Actor);
         await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }

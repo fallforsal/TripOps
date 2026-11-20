@@ -54,6 +54,21 @@ public sealed partial class PublicTourFinder(TourRepository tours)
 
     public Task<Tour?> Detail(int id, CancellationToken ct) => tours.Find(id, null, true, ct);
 
+    public static bool IsStopWord(string folded) => StopWords.Contains(folded);
+
+    /// <summary>
+    /// Tải lại các tour theo ID frontend gửi (danh sách vừa gợi ý). Chỉ lấy tour còn công khai, giữ đúng thứ tự cũ;
+    /// mọi giá và nội dung lấy từ hệ thống, không dùng dữ liệu client.
+    /// </summary>
+    public async Task<GuestTourContext> Context(IEnumerable<int>? ids, CancellationToken ct)
+    {
+        var wanted = (ids ?? []).Where(id => id > 0).Distinct().Take(8).ToList();
+        if (wanted.Count == 0) return GuestTourContext.Empty;
+        var found = (await tours.PublicByIds(wanted, ct)).ToDictionary(t => t.Id);
+        var ordered = wanted.Where(found.ContainsKey).Select(id => found[id]).ToList();
+        return new GuestTourContext(ordered, wanted.Count - ordered.Count);
+    }
+
     /// <summary>Câu có từ khóa thật để tìm tour không (khác lời chào, câu chung chung)?</summary>
     public static bool HasKeywords(string? text) =>
         GuestAssistantKnowledge.Fold(text).Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.Length >= 3 && !StopWords.Contains(w) && !w.All(char.IsDigit));
@@ -103,7 +118,8 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         agency = tour.Agency?.BusinessProfile?.BusinessName ?? tour.Agency?.Name,
     };
 
-    public static object Details(Tour tour) => new
+    /// <summary>Chi tiết tour cho AI; <paramref name="terms"/> là chính sách hủy của Agency chủ trì (null = mặc định TripOps).</summary>
+    public static object Details(Tour tour, Contracts.ContractTerms? terms = null) => new
     {
         id = tour.Id,
         name = tour.Name,
@@ -119,6 +135,7 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         inclusions = Clip(tour.Inclusions, 600),
         exclusions = Clip(tour.Exclusions, 400),
         agency_policy_note = Clip(tour.CancellationPolicy, 400),
+        cancellation_policy = (terms ?? Contracts.ContractTerms.Default).Describe(),
         itinerary = tour.Timelines.OrderBy(d => d.DayNumber)
             .Select(d => new { day = d.DayNumber, title = Clip(d.Title, 120), places = d.Attractions.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Take(6) }),
     };

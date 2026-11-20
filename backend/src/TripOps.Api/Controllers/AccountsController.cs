@@ -184,6 +184,15 @@ public sealed class PartnerApplicationsController(AccountService accounts) : Con
 [Tags("Account Management")]
 public sealed class AdminAccountsController(AccountService accounts) : ControllerBase
 {
+    [HttpPost]
+    [EndpointSummary("Create an active account with its role profile")]
+    [ProducesResponseType<AdminAccountDto>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> Create(CreateAdminAccountRequest request, CancellationToken ct)
+    {
+        var account = await accounts.CreateAdminAccount(request, ct);
+        return StatusCode(StatusCodes.Status201Created, account);
+    }
+
     [HttpGet]
     [EndpointSummary("List customer, Agency, Provider and Guide accounts with filters")]
     [ProducesResponseType<AdminAccountPageDto>(StatusCodes.Status200OK)]

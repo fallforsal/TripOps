@@ -112,7 +112,7 @@ class GuideRepository {
       final validation = CheckinPhoto.validate(photos);
       if (validation != null) throw ApiFailure(validation);
     }
-    // Backend consolidated incident reporting onto a single multipart POST endpoint.
+    // The backend accepts one multipart endpoint with optional evidence images.
     final form = FormData();
     form.fields.add(MapEntry('IncidentType', type));
     form.fields.add(MapEntry('Title', title));

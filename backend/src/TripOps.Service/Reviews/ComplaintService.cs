@@ -153,6 +153,13 @@ public sealed class ComplaintService(TripOpsDbContext db, PaymentClock clock, Cl
                 ? "TripOps đã nhận khiếu nại của bạn về nền tảng. Admin sẽ xem xét và phản hồi trong mục Khiếu nại của tôi."
                 : $"TripOps đã nhận khiếu nại của bạn về booking {bookingCode}. Admin sẽ xem xét và phản hồi trong mục Khiếu nại của tôi."
         });
+        await TripOps.Data.WorkflowNotice.QueueAdminsAsync(db,
+            $"Có khiếu nại mới: {title}. Vui lòng kiểm tra mục quản lý khiếu nại.", ct,
+            bookingId, customerId);
+        if (agencyId is not null)
+            TripOps.Data.WorkflowNotice.Queue(db, agencyId,
+                $"Khách đã gửi khiếu nại về booking {bookingCode}. Admin sẽ xem xét.", bookingId,
+                actorId: customerId);
         await db.SaveChangesAsync(ct);
         return await MineDetail(customerId, complaint.Id, ct);
     }

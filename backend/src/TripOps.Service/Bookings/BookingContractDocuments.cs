@@ -141,6 +141,9 @@ public sealed partial class BookingService
         contract.ReviewedBy = null;
         contract.ReviewedAt = null;
         contract.ReviewNote = null;
+        Repo.Notify(booking.Tour!.AgencyId,
+            $"Khách đã tải hợp đồng ký cho booking {booking.BookingCode}. Vui lòng kiểm tra hợp đồng.",
+            id, customerId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -165,6 +168,11 @@ public sealed partial class BookingService
         contract.ReviewedBy = agencyId;
         contract.ReviewedAt = UtcNow;
         contract.ReviewNote = string.IsNullOrWhiteSpace(note) ? null : note;
+        Repo.Notify(booking.CustomerId!,
+            request.Decision == "verify"
+                ? $"Hợp đồng booking {booking.BookingCode} đã được Agency xác nhận."
+                : $"Agency yêu cầu ký lại hợp đồng booking {booking.BookingCode}. Lý do: {note}",
+            id, agencyId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(agencyId,id,ct);
@@ -229,6 +237,6 @@ public sealed partial class BookingService
             booking.Participants.Where(p => p.Status != "INACTIVE").GroupBy(p=>p.ParticipantIndex).OrderBy(g=>g.Key)
                 .Select(g => (g.First().FullName, g.First().TierName, (decimal?)g.Sum(p=>p.Price))).ToList(),
             days,
-            contract.TotalAmount, schedule);
+            contract.TotalAmount, schedule, Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot));
     }
 }

@@ -22,6 +22,55 @@ namespace TripOps.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("TripOps.Data.Entities.AgencyContractTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdditionalTerms")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("additional_terms");
+
+                    b.Property<string>("AgencyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)")
+                        .HasColumnName("agency_id");
+
+                    b.Property<string>("CancellationNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("cancellation_note");
+
+                    b.Property<string>("CancellationTiers")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("cancellation_tiers");
+
+                    b.Property<string>("Clauses")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("clauses");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId")
+                        .IsUnique();
+
+                    b.ToTable("agency_contract_templates", (string)null);
+                });
+
             modelBuilder.Entity("TripOps.Data.Entities.AgencySubscription", b =>
                 {
                     b.Property<int>("Id")
@@ -252,6 +301,10 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
                         .HasColumnName("contact_phone");
+
+                    b.Property<string>("ContractTermsSnapshot")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("contract_terms_snapshot");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -4069,7 +4122,46 @@ namespace TripOps.Data.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.WorkflowNotification", b =>
+                        modelBuilder.Entity("TripOps.Data.Entities.NotificationDeviceToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "LastSeenAt");
+
+                    b.ToTable("notification_device_tokens", (string)null);
+                });
+
+modelBuilder.Entity("TripOps.Data.Entities.WorkflowNotification", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -4081,6 +4173,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DispatchAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DispatchClaimedUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DispatchedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Message")
@@ -4101,9 +4202,22 @@ namespace TripOps.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DispatchedAt", "DispatchClaimedUntil");
+
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("workflow_notifications", (string)null);
+                });
+
+            modelBuilder.Entity("TripOps.Data.Entities.AgencyContractTemplate", b =>
+                {
+                    b.HasOne("TripOps.Data.Entities.User", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
                 });
 
             modelBuilder.Entity("TripOps.Data.Entities.AgencySubscription", b =>

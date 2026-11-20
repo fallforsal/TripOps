@@ -21,6 +21,8 @@ public decimal TotalAmount { get; set; }
 public BookingStatus? Status { get; set; } = BookingStatus.Pending;
 public string? CancelReason { get; set; }
 public DateTime? CancelledAt { get; set; }
+/// <summary>Bản chụp chính sách hủy và điều khoản bổ sung của Agency chủ trì lúc đặt tour (JSON). Null = chính sách mặc định của TripOps.</summary>
+public string? ContractTermsSnapshot { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual User Customer { get; set; } = null!;

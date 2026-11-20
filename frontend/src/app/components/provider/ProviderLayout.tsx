@@ -15,6 +15,7 @@ import {
 import { User } from "@/app/types";
 import { Button } from "@/app/components/ui/button";
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 
 interface ProviderLayoutProps {
   children: React.ReactNode;
@@ -243,6 +244,10 @@ export function ProviderLayout({
             </Button>
           )}
         </header>
+
+        <div className="sticky top-0 z-20 flex justify-end border-b border-slate-200 bg-white px-6 py-2">
+          <WorkflowNotifications role="provider" onNavigate={onNavigate} />
+        </div>
 
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full min-w-0">

@@ -155,7 +155,11 @@ public sealed record CancellationRequestDto(
 /// </summary>
 public sealed record CancellationQuoteDto(
     int BookingId, string Mode, int DaysBeforeDeparture, bool CoolingOff, decimal FeePercent,
-    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation);
+    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation)
+{
+    /// <summary>Chính sách hủy ghi trong hợp đồng của đơn (của Agency chủ trì, hoặc mặc định TripOps).</summary>
+    public Contracts.CancellationPolicyDto? Policy { get; init; }
+}
 
 public sealed record CustomerCancellationRequest(
     [Required, AllowedValues("CUSTOMER_REQUEST", "WEATHER_FORCE_MAJEURE", "SERVICE_QUALITY", "OTHER")] string Reason,

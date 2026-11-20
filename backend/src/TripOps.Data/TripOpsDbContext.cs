@@ -60,9 +60,11 @@ public class TripOpsDbContext : DbContext
 
     // 6. Interaction
     public DbSet<WorkflowNotification> WorkflowNotifications => Set<WorkflowNotification>();
+    public DbSet<NotificationDeviceToken> NotificationDeviceTokens => Set<NotificationDeviceToken>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Complaint> Complaints => Set<Complaint>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
+    public DbSet<AgencyContractTemplate> AgencyContractTemplates => Set<AgencyContractTemplate>();
 
     // 7. Chat & Subscription Extensions
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
@@ -174,6 +176,15 @@ public class TripOpsDbContext : DbContext
             e.Property(x => x.UserId).HasMaxLength(36);
             e.Property(x => x.Message).HasMaxLength(1000);
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
+            e.HasIndex(x => new { x.DispatchedAt, x.DispatchClaimedUntil });
+        });
+        modelBuilder.Entity<NotificationDeviceToken>(e => {
+            e.ToTable("notification_device_tokens");
+            e.Property(x => x.UserId).HasMaxLength(36).IsRequired();
+            e.Property(x => x.Token).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Platform).HasMaxLength(12).IsRequired();
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.LastSeenAt });
         });
         modelBuilder.Entity<Tour>().Property(t => t.Id).UseIdentityColumn();
         modelBuilder.Entity<ChatConversation>(e => {

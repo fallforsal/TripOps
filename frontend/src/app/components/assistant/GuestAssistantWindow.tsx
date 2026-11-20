@@ -6,6 +6,7 @@ import { askAgencyAssistant, askGuestAssistant, type AiTourCard } from "@/app/se
 import type { TourConfiguration } from "@/app/services/wf02Tours";
 import { openAiDraftEditor, previewAiTour, saveAiTour, type AiTourDraftRequest } from "@/app/services/aiTourDraft";
 import { AiTourDesignForm, AiTourDraftCard } from "./AiTourDesigner";
+import { nextTourContext } from "@/app/lib/guestTourContext";
 
 interface Turn {
   id: number;
@@ -44,6 +45,11 @@ function plainText(text: string) {
     .replace(/\*\*|__/g, "")
     .replace(/^\s*#{1,6}\s*/gm, "")
     .replace(/^(\s*)[*•]\s+/gm, "$1- ");
+}
+
+/** Chữ "Lưu ý:" trong câu trả lời luôn in đậm để khách không bỏ sót. */
+function withBoldNotes(text: string) {
+  return text.split(/(lưu ý\s*:)/i).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
 }
 
 /** Khung tour AI soạn gần nhất trong cửa sổ (để trợ lý Agency góp ý cho đúng tour đó). */
@@ -111,6 +117,8 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
   const [error, setError] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [savingTurn, setSavingTurn] = useState<number | null>(null);
+  // ID danh sách tour AI gợi ý gần nhất: gửi kèm câu hỏi sau để "tour rẻ nhất", "tour thứ hai" hiểu đúng danh sách đó.
+  const contextTourIds = useRef<number[]>([]);
   // "Thử lại" gọi lại đúng thao tác vừa lỗi: câu hỏi chatbot hoặc lượt soạn tour.
   const retry = useRef<(() => void) | null>(null);
   const sequence = useRef(0);
@@ -128,6 +136,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     setDesigning(false);
     setSavingTurn(null);
     retry.current = null;
+    contextTourIds.current = [];
   };
 
   // Đổi tài khoản (đăng nhập/đăng xuất) thì bắt đầu cuộc trò chuyện mới.
@@ -258,9 +267,11 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
       // Agency hỏi trợ lý dành cho Agency, kèm khung tour mới nhất trong cửa sổ để góp ý đúng tour đó.
       const answer = isAgency
         ? await askAgencyAssistant(chat, latestDraft(history), controller.signal)
-        : await askGuestAssistant(chat, controller.signal);
+        : await askGuestAssistant(chat, contextTourIds.current, controller.signal);
       if (request.current !== controller) return;
       retry.current = null;
+      // Giữ ID danh sách tour gợi ý gần nhất (máy chủ đã kiểm tra lại) cho câu hỏi tiếp theo.
+      if (!isAgency) contextTourIds.current = nextTourContext(contextTourIds.current, answer);
       setTurns((old) => [...old, { id: ++sequence.current, role: "assistant", content: answer.reply, tours: answer.tours, offline: !answer.aiConfigured }]);
     } catch (e) {
       if (request.current !== controller) return;
@@ -321,7 +332,7 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
         )}
         {turns.map((turn) => (
           <div key={turn.id} className={`ai-turn ${turn.role}`}>
-            <p className="ai-bubble">{plainText(turn.content)}</p>
+            <p className="ai-bubble">{withBoldNotes(plainText(turn.content))}</p>
             {turn.tours && turn.tours.length > 0 && (
               <div className="ai-tour-list">
                 {turn.tours.map((tour) => <TourCard key={tour.id} tour={tour} onOpen={() => openTourCard(tour.id)} />)}

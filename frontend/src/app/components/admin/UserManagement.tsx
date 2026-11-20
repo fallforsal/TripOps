@@ -1,4 +1,5 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { CreateAccountDialog } from "./CreateAccountDialog";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/app/lib/notifications";
 import {
@@ -134,6 +135,7 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
 
 export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: string) => void }) {
   const [tab, setTab] = useState<Tab>("all");
+  const [creating, setCreating] = useState(false);
   const [status, setStatus] = useState<StatusFilter>("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -205,7 +207,14 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
           Theo dõi tài khoản khách hàng, công ty lữ hành, nhà cung cấp và hướng dẫn viên; cấm hoặc thu hồi lệnh cấm khi cần.
         </p>
+        <Button type="button" onClick={() => setCreating(true)} className="mt-4 bg-[#075985] text-white hover:bg-[#0369a1] gap-2">
+          <UserCheck className="w-4 h-4" /> Tạo tài khoản
+        </Button>
       </div>
+      <CreateAccountDialog open={creating} onClose={() => setCreating(false)} onCreated={() => {
+        toast.success("Đã tạo tài khoản thành công.");
+        setTab("all"); setStatus(""); setSearch(""); setPage(1); refresh();
+      }} />
 
       {/* 3 phần chính + toàn bộ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
