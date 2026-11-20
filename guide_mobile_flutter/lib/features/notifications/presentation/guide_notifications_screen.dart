@@ -58,10 +58,12 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
       }
       if (mounted) setState(() { loading = false; error = e.message; });
     } catch (_) {
-      if (mounted) setState(() {
-        loading = false;
-        error = 'Không tải được thông báo. Vui lòng thử lại.';
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+          error = 'Không tải được thông báo. Vui lòng thử lại.';
+        });
+      }
     }
   }
 
@@ -71,8 +73,10 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
       await widget.guides.api.postVoid('notifications/${notice.id}/read');
       if (mounted) await load();
     } on ApiFailure catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)));
+      }
     }
   }
 
@@ -83,8 +87,10 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
       await widget.guides.api.postVoid('notifications/read-all');
       await load();
     } on ApiFailure catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)));
+      }
     } finally {
       if (mounted) setState(() => updating = false);
     }

@@ -73,9 +73,11 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
         if (validation == null) _selected.add(addition);
       });
     } catch (_) {
-      if (mounted) setState(() {
-        _photoError = 'Không thể mở camera để chụp ảnh.';
-      });
+      if (mounted) {
+        setState(() {
+          _photoError = 'Không thể mở camera để chụp ảnh.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }
