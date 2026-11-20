@@ -11,6 +11,16 @@ public sealed record GuideBookingSummary(
 
 public sealed class BookingRepository(TripOpsDbContext db)
 {
+    public void Notify(string recipient, string message, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.Queue(db, recipient, message, bookingId: bookingId, actorId: actor);
+
+    public void NotifyAgencies(Booking booking, string message, string? actor = null)
+    {
+        foreach (var agency in booking.BookingAgencies.Select(a => a.AgencyId)
+                     .Append(booking.Tour!.AgencyId).Distinct())
+            Notify(agency, message, booking.Id, actor);
+    }
+
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
     public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
         .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);

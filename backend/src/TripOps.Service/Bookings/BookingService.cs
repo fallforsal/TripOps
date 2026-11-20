@@ -395,6 +395,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
             CloseOpenRequests(booking);
         }
 
+        repository.Notify(booking.CustomerId!, request.Decision == "approve"
+            ? $"Booking {booking.BookingCode} đã được Agency xác nhận. Vui lòng kiểm tra và ký hợp đồng."
+            : $"Booking {booking.BookingCode} bị từ chối. Lý do: {request.Reason?.Trim() ?? "Không được cung cấp"}",
+            booking.Id, agencyId);
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(agencyId,id,ct);
@@ -425,6 +429,8 @@ public sealed partial class BookingService(BookingRepository repository, Account
         booking.CancelledAt = DateTime.UtcNow;
         booking.SpecialRequests = $"{booking.SpecialRequests} [Khách hủy: {request.Reason}]".Trim();
 
+        repository.NotifyAgencies(booking,
+            $"Khách đã hủy booking {booking.BookingCode}. Lý do: {request.Reason.Trim()}", customerId);
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -450,6 +456,9 @@ public sealed partial class BookingService(BookingRepository repository, Account
             throw new BookingException(409, "HDV đã được phân công cho chuyến khác trùng thời gian.");
 
         var existing = booking.AssignedGuides.FirstOrDefault(ag => ag.GuideId == request.GuideId);
+        var assignmentChanged = existing is null
+            || (request.Role is not null && existing.Role != request.Role)
+            || (request.Notes is not null && existing.Notes != request.Notes);
         if (existing is null)
         {
             booking.AssignedGuides.Add(new BookingAssignedGuide
@@ -471,6 +480,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         }
 
         foreach(var p in booking.Participants.Where(p=>p.AgencyId==agencyId && p.Status!="INACTIVE" && p.AssignedGuideId==null))p.AssignedGuideId=request.GuideId;
+        if (assignmentChanged)
+            repository.Notify(request.GuideId,
+                $"Bạn được phân công booking {booking.BookingCode} - {booking.Tour?.Name ?? "Tour"}. Ngày khởi hành: {booking.StartDate:dd/MM/yyyy}.",
+                id, agencyId);
         await repository.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(agencyId,id,ct);
@@ -602,6 +615,10 @@ public sealed partial class BookingService(BookingRepository repository, Account
         };
 
         repository.AddIncident(incident);
+        foreach (var agency in new[] { assignment.AgencyId, booking.Tour!.AgencyId }.Distinct())
+            repository.Notify(agency,
+                $"Sự cố [{normalizedType}] trong booking {booking.BookingCode}: {request.Title.Trim()}. Vui lòng xem Incident Reports.",
+                bookingId, guideId);
         await repository.SaveChangesAsync(ct);
 
         return IncidentToDto(incident, assignment.Guide?.Name);

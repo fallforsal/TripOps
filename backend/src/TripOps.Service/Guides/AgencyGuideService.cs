@@ -144,6 +144,9 @@ public sealed class AgencyGuideService(TripOpsDbContext db, CloudinaryStorage im
         guide.Status = request.Action == "suspend" ? UserStatus.Inactive : UserStatus.Active;
         profile.SuspendedAt = request.Action == "suspend" ? DateTime.UtcNow : null;
         profile.SuspendedReason = request.Action == "suspend" ? request.Reason?.Trim() : null;
+        TripOps.Data.WorkflowNotice.Queue(db, id,
+            request.Action == "suspend" ? $"Agency đã tạm khóa tài khoản hướng dẫn viên. {request.Reason?.Trim()}"
+                : "Agency đã kích hoạt lại tài khoản hướng dẫn viên.", actorId: agencyId);
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return new((await Detail(agencyId, id, ct)).Guide, affected);
     }

@@ -79,7 +79,11 @@ public sealed class BookingOperationsController(TripOpsDbContext db, BookingServ
             location.GuideId=null;
         }
         foreach (var p in b.Participants.Where(p => p.AssignedGuideId == guideId)) p.AssignedGuideId = null;
-        await db.SaveChangesAsync(ct); db.BookingAssignedGuides.Remove(assignment); await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
+        db.BookingAssignedGuides.Remove(assignment);
+        WorkflowNotice.Queue(db, guideId, $"Agency đã hủy phân công booking {b.BookingCode}.",
+            id, actorId: Actor);
+        await db.SaveChangesAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
 }
@@ -92,7 +96,9 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
     [HttpPost("start")]
     [EndpointSummary("Start an assigned tour on or after its departure date")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow)) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress; await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
+    public async Task<IActionResult> Start(int id, CancellationToken ct) { var b = await Assigned(id, ct); if (b.Status is not (BookingStatus.Confirmed or BookingStatus.Paid) || b.StartDate.Date > PaymentRules.VietnamDate(DateTime.UtcNow)) throw new BookingException(409, "Booking is not ready to depart."); b.Status = BookingStatus.InProgress;
+        WorkflowNotice.Queue(db, b.Tour!.AgencyId, $"Hướng dẫn viên đã bắt đầu tour booking {b.BookingCode}.", id, actorId: Actor);
+        await db.SaveChangesAsync(ct); return Ok(await bookings.Get(Actor, id, ct)); }
     [HttpPost("locations/{locationId:int}/check-in")]
     [EndpointSummary("Deprecated: photo-less check-in is rejected")]
     [ProducesResponseType<BookingDto>(StatusCodes.Status200OK)]

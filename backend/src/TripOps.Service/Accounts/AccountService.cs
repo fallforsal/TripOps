@@ -168,7 +168,12 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
                 .SetProperty(p => p.RejectionReason, approve ? null : reason!.Trim())
                 .SetProperty(p => p.ApprovedAt, approve ? (DateTime?)now : null).SetProperty(p => p.UpdatedAt, now), ct);
         if (count == 0) throw new AccountException(409, "Hồ sơ không tồn tại hoặc đã được xử lý. Vui lòng tải lại.");
-        return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+        var reviewed = await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, reviewed.UserId,
+            approve ? "Hồ sơ doanh nghiệp đã được phê duyệt."
+                : $"Hồ sơ doanh nghiệp bị từ chối. Lý do: {reason?.Trim()}");
+        await db.SaveChangesAsync(ct);
+        return Profile(reviewed);
     }
 
     public async Task<ProfileDto> SetSuspended(int id, bool suspend, CancellationToken ct)
@@ -184,7 +189,12 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
             throw new AccountException(409, suspend
                 ? "Chỉ có thể đình chỉ hồ sơ đang hoạt động. Vui lòng tải lại."
                 : "Chỉ có thể kích hoạt lại hồ sơ đang bị đình chỉ. Vui lòng tải lại.");
-        return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+        var reviewed = await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, reviewed.UserId,
+            suspend ? "Hồ sơ doanh nghiệp của bạn đã bị đình chỉ."
+                : "Hồ sơ doanh nghiệp của bạn đã được kích hoạt lại.");
+        await db.SaveChangesAsync(ct);
+        return Profile(reviewed);
     }
     //profile cho agency
     public sealed record UpdateBusinessRequest(string Name, string Phone, string BusinessName, string TaxCode,

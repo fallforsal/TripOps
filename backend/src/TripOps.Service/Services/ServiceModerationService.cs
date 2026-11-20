@@ -102,7 +102,12 @@ public sealed class ServiceModerationService(TripOpsDbContext db)
                 throw new ServiceModerationException(404, "Không tìm thấy bài đăng dịch vụ.");
             throw new ServiceModerationException(409, "Trạng thái bài đăng không cho phép thao tác này. Vui lòng tải lại dữ liệu.");
         }
-        return new(message, await Get(id, ct));
+        var result = await Get(id, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, result.ProviderId,
+            $"Dịch vụ {result.Name}: {message}" +
+            (string.IsNullOrWhiteSpace(rejectionReason ?? hiddenReason) ? "" : $" Lý do: {rejectionReason ?? hiddenReason}"));
+        await db.SaveChangesAsync(ct);
+        return new(message, result);
     }
 
     internal static AdminServiceDto Map(ServiceEntity service)
