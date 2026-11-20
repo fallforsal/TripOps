@@ -115,6 +115,8 @@ import { fromApiBooking, getAgencyCancellationQuote, type CancellationQuoteDto }
 
 interface AgencyBookingDetailPageProps {
   booking: Booking;
+  focusItineraryTab?: "incidents" | "live_checkin" | null;
+  notificationFocusVersion?: number;
   guides: User[];
   companyName: string;
   companyId?: string;
@@ -204,6 +206,8 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 
 export function AgencyBookingDetailPage({
   booking,
+  focusItineraryTab,
+  notificationFocusVersion,
   guides,
   companyName,
   companyId,
@@ -709,7 +713,16 @@ export function AgencyBookingDetailPage({
   // ----------------------------------------------------
   // ITINERARY SUB-TAB & FILTERS (NO BUS/XE MENTION!)
   // ----------------------------------------------------
-  const [itinerarySubTab, setItinerarySubTab] = useState<"standard" | "live_checkin" | "incidents">("standard");
+  const [itinerarySubTab, setItinerarySubTab] = useState<"standard" | "live_checkin" | "incidents">(focusItineraryTab ?? "standard");
+  const itineraryPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusItineraryTab) return;
+    setItinerarySubTab(focusItineraryTab);
+    const frame = window.requestAnimationFrame(() => {
+      itineraryPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [booking.id, focusItineraryTab, notificationFocusVersion]);
   const [trackerGuideFilter, setTrackerGuideFilter] = useState<string>("all");
   const [trackerDayFilter, setTrackerDayFilter] = useState<string>("all");
 
@@ -1967,8 +1980,8 @@ export function AgencyBookingDetailPage({
           })()}
 
           {/* TOUR FULL ITINERARY (MATCHING chitietlichtrinh.png & TourDetailPage.tsx) */}
-          {booking.tour.itinerary && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
+          {(booking.tour.itinerary || incidents.length > 0 || focusItineraryTab) && (
+            <div ref={itineraryPanelRef} className="scroll-mt-28 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
               {/* Header with Sub-Tabs */}
               <div className="border-b border-gray-200 pb-3 flex items-center justify-between gap-3 flex-wrap">
                 <div>

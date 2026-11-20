@@ -1194,7 +1194,10 @@ function Application() {
   // Company adjusts total booking price & logs adjustment history
   const handleBookingChanged = (dto: import("@/app/services/wf05Bookings").BookingDto) => {
     const updated = fromApiBooking(dto, tours, currentUser);
-    setBookings(prev => prev.map(b => b.id === updated.id ? updated : b));
+    // A deep link can refer to a valid booking missing from the current list page.
+    setBookings(prev => prev.some(b => b.id === updated.id)
+      ? prev.map(b => b.id === updated.id ? updated : b)
+      : [...prev, updated]);
   };
   const handleUpdateBookingPrice = async (bookingId: string, newPrice: number, note?: string): Promise<boolean> => {
     const booking = bookings.find(b => b.id === bookingId);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { http } from "@/app/lib/http";
+import { notificationDestination, type NotificationDestination, type NotificationRole } from "@/app/lib/notificationNavigation";
 
 interface Notice {
   id: number;
@@ -10,24 +11,9 @@ interface Notice {
   createdAt: string;
   readAt: string | null;
 }
-type Role = "agency" | "provider" | "admin" | "user";
 interface Props {
-  role?: Role;
-  onNavigate?: (section: string) => void;
-}
-
-function sectionFor(notice: Notice, role: Role): string | null {
-  if (notice.requestId != null) {
-    return role === "agency" ? "custom-requests" :
-      role === "user" ? "my-requests" : null;
-  }
-  if (notice.bookingId != null) {
-    return role === "agency" ? "bookings" :
-      role === "user" ? "my-bookings" :
-      role === "provider" ? "room-requests" :
-      role === "admin" ? "bookings" : null;
-  }
-  return null;
+  role?: NotificationRole;
+  onNavigate?: (section: string, destination?: NotificationDestination) => void;
 }
 
 /** Shared inbox for the four authenticated web actors. The backend is the
@@ -94,11 +80,17 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
 
   async function choose(n: Notice) {
     await markRead(n);
-    const section = sectionFor(n, role);
-    if (section && onNavigate) {
-      setOpen(false);
-      onNavigate(section);
+    const destination = notificationDestination(n, role);
+    if (!destination) return;
+    setOpen(false);
+    // Agency owns the nested booking state; hand both the section and entity to it.
+    if (role === "agency" && onNavigate) {
+      onNavigate(destination.section, destination);
+      return;
     }
+    // Customer's booking details and Provider's request details are hash-routed.
+    onNavigate?.(destination.section, destination);
+    if (window.location.hash !== destination.href) window.location.hash = destination.href;
   }
 
   return (
