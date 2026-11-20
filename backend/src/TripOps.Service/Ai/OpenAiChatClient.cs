@@ -68,9 +68,11 @@ public sealed class OpenAiChatClient(HttpClient http, AiAssistantOptions options
             ["model"] = model,
             ["messages"] = messages.DeepClone(),
             ["temperature"] = 0.3,
-            ["max_completion_tokens"] = maxTokens,
+            [options.MaxTokensParameter] = maxTokens,
         };
         if (options.ReasoningEffort is { } effort) body["reasoning_effort"] = effort;
+        // DeepSeek mặc định bật suy luận; "disabled" để không trả token suy luận (và không phải gửi lại reasoning_content khi dùng công cụ).
+        if (options.Thinking is { } thinking) body["thinking"] = new JsonObject { ["type"] = thinking };
         if (tools is { Count: > 0 })
         {
             body["tools"] = tools.DeepClone();

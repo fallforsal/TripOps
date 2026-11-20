@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -22,7 +23,7 @@ namespace TripOps.Service.Ai;
 /// </summary>
 public sealed partial class GuestAssistantService(
     PublicTourFinder finder, OpenAiChatClient openAi, AiAssistantOptions options, ILogger<GuestAssistantService> logger,
-    Contracts.ContractTemplateService contractTemplates)
+    Contracts.ContractTemplateService contractTemplates, IMemoryCache cache)
 {
     private const int MaxHistory = 10;
     private const int MaxQuestionLength = 1000;
@@ -105,9 +106,16 @@ public sealed partial class GuestAssistantService(
         var intent = await Classify(question, context, ct);
 
         if (!options.Configured) return await Offline(question, context, intent, ct);
+        // Cache câu trả lời: câu hỏi đầu tiên, chưa có danh sách tour trước đó, giống hệt câu đã hỏi gần đây thì trả lại kết quả cũ,
+        // không gọi model. Câu hỏi tiếp theo phụ thuộc lịch sử hội thoại nên không cache.
+        var cacheKey = history.Count == 1 && intent == GuestIntent.NoContext && options.ResponseCacheMinutes > 0 ? CacheKey(question) : null;
+        if (cacheKey is not null && cache.TryGetValue(cacheKey, out AiChatResponse? cached) && cached is not null) return cached;
         try
         {
-            return await WithModel(history, context, intent, useTools: true, ct);
+            var answer = await WithModel(history, context, intent, useTools: true, ct);
+            if (cacheKey is not null && answer.AiConfigured)
+                cache.Set(cacheKey, answer, TimeSpan.FromMinutes(options.ResponseCacheMinutes));
+            return answer;
         }
         catch (OpenAiException ex) when (ex.Code == OpenAiException.ToolUseFailed && intent == GuestIntent.FollowUp && context.Tours.Count > 0)
         {
@@ -121,6 +129,13 @@ public sealed partial class GuestAssistantService(
         {
             return await Fallback(question, context, intent, ex, ct);
         }
+    }
+
+    /// <summary>Khóa cache: chữ thường, gộp khoảng trắng, bỏ dấu câu ở cuối ("Tour Đà Lạt?" = "tour đà lạt").</summary>
+    internal static string? CacheKey(string question)
+    {
+        var text = string.Join(' ', question.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('?', '!', '.', ' ', '…');
+        return text.Length is 0 or > 300 ? null : "ai:guest:" + text;
     }
 
     private async Task<AiChatResponse> Fallback(string question, GuestTourContext context, GuestIntent intent, OpenAiException ex, CancellationToken ct)
