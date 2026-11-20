@@ -1,6 +1,7 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useState } from "react";
 import { BookUser, Eye, Hotel, Loader2, MapPin, Pencil, Search, Trash2, UtensilsCrossed } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import type { AgencySupplier, SupplierInput } from "@/app/services/wf02Tours";
 import { agencySuppliers, deleteAgencySupplier, getAgencySupplier, updateAgencySupplier } from "@/app/services/wf02Tours";
 import { Button } from "@/app/components/ui/button";
@@ -242,7 +243,7 @@ export function AgencySupplierDirectory() {
                 <option value="ACTIVE">Đang dùng</option><option value="ARCHIVED">Lưu trữ</option>
               </select>
             </label>
-            {editError && <p role="alert" className="text-sm text-rose-600 sm:col-span-2">{editError}</p>}
+            {editError && <NotificationMessage tone="error" message={editError} />}
             <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="outline" disabled={saving} onClick={() => { setEditing(null); setDraft(null); }}>Hủy</Button>
               <Button disabled={saving} onClick={() => void saveSupplier()}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></div>
           </div>}
@@ -250,13 +251,13 @@ export function AgencySupplierDirectory() {
       </Dialog>
 
       <AlertDialog open={!!deleting} onOpenChange={(open) => { if (!open && !isDeleting) setDeleting(null); }}>
-        <AlertDialogContent className="bg-white text-slate-900">
+        <AlertDialogContent tone="error" className="bg-white text-slate-900">
           <AlertDialogHeader>
             <AlertDialogTitle>Xóa nhà cung cấp khỏi danh bạ?</AlertDialogTitle>
             <AlertDialogDescription className="leading-6">Bạn muốn xóa <strong className="text-slate-800">{deleting?.name}</strong> khỏi danh bạ? Nhà cung cấp sẽ không còn xuất hiện trong danh bạ để chọn khi tạo tour. Thông tin trong các tour đã lưu được giữ nguyên.</AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteError && <p role="alert" className="text-sm text-rose-600">{deleteError}</p>}
-          <AlertDialogFooter><AlertDialogCancel disabled={isDeleting}>Giữ lại</AlertDialogCancel><Button disabled={isDeleting} className="bg-rose-600 text-white hover:bg-rose-700" onClick={() => void confirmDelete()}>{isDeleting ? "Đang xóa..." : "Xóa khỏi danh bạ"}</Button></AlertDialogFooter>
+          {deleteError && <NotificationMessage tone="error" message={deleteError} />}
+          <AlertDialogFooter><AlertDialogCancel disabled={isDeleting}>Giữ lại</AlertDialogCancel><Button data-slot="alert-dialog-action" disabled={isDeleting} className="bg-rose-600 text-white hover:bg-rose-700" onClick={() => void confirmDelete()}>{isDeleting ? "Đang xóa..." : "Xóa khỏi danh bạ"}</Button></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

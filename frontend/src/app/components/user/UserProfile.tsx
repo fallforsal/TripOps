@@ -1,83 +1,45 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState } from "react";
-import {
-  User as UserIcon,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  Lock,
-  Save,
-  CheckCircle2,
-  AlertCircle,
-  Building2,
-} from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
+import { changePassword, newPasswordProblem } from "@/app/services/password";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
-
-interface UserProfileData {
-  name: string;
-  email: string;
-  phone: string;
-  dateOfBirth: string;
-  gender: string;
-  companyName: string;
-  address: string;
-  city: string;
-}
-
-const defaultProfile: UserProfileData = {
-  name: "Tập đoàn FPT",
-  email: "khachhang.fpt@gmail.com",
-  phone: "0933 888 999",
-  dateOfBirth: "1988-09-13",
-  gender: "Khác",
-  companyName: "Công ty Cổ phần FPT",
-  address: "Tòa nhà FPT, Phố Duy Tân, Cầu Giấy",
-  city: "Hà Nội",
-};
+import { ProfileBankAccountCard } from "@/app/components/user/ProfileBankAccountCard";
+import { CustomerProfileCard } from "@/app/components/user/CustomerProfileCard";
 
 export function UserProfile() {
-  const [profile, setProfile] = useState<UserProfileData>(defaultProfile);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<UserProfileData>(defaultProfile);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwMessage, setPwMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfile(formData);
-    setIsEditing(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-  };
+  const [saving, setSaving] = useState(false);
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwMessage(null);
-
     if (!currentPassword) {
-      setPwMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại" });
+      setPwMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại." });
       return;
     }
-    if (newPassword.length < 6) {
-      setPwMessage({ type: "error", text: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+    const problem = newPasswordProblem(newPassword, confirmPassword);
+    if (problem) {
+      setPwMessage({ type: "error", text: problem });
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setPwMessage({ type: "error", text: "Mật khẩu xác nhận không khớp" });
-      return;
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword, confirmPassword);
+      setPwMessage({ type: "success", text: "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất; thiết bị này vẫn giữ đăng nhập." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPwMessage({ type: "error", text: err instanceof Error ? err.message : "Không đổi được mật khẩu. Vui lòng thử lại." });
+    } finally {
+      setSaving(false);
     }
-
-    setPwMessage({ type: "success", text: "Đổi mật khẩu thành công!" });
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setTimeout(() => setPwMessage(null), 3000);
   };
 
   return (
@@ -87,135 +49,9 @@ export function UserProfile() {
         subtitle="Quản lý hồ sơ khách hàng, thông tin doanh nghiệp và bảo mật tài khoản"
       />
 
-      {saveSuccess && (
-        <div className="p-3.5 bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] text-xs text-[#15803D] flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>Cập nhật thông tin cá nhân thành công!</span>
-        </div>
-      )}
+      <CustomerProfileCard />
 
-      {/* Main Profile Info Card */}
-      <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#F1F5F9] pb-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-[6px] bg-[#075985] text-white flex items-center justify-center text-2xl font-bold">
-              {profile.name.charAt(0)}
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-[#0F172A]">{profile.name}</h2>
-              <p className="text-xs text-[#475569]">{profile.email}</p>
-              <span className="inline-block mt-1 text-[11px] font-semibold text-[#075985] bg-[#F0F9FF] border border-[#BAE6FD] px-2 py-0.5 rounded-[4px]">
-                Khách hàng doanh nghiệp (B2B)
-              </span>
-            </div>
-          </div>
-
-          <div>
-            {!isEditing ? (
-              <Button
-                type="button"
-                onClick={() => {
-                  setFormData(profile);
-                  setIsEditing(true);
-                }}
-                className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px]"
-              >
-                Chỉnh sửa thông tin
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditing(false)}
-                className="border-[#CBD5E1] text-[#0F172A] text-xs h-9 px-4 rounded-[6px]"
-              >
-                Hủy thay đổi
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Profile Form */}
-        <form onSubmit={handleProfileSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Họ và tên / Tên đại diện:</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={isEditing ? formData.name : profile.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Tên cơ quan / Doanh nghiệp:</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={isEditing ? formData.companyName : profile.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Email:</label>
-              <input
-                type="email"
-                disabled
-                value={profile.email}
-                className="w-full h-9 px-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#64748B] cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Số điện thoại liên hệ:</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={isEditing ? formData.phone : profile.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Địa chỉ:</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={isEditing ? formData.address : profile.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-[#0F172A]">Tỉnh / Thành phố:</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={isEditing ? formData.city : profile.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full h-9 px-3 bg-white disabled:bg-[#F8FAFC] border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              />
-            </div>
-          </div>
-
-          {isEditing && (
-            <div className="flex justify-end pt-3 border-t border-[#F1F5F9]">
-              <Button
-                type="submit"
-                className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-5 rounded-[6px] font-semibold"
-              >
-                Lưu thay đổi
-              </Button>
-            </div>
-          )}
-        </form>
-      </div>
+      <ProfileBankAccountCard />
 
       {/* Password Change Card */}
       <div className="bg-white border border-[#CBD5E1] rounded-[6px] p-6 space-y-4">
@@ -226,24 +62,18 @@ export function UserProfile() {
           </h3>
         </div>
 
-        {pwMessage && (
-          <div
-            className={`p-3 rounded-[6px] text-xs flex items-center gap-2 ${
-              pwMessage.type === "success"
-                ? "bg-[#F0FDF4] border border-[#BBF7D0] text-[#15803D]"
-                : "bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C]"
-            }`}
-          >
-            {pwMessage.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-            <span>{pwMessage.text}</span>
-          </div>
-        )}
+        {pwMessage && <NotificationMessage tone={pwMessage.type} message={pwMessage.text} />}
 
-        <form onSubmit={handlePasswordSubmit} className="space-y-3 max-w-md text-xs">
+        <p className="text-xs text-[#64748B]">
+          Mật khẩu mới cần ít nhất 8 ký tự. Sau khi đổi, các thiết bị khác đang đăng nhập sẽ bị đăng xuất và bạn sẽ nhận email thông báo.
+        </p>
+
+        <form onSubmit={(e) => void handlePasswordSubmit(e)} className="space-y-3 max-w-md text-xs">
           <div className="space-y-1.5">
             <label className="font-semibold text-[#0F172A]">Mật khẩu hiện tại:</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -254,6 +84,7 @@ export function UserProfile() {
             <label className="font-semibold text-[#0F172A]">Mật khẩu mới:</label>
             <input
               type="password"
+              autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -264,6 +95,7 @@ export function UserProfile() {
             <label className="font-semibold text-[#0F172A]">Xác nhận mật khẩu mới:</label>
             <input
               type="password"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
@@ -273,8 +105,10 @@ export function UserProfile() {
           <div className="pt-2">
             <Button
               type="submit"
-              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold"
+              disabled={saving}
+              className="bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs h-9 px-4 rounded-[6px] font-semibold gap-1.5"
             >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Cập nhật mật khẩu
             </Button>
           </div>

@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { Building2, CheckCircle2, XCircle, Clock, Phone, Mail, MapPin, FileText, FileCheck, AlertTriangle, ShieldCheck, UserCheck, ExternalLink, Store, Compass, Check, X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
@@ -52,7 +53,7 @@ export function PartnerProfileDialog({ partner: selectedPartner, open, onOpenCha
           {!selectedPartner && <div className="space-y-4 p-6">
             <DialogTitle>Hồ sơ nhà cung cấp</DialogTitle>
             <DialogDescription>{error ? "Không thể tải hồ sơ doanh nghiệp." : "Đang tải hồ sơ doanh nghiệp…"}</DialogDescription>
-            {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+            {error && <NotificationMessage tone="error" message={error} />}
             {error && onRetry && <Button variant="outline" onClick={onRetry}>Thử lại</Button>}
           </div>}
           {selectedPartner && (

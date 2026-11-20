@@ -1,10 +1,14 @@
-import { useState } from "react";
-import { toast } from "sonner";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { CreateAccountDialog } from "./CreateAccountDialog";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/app/lib/notifications";
 import {
   AlertCircle,
   Ban,
   Building2,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   ExternalLink,
   Eye,
@@ -12,6 +16,7 @@ import {
   MapPin,
   MinusCircle,
   Phone,
+  RefreshCw,
   Search,
   Store,
   User as UserIcon,
@@ -43,7 +48,7 @@ import {
 type Tab = "all" | "user" | "agency" | "provider";
 type StatusFilter = "" | AccountStatus;
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const TABS: { id: Tab; label: string; Icon: LucideIcon; count: (c: AccountCounts) => number }[] = [
   { id: "all", label: "Toàn bộ tài khoản", Icon: Users, count: (c) => c.all },
@@ -86,7 +91,7 @@ const asDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) || date.getFullYear() < 1971 ? null : date;
 };
 const formatDate = (value?: string | null) => asDate(value)?.toLocaleDateString("vi-VN") ?? "Chưa có";
-const formatDateTime = (value?: string | null) => asDate(value)?.toLocaleString("vi-VN") ?? "Chưa cập nhật";
+const formatDateTime = (value?: string | null) => asDate(value)?.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }) ?? "Chưa cập nhật";
 
 function Avatar({ account, size }: { account: AdminAccount; size: "sm" | "lg" }) {
   const box = size === "lg" ? "w-20 h-20 text-3xl" : "w-9 h-9 text-sm";
@@ -130,10 +135,25 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
 
 export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: string) => void }) {
   const [tab, setTab] = useState<Tab>("all");
+  const [creating, setCreating] = useState(false);
   const [status, setStatus] = useState<StatusFilter>("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const { items, total, counts, loading, error, refresh } = useAdminAccounts(tab, status, search, page, pageSize);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const visiblePages = useMemo(() => {
+    const candidates = new Set([1, totalPages, page - 1, page, page + 1]);
+    return [...candidates].filter((value) => value >= 1 && value <= totalPages).sort((a, b) => a - b);
+  }, [page, totalPages]);
+  const firstItem = items.length > 0 ? (page - 1) * pageSize + 1 : 0;
+  const lastItem = items.length > 0 ? Math.min(total, (page - 1) * pageSize + items.length) : 0;
+
+  // Keep the current page valid when a ban/unban or server refresh reduces the result count.
+  useEffect(() => {
+    if (!loading && !error && page > totalPages) setPage(totalPages);
+  }, [loading, error, page, totalPages]);
 
   const [selected, setSelected] = useState<AdminAccount | null>(null);
   const [target, setTarget] = useState<AdminAccount | null>(null);
@@ -187,7 +207,14 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
           Theo dõi tài khoản khách hàng, công ty lữ hành, nhà cung cấp và hướng dẫn viên; cấm hoặc thu hồi lệnh cấm khi cần.
         </p>
+        <Button type="button" onClick={() => setCreating(true)} className="mt-4 bg-[#075985] text-white hover:bg-[#0369a1] gap-2">
+          <UserCheck className="w-4 h-4" /> Tạo tài khoản
+        </Button>
       </div>
+      <CreateAccountDialog open={creating} onClose={() => setCreating(false)} onCreated={() => {
+        toast.success("Đã tạo tài khoản thành công.");
+        setTab("all"); setStatus(""); setSearch(""); setPage(1); refresh();
+      }} />
 
       {/* 3 phần chính + toàn bộ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -231,7 +258,10 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
               key={option.id || "all"}
               type="button"
               onClick={() => changeStatus(option.id)}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${status === option.id ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500"
+              aria-pressed={status === option.id}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${status === option.id
+                  ? "bg-white text-slate-900 font-bold shadow-md ring-1 ring-slate-300"
+                  : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               {option.label}
@@ -242,8 +272,12 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
 
       {/* Bảng */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div role="status" className="p-12 text-center text-sm text-slate-500">Đang tải danh sách tài khoản...</div>
+        {/* Đang tải lại: giữ bảng cũ (mờ đi) và hiện thanh chạy mảnh phía trên, không xóa trắng bảng. */}
+        <div className={`h-0.5 w-full overflow-hidden ${loading && items.length > 0 ? "bg-sky-100" : "bg-transparent"}`}>
+          {loading && items.length > 0 && <div className="h-full w-full bg-[#075985]/70 animate-pulse" />}
+        </div>
+        {loading && items.length === 0 ? (
+          <TableSkeleton />
         ) : error ? (
           <div role="alert" className="p-12 text-center text-sm text-rose-700">
             {error}
@@ -270,13 +304,20 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                   <th className="py-3.5 px-4 text-right">Hành động</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className={`divide-y divide-slate-100 transition-opacity duration-200 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
                 {items.map((account) => (
                   <tr key={account.id} className="hover:bg-sky-50/30 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar account={account} size="sm" />
-                        <span className="font-bold text-sm text-slate-900 truncate max-w-[14rem]">{account.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(account)}
+                          title="Xem chi tiết tài khoản"
+                          className="font-bold text-sm text-slate-900 truncate max-w-[14rem] text-left hover:text-[#075985] hover:underline cursor-pointer"
+                        >
+                          {account.name}
+                        </button>
                       </div>
                     </td>
                     <td className="py-3.5 px-4"><RoleBadge role={account.role} /></td>
@@ -290,23 +331,25 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                           variant="outline"
                           size="sm"
                           onClick={() => setSelected(account)}
-                          className="h-8 px-2.5 text-xs border-slate-300 hover:bg-slate-100 gap-1 cursor-pointer"
+                          title="Xem chi tiết"
+                          aria-label={`Xem chi tiết ${account.name}`}
+                          className="h-8 w-8 p-0 border-slate-300 hover:bg-slate-100 cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Xem chi tiết</span>
+                          <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => openConfirm(account)}
-                          className={`h-8 px-2.5 text-xs font-bold gap-1 cursor-pointer ${account.status === "banned"
+                          title={account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"}
+                          aria-label={`${account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"} ${account.name}`}
+                          className={`h-8 w-8 p-0 cursor-pointer ${account.status === "banned"
                               ? "border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100"
                               : "border-rose-300 text-rose-700 hover:bg-rose-50"
                             }`}
                         >
-                          {account.status === "banned" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                          <span>{account.status === "banned" ? "Thu hồi lệnh cấm" : "Cấm tài khoản"}</span>
+                          {account.status === "banned" ? <CheckCircle2 className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
                         </Button>
                       </div>
                     </td>
@@ -318,17 +361,77 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
         )}
       </div>
 
-      {/* Phân trang */}
-      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-        <span>Trang {page} · Tổng {total} tài khoản phù hợp</span>
-        <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl" disabled={loading || page <= 1} onClick={() => setPage((v) => v - 1)}>
-            Trang trước
+      {/* Phân trang - sử dụng dữ liệu đã được phân trang từ API */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-slate-600 gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            Hiển thị <strong>{firstItem}–{lastItem}</strong>
+            {" / "}<strong>{total}</strong> tài khoản
+          </span>
+          <label className="inline-flex items-center gap-2">
+            Số tài khoản/trang:
+            <select
+              aria-label="Số tài khoản mỗi trang"
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {totalPages > 1 && (
+            <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang tài khoản">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang trước"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Trước</span>
+              </Button>
+              {visiblePages.map((pageNumber, index) => (
+                <div key={pageNumber} className="inline-flex items-center gap-1">
+                  {index > 0 && pageNumber > visiblePages[index - 1] + 1 && (
+                    <span aria-hidden="true" className="px-1 text-slate-400">…</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={pageNumber === page ? "default" : "outline"}
+                    size="sm"
+                    disabled={loading}
+                    aria-label={`Trang ${pageNumber}`}
+                    aria-current={pageNumber === page ? "page" : undefined}
+                    onClick={() => setPage(pageNumber)}
+                    className={`h-8 min-w-8 px-2 text-xs ${pageNumber === page ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                  >
+                    {pageNumber}
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang sau"
+              >
+                <span className="hidden sm:inline">Sau</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </nav>
+          )}
+          <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 text-xs" disabled={loading} onClick={refresh}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Đang tải..." : "Tải lại"}
           </Button>
-          <Button variant="outline" className="rounded-xl" disabled={loading || page * PAGE_SIZE >= total} onClick={() => setPage((v) => v + 1)}>
-            Trang sau
-          </Button>
-          <Button variant="outline" className="rounded-xl" disabled={loading} onClick={refresh}>Tải lại</Button>
         </div>
       </div>
 
@@ -485,7 +588,7 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
                 </div>
               )}
 
-              {actionError && <p role="alert" className="text-xs text-rose-700">{actionError}</p>}
+              {actionError && <NotificationMessage tone="error" message={actionError} />}
 
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button type="button" variant="outline" disabled={submitting} onClick={() => setTarget(null)} className="rounded-xl text-xs">
@@ -504,6 +607,29 @@ export function UserManagement({ onOpenBusiness }: { onOpenBusiness?: (userId: s
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Khung xương lúc tải lần đầu: giữ đúng bố cục bảng để trang không bị nhảy. */
+function TableSkeleton() {
+  return (
+    <div role="status" aria-label="Đang tải danh sách tài khoản" className="divide-y divide-slate-100">
+      <div className="bg-slate-50/80 h-11 border-b border-slate-200" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-3.5 animate-pulse">
+          <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0" />
+          <div className="h-3.5 w-40 rounded bg-slate-200" />
+          <div className="h-5 w-20 rounded-full bg-slate-100" />
+          <div className="h-3 w-44 rounded bg-slate-100 hidden md:block" />
+          <div className="h-3 w-24 rounded bg-slate-100 hidden md:block" />
+          <div className="h-5 w-20 rounded-full bg-slate-100" />
+          <div className="ml-auto flex gap-1.5">
+            <div className="w-8 h-8 rounded-md bg-slate-100" />
+            <div className="w-8 h-8 rounded-md bg-slate-100" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

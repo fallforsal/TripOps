@@ -15,16 +15,23 @@ import {
   Handshake,
   Compass,
   BookUser,
+  HandCoins,
+  Star,
+  MessageSquareWarning,
+  FileSignature,
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
+import type { NotificationDestination } from "@/app/lib/notificationNavigation";
 
 interface AgencyLayoutProps {
   children: React.ReactNode;
   activeSection: string;
-  onNavigate: (section: string) => void;
+  onNavigate: (section: string, destination?: NotificationDestination) => void;
   company: TourCompany;
   currentUser: User;
+  customRequestsBadgeCount?: number;
   coHostingBadgeCount?: number;
   onLogout?: () => void;
 }
@@ -35,6 +42,7 @@ export function AgencyLayout({
   onNavigate,
   company,
   currentUser,
+  customRequestsBadgeCount,
   coHostingBadgeCount,
   onLogout,
 }: AgencyLayoutProps) {
@@ -45,11 +53,15 @@ export function AgencyLayout({
     { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
     { id: "tours", label: "Quản lý Tour", icon: Package },
     { id: "bookings", label: "Đặt tour & Khách", icon: Calendar },
+    { id: "finance", label: "Thu chi & Hoàn tiền", icon: HandCoins },
+    { id: "reviews", label: "Đánh giá từ khách", icon: Star },
+    { id: "complaints", label: "Khiếu nại", icon: MessageSquareWarning },
     { id: "services", label: "Dịch vụ đối tác", icon: Compass },
     { id: "supplier-directory", label: "Danh bạ nhà cung cấp", icon: BookUser },
     { id: "guides", label: "Hướng dẫn viên", icon: Users },
-    { id: "custom-requests", label: "Yêu cầu thiết kế riêng", icon: PenSquare },
-    { id: "co-hosting", label: "Liên minh lữ hành", icon: Handshake, badge: coHostingBadgeCount },
+    { id: "custom-requests", label: "Thiết kế tour", icon: PenSquare, badge: customRequestsBadgeCount },
+    { id: "co-hosting", label: "Lời mời đối tác", icon: Handshake, badge: coHostingBadgeCount },
+    { id: "contract-template", label: "Mẫu hợp đồng", icon: FileSignature },
     { id: "business-account", label: "Hồ sơ doanh nghiệp", icon: Building2 },
   ];
 
@@ -129,12 +141,19 @@ export function AgencyLayout({
                   isActive ? "text-white" : "text-[#475569] group-hover:text-[#075985]"
                 }`}
               />
+              {collapsed && item.badge !== undefined && item.badge > 0 && (
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+              )}
               {!collapsed && (
-                <div className="flex-1 flex items-center justify-between min-w-0">
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                   <span data-slot="sidebar-label" className={`truncate ${isActive ? "text-white font-semibold" : "text-[#475569]"}`}>{item.label}</span>
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#EA580C] text-white">
-                      {item.badge}
+                    <span
+                      className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none tabular-nums ${
+                        isActive ? "bg-white text-[#075985]" : "bg-rose-500 text-white shadow-2xs"
+                      }`}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
                 </div>
@@ -149,7 +168,7 @@ export function AgencyLayout({
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans antialiased text-[#0F172A]">
+    <div className="min-h-screen w-full overflow-x-clip bg-[#F8FAFC] flex font-sans antialiased text-[#0F172A]">
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:flex flex-col bg-white border-r border-[#CBD5E1] transition-all duration-300 fixed left-0 top-0 bottom-0 z-30 ${
@@ -193,6 +212,10 @@ export function AgencyLayout({
               {company.name}
             </span>
           </div>
+        </div>
+
+        <div className="sticky top-0 z-20 flex justify-end border-b border-slate-200 bg-white px-6 py-2">
+          <WorkflowNotifications role="agency" onNavigate={onNavigate} />
         </div>
 
         {/* Dynamic Page Content */}

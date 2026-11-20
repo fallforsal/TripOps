@@ -1,12 +1,43 @@
 using Microsoft.AspNetCore.Mvc;
 using TripOps.Api.Infrastructure;
 using TripOps.Service;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using TripOps.Service.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
+
+//
+if (builder.Environment.IsDevelopment())
+{
+    Console.WriteLine(
+        $"Environment: {builder.Environment.EnvironmentName}");
+
+    Console.WriteLine(
+        $"ContentRoot: {builder.Environment.ContentRootPath}");
+
+    foreach (var key in new[]
+    {
+        "CloudName",
+        "ApiKey",
+        "ApiSecret"
+    })
+    {
+        var value = builder.Configuration[$"Cloudinary:{key}"];
+
+        Console.WriteLine(
+            $"Cloudinary:{key} = " +
+            (string.IsNullOrWhiteSpace(value) ? "MISSING" : "SET"));
+    }
+
+    Console.WriteLine(
+        $"Storage:UseLocal = " +
+        builder.Configuration["Storage:UseLocal"]);
+}
+//
+
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole();
 builder.Services.AddTripOpsServices(builder.Configuration);
@@ -24,14 +55,26 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             var account = await context.HttpContext.RequestServices.GetRequiredService<AccountService>().Current(
                 context.Principal!.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value, context.HttpContext.RequestAborted);
             if (AccountService.RoleName(account.Role) != context.Principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value) context.RejectPrincipal();
+            // Đã đổi/đặt lại mật khẩu sau khi phiên này đăng nhập → đăng xuất (phiên cũ chưa có claim coi như "0").
+            else if (TripOps.Service.Accounts.PasswordService.SessionStamp(account) !=
+                     (context.Principal.FindFirst(TripOps.Api.Controllers.AccountsController.PasswordStampClaim)?.Value ?? "0"))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
         } catch (AccountException) { context.RejectPrincipal(); }
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR(options => options.MaximumReceiveMessageSize = 16 * 1024);
+builder.Services.AddScoped<TripOps.Service.Chat.IChatEvents, TripOps.Api.Hubs.SignalRChatEvents>();
 builder.Services.AddRateLimiter(options => {
     options.RejectionStatusCode = 429;
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Quên/đổi mật khẩu: giới hạn theo IP (OTP còn tự khóa sau 5 lần sai).
+    options.AddPolicy("password", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     // Tra cứu trạng thái payOS: giới hạn theo IP + đơn để polling của FE không làm quá tải payOS.
     options.AddPolicy("payment-sync", context => RateLimitPartition.GetFixedWindowLimiter(
         $"{context.Connection.RemoteIpAddress}:{context.Request.RouteValues["id"]}",
@@ -40,6 +83,10 @@ builder.Services.AddRateLimiter(options => {
     options.AddPolicy("contract-signing", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 40, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Chatbot AI không cần đăng nhập: giới hạn theo IP để tránh bị gọi liên tục làm tốn phí OpenAI.
+    options.AddPolicy("ai-chat", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
@@ -64,10 +111,29 @@ if (builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+if (builder.Configuration.GetValue<bool>("SeedRegionalDemo"))
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Regional demo seed is only available in Development.");
+    var path = builder.Configuration["RegionalDemo:Manifest"] ?? throw new InvalidOperationException("RegionalDemo:Manifest is required.");
+    var manifest = RegionalDemoSeed.ReadManifest(path);
+    var report = await RegionalDemoSeed.Run(app.Services, manifest);
+    var reportPath = builder.Configuration["RegionalDemo:Report"];
+    var json = System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true });
+    if (reportPath is not null) await File.WriteAllTextAsync(reportPath, json);
+    Console.WriteLine(json);
+    return;
+}
 if (builder.Configuration.GetValue<bool>("SeedDemo"))
 {
     if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo seed is only available in Development.");
     await DemoSeed.Run(app.Services, builder.Configuration.GetValue<bool>("ClearDemoData"));
+    return;
+}
+if (builder.Configuration.GetValue<bool>("SeedGuideGpsDemo"))
+{
+    if (!app.Environment.IsDevelopment())
+        throw new InvalidOperationException("Guide demo seed is only available in Development.");
+    await GuideCheckinDemoSeed.Run(app.Services);
     return;
 }
 if (builder.Configuration.GetValue<bool>("CreateAdmin"))
@@ -79,7 +145,7 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.Use(async (context, next) => {
     // Browser mutations must originate from this app or an explicitly allowed frontend.
-    if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
+    if (context.Request.Path.StartsWithSegments("/hubs/chat") || HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPatch(context.Request.Method) || HttpMethods.IsDelete(context.Request.Method)) {
         var origin = context.Request.Headers.Origin.ToString();
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         var crossSite = context.Request.Headers["Sec-Fetch-Site"] == "cross-site";
@@ -119,6 +185,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllers();
+app.MapHub<TripOps.Api.Hubs.ChatHub>("/hubs/chat", options => options.CloseOnAuthenticationExpiration = true);
 app.Run();
 
 public partial class Program;

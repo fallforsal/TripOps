@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useState, useEffect, useMemo } from "react";
 import {
   CalendarDays,
@@ -20,11 +21,9 @@ import {
   Info,
   Camera,
   ShieldCheck,
-  Award,
   NotebookPen,
   Users,
   Compass,
-  CheckCheck,
 } from "lucide-react";
 import { GuideSchedule, BookingPassenger, IncidentReport } from "@/app/types";
 import {
@@ -54,10 +53,6 @@ interface GuideDashboardProps {
     scheduleId: string,
     incident: Omit<IncidentReport, "id" | "reportedAt">,
   ) => void;
-  onWrapUpTour?: (
-    scheduleId: string,
-    wrapUpReport: { rating?: number; notes: string },
-  ) => void;
   onUpdateNotes?: (
     scheduleId: string,
     personalNotes: string,
@@ -73,7 +68,6 @@ export function GuideDashboard({
   onCheckIn,
   onDepartureRollCall,
   onReportIncident,
-  onWrapUpTour,
   onUpdateNotes,
 }: GuideDashboardProps) {
   // Viewport mode: Phone simulator vs Expanded
@@ -153,12 +147,7 @@ export function GuideDashboard({
 
   // Incident reporting modal
   const [showIncidentModal, setShowIncidentModal] = useState(false);
-  const [incidentCategory, setIncidentCategory] = useState<
-    "medical" | "vehicle" | "weather" | "service" | "other"
-  >("medical");
-  const [incidentSeverity, setIncidentSeverity] = useState<
-    "low" | "medium" | "high" | "critical"
-  >("medium");
+  const [incidentCategory, setIncidentCategory] = useState<IncidentReport["category"]>("HEALTH");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentLocation, setIncidentLocation] = useState("");
 
@@ -173,8 +162,7 @@ export function GuideDashboard({
         guideId: currentSchedule?.booking.guideId ?? "",
         guideName: currentSchedule?.booking.guideName ?? "",
         title: "Chậm phương tiện",
-        category: "vehicle",
-        severity: "medium",
+        category: "VEHICLE",
         description:
           "Xe 29 chỗ kẹt phà 20 phút tại bến phà, đã thông báo khách và điều chỉnh giờ cơm trưa.",
         reportedAt: "09:30",
@@ -186,11 +174,6 @@ export function GuideDashboard({
 
   // Quick SOS Hotline Modal
   const [showHotlineModal, setShowHotlineModal] = useState(false);
-
-  // Tour wrap-up modal (báo cáo hoàn thành tour)
-  const [showWrapUpModal, setShowWrapUpModal] = useState(false);
-  const [wrapUpNotes, setWrapUpNotes] = useState("");
-  const [wrapUpSuccess, setWrapUpSuccess] = useState(false);
 
   // Helper info for current tour
   const tour = currentSchedule?.booking?.tour;
@@ -208,15 +191,6 @@ export function GuideDashboard({
   );
   const completedLocationsCount =
     currentSchedule?.completedLocations?.length || 0;
-
-  // Condition for completion button: All locations checked in!
-  const isAllLocationsCheckedIn =
-    totalLocations > 0 && completedLocationsCount >= totalLocations;
-
-  // Identify last day & last location of the tour
-  const lastDay = itinerary[itinerary.length - 1];
-  const lastLocation = lastDay?.locations?.[lastDay.locations.length - 1];
-  const isViewingLastDay = lastDay && selectedDayNumber === lastDay.day;
 
   // Roll call calculations
   const presentCount = passengers.filter(
@@ -343,7 +317,6 @@ export function GuideDashboard({
   const handleOpenIncidentForLocation = (locationName: string) => {
     setIncidentLocation(locationName);
     setIncidentDescription("");
-    setIncidentSeverity("medium");
     setShowIncidentModal(true);
   };
 
@@ -436,7 +409,6 @@ export function GuideDashboard({
       guideName: currentSchedule.booking.guideName ?? "",
       title: incidentDescription.trim().slice(0, 100),
       category: incidentCategory,
-      severity: incidentSeverity,
       description: incidentDescription.trim(),
       location: incidentLocation.trim() || "Tại điểm tham quan",
       reportedAt: new Date().toLocaleTimeString("vi-VN", {
@@ -454,7 +426,6 @@ export function GuideDashboard({
         guideName: newInc.guideName,
         title: newInc.title,
         category: incidentCategory,
-        severity: incidentSeverity,
         description: incidentDescription.trim(),
         location: incidentLocation.trim(),
         status: "reported",
@@ -466,21 +437,6 @@ export function GuideDashboard({
     setIncidentLocation("");
     // Switch to incidents tab so user sees it right away
     setOperationSubTab("incidents");
-  };
-
-  // Wrap-up Tour submit
-  const handleConfirmWrapUp = async () => {
-    if (!currentSchedule) return;
-    if (onWrapUpTour) {
-      await onWrapUpTour(currentSchedule.id, {
-        notes: wrapUpNotes.trim(),
-      });
-    }
-    setWrapUpSuccess(true);
-    setTimeout(() => {
-      setShowWrapUpModal(false);
-      setWrapUpSuccess(false);
-    }, 2000);
   };
 
   if (!currentSchedule) {
@@ -1141,47 +1097,6 @@ export function GuideDashboard({
                       })}
                     </div>
 
-                    {/* NÚT BÁO CÁO HOÀN THÀNH TOUR:
-                        CHỈ HIỂN THỊ Ở ĐỊA ĐIỂM CUỐI CÙNG VÀ TẤT CẢ CÁC ĐỊA ĐIỂM ĐÃ ĐƯỢC CHECK-IN */}
-                    {isViewingLastDay && isAllLocationsCheckedIn && (
-                      <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-2xl p-4 text-white shadow-lg space-y-2.5 animate-in fade-in zoom-in-95">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                            <CheckCheck className="w-5 h-5 text-yellow-300" />
-                          </div>
-                          <div>
-                            <h4 className="font-extrabold text-xs uppercase tracking-wide">
-                              Đã hoàn thành toàn bộ lộ trình tour!
-                            </h4>
-                            <p className="text-[11px] text-emerald-100">
-                              Tất cả các điểm đến đã được check-in đầy đủ.
-                            </p>
-                          </div>
-                        </div>
-
-                        {currentSchedule.wrapUpReport ? (
-                          <div className="bg-white/15 rounded-xl p-2.5 text-xs">
-                            <span className="font-bold text-yellow-200 block">
-                              ✓ Tour đã được nghiệm thu kết thúc!
-                            </span>
-                            <p className="text-[11px] text-white/90 italic mt-0.5">
-                              "
-                              {currentSchedule.wrapUpReport.notes ||
-                                "Tour kết thúc thành công."}
-                              "
-                            </p>
-                          </div>
-                        ) : (
-                          <Button
-                            onClick={() => setShowWrapUpModal(true)}
-                            className="w-full bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-extrabold text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-2"
-                          >
-                            <Award className="w-4 h-4 text-slate-950" />
-                            <span>Báo Cáo Hoàn Thành & Kết Thúc Tour</span>
-                          </Button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1202,12 +1117,7 @@ export function GuideDashboard({
                       </p>
                     </div>
 
-                    {rollCallSavedNotice && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{rollCallSavedNotice}</span>
-                      </div>
-                    )}
+                    {rollCallSavedNotice && <NotificationMessage tone="success" message={rollCallSavedNotice} />}
 
                     {/* Stats bar */}
                     <div className="grid grid-cols-3 gap-2 text-center">
@@ -1381,12 +1291,7 @@ export function GuideDashboard({
                       </Button>
                     </div>
 
-                    {noteSavedNotice && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{noteSavedNotice}</span>
-                      </div>
-                    )}
+                    {noteSavedNotice && <NotificationMessage tone="success" message={noteSavedNotice} />}
 
                     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                       <Textarea
@@ -1457,29 +1362,17 @@ export function GuideDashboard({
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                    inc.severity === "critical"
-                                      ? "bg-rose-600 text-white animate-pulse"
-                                      : inc.severity === "high"
-                                        ? "bg-rose-100 text-rose-800"
-                                        : "bg-amber-100 text-amber-800"
-                                  }`}
-                                >
-                                  {inc.severity === "critical"
-                                    ? "🚨 Khẩn cấp"
-                                    : inc.severity === "high"
-                                      ? "Mức cao"
-                                      : "Trung bình"}
-                                </span>
                                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
-                                  {inc.category === "medical"
-                                    ? "Y tế"
-                                    : inc.category === "vehicle"
-                                      ? "Giao thông"
-                                      : inc.category === "weather"
-                                        ? "Thời tiết"
-                                        : "Khác"}
+                                  {({
+                                    HEALTH: "Y tế & Sức khỏe",
+                                    VEHICLE: "Phương tiện",
+                                    WEATHER: "Thời tiết",
+                                    CUSTOMER: "Khách hàng",
+                                    SECURITY: "An ninh",
+                                    SERVICE_PROVIDER: "Dịch vụ & Nhà cung cấp",
+                                    SCHEDULE: "Lịch trình",
+                                    OTHER: "Sự cố khác",
+                                  } as Record<IncidentReport["category"], string>)[inc.category]}
                                 </span>
                               </div>
                               <span className="font-mono text-[10px] text-slate-400">
@@ -1689,7 +1582,7 @@ export function GuideDashboard({
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-rose-700 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-600" />
-              Báo cáo sự cố khẩn cấp
+              Báo cáo sự cố
             </DialogTitle>
             <DialogDescription className="text-[11px] text-slate-500">
               Gửi thông tin về trung tâm điều hành lữ hành
@@ -1703,16 +1596,17 @@ export function GuideDashboard({
               </label>
               <select
                 value={incidentCategory}
-                onChange={(e) => setIncidentCategory(e.target.value as any)}
+                onChange={(e) => setIncidentCategory(e.target.value as IncidentReport["category"])}
                 className="w-full text-xs rounded-lg border border-slate-300 px-2.5 py-2 bg-white"
               >
-                <option value="medical">🚑 Y tế & Sức khỏe thành viên</option>
-                <option value="vehicle">🚌 Xe cộ & Giao thông di chuyển</option>
-                <option value="weather">
-                  ⛈️ Thời tiết cực đoan & Thiên tai
-                </option>
-                <option value="service">🏨 Đối tác khách sạn / nhà hàng</option>
-                <option value="other">📌 Tình huống khác</option>
+                <option value="HEALTH">🚑 Y tế & Sức khỏe</option>
+                <option value="VEHICLE">🚌 Phương tiện di chuyển</option>
+                <option value="WEATHER">⛈️ Thời tiết & Thiên tai</option>
+                <option value="CUSTOMER">👥 Khách hàng & Thành viên</option>
+                <option value="SECURITY">🛡️ An ninh & An toàn</option>
+                <option value="SERVICE_PROVIDER">🏨 Dịch vụ & Nhà cung cấp</option>
+                <option value="SCHEDULE">⏰ Lịch trình & Thời gian</option>
+                <option value="OTHER">📌 Sự cố khác</option>
               </select>
             </div>
 
@@ -1859,65 +1753,6 @@ export function GuideDashboard({
         </DialogContent>
       </Dialog>
 
-      {/* TOUR WRAP-UP MODAL (BÁO CÁO KẾT THÚC TOUR) */}
-      <Dialog open={showWrapUpModal} onOpenChange={setShowWrapUpModal}>
-        <DialogContent className="max-w-sm p-5 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-              <Award className="w-4 h-4 text-indigo-600" />
-              Tổng kết & Báo Cáo Kết Thúc Tour
-            </DialogTitle>
-            <DialogDescription className="text-[11px] text-slate-500">
-              Báo cáo hoàn thành tour cho điều hành lữ hành
-            </DialogDescription>
-          </DialogHeader>
-
-          {wrapUpSuccess ? (
-            <div className="py-6 text-center space-y-2">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-              <h4 className="font-bold text-sm text-slate-900">
-                Đã gửi báo cáo kết thúc tour!
-              </h4>
-              <p className="text-xs text-slate-500">
-                Cảm ơn bạn đã hoàn thành xuất sắc toàn bộ lộ trình tour.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Ghi chú tổng kết chuyến đi của HDV
-                </label>
-                <Textarea
-                  rows={4}
-                  value={wrapUpNotes}
-                  onChange={(e) => setWrapUpNotes(e.target.value)}
-                  placeholder="Ghi nhận tình hình chung của đoàn, phản hồi về đối tác khách sạn/nhà hàng hoặc các đề xuất cho chuyến đi sau..."
-                  className="text-xs"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowWrapUpModal(false)}
-                  className="text-xs"
-                >
-                  Đóng
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleConfirmWrapUp}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
-                >
-                  Xác Nhận Kết Thúc Tour
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

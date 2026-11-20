@@ -9,8 +9,13 @@ internal static class BookingQuotationConfiguration
     {
         modelBuilder.Entity<BookingSupplierRequest>(e => {
             e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.ParentRequestId).HasColumnName("parent_request_id");
+            e.Property(x => x.ParticipantIndicesJson).HasColumnName("participant_indices_json").HasColumnType("nvarchar(max)");
+            e.HasOne<BookingSupplierRequest>().WithMany().HasForeignKey(x => x.ParentRequestId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.BookingId).HasColumnName("booking_id");
             e.Property(x => x.ServiceId).HasColumnName("service_id");
+            e.Property(x => x.AgencySupplierId).HasColumnName("agency_supplier_id");
+            e.HasOne<AgencySupplier>().WithMany().HasForeignKey(x => x.AgencySupplierId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.ProviderId).HasColumnName("provider_id").HasColumnType("nvarchar(36)").HasMaxLength(36);
             e.Property(x => x.SlotKey).HasColumnName("slot_key").HasColumnType("nvarchar(100)").HasMaxLength(100);
             e.Property(x => x.ServiceName).HasColumnName("service_name").HasColumnType("nvarchar(255)").HasMaxLength(255);

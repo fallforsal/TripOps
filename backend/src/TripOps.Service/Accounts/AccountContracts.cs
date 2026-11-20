@@ -21,6 +21,18 @@ public sealed record ProfileDto(int Id, string UserId, string? BusinessName, str
     string? RejectionReason, DateTime? ApprovedAt, DateTime CreatedAt, DateTime UpdatedAt, string? LogoUrl);
 
 //admin user management
+public sealed record CreateAdminAccountRequest(
+    [Required, StringLength(150, MinimumLength = 2)] string Name,
+    [Required, EmailAddress, StringLength(191)] string Email,
+    [Required, Phone, StringLength(30)] string Phone,
+    [Required, StringLength(128, MinimumLength = 8)] string Password,
+    [Required] string Role,
+    [StringLength(255)] string? BusinessName = null,
+    [StringLength(50)] string? TaxCode = null,
+    [StringLength(2000)] string? BusinessAddress = null,
+    [Url, StringLength(2000)] string? BusinessLicenseUrl = null,
+    [StringLength(5000)] string? Description = null,
+    [StringLength(36)] string? AgencyId = null);
 public sealed record AdminAccountBusinessDto(int ProfileId, string BusinessName, string? LogoUrl,
     string? Address, string? Status, DateTime? CreatedAt);
 public sealed record AdminAccountDto(string Id, string Name, string Email, string? Phone, string Role,
@@ -32,9 +44,15 @@ public sealed record AdminAccountPageDto(IReadOnlyList<AdminAccountDto> Items, i
 public sealed record BanAccountRequest([Required, StringLength(1000, MinimumLength = 5)] string Reason);
 
 public sealed record AccountDto(string Id, string Name, string Email, string? Phone,
-    string Role, ProfileDto? BusinessProfile);
+    string Role, ProfileDto? BusinessProfile, string? Avatar = null);
 public sealed record PartnerDto(ProfileDto Profile, string Name, string Email, string? Phone, string Role);
 // Describes the existing anonymous list response without changing its runtime shape.
 public sealed record PartnerPageDto(IReadOnlyList<PartnerDto> Items, int Total, int Page, int PageSize);
 public sealed class AccountException(int status, string message) : Exception(message)
 { public int Status { get; } = status; }
+// Tài khoản ngân hàng nhận tiền hoàn lưu trong hồ sơ người dùng.
+public sealed record BankAccountDto(string? BankName, string? AccountNumber, string? AccountHolder, DateTime? UpdatedAt, bool HasAccount);
+public sealed record BankAccountInput(
+    [Required, StringLength(150)] string BankName,
+    [Required, StringLength(30)] string AccountNumber,
+    [Required, StringLength(150)] string AccountHolder);

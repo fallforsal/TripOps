@@ -1,4 +1,5 @@
 import { http } from "@/app/lib/http";
+import type { CancellationPolicyDto } from "@/app/services/contractTemplate";
 import type { PaymentOutcome } from "./payos";
 import { buildSignPageUrl } from "./contractSigning";
 
@@ -12,9 +13,11 @@ export interface ParticipantInput {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface CreateBookingRequest {
+  tourVersion?: number; tourRevision?: number;
   tourId: number;
   startDate: string;
   contactName: string;
@@ -28,6 +31,12 @@ export interface CreateBookingRequest {
     mealType: string;
     name: string;
     serviceId?: number;
+  }[];
+  locationChoices?: {
+    dayNumber: number;
+    originalLocationName: string;
+    requestedLocationName: string;
+    note?: string;
   }[];
 }
 
@@ -52,9 +61,11 @@ export interface ParticipantDto {
   note?: string;
   roommateNote?: string;
   restaurantNote?: string;
+  statusNote?: string;
 }
 
 export interface AssignedGuideDto {
+  guideAvatar?: string;
   id: number;
   guideId: string;
   guideName: string;
@@ -66,7 +77,17 @@ export interface AssignedGuideDto {
   agencyId?: string;
 }
 
+export interface BookingAgencyDto {
+  id:number;agencyId:string;agencyName:string;isHost:boolean;originalAmount:number;finalAmount:number;netPayout:number;settlementStatus:string;
+  stageArea?:string;pricingTiers?:{name:string;minAge:number|null;maxAge:number|null;pricePerGuest:number;displayOrder:number}[];
+  paidSurchargeAmount:number;unpaidSurchargeAmount:number;
+  surchargeAmount?:number;reductionAmount?:number;pendingRefundAmount?:number;platformFee?:number;
+}
 export interface BookingDto {
+  isPartnerView?: boolean;
+  agencyDirectory?:{agencyId:string;agencyName:string}[];
+  bookingAgencies?:BookingAgencyDto[];
+  attractionCheckins?:{id:number;locationId:number;agencyId:string;guideId:string;guideName:string;guideAvatar?:string;status:string;checkedAt?:string;note?:string;photoUrls?:string[];checkoutAt?:string;checkoutNote?:string;checkoutPhotoUrls?:string[]}[];
   id: number;
   bookingCode: string;
   customerId: string;
@@ -117,19 +138,28 @@ export interface BookingDto {
       time?: string;
       attendanceStatus?: string;
       changeReason?: string;
+      agencyId?:string;
+      photoUrls?: string[];
+      checkinNote?: string;
+      checkoutPhotoUrls?: string[];
+      checkoutNote?: string;
+      checkoutAt?: string;
     }[];
     meals: {
       id: number;
+      agencyId?:string;
       mealType: "breakfast" | "lunch" | "dinner";
       name: string;
       originalName?: string;
       time?: string;
       serviceId?: number;
       priceDifference: number;
-      supplier?: { address?: string; contactPhone?: string };
+      supplier?: { address?: string; contactPhone?: string; area?: string; contactName?: string; referencePrice?: number; conditions?: string; contactEmail?: string; notes?: string };
     }[];
   }[];
   snapshotHotels?: {
+    dateFrom?:string; dateTo?:string;
+    agencyId?:string;
     id: number;
     destination: string;
     name: string;
@@ -289,6 +319,8 @@ export interface CancellationQuoteDto {
   fee: number;
   refundAmount: number;
   explanation: string;
+  /** Chính sách hủy trong hợp đồng của đơn (của công ty lữ hành chủ trì, hoặc mặc định TripOps). */
+  policy?: CancellationPolicyDto | null;
 }
 
 export interface RefundAccountInput {
@@ -343,6 +375,7 @@ export interface PayoutAccountDto {
 }
 
 export interface PaymentScheduleItemDto {
+  beneficiaryAgencyId?:string;beneficiaryAgencyName?:string;
   id?: number | null;
   /** full = tour sát ngày khởi hành: thanh toán toàn bộ một lần, không có đợt 2. */
   stage: "deposit" | "balance" | "full" | "surcharge";
@@ -409,13 +442,17 @@ export interface BookingPage<T> {
 }
 
 export interface IncidentDto {
+  incidentType?: string | null;
+  agencyId?: string | null;
+  reportedByName?: string | null;
+  evidenceUrls?: string[] | null;
   id: number;
   bookingId: number;
   title: string;
   description: string;
-  resolutionNotes?: string;
   status: string;
   createdAt: string;
+  reportedById?: string;
 }
 
 // 1. Customer APIs (WF05)
@@ -667,11 +704,16 @@ export async function reportIncident(
   incidentType: string,
   title: string,
   description: string,
-  severity?: string,
+  images: File[] = [],
 ): Promise<IncidentDto> {
+  const form = new FormData();
+  form.append("IncidentType", incidentType);
+  form.append("Title", title);
+  form.append("Description", description);
+  for (const image of images) form.append("Images", image);
   return await http<IncidentDto>(`/guide/bookings/${bookingId}/incidents`, {
     method: "POST",
-    body: JSON.stringify({ incidentType, title, description, severity }),
+    body: form,
   });
 }
 

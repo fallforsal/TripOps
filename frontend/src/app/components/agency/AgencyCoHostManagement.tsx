@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
 import { useState } from "react";
 import { TourCompany, Tour, CustomTourRequest, Booking, TourCoHost } from "@/app/types";
 import {
@@ -788,16 +789,16 @@ export function AgencyCoHostManagement({
 
       {/* MODAL: TỪ CHỐI LỜI MỜI */}
       {rejectModalItem && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4">
-            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+        <AlertDialog open onOpenChange={open => { if (!open) setRejectModalItem(null); }}>
+          <AlertDialogContent tone="error" className="max-w-md">
+            <AlertDialogTitle className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-500" />
               Từ chối lời mời hợp tác
-            </h3>
-            <p className="text-xs text-gray-600">
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               Bạn có chắc chắn muốn từ chối lời mời tham gia tổ chức tour{" "}
               <strong>"{rejectModalItem.name}"</strong> không?
-            </p>
+            </AlertDialogDescription>
             <div>
               <label className="text-xs font-semibold text-gray-700 block mb-1">
                 Lý do từ chối (Gửi lại cho công ty mời):
@@ -811,14 +812,14 @@ export function AgencyCoHostManagement({
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button
+              <AlertDialogCancel asChild><Button
                 variant="outline"
                 size="sm"
                 onClick={() => setRejectModalItem(null)}
               >
                 Hủy
-              </Button>
-              <Button
+              </Button></AlertDialogCancel>
+              <Button data-slot="alert-dialog-action"
                 size="sm"
                 className="bg-red-600 hover:bg-red-700 text-white"
                 onClick={handleConfirmReject}
@@ -826,8 +827,8 @@ export function AgencyCoHostManagement({
                 Xác nhận từ chối
               </Button>
             </div>
-          </div>
-        </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

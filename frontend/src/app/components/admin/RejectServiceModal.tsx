@@ -8,7 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { XCircle, AlertCircle, Check } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 
 interface RejectServiceModalProps {
   isOpen: boolean;

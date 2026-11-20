@@ -89,7 +89,7 @@ Thanh toán là **mô phỏng Development**: ghi transaction `DEMO`, cập nhậ
 
 Provider đã có API tạo/sửa/xóa, tải ảnh và xem bài của mình tại `/api/v1/provider/services`; Admin có 5 API danh sách, chi tiết, duyệt, từ chối và ẩn/mở lại tại `/api/v1/admin/services`. FE đã nối các API này; xem [hướng dẫn Service Moderation](backend/docs/service-moderation.md).
 
-UI mới được giữ, nhưng thao tác chưa có API trong đợt này báo chưa hỗ trợ thay vì ghi giả bằng setState: Provider báo giá đoàn, thiết kế tour riêng, đồng tổ chức đầy đủ, hoàn tiền/quyết toán, chat/khiếu nại/đánh giá và AI.
+UI mới được giữ, nhưng thao tác chưa có API trong đợt này báo chưa hỗ trợ thay vì ghi giả bằng setState: Provider báo giá đoàn, thiết kế tour riêng, đồng tổ chức đầy đủ, hoàn tiền/quyết toán, khiếu nại/đánh giá và AI.
 
 Sửa hành khách sau đặt hỗ trợ hồ sơ/ghi chú của danh sách đã chốt. Thêm/bớt khách hoặc đổi ngày sinh cần luồng chốt lại giá riêng. Chưa có API quản lý đầy đủ nghề nghiệp HDV; gán HDV dùng tài khoản HDV thuộc Agency trong database.
 
@@ -102,6 +102,10 @@ dotnet run --project backend/src/TripOps.Api --launch-profile http -- --SeedDemo
 ```
 
 Lệnh tạo schema qua migration khởi tạo mới rồi nạp demo; yêu cầu database chưa có người dùng. Không chạy lại seed trên database đang sử dụng và không dùng migration cũ để nâng cấp schema trước. Cờ `--ClearDemoData true` sẽ xóa dữ liệu nghiệp vụ và nạp lại bộ mẫu tối giản; chỉ dùng khi chủ động muốn dọn toàn bộ dữ liệu.
+
+## Chat realtime 1-1
+
+Đã có SignalR, lịch sử database, unread/read receipt và UI Ant Design. Mọi tài khoản Active có thể nhắn tin 1-1 với nhau, bất kể role. Chat dùng xác thực cookie HttpOnly. Cần áp dụng migration `AddRealtimeDirectChat` trước khi dùng. Xem [kiến trúc, API, migration và hướng dẫn chạy thử](backend/docs/realtime-chat.md).
 
 ## Kiểm tra
 

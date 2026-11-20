@@ -6,7 +6,6 @@ import '../../../core/utils/tripops_dates.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../../assigned_tours/presentation/tour_card.dart';
 import '../../auth/domain/guide_account.dart';
-import '../../invitations/presentation/invitation_notice.dart';
 import '../domain/home_trip_picker.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -148,8 +147,6 @@ class HomeScreen extends StatelessWidget {
           subtitle: 'Xem lại những hành trình đã hoàn tất',
           onTap: onHistoryTab,
         ),
-        space(10),
-        const InvitationNotice(),
       ],
     );
   }

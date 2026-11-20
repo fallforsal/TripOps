@@ -73,6 +73,7 @@ const BANK_CODE_MAP: Record<string, string> = {
 };
 
 const REASON_LABELS: Record<RefundReasonType, { label: string; color: string }> = {
+  PRICE_REDUCTION: {label:"Hoàn do giảm giá (tour tiếp tục)",color:"bg-emerald-50 text-emerald-800 border-emerald-200"},
   CUSTOMER_REQUEST: { label: "Khách đổi kế hoạch", color: "bg-blue-50 text-blue-700 border-blue-200" },
   WEATHER_FORCE_MAJEURE: { label: "Thời tiết / Bất khả kháng", color: "bg-amber-50 text-amber-700 border-amber-200" },
   SERVICE_QUALITY: { label: "Chất lượng dịch vụ", color: "bg-purple-50 text-purple-700 border-purple-200" },
@@ -243,17 +244,12 @@ export function AdminRefundManagement({
       {/* PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-[11px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300">
-              Module Tài chính & Hoàn hủy (Escrow)
-            </span>
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1.5 flex items-center gap-2.5">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <RotateCcw className="w-6 h-6 text-[#075985]" />
             <span>Quản lý & Xử lý Yêu cầu Hoàn tiền</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Thẩm định yêu cầu hủy tour từ khách hàng, đối chiếu chính sách hoàn tiền và thực hiện chuyển khoản giải ngân.
+            Đơn đã hủy ngay khi khách hoặc Agency gửi yêu cầu. Admin chỉ chuyển tiền hoàn vào tài khoản trong hồ sơ khách.
           </p>
         </div>
 
@@ -296,7 +292,7 @@ export function AdminRefundManagement({
       </div>
 
       {/* KPI METRIC CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Card 1: Tổng đơn */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
@@ -310,7 +306,7 @@ export function AdminRefundManagement({
         {/* Card 2: Chờ duyệt */}
         <div className="bg-amber-500/5 rounded-2xl p-4 border border-amber-300/80 shadow-2xs space-y-1 relative overflow-hidden">
           <div className="flex items-center justify-between text-amber-900 text-xs font-bold">
-            <span>Chờ duyệt (PENDING)</span>
+            <span>Chờ duyệt</span>
             <div className="relative">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block animate-pulse" />
             </div>
@@ -341,15 +337,6 @@ export function AdminRefundManagement({
           </p>
         </div>
 
-        {/* Card 5: Đã từ chối */}
-        <div className="bg-rose-500/5 rounded-2xl p-4 border border-rose-300/80 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-rose-900 text-xs font-bold">
-            <span>Từ chối</span>
-            <XCircle className="w-4 h-4 text-rose-600" />
-          </div>
-          <div className="text-2xl font-black text-rose-700">{stats.rejected}</div>
-          <p className="text-[10px] text-rose-800/80 font-medium">Vi phạm chính sách hủy</p>
-        </div>
       </div>
 
       {/* FILTER & SEARCH BAR */}
@@ -422,17 +409,6 @@ export function AdminRefundManagement({
               }`}
             >
               Đã hoàn tiền
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("REJECTED")}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                statusFilter === "REJECTED"
-                  ? "bg-rose-600 text-white shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Từ chối
             </button>
           </div>
         </div>
@@ -658,20 +634,7 @@ export function AdminRefundManagement({
                               className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold gap-1 shadow-2xs cursor-pointer"
                             >
                               <Check className="w-3.5 h-3.5" />
-                              <span>Duyệt chi</span>
-                            </Button>
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                setRejectingRefund(item);
-                                setRejectReason("");
-                                setRejectError("");
-                              }}
-                              className="h-8 px-2.5 text-xs border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl font-bold cursor-pointer"
-                            >
-                              <X className="w-3.5 h-3.5" />
+                              <span>Hoàn tiền</span>
                             </Button>
                           </>
                         )}
@@ -774,7 +737,7 @@ export function AdminRefundManagement({
                       </div>
 
                       <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 text-slate-600 leading-relaxed text-[11px]">
-                        <strong>Căn cứ điều khoản hoàn hủy:</strong> Yêu cầu gửi lúc{" "}
+                        <strong>{selectedRefund.reason==="PRICE_REDUCTION"?"Khoản giảm đã được duyệt:":"Căn cứ điều khoản hoàn hủy:"}</strong> Yêu cầu gửi lúc{" "}
                         {new Date(selectedRefund.createdAt).toLocaleDateString("vi-VN")}. Tỷ lệ khấu trừ được tự động tính
                         toán theo thời gian cách ngày khởi hành ({selectedRefund.refundPercentage}% hoàn trả).
                       </div>
@@ -785,7 +748,7 @@ export function AdminRefundManagement({
                       <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
                         <AlertTriangle className="w-4 h-4 text-[#075985]" />
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          2. Lý do hủy tour từ khách hàng
+                          2. Nội dung yêu cầu hoàn tiền
                         </h3>
                       </div>
 
@@ -806,7 +769,7 @@ export function AdminRefundManagement({
 
                       <div>
                         <span className="text-[11px] text-slate-400 font-semibold block uppercase">
-                          Nội dung mô tả chi tiết (reason_detail)
+                          Nội dung mô tả chi tiết
                         </span>
                         <div className="mt-1 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 leading-relaxed">
                           "{selectedRefund.reasonDetail}"
@@ -947,21 +910,8 @@ export function AdminRefundManagement({
                 </Button>
 
                 <div className="flex items-center gap-2">
-                  {selectedRefund.status !== "COMPLETED" && selectedRefund.status !== "REJECTED" && (
+                  {selectedRefund.status !== "COMPLETED" && selectedRefund.status !== "REJECTED" && selectedRefund.status !== "APPROVED" && (
                     <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setRejectingRefund(selectedRefund);
-                          setSelectedRefund(null);
-                        }}
-                        className="h-10 px-4.5 border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold gap-1.5 cursor-pointer rounded-xl"
-                      >
-                        <X className="w-4 h-4" />
-                        <span>Từ chối</span>
-                      </Button>
-
                       <Button
                         type="button"
                         onClick={() => {
@@ -971,7 +921,7 @@ export function AdminRefundManagement({
                         className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 cursor-pointer shadow-xs rounded-xl"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Duyệt chi & Chuyển tiền</span>
+                        <span>Hoàn tiền</span>
                       </Button>
                     </>
                   )}
@@ -1027,7 +977,7 @@ export function AdminRefundManagement({
                 <strong>{formatVND(approvingRefund?.refundFee || 0)}</strong>
                 {approvingRefund?.feePercent !== undefined ? ` (${approvingRefund.feePercent}%)` : ""}
               </p>
-              <p>Duyệt xong đơn sẽ chuyển sang "Đã hủy". Chuyển khoản trước rồi nhập mã giao dịch bên dưới.</p>
+              <p>{approvingRefund?.reason==="PRICE_REDUCTION"?"Đây là hoàn tiền do giảm giá. Tour tiếp tục hoạt động, không chuyển sang Đã hủy. Hoàn đúng số tiền đã được chủ trì duyệt.":"Đơn đã hủy khi khách hoặc Agency gửi yêu cầu. Chuyển tiền vào tài khoản trong hồ sơ khách rồi xác nhận bên dưới."}</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1070,17 +1020,15 @@ export function AdminRefundManagement({
               <Label className="text-xs font-bold text-slate-900">
                 Số tiền thực hoàn (VND) <span className="text-rose-600">*</span>
               </Label>
+              {/* Số tiền cố định theo chính sách hoàn hủy; Admin không sửa. */}
               <Input
-                value={approveAmount}
-                inputMode="numeric"
-                onChange={(e) => {
-                  setApproveAmount(e.target.value.replace(/[^\d]/g, ""));
-                  setApprovalError("");
-                }}
-                className="text-xs h-10 font-bold"
+                value={Number(approveAmount || 0).toLocaleString("vi-VN")}
+                readOnly
+                tabIndex={-1}
+                className="text-xs h-10 font-bold bg-slate-50 cursor-not-allowed focus-visible:ring-0"
               />
               <p className="text-[11px] text-slate-500">
-                Đổi khác số gợi ý (ví dụ bất khả kháng) thì bắt buộc ghi lý do. Nhập 0 nếu không hoàn tiền.
+                Theo chính sách hoàn hủy, không chỉnh sửa.
               </p>
             </div>
 
@@ -1111,7 +1059,7 @@ export function AdminRefundManagement({
                 value={approvalNote}
                 onChange={(e) => setApprovalNote(e.target.value)}
                 rows={2}
-                placeholder="Bắt buộc khi số tiền khác số gợi ý (ví dụ bất khả kháng)..."
+                placeholder="Ghi chú thêm nếu cần..."
                 className="text-xs bg-slate-50 focus:bg-white resize-none"
               />
             </div>

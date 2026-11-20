@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TripOps.Data;
 using TripOps.Data.Entities;
@@ -12,7 +14,9 @@ public sealed partial class BookingFlowTests
     [Fact]
     public async Task Snapshot_selection_passenger_preferences_and_guide_operations_persist()
     {
-        using var app=new App();await app.Initialize();
+        using var app=new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
+        await app.Initialize();
         using(var scope=app.Services.CreateScope()){
             var db=scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
             db.TourAccommodations.AddRange(new TourAccommodation{TourId=1,AgencyId="agency1",DestinationName="Da Nang",HotelName="Default",IsDefault=true,NightsCount=2},new TourAccommodation{TourId=1,AgencyId="agency1",DestinationName="Da Nang",HotelName="Upgrade",PriceDifference=300000,NightsCount=2});
@@ -26,9 +30,20 @@ public sealed partial class BookingFlowTests
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision",new BookingDecisionRequest("approve",null))).EnsureSuccessStatusCode();
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-assignments",new GuideAssignmentRequest("guide1","lead_guide",null))).EnsureSuccessStatusCode();
         (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start",null)).EnsureSuccessStatusCode();
-        var checkedResponse=await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{booking.Id}/locations/{booking.SnapshotDays![0].Locations[0].Id}/check-in",new{status="CheckedIn",note="Arrived"});checkedResponse.EnsureSuccessStatusCode();
-        var read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");Assert.Equal("CheckedIn",read!.SnapshotDays![0].Locations[0].AttendanceStatus);
-        (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/complete",null)).EnsureSuccessStatusCode();
+        var stopId = booking.SnapshotDays![0].Locations[0].Id;
+        using (var form = PhotoForm(1))
+            (await guide.PostAsync(
+                $"/api/v1/guide/bookings/{booking.Id}/locations/{stopId}/check-in-with-images", form))
+                .EnsureSuccessStatusCode();
+        var read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");
+        Assert.Equal("CheckedIn",read!.SnapshotDays![0].Locations[0].AttendanceStatus);
+        using (var form = PhotoForm(1))
+            (await guide.PostAsync(
+                $"/api/v1/guide/bookings/{booking.Id}/locations/{stopId}/check-out-with-images", form))
+                .EnsureSuccessStatusCode();
+        read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");
+        Assert.Equal("CheckedOut",read!.SnapshotDays![0].Locations[0].AttendanceStatus);
+        (await agency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete",null)).EnsureSuccessStatusCode();
         read=await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}");Assert.Equal("Completed",read!.Status);
         var invalid=await customer.PostAsJsonAsync("/api/v1/bookings",request with{HotelChoices=[new("Da Nang","Not offered")]});Assert.Equal(HttpStatusCode.UnprocessableEntity,invalid.StatusCode);
     }

@@ -1,3 +1,4 @@
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import { Tour, Service } from "@/app/types";
 import {
   Plus,
@@ -315,9 +316,9 @@ export function AdminTourManagement({
                         Chỉnh sửa
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (
-                            confirm(
+                            await confirmAction(
                               `Bạn có chắc chắn muốn xóa tour "${tour.name}"?`,
                             )
                           ) {

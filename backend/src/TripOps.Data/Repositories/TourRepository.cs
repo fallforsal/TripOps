@@ -19,6 +19,18 @@ public sealed class TourRepository(TripOpsDbContext db)
         t.Agency.Status == UserStatus.Active && t.Agency.Role == UserRole.TravelAgency &&
         t.Agency.BusinessProfile != null && t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved);
 
+    /// <summary>Danh sách tour đang mở bán công khai (kèm Agency và giá theo độ tuổi) cho chatbot khách vãng lai.</summary>
+    public Task<List<Tour>> PublicCatalogue(int take, CancellationToken ct) => Public(db.Tours.AsNoTracking()
+            .Include(t => t.Agency).ThenInclude(a => a.BusinessProfile)
+            .Include(t => t.PricingTiers))
+        .OrderByDescending(t => t.CreatedAt).ThenBy(t => t.Id)
+        .Take(take).AsSplitQuery().ToListAsync(ct);
+
+    /// <summary>Tour công khai theo danh sách ID (kèm lịch trình, giá, Agency) cho ngữ cảnh chatbot khách vãng lai.</summary>
+    public Task<List<Tour>> PublicByIds(IReadOnlyCollection<int> ids, CancellationToken ct) =>
+        Public(Details().Include(t => t.Agency).ThenInclude(a => a.BusinessProfile)).AsNoTracking()
+            .Where(t => ids.Contains(t.Id)).ToListAsync(ct);
+
     public Task<Tour?> Find(int id, string? owner, bool publicOnly, CancellationToken ct, bool includeDeleted = false)
     {
         var query = Details();
@@ -100,16 +112,6 @@ public sealed class TourRepository(TripOpsDbContext db)
         db.TourDesignRequests.SingleOrDefaultAsync(r => r.Id == id && r.AgencyId == actor, ct);
     public Task<bool> HasRequestTour(int requestId, CancellationToken ct) =>
         db.Tours.IgnoreQueryFilters().AnyAsync(t => t.DesignRequestId == requestId && t.Status != TourStatus.Deleted, ct);
-    public Task<Tour?> CustomerRequestTour(string actor, int requestId, CancellationToken ct) =>
-        Details().AsNoTracking().Where(t => t.DesignRequestId == requestId && t.IsRequest == true &&
-            t.Status == TourStatus.Completed && t.IsSharedToCustomer == true &&
-            db.TourDesignRequests.Any(r => r.Id == requestId && r.CustomerId == actor))
-            .OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync(ct);
-    public Task<List<Tour>> CustomerRequestTours(string actor, int requestId, CancellationToken ct) =>
-        Details().AsNoTracking().Where(t => t.DesignRequestId == requestId && t.IsRequest == true &&
-            t.Status == TourStatus.Completed && t.IsSharedToCustomer == true &&
-            db.TourDesignRequests.Any(r => r.Id == requestId && r.CustomerId == actor))
-            .OrderByDescending(t => t.CreatedAt).ToListAsync(ct);
     public Task<List<AgencySupplier>> SuppliersOwnedBy(string actor, int[] ids, CancellationToken ct) =>
         db.AgencySuppliers.AsNoTracking().Where(s => s.AgencyId == actor && ids.Contains(s.Id)).ToListAsync(ct);
     public Task<List<AgencySupplier>> SupplierDirectory(string actor, string? type, string? search, CancellationToken ct) =>

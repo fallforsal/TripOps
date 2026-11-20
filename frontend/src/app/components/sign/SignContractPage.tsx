@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Clock, FileText, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -210,7 +211,7 @@ export function SignContractPage({ token }: { token: string }) {
           )}
         </div>
 
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+        {error && <NotificationMessage tone="error" message={error} />}
         <Button
           type="button"
           disabled={busy !== "" || !otpSent || !signature || !agreed || otp.length !== 6}

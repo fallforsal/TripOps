@@ -141,9 +141,12 @@ public sealed partial class BookingService
         contract.ReviewedBy = null;
         contract.ReviewedAt = null;
         contract.ReviewNote = null;
+        Repo.Notify(booking.Tour!.AgencyId,
+            $"Khách đã tải hợp đồng ký cho booking {booking.BookingCode}. Vui lòng kiểm tra hợp đồng.",
+            id, customerId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // ------------------------------------------------------------ Agency kiểm tra
@@ -165,16 +168,21 @@ public sealed partial class BookingService
         contract.ReviewedBy = agencyId;
         contract.ReviewedAt = UtcNow;
         contract.ReviewNote = string.IsNullOrWhiteSpace(note) ? null : note;
+        Repo.Notify(booking.CustomerId!,
+            request.Decision == "verify"
+                ? $"Hợp đồng booking {booking.BookingCode} đã được Agency xác nhận."
+                : $"Agency yêu cầu ký lại hợp đồng booking {booking.BookingCode}. Lý do: {note}",
+            id, agencyId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(agencyId,id,ct);
     }
 
     // ------------------------------------------------------------ hỗ trợ
 
     private async Task EnsureContractAccess(string actorId, Booking booking, CancellationToken ct)
     {
-        if (booking.CustomerId == actorId || booking.Tour?.AgencyId == actorId) return;
+        if (booking.CustomerId == actorId || booking.Tour?.AgencyId==actorId) return;
         var user = await Accounts.Current(actorId, ct);
         if (user.Role != UserRole.Admin)
             throw new BookingException(403, "Bạn không có quyền xem hợp đồng của đơn này.");
@@ -204,16 +212,31 @@ public sealed partial class BookingService
                 s.Amount,
                 Deadline: s.DueAt is { } due ? VietnamText(due) : s.DueDate is { } date ? "hết ngày " + date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "theo thông báo"))
             .ToList();
+        var meals = new Dictionary<string, string> { ["breakfast"] = "Sáng", ["lunch"] = "Trưa", ["dinner"] = "Tối" };
+        var days = booking.Timelines.OrderBy(t => t.DayNumber).Select(t =>
+        {
+            var date = booking.StartDate.Date.AddDays(t.DayNumber - 1);
+            var dayMeals = t.Meals.OrderBy(m => m.MealType switch { "breakfast" => 0, "lunch" => 1, _ => 2 })
+                .Select(m => meals.GetValueOrDefault(m.MealType, m.MealType)).Distinct().ToArray();
+            var stays = booking.Accommodations.Where(h => h.DateFrom is { } from && h.DateTo is { } to && from.Date <= date && date < to.Date)
+                .Select(h => h.CurrentHotelName ?? h.OriginalHotelName).Distinct().ToArray();
+            return new ContractDay(t.DayNumber, date, t.Title, dayMeals.Length == 0 ? null : string.Join(", ", dayMeals),
+                stays.Length == 0 ? null : string.Join("; ", stays));
+        }).ToList();
+        var coHosts = booking.BookingAgencies.Where(a => a.AgencyId != booking.Tour?.AgencyId)
+            .Select(a => new ContractCoHost(a.Agency?.BusinessProfile?.BusinessName ?? a.Agency?.Name ?? a.AgencyId, a.Agency?.BusinessProfile?.TaxCode, a.FinalAmount))
+            .ToList();
         return new ContractData(
             contract.ContractNo, contract.Version,
             DateTime.SpecifyKind(contract.CreatedAt ?? UtcNow, DateTimeKind.Utc).Add(PaymentRules.VietnamOffset),
+            booking.CreatedAt is { } created ? DateTime.SpecifyKind(created, DateTimeKind.Utc).Add(PaymentRules.VietnamOffset) : null,
             profile?.BusinessName ?? agency?.Name ?? "Công ty lữ hành", profile?.TaxCode, profile?.BusinessAddress, agency?.Email, agency?.Phone,
-            booking.ContactName, booking.ContactPhone, booking.ContactEmail,
+            coHosts,
+            booking.ContactName, booking.ContactPhone, booking.ContactEmail, booking.Customer?.OrganizationName,
             booking.BookingCode, booking.Tour?.Name ?? "Tour du lịch", booking.StartDate, EndDate(booking), TotalGuests(booking),
-            booking.Participants.Where(p => p.Status != "INACTIVE").OrderBy(p => p.ParticipantIndex)
-                .Select(p => (p.FullName, p.TierName, (decimal?)p.Price)).ToList(),
-            booking.Timelines.OrderBy(t => t.DayNumber).Select(t => (t.DayNumber, t.Title)).ToList(),
-            booking.Accommodations.Select(h => (h.Destination, h.CurrentHotelName ?? h.OriginalHotelName, h.NightsCount)).ToList(),
-            contract.TotalAmount, schedule);
+            booking.Participants.Where(p => p.Status != "INACTIVE").GroupBy(p=>p.ParticipantIndex).OrderBy(g=>g.Key)
+                .Select(g => (g.First().FullName, g.First().TierName, (decimal?)g.Sum(p=>p.Price))).ToList(),
+            days,
+            contract.TotalAmount, schedule, Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot));
     }
 }

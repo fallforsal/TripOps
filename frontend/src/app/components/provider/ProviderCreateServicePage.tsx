@@ -1,3 +1,5 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { toast } from "@/app/lib/notifications";
 import { useState, useEffect, useRef } from "react";
 import { User, Service } from "@/app/types";
 import {
@@ -479,7 +481,7 @@ export function ProviderCreateServicePage({
   const handleRemoveImage = (index: number) => {
     if (saving || uploading) return;
     if (images.length <= 1) {
-      alert("Cần giữ lại ít nhất 1 hình ảnh cho bài đăng dịch vụ.");
+      toast.warning("Cần giữ lại ít nhất 1 hình ảnh cho bài đăng dịch vụ.");
       return;
     }
     const filtered = images.filter((_, i) => i !== index);
@@ -533,14 +535,14 @@ export function ProviderCreateServicePage({
     setSaveError("");
 
     if (!name.trim()) {
-      alert("Vui lòng nhập tên dịch vụ / cơ sở.");
+      toast.warning("Vui lòng nhập tên dịch vụ / cơ sở.");
       setViewMode("form");
       setCurrentStep(2);
       return;
     }
 
     if (images.length === 0) {
-      alert("Vui lòng tải lên ít nhất 1 hình ảnh.");
+      toast.warning("Vui lòng tải lên ít nhất 1 hình ảnh.");
       setViewMode("form");
       setCurrentStep(1);
       return;
@@ -658,7 +660,7 @@ export function ProviderCreateServicePage({
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-200 max-w-6xl mx-auto">
-      {saveError && <div role="alert" className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">{saveError}</div>}
+      {saveError && <NotificationMessage tone="error" message={saveError} />}
       {(saving || uploading) && <p role="status" className="text-sm text-sky-800">{uploading ? "Đang tải ảnh lên Cloudinary…" : "Đang lưu bài đăng…"}</p>}
       {/* Top Header Bar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">

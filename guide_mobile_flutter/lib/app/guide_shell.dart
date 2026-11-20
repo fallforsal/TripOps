@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
 import '../features/assigned_tours/data/guide_repository.dart';
 import '../features/assigned_tours/domain/booking_models.dart';
@@ -10,6 +12,7 @@ import '../features/assigned_tours/presentation/tour_list_screen.dart';
 import '../features/auth/domain/guide_account.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/notifications/presentation/guide_notifications_screen.dart';
 import '../features/tour_history/presentation/history_screen.dart';
 
 class GuideShell extends StatefulWidget {
@@ -35,11 +38,41 @@ class _GuideShellState extends State<GuideShell> {
   String? error;
   List<BookingSummary> bookings = [];
   Map<int, DateTime> endDates = {};
+  int unreadNotices = 0;
+  Timer? _notificationsPoll;
 
   @override
   void initState() {
     super.initState();
     refresh();
+    refreshNotices();
+    _notificationsPoll = Timer.periodic(
+      const Duration(seconds: 15), (_) => refreshNotices());
+  }
+
+  @override
+  void dispose() {
+    _notificationsPoll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> refreshNotices() async {
+    try {
+      final raw = await widget.guides.api.getList('notifications');
+      final count = raw.where((n) => n is Map && n['readAt'] == null).length;
+      if (mounted) setState(() => unreadNotices = count);
+    } catch (_) {
+      // Bookings remain usable even when notification fetching fails.
+    }
+  }
+
+  Future<void> openNotices() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GuideNotificationsScreen(
+        guides: widget.guides, onSessionExpired: widget.onSessionExpired,
+      ),
+    ));
+    if (mounted) await refreshNotices();
   }
 
   Future<void> refresh() async {
@@ -99,18 +132,56 @@ class _GuideShellState extends State<GuideShell> {
           )),
         ]),
         actions: [
+          Stack(
+            children: [
+              IconButton(
+                tooltip: 'Thông báo',
+                onPressed: openNotices,
+                icon: const Icon(Icons.notifications_none_rounded, color: ink, size: 23),
+              ),
+              if (unreadNotices > 0)
+                Positioned(
+                  right: 2, top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent, borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(unreadNotices > 99 ? '99+' : '$unreadNotices',
+                      style: const TextStyle(fontSize: 9, color: Colors.white)),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: 'Làm mới',
             onPressed: loading ? null : refresh,
             icon: const Icon(Icons.refresh_rounded, color: ink, size: 21),
           ),
-          const Padding(
-            padding: EdgeInsets.only(right: 17, left: 4),
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: paleTeal,
-              child: Icon(Icons.person_rounded, color: deepTeal, size: 19),
-            ),
+          Padding(
+            padding: const EdgeInsets.only(right: 17, left: 4),
+            child: () {
+              final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
+              return CircleAvatar(
+                radius: 17,
+                backgroundColor: paleTeal,
+                child: avatarUrl == null
+                    ? const Icon(Icons.person_rounded, color: deepTeal, size: 19)
+                    : ClipOval(
+                        child: Image.network(
+                          avatarUrl,
+                          width: 34,
+                          height: 34,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.person_rounded,
+                            color: deepTeal,
+                            size: 19,
+                          ),
+                        ),
+                      ),
+              );
+            }(),
           ),
         ],
       ),

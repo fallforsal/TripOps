@@ -25,9 +25,13 @@ public TourStatus? Status { get; set; } = TourStatus.Draft;
 public TourVisibility? Visibility { get; set; } = TourVisibility.Hidden;
 public bool? IsRequest { get; set; } = false;
 public int? Version { get; set; } = 1;
+public int Revision { get; set; } = 1;
+public string? ConfigurationData { get; set; }
+public bool HasDraftChanges { get; set; }
 public string? ChangeNote { get; set; }
 public int? DesignRequestId { get; set; }
-public bool? IsSharedToCustomer { get; set; } = false;
+public int? SharedVersion { get; set; }
+public int? ClonedFromTourId { get; set; }
 public bool? IsAiGenerated { get; set; } = false;
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -106,19 +110,18 @@ public virtual Tour Tour { get; set; } = null!;
 }
 
 public class TourDesignRequest : BaseEntity<int> {
+public DateTime? ClosedAt { get; set; }
+public string? CloseReason { get; set; }
 public string? InitialChangesJson { get; set; }
 public int? SourceTourId { get; set; }
 public string? SourceSnapshotJson { get; set; }
-public int? AgreedTourId { get; set; }
-public int? AgreedTourVersion { get; set; }
-public DateTime? AgreedAt { get; set; }
+public string? RejectionReason { get; set; }
+public DateTime? RespondedAt { get; set; }
 public int Revision { get; set; }
 
 public string? CustomerId { get; set; }
 public string? AgencyId { get; set; }
 public string? BusinessName { get; set; }
-public string? BusinessEmail { get; set; }
-public string? BusinessPhone { get; set; }
 public string ContactName { get; set; } = string.Empty;
 public string ContactEmail { get; set; } = string.Empty;
 public string ContactPhone { get; set; } = string.Empty;
@@ -133,11 +136,12 @@ public CustomRequestStatus? Status { get; set; } = CustomRequestStatus.Pending;
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual User Customer { get; set; } = null!;
-public virtual ICollection<TourDesignRequestAgency> RequestAgencies { get; set; } = new List<TourDesignRequestAgency>();
 }
 
 public class TourVersion : BaseEntity<int> {
-public bool SharedToCustomer { get; set; }
+public DateTime? SharedAt { get; set; }
+public string? SharedBy { get; set; }
+public int? RestoredFromVersion { get; set; }
 public int? NumberOfGuests { get; set; }
 
 public int TourId { get; set; }
@@ -148,20 +152,6 @@ public string SnapshotData { get; set; } = string.Empty;
 public string? CreatedBy { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public virtual Tour Tour { get; set; } = null!;
-}
-
-public class TourDesignRequestAgency : BaseEntity<int> {
-public int TourDesignRequestId { get; set; }
-public string AgencyId { get; set; } = string.Empty;
-public bool? IsHost { get; set; } = false;
-public string? StageArea { get; set; }
-public decimal? SuggestedBudget { get; set; }
-public string? CommunicationNotes { get; set; }
-public string? Status { get; set; } = "PENDING";
-public DateTime? AssignedAt { get; set; } = DateTime.UtcNow;
-public DateTime? RespondedAt { get; set; }
-public virtual TourDesignRequest TourDesignRequest { get; set; } = null!;
-public virtual User Agency { get; set; } = null!;
 }
 
 public class TourProvince : BaseEntity<int> {

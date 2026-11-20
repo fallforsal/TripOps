@@ -14,8 +14,54 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         p.BusinessAddress, storage.DeliveryUrl(p.BusinessLicenseUrl), p.Description,
         p.Status?.ToString().ToLowerInvariant() ?? "pending", p.RejectionReason, p.ApprovedAt,
         p.CreatedAt ?? DateTime.UnixEpoch, p.UpdatedAt ?? p.CreatedAt ?? DateTime.UnixEpoch, p.LogoUrl is null ? null : storage.DeliveryUrl(p.LogoUrl));
+    // ------------------------------------------------------------ tài khoản ngân hàng trong hồ sơ
+    public static BankAccountDto BankAccount(User u) => new(u.BankName, u.BankAccountNumber, u.BankAccountHolder,
+        u.BankAccountUpdatedAt is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : null,
+        !string.IsNullOrWhiteSpace(u.BankAccountNumber));
+    public async Task<BankAccountDto> GetBankAccount(string userId, CancellationToken ct) =>
+        BankAccount(await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new AccountException(404, "Không tìm thấy tài khoản."));
+    public async Task<BankAccountDto> SetBankAccount(string userId, BankAccountInput input, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        var bank = input.BankName.Trim();
+        var number = Common.BankAccountText.Number(input.AccountNumber);
+        var holder = Common.BankAccountText.Holder(input.AccountHolder);
+        if (bank.Length == 0) throw new AccountException(422, "Vui lòng chọn ngân hàng.");
+        if (!Common.BankAccountText.IsValidNumber(number)) throw new AccountException(422, "Số tài khoản chỉ gồm 6–30 chữ số.");
+        if (holder.Length < 2) throw new AccountException(422, "Vui lòng nhập tên chủ tài khoản.");
+        if (user.BankName != bank || user.BankAccountNumber != number || user.BankAccountHolder != holder)
+        {
+            user.BankName = bank; user.BankAccountNumber = number; user.BankAccountHolder = holder;
+            user.BankAccountUpdatedAt = DateTime.UtcNow;
+            await SyncOpenRefunds(userId, bank, number, holder, ct);
+            await db.SaveChangesAsync(ct);
+        }
+        return BankAccount(user);
+    }
+    public async Task ClearBankAccount(string userId, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw new AccountException(404, "Không tìm thấy tài khoản.");
+        user.BankName = null; user.BankAccountNumber = null; user.BankAccountHolder = null; user.BankAccountUpdatedAt = DateTime.UtcNow;
+        await SyncOpenRefunds(userId, null, null, null, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Khoản hoàn chưa chuyển của khách luôn theo tài khoản trong hồ sơ: khách đổi/xóa tài khoản thì cập nhật theo.</summary>
+    private async Task SyncOpenRefunds(string userId, string? bank, string? number, string? holder, CancellationToken ct)
+    {
+        var open = await db.RefundRequests
+            .Where(r => r.Booking.CustomerId == userId && (r.Status == RefundStatus.Pending || r.Status == RefundStatus.Reviewing))
+            .ToListAsync(ct);
+        foreach (var refund in open)
+        {
+            refund.RefundBankName = bank;
+            refund.RefundAccountNumber = number;
+            refund.RefundAccountHolder = holder;
+        }
+    }
     public AccountDto Dto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),
-        u.BusinessProfile is null ? null : Profile(u.BusinessProfile));
+        u.BusinessProfile is null ? null : Profile(u.BusinessProfile), u.Avatar);
     public async Task<User> Register(RegisterRequest request, CancellationToken ct)
     {
         if (!request.AcceptedTerms) throw new AccountException(400, "Vui lòng đồng ý điều khoản.");
@@ -60,6 +106,8 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
             ?? throw new AccountException(404, "Không tìm thấy tài khoản HDV thuộc Agency của bạn. Hồ sơ mẫu chưa có trong database không thể đổi mật khẩu.");
         guide.PasswordHash = hasher.HashPassword(guide, request.NewPassword);
         guide.UpdatedAt = DateTime.UtcNow;
+        // HDV đang đăng nhập bằng mật khẩu cũ sẽ bị đăng xuất.
+        guide.PasswordChangedAt = new DateTime(guide.UpdatedAt.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
         await db.SaveChangesAsync(ct);
     }
     public async Task<ProfileDto> Submit(string id, ProfileRequest request, byte[]? image, string? mime, CancellationToken ct)
@@ -81,6 +129,8 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         profile.BusinessAddress = request.BusinessAddress.Trim(); profile.Description = request.Description?.Trim();
         profile.BusinessLicenseUrl = url; profile.Status = BusinessProfileStatus.Pending;
         profile.RejectionReason = null; profile.ApprovedAt = null; user.Phone = request.Phone.Trim();
+        await TripOps.Data.WorkflowNotice.QueueAdminsAsync(db,
+            $"Có hồ sơ doanh nghiệp mới chờ xét duyệt: {profile.BusinessName}.", ct, actorId: id);
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
         { throw new AccountException(409, "Hồ sơ đã được nộp. Vui lòng tải lại trạng thái."); }
@@ -120,7 +170,12 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
                 .SetProperty(p => p.RejectionReason, approve ? null : reason!.Trim())
                 .SetProperty(p => p.ApprovedAt, approve ? (DateTime?)now : null).SetProperty(p => p.UpdatedAt, now), ct);
         if (count == 0) throw new AccountException(409, "Hồ sơ không tồn tại hoặc đã được xử lý. Vui lòng tải lại.");
-        return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+        var reviewed = await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, reviewed.UserId,
+            approve ? "Hồ sơ doanh nghiệp đã được phê duyệt."
+                : $"Hồ sơ doanh nghiệp bị từ chối. Lý do: {reason?.Trim()}");
+        await db.SaveChangesAsync(ct);
+        return Profile(reviewed);
     }
 
     public async Task<ProfileDto> SetSuspended(int id, bool suspend, CancellationToken ct)
@@ -136,7 +191,12 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
             throw new AccountException(409, suspend
                 ? "Chỉ có thể đình chỉ hồ sơ đang hoạt động. Vui lòng tải lại."
                 : "Chỉ có thể kích hoạt lại hồ sơ đang bị đình chỉ. Vui lòng tải lại.");
-        return Profile(await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct));
+        var reviewed = await db.BusinessProfiles.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, reviewed.UserId,
+            suspend ? "Hồ sơ doanh nghiệp của bạn đã bị đình chỉ."
+                : "Hồ sơ doanh nghiệp của bạn đã được kích hoạt lại.");
+        await db.SaveChangesAsync(ct);
+        return Profile(reviewed);
     }
     //profile cho agency
     public sealed record UpdateBusinessRequest(string Name, string Phone, string BusinessName, string TaxCode,
@@ -182,6 +242,50 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
         { throw new AccountException(409, "Thông tin bị trùng (có thể là mã số thuế). Vui lòng kiểm tra lại."); }
         return Dto(user);
+    }
+
+    public async Task<AdminAccountDto> CreateAdminAccount(CreateAdminAccountRequest request, CancellationToken ct)
+    {
+        var role = request.Role switch {
+            "user" => UserRole.Customer, "agency" => UserRole.TravelAgency,
+            "provider" => UserRole.Provider, "guide" => UserRole.TourGuide,
+            _ => throw new AccountException(400, "Vai trò không hợp lệ.") };
+        if (request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone)
+            || string.IsNullOrWhiteSpace(request.Password))
+            throw new AccountException(400, "Vui lòng điền đầy đủ thông tin tài khoản.");
+        var email = request.Email.Trim().ToLowerInvariant();
+        if (await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email.ToLower() == email, ct))
+            throw new AccountException(409, "Email đã được sử dụng.");
+        var user = new User { Id = Guid.NewGuid().ToString(), Name = request.Name.Trim(), Email = email,
+            Phone = request.Phone.Trim(), Role = role, Status = UserStatus.Active, IsVerified = false };
+        user.PasswordHash = hasher.HashPassword(user, request.Password);
+        if (role is UserRole.TravelAgency or UserRole.Provider)
+        {
+            if (new[] { request.BusinessName, request.TaxCode, request.BusinessAddress, request.BusinessLicenseUrl }.Any(string.IsNullOrWhiteSpace))
+                throw new AccountException(400, "Vui lòng nhập đủ tên doanh nghiệp, mã số thuế, địa chỉ và liên kết giấy phép.");
+            if (!Uri.TryCreate(request.BusinessLicenseUrl, UriKind.Absolute, out var license) || license.Scheme is not ("http" or "https"))
+                throw new AccountException(400, "Liên kết giấy phép phải là URL HTTP hoặc HTTPS.");
+            if (await db.BusinessProfiles.AnyAsync(p => p.TaxCode == request.TaxCode!.Trim(), ct))
+                throw new AccountException(409, "Mã số thuế đã được sử dụng.");
+            user.BusinessProfile = new BusinessProfile { UserId = user.Id, BusinessName = request.BusinessName!.Trim(),
+                TaxCode = request.TaxCode!.Trim(), BusinessAddress = request.BusinessAddress!.Trim(),
+                BusinessLicenseUrl = request.BusinessLicenseUrl!.Trim(), Description = request.Description?.Trim(),
+                Status = BusinessProfileStatus.Approved, ApprovedAt = DateTime.UtcNow };
+        }
+        if (role == UserRole.TourGuide)
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == request.AgencyId && u.Role == UserRole.TravelAgency
+                && u.Status == UserStatus.Active && u.BusinessProfile != null
+                && u.BusinessProfile.Status == BusinessProfileStatus.Approved, ct))
+                throw new AccountException(400, "Vui lòng chọn Agency đang hoạt động và đã được duyệt.");
+            user.AgencyId = request.AgencyId;
+            user.GuideProfile = new GuideProfile { UserId = user.Id };
+        }
+        db.Users.Add(user);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
+        { throw new AccountException(409, "Email hoặc mã số thuế đã được sử dụng."); }
+        return AdminDto(user);
     }
 
     private AdminAccountDto AdminDto(User u) => new(u.Id, u.Name, u.Email, u.Phone, RoleName(u.Role),

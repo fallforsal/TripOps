@@ -12,13 +12,14 @@ import { AdminLayout } from "./AdminLayout";
 import { AdminDashboardOverview } from "./AdminDashboardOverview";
 import { AdminFinancialManagement } from "./AdminFinancialManagement";
 import { ServicePostApproval } from "./ServicePostApproval";
-import { ProviderManagement } from "./ProviderManagement";
 import { UserManagement } from "./UserManagement";
 import { PartnerApprovalManagement } from "./PartnerApprovalManagement";
 import { AdminRefundManagement } from "./AdminRefundManagement";
 import { RefundRequest } from "@/app/types";
 import type { PayoutAccountDto } from "@/app/services/wf05Bookings";
 import { AdminTourModeration } from "./AdminTourModeration";
+import { AdminSettlementManagement } from "./AdminSettlementManagement";
+import { AdminComplaintManagement } from "./AdminComplaintManagement";
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -122,7 +123,7 @@ export function AdminDashboard({
   }, []);
 
   const [activeSection, setActiveSection] =
-    useState<string>("partner-approvals");
+    useState<string>("dashboard");
 
   const [focusPartnerUserId, setFocusPartnerUserId] = useState<string | null>(null);
 
@@ -139,11 +140,12 @@ export function AdminDashboard({
       case "dashboard":
         return (
           <AdminDashboardOverview
-            tours={tours}
-            bookings={bookings}
             services={services}
-            guides={guides}
-            guideSchedules={guideSchedules}
+            refundRequests={refundRequests}
+            onNavigate={(section) => {
+              setActiveSection(section);
+              window.location.hash = "#/admin/" + section;
+            }}
           />
         );
       case "partner-approvals":
@@ -180,6 +182,12 @@ export function AdminDashboard({
           />
         );
 
+      case "settlements":
+        return <AdminSettlementManagement />;
+
+      case "complaints":
+        return <AdminComplaintManagement />;
+
       case "finance":
         return (
           <AdminFinancialManagement
@@ -202,15 +210,6 @@ export function AdminDashboard({
             onDeleteService={onDeleteService}
           />
         );
-      case "providers":
-        return (
-          <ProviderManagement
-            providers={providers.filter(
-              (p) => p.accountStatus === "approved",
-            )}
-            services={services}
-          />
-        );
       case "users":
         return (
           <UserManagement
@@ -219,15 +218,6 @@ export function AdminDashboard({
               setActiveSection("partner-approvals");
               window.location.hash = "#/admin/partner-approvals";
             }}
-          />
-        );
-      case "partner-approvals":
-      case "companies":
-      case "approve-providers":
-        return (
-          <PartnerApprovalManagement
-            focusUserId={focusPartnerUserId}
-            onFocusHandled={() => setFocusPartnerUserId(null)}
           />
         );
       default:

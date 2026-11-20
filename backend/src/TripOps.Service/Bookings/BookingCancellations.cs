@@ -1,20 +1,22 @@
 using System.Globalization;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
+using TripOps.Service.Common;
 using TripOps.Service.Payments;
 
 namespace TripOps.Service.Bookings;
 
 // Hủy đơn và hoàn tiền (chính sách chung của nền tảng, xem CancellationPolicy):
 //  - Chưa trả đồng nào: khách hoặc Agency hủy ngay, không cần Admin.
-//  - Đã có tiền: tạo yêu cầu hủy (refund_requests, trạng thái Pending). Đơn CHỈ bị hủy khi Admin duyệt.
-//    Trong lúc chờ duyệt, đơn bị khóa thanh toán và không tạo được yêu cầu thứ hai.
+//  - Đã có tiền: đơn chuyển NGAY sang Đã hủy và tạo yêu cầu hoàn tiền (refund_requests, Pending) để Admin chuyển tiền.
+//    Admin không duyệt/từ chối việc hủy, chỉ thực hiện hoàn tiền. Số hoàn = 0 (phí 100%, khách quá hạn) thì hoàn tất luôn.
 //  - Khách hủy: phí theo bảng mốc ngày, tính tại thời điểm GỬI yêu cầu.
 //  - Agency hủy: hoàn 100%. Agency hủy vì khách quá hạn thanh toán: khách mất số đã trả.
-//  - Admin duyệt theo một trong hai cách:
+//  - Tài khoản nhận hoàn luôn lấy theo hồ sơ khách tại lúc chuyển tiền (khách đổi tài khoản thì dùng tài khoản mới).
+//  - Admin hoàn tiền theo một trong hai cách:
 //      a) Chi tự động qua payOS (kênh chuyển tiền): yêu cầu chuyển sang Approved ("đang chuyển"), tạo lệnh chi,
-//         payOS báo SUCCEEDED thì mới hủy đơn; lệnh lỗi thì yêu cầu quay lại Pending để Admin xử lý lại.
-//      b) Đã chuyển khoản tay: nhập mã giao dịch ngân hàng, hủy đơn ngay.
+//         payOS báo SUCCEEDED thì hoàn tất; lệnh lỗi thì yêu cầu quay lại Pending để Admin xử lý lại.
+//      b) Đã chuyển khoản tay: nhập mã giao dịch ngân hàng, hoàn tất ngay.
 //    Tiền ra được ghi thành giao dịch trạng thái Refunded (REFUND-… hoặc PAYOUT-…) để có lịch sử.
 public sealed partial class BookingService
 {
@@ -31,7 +33,7 @@ public sealed partial class BookingService
         if (booking.CustomerId != customerId)
             throw new BookingException(403, "Bạn không phải người tạo đơn đặt này.");
         EnsureCancellable(booking);
-        return CustomerQuote(booking, UtcNow);
+        return CustomerQuote(booking, UtcNow) with { Policy = Contracts.CancellationPolicyDto.Of(Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot)) };
     }
 
     public async Task<CancellationQuoteDto> AgencyCancellationQuote(string agencyId, int id, CancellationToken ct)
@@ -40,7 +42,7 @@ public sealed partial class BookingService
         if (booking.Tour?.AgencyId != agencyId)
             throw new BookingException(403, "Chỉ Agency sở hữu tour mới có quyền hủy đơn này.");
         EnsureCancellable(booking);
-        return AgencyQuote(booking, UtcNow);
+        return AgencyQuote(booking, UtcNow) with { Policy = Contracts.CancellationPolicyDto.Of(Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot)) };
     }
 
     private CancellationQuoteDto CustomerQuote(Booking booking, DateTime now)
@@ -51,7 +53,8 @@ public sealed partial class BookingService
             return new(booking.Id, "immediate", days, false, 0, booking.TotalAmount, 0, 0, 0,
                 "Bạn chưa thanh toán khoản nào nên có thể hủy ngay, không mất phí và không cần Admin duyệt.");
         var coolingOff = CancellationPolicy.InCoolingOff(FirstPaidAt(booking), days, now);
-        var percent = CancellationPolicy.FeePercent(days, coolingOff);
+        // Phí theo chính sách hủy trong hợp đồng của đơn (Agency chủ trì soạn; đơn cũ không có thì dùng mặc định TripOps).
+        var percent = Contracts.ContractTerms.Parse(booking.ContractTermsSnapshot).FeePercent(days, coolingOff);
         var fee = Money(booking.TotalAmount * percent / 100m);
         var refund = Math.Max(0, Money(paid - fee));
         var why = coolingOff
@@ -60,7 +63,7 @@ public sealed partial class BookingService
                 ? "Hủy vào ngày khởi hành hoặc sau khi tour đã bắt đầu: phí hủy 100%."
                 : $"Còn {days} ngày trước khởi hành: phí hủy {percent.ToString("0.##", Vietnamese)}% tổng giá trị tour.";
         return new(booking.Id, "customer", days, coolingOff, percent, booking.TotalAmount, paid, fee, refund,
-            why + " Đơn chỉ bị hủy sau khi Admin duyệt; phí tính theo thời điểm bạn gửi yêu cầu.");
+            why + " Đơn được hủy ngay khi bạn gửi yêu cầu; Admin sẽ chuyển tiền hoàn vào tài khoản ngân hàng trong hồ sơ của bạn.");
     }
 
     private CancellationQuoteDto AgencyQuote(Booking booking, DateTime now)
@@ -73,9 +76,9 @@ public sealed partial class BookingService
         if (OverdueStage(booking, now) is { } overdue)
             return new(booking.Id, "overdue", days, false, 100, booking.TotalAmount, paid, paid, 0,
                 $"Khách đã quá hạn {StageName(booking, overdue)} ({VietnamText(Deadline(overdue)!.Value)}) mà chưa trả đủ: theo chính sách, " +
-                "khách mất số tiền đã trả. Đơn chỉ bị hủy sau khi Admin duyệt.");
+                "khách mất số tiền đã trả. Đơn được hủy ngay.");
         return new(booking.Id, "agency", days, false, 0, booking.TotalAmount, paid, 0, paid,
-            "Agency hủy tour: khách được hoàn 100% số đã trả. Đơn chỉ bị hủy sau khi Admin duyệt và chuyển tiền hoàn.");
+            "Agency hủy tour: khách được hoàn 100% số đã trả. Đơn được hủy ngay; Admin sẽ chuyển tiền hoàn cho khách.");
     }
 
     // ------------------------------------------------------------ khách
@@ -95,7 +98,7 @@ public sealed partial class BookingService
             throw new BookingException(409, "Đơn chưa có khoản thanh toán nào: hãy dùng chức năng hủy ngay.");
         var account = Account(request.BankName, request.AccountNumber, request.AccountHolder, required: quote.RefundAmount > 0);
 
-        booking.RefundRequests.Add(new RefundRequest
+        var refund = new RefundRequest
         {
             RequestedBy = customerId,
             Reason = request.Reason,
@@ -108,10 +111,18 @@ public sealed partial class BookingService
             RefundAccountHolder = account?.Holder,
             Status = RefundStatus.Pending,
             CreatedAt = now
-        });
+        };
+        booking.RefundRequests.Add(refund);
+        CancelNow(booking, refund, $"Khách hủy: {request.ReasonDetail.Trim()}", now);
+        await RememberRefundAccount(customerId, account, ct);
+        Repo.NotifyAgencies(booking, $"Khách đã hủy booking {booking.BookingCode}. Lý do: {request.ReasonDetail.Trim()}", customerId);
+        foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
+            Repo.Notify(guide, $"Booking {booking.BookingCode} đã bị hủy.", id, customerId);
+        if (refund.Status != RefundStatus.Completed)
+            await Repo.NotifyAdmins($"Có yêu cầu hoàn tiền mới cho booking {booking.BookingCode}.", ct, id, customerId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     /// <summary>Khách bổ sung/sửa tài khoản nhận hoàn khi yêu cầu còn chờ duyệt (ví dụ Agency hủy tour).</summary>
@@ -127,9 +138,10 @@ public sealed partial class BookingService
         open.RefundBankName = account.Bank;
         open.RefundAccountNumber = account.Number;
         open.RefundAccountHolder = account.Holder;
+        await RememberRefundAccount(customerId, account, ct);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // ------------------------------------------------------------ Agency
@@ -160,7 +172,7 @@ public sealed partial class BookingService
         }
         else
         {
-            booking.RefundRequests.Add(new RefundRequest
+            var refund = new RefundRequest
             {
                 RequestedBy = agencyId,
                 Reason = quote.Mode == "overdue" ? ReasonPaymentOverdue : ReasonAgencyCancelled,
@@ -169,11 +181,20 @@ public sealed partial class BookingService
                 RefundFee = quote.Fee,
                 Status = RefundStatus.Pending,
                 CreatedAt = now
-            });
+            };
+            booking.RefundRequests.Add(refund);
+            CancelNow(booking, refund, $"Agency hủy: {reason}", now);
+            // Tài khoản nhận hoàn lấy theo hồ sơ khách (nếu khách đã lưu).
+            await UseProfileAccount(booking, refund, ct);
         }
+        Repo.Notify(booking.CustomerId!, $"Agency đã hủy booking {booking.BookingCode}. Lý do: {reason}.", id, agencyId);
+        foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
+            Repo.Notify(guide, $"Booking {booking.BookingCode} đã bị hủy.", id, agencyId);
+        if (quote.Mode != "immediate")
+            await Repo.NotifyAdmins($"Agency hủy booking {booking.BookingCode}; cần xử lý hoàn tiền.", ct, id, agencyId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(agencyId,id,ct);
     }
 
     // ------------------------------------------------------------ Admin
@@ -195,6 +216,7 @@ public sealed partial class BookingService
         var booking = await Repo.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         var refund = booking.RefundRequests.Single(r => r.Id == refundId);
         EnsureReviewable(refund);
+        await UseProfileAccount(booking, refund, ct);
 
         var now = UtcNow;
         var (amount, note) = ValidateRefundAmount(booking, refund, request.RefundAmount, request.Note);
@@ -225,7 +247,8 @@ public sealed partial class BookingService
             });
         }
         CompleteCancellation(booking, refund, amount, now);
-
+        Repo.Notify(booking.CustomerId!, $"Khoản hoàn tiền booking {booking.BookingCode} đã được xử lý: {amount:N0}đ.", booking.Id, adminId);
+        Repo.NotifyAgencies(booking, $"Admin đã xử lý hoàn tiền booking {booking.BookingCode}.", adminId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return AdminRefund(refund);
@@ -247,6 +270,7 @@ public sealed partial class BookingService
             var booking = await Repo.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
             var refund = booking.RefundRequests.Single(r => r.Id == refundId);
             EnsureReviewable(refund);
+            await UseProfileAccount(booking, refund, ct);
             var now = UtcNow;
             var (money, note) = ValidateRefundAmount(booking, refund, request.RefundAmount, request.Note);
             if (money <= 0)
@@ -379,6 +403,16 @@ public sealed partial class BookingService
             refund.ApprovedRefundAmount = null;
             refund.AdminNote = Truncate($"Chi hộ payOS không thành công ({reason}). {refund.AdminNote}".Trim(), 4000);
         }
+        if (payment.Status == PaymentTransactionStatus.Refunded)
+        {
+            Repo.Notify(booking.CustomerId!, $"Đã chuyển hoàn tiền booking {booking.BookingCode}: {payment.Amount:N0}đ.", booking.Id);
+            Repo.NotifyAgencies(booking, $"Hoàn tiền booking {booking.BookingCode} đã hoàn tất.");
+        }
+        else if (payment.Status == PaymentTransactionStatus.Failed)
+        {
+            Repo.Notify(booking.CustomerId!, $"Hoàn tiền booking {booking.BookingCode} chưa thành công. TripOps sẽ xử lý lại.", booking.Id);
+            await Repo.NotifyAdmins($"Lệnh hoàn tiền booking {booking.BookingCode} thất bại, cần kiểm tra.", ct, booking.Id);
+        }
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return AdminRefund(refund);
@@ -390,12 +424,45 @@ public sealed partial class BookingService
         refund.Status = RefundStatus.Completed;
         refund.ApprovedRefundAmount = amount;
         refund.CompletedAt = now;
+        if(refund.Reason==BookingBilling.PriceReductionReason) {
+            var paid=PaidAmount(booking);
+            booking.PaymentStatus=paid>=booking.TotalAmount?PaymentStatus.Paid:paid>0?PaymentStatus.PartiallyPaid:PaymentStatus.Unpaid;
+            booking.UpdatedAt=now;return;
+        }
         if (amount > 0) booking.PaymentStatus = PaymentStatus.Refunded;
+        CloseOpenRequests(booking);
+        // Đơn thường đã hủy từ lúc gửi yêu cầu; giữ nguyên thời điểm hủy ban đầu.
+        booking.Status = BookingStatus.Cancelled;
+        booking.CancelledAt ??= now;
+        booking.CancelReason ??= Truncate(refund.ReasonDetail, 1000);
+        booking.SpecialRequests = $"{booking.SpecialRequests} [Admin hoàn tiền yêu cầu hủy #{refund.Id}: {amount.ToString("N0", Vietnamese)}đ]".Trim();
+    }
+
+    /// <summary>Hủy đơn ngay khi khách/Agency gửi yêu cầu hủy (đơn đã có tiền). Số hoàn = 0 thì hoàn tất luôn.</summary>
+    private static void CancelNow(Booking booking, RefundRequest refund, string reason, DateTime now)
+    {
         CloseOpenRequests(booking);
         booking.Status = BookingStatus.Cancelled;
         booking.CancelledAt = now;
-        booking.CancelReason = Truncate(refund.ReasonDetail, 1000);
-        booking.SpecialRequests = $"{booking.SpecialRequests} [Admin duyệt hủy #{refund.Id}, hoàn {amount.ToString("N0", Vietnamese)}đ]".Trim();
+        booking.CancelReason = Truncate(reason, 1000);
+        booking.UpdatedAt = now;
+        if (SuggestedRefund(refund) <= 0)
+        {
+            refund.Status = RefundStatus.Completed;
+            refund.ApprovedRefundAmount = 0;
+            refund.CompletedAt = now;
+        }
+    }
+
+    /// <summary>Tài khoản nhận hoàn luôn theo hồ sơ khách hiện tại; hồ sơ chưa có thì giữ tài khoản khách nhập lúc hủy.</summary>
+    private async Task UseProfileAccount(Booking booking, RefundRequest refund, CancellationToken ct)
+    {
+        if (booking.CustomerId is not { Length: > 0 } customerId) return;
+        var customer = await Repo.FindUser(customerId, ct);
+        if (customer is null || string.IsNullOrWhiteSpace(customer.BankAccountNumber)) return;
+        refund.RefundBankName = customer.BankName;
+        refund.RefundAccountNumber = customer.BankAccountNumber;
+        refund.RefundAccountHolder = customer.BankAccountHolder;
     }
 
     private static void EnsureReviewable(RefundRequest refund)
@@ -410,6 +477,8 @@ public sealed partial class BookingService
     {
         var paid = PaidAmount(booking);
         var amount = Money(requested);
+        if(refund.Reason==BookingBilling.PriceReductionReason && amount!=SuggestedRefund(refund))
+            throw new BookingException(422,"Khoản hoàn giảm giá phải đúng số tiền đã được chủ trì phê duyệt.");
         if (amount > paid)
             throw new BookingException(422, $"Số tiền hoàn không được vượt số khách đã trả ({paid.ToString("N0", Vietnamese)}đ).");
         note = note?.Trim();
@@ -425,22 +494,17 @@ public sealed partial class BookingService
     private static PaymentTransaction? RefundTransaction(Booking booking, int refundId) => booking.PaymentTransactions
         .FirstOrDefault(t => t.Status == PaymentTransactionStatus.Refunded && (t.TransactionCode == RefundCode(refundId) || IsPayoutOf(t, refundId)));
 
+    /// <summary>Không còn từ chối yêu cầu hủy: đơn đã hủy ngay khi khách/Agency gửi, Admin chỉ hoàn tiền.</summary>
     public async Task<AdminRefundDto> RejectRefund(string adminId, int refundId, RefundRejectionRequest request, CancellationToken ct)
     {
         var bookingId = await Repo.RefundBookingId(refundId, ct) ?? throw new BookingException(404, "Không tìm thấy yêu cầu hủy.");
-        await using var transaction = await Repo.BeginPaymentChange(bookingId, ct);
-        Repo.ResetTracking();
         var booking = await Repo.Find(bookingId, ct) ?? throw new BookingException(404, "Không tìm thấy đơn đặt tour.");
         var refund = booking.RefundRequests.Single(r => r.Id == refundId);
         if (refund.Status is not (RefundStatus.Pending or RefundStatus.Reviewing))
             throw new BookingException(409, "Yêu cầu này đã được xử lý.");
-        refund.Status = RefundStatus.Rejected;
-        refund.RejectionReason = request.Reason.Trim();
-        refund.ReviewedBy = adminId;
-        refund.ReviewedAt = UtcNow;
-        await Repo.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return AdminRefund(refund);
+        if (refund.Reason == BookingBilling.PriceReductionReason)
+            throw new BookingException(409, "Khoản giảm đã được chủ trì duyệt; nền tảng cần hoàn đúng số tiền, không hủy nghĩa vụ hoàn.");
+        throw new BookingException(409, "Đơn đã được hủy khi gửi yêu cầu; Admin chỉ cần thực hiện hoàn tiền, không từ chối yêu cầu.");
     }
 
     // ------------------------------------------------------------ hỗ trợ
@@ -448,16 +512,18 @@ public sealed partial class BookingService
     /// <summary>Chỉ hủy được đơn chưa khởi hành, chưa hủy; không chồng yêu cầu; không hủy khi đang có link payOS còn hạn.</summary>
     private void EnsureCancellable(Booking booking)
     {
+        if(booking.RefundRequests.Any(r=>r.Reason==BookingBilling.PriceReductionReason&&r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved))
+            throw new BookingException(409,"Đang xử lý hoàn tiền giảm giá; hãy hoàn tất khoản này trước khi yêu cầu hủy tour.");
         if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.InProgress)
             throw new BookingException(422, $"Không thể hủy đơn đặt đang ở trạng thái {booking.Status}.");
         if (OpenCancellation(booking) is not null)
-            throw new BookingException(409, "Đơn đã có yêu cầu hủy đang chờ Admin duyệt.");
+            throw new BookingException(409, "Đơn đã có yêu cầu hủy đang chờ hoàn tiền.");
         if (HasOpenGatewayPayment(booking, UtcNow))
             throw new BookingException(409, "Đơn đang có link thanh toán payOS còn hiệu lực. Vui lòng chờ link hết hạn hoặc bấm \"Kiểm tra thanh toán\" trước khi hủy.");
     }
 
     private static RefundRequest? OpenCancellation(Booking booking) =>
-        booking.RefundRequests.FirstOrDefault(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
+        booking.RefundRequests.FirstOrDefault(r => r.Reason!=BookingBilling.PriceReductionReason && r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
 
     /// <summary>Đợt thu đã quá hạn mà chưa trả đủ (dùng khi Agency hủy vì khách không thanh toán).</summary>
     private PaymentRequest? OverdueStage(Booking booking, DateTime now) => booking.PaymentRequests
@@ -472,7 +538,8 @@ public sealed partial class BookingService
 
     private static RefundAccount? Account(string? bank, string? number, string? holder, bool required)
     {
-        bank = bank?.Trim(); number = number?.Replace(" ", "").Trim(); holder = holder?.Trim().ToUpperInvariant();
+        bank = bank?.Trim(); number = number is null ? null : BankAccountText.Number(number);
+        holder = holder is null ? null : BankAccountText.Holder(holder);
         if (string.IsNullOrEmpty(bank) && string.IsNullOrEmpty(number) && string.IsNullOrEmpty(holder))
         {
             if (required) throw new BookingException(422, "Vui lòng nhập tài khoản ngân hàng nhận tiền hoàn.");
@@ -483,6 +550,19 @@ public sealed partial class BookingService
         if (!number.All(char.IsAsciiDigit) || number.Length is < 6 or > 30)
             throw new BookingException(422, "Số tài khoản chỉ gồm 6–30 chữ số.");
         return new RefundAccount(bank, number, holder);
+    }
+
+    /// <summary>Lưu tài khoản khách vừa nhập vào hồ sơ để lần sau tự điền (chỉ ghi khi có thay đổi).</summary>
+    private async Task RememberRefundAccount(string userId, RefundAccount? account, CancellationToken ct)
+    {
+        if (account is null) return;
+        var user = await Repo.FindUser(userId, ct);
+        if (user is null || (user.BankName == account.Bank && user.BankAccountNumber == account.Number && user.BankAccountHolder == account.Holder))
+            return;
+        user.BankName = account.Bank.Length <= 150 ? account.Bank : account.Bank[..150];
+        user.BankAccountNumber = account.Number;
+        user.BankAccountHolder = account.Holder.Length <= 150 ? account.Holder : account.Holder[..150];
+        user.BankAccountUpdatedAt = DateTime.UtcNow;
     }
 
     private static decimal SuggestedRefund(RefundRequest refund) =>
@@ -504,7 +584,7 @@ public sealed partial class BookingService
 
     private static CancellationRequestDto? Cancellation(Booking booking)
     {
-        var refund = booking.RefundRequests.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
+        var refund = booking.RefundRequests.Where(r=>r.Reason!=BookingBilling.PriceReductionReason).OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).FirstOrDefault();
         return refund is null ? null : new CancellationRequestDto(
             refund.Id, refund.Reason, refund.ReasonDetail, refund.Status.ToString(), RequestedByRole(refund),
             FeePercentOf(refund, booking.TotalAmount), refund.RefundFee ?? 0, refund.OriginalPaidAmount, SuggestedRefund(refund),
@@ -517,6 +597,9 @@ public sealed partial class BookingService
     private static AdminRefundDto AdminRefund(RefundRequest refund)
     {
         var booking = refund.Booking;
+        // Yêu cầu chưa hoàn: hiện tài khoản trong hồ sơ khách hiện tại (khách đổi tài khoản thì Admin thấy tài khoản mới).
+        if (refund.Status is RefundStatus.Pending or RefundStatus.Reviewing && booking.Customer is { BankAccountNumber.Length: > 0 } customer)
+            (refund.RefundBankName, refund.RefundAccountNumber, refund.RefundAccountHolder) = (customer.BankName, customer.BankAccountNumber, customer.BankAccountHolder);
         var payouts = booking.PaymentTransactions
             .Where(t => t.PaymentMethod == PayoutMethod && IsPayoutOf(t, refund.Id)).OrderByDescending(t => t.Id).ToList();
         return new AdminRefundDto(

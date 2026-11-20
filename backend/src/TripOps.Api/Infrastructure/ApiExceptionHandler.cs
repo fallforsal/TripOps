@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace TripOps.Api.Infrastructure;
 
 public sealed class ApiExceptionHandler(
-    IProblemDetailsService problems, ILogger<ApiExceptionHandler> logger) : IExceptionHandler
+    IProblemDetailsService problems, ILogger<ApiExceptionHandler> logger, IHostEnvironment environment) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
@@ -46,8 +46,13 @@ public sealed class ApiExceptionHandler(
                 ProblemDetails = new ProblemDetails { Status = 409, Title = "Dữ liệu đã thay đổi; vui lòng tải lại." } });
             return true;
         }
-        logger.LogError("Unhandled {ExceptionType}; trace {TraceId}",
-            exception.GetType().Name, context.TraceIdentifier);
+        // Development: ghi đủ nội dung + vị trí lỗi để tìm nguyên nhân. Môi trường khác chỉ ghi loại lỗi như cũ.
+        if (environment.IsDevelopment())
+            logger.LogError(exception, "Unhandled {ExceptionType} at {Method} {Path}; trace {TraceId}",
+                exception.GetType().Name, context.Request.Method, context.Request.Path, context.TraceIdentifier);
+        else
+            logger.LogError("Unhandled {ExceptionType}; trace {TraceId}",
+                exception.GetType().Name, context.TraceIdentifier);
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         await problems.WriteAsync(new ProblemDetailsContext
         {

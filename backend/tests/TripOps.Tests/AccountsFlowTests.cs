@@ -63,6 +63,51 @@ public sealed class AccountsFlowTests
     }
 
     private static object Registration(string role = "agency") => new { name = "Test Partner", email = "Partner@Example.test", password = "Partner123!", role, acceptedTerms = true };
+    [Fact]
+    public async Task Admin_creates_accounts_with_profiles_without_changing_session()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var admin = app.CreateClient();
+        var input = new CreateAdminAccountRequest("New Customer", "New@Example.test", "0901234567", "Password123!", "user");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await admin.PostAsJsonAsync("/api/v1/admin/accounts", input)).StatusCode);
+        (await admin.PostAsJsonAsync("/api/v1/auth/login", new { email = "admin@example.test", password = "AdminPass123!" })).EnsureSuccessStatusCode();
+        var created = await admin.PostAsJsonAsync("/api/v1/admin/accounts", input);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var customer = (await created.Content.ReadFromJsonAsync<AdminAccountDto>())!;
+        Assert.Equal("new@example.test", customer.Email);
+        Assert.Equal("active", customer.Status);
+        Assert.Equal("admin", (await admin.GetFromJsonAsync<AccountDto>("/api/v1/auth/me"))!.Role);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/v1/admin/accounts", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/admin/accounts", input with { Email = "bad@example.test", Role = "admin" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/admin/accounts", input with { Email = "bad@example.test", Password = "short" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/admin/accounts", input with { Email = "bad@example.test", Role = "agency" })).StatusCode);
+
+        var agencyInput = input with { Email = "agency2@example.test", Role = "agency", BusinessName = "New Agency",
+            TaxCode = "9999999999", BusinessAddress = "Hanoi", BusinessLicenseUrl = "https://example.test/license.png" };
+        var agencyResponse = await admin.PostAsJsonAsync("/api/v1/admin/accounts", agencyInput);
+        Assert.Equal(HttpStatusCode.Created, agencyResponse.StatusCode);
+        var agency = (await agencyResponse.Content.ReadFromJsonAsync<AdminAccountDto>())!;
+        Assert.Equal("approved", agency.Business!.Status);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/v1/admin/accounts",
+            agencyInput with { Email = "provider2@example.test", Role = "provider", TaxCode = "8888888888" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/v1/admin/accounts",
+            input with { Email = "guide@example.test", Role = "guide" })).StatusCode);
+        var guideResponse = await admin.PostAsJsonAsync("/api/v1/admin/accounts", input with { Email = "guide@example.test", Role = "guide", AgencyId = agency.Id });
+        Assert.Equal(HttpStatusCode.Created, guideResponse.StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var stored = await db.Users.SingleAsync(u => u.Id == customer.Id);
+            Assert.NotEqual(input.Password, stored.PasswordHash);
+            Assert.NotEqual(PasswordVerificationResult.Failed, new PasswordHasher<User>().VerifyHashedPassword(stored, stored.PasswordHash!, input.Password));
+            var guide = await db.Users.Include(u => u.GuideProfile).SingleAsync(u => u.Email == "guide@example.test");
+            Assert.Equal(agency.Id, guide.AgencyId); Assert.NotNull(guide.GuideProfile);
+        }
+        using var userClient = app.CreateClient();
+        (await userClient.PostAsJsonAsync("/api/v1/auth/login", new { email = customer.Email, password = input.Password })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await userClient.PostAsJsonAsync("/api/v1/admin/accounts", input)).StatusCode);
+    }
+
     private static MultipartFormDataContent Profile(bool includeImage = true)
     {
         var form = new MultipartFormDataContent();

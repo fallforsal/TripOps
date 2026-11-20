@@ -30,6 +30,13 @@ public sealed class BookingAmendmentsController(BookingQuotationService amendmen
         await amendments.AddSurcharge(Actor, id, input, ct);
         return Ok(await bookings.Get(Actor, id, ct));
     }
+    [HttpPut("participants/{participantIndex:int}/stages")]
+    [ProducesResponseType<BookingDto>(200)]
+    public async Task<IActionResult> Stages(int id,int participantIndex,ParticipantStagesInput input,CancellationToken ct)
+    {
+        await amendments.ChangeParticipantStages(Actor,id,participantIndex,input,ct);
+        return Ok(await bookings.Get(Actor,id,ct));
+    }
     [HttpPost("price-adjustments")]
     [ProducesResponseType<BookingDto>(200)]
     public async Task<IActionResult> Price(int id, BookingPriceChange input, CancellationToken ct)

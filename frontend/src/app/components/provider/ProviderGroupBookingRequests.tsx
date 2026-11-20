@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { providerQuoteCopy } from "@/app/lib/providerQuoteCopy";
+import { toast } from "@/app/lib/notifications";
+import { useState, useMemo, useEffect } from "react";
 import {
   BedDouble,
   Calendar,
@@ -88,6 +90,28 @@ export function ProviderGroupBookingRequests({
   // State to manage dedicated standalone detail page
   const [viewingRequestId, setViewingRequestId] = useState<string | null>(null);
 
+  useEffect(()=>{
+    const syncFromHash = () => {
+      const params = new URLSearchParams(window.location.hash.split("?")[1]);
+      const bookingId = params.get("bookingId");
+      const requestId = params.get("requestId");
+      if (requestId) {
+        const exact = requests.find(r => String(r.id) === requestId);
+        if (exact) {
+          setViewingRequestId(exact.id);
+          return;
+        }
+      }
+      if (bookingId) {
+        const request = requests.find(r => String(r.bookingId) === bookingId && r.status !== "cancelled");
+        if (request) setViewingRequestId(request.id);
+      }
+    };
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  },[requests]);
+
   // Quick modals for list actions
   const [approvingRequest, setApprovingRequest] =
     useState<ProviderGroupReservationRequest | null>(null);
@@ -103,16 +127,7 @@ export function ProviderGroupBookingRequests({
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [rejectionError, setRejectionError] = useState<string>("");
 
-  // Toast feedback
-  const [toastMessage, setToastMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 4000);
-  };
+  const showToast = (text: string, type: "success" | "error" = "success") => toast[type](text);
 
   // Helper check for request types
   const isHotelReq = (r: ProviderGroupReservationRequest) =>
@@ -219,12 +234,8 @@ export function ProviderGroupBookingRequests({
     setQuoteInputPrice(
       req.quotedTotalPrice ? req.quotedTotalPrice.toString() : ""
     );
-    const isRest = isRestaurantReq(req);
     setProviderNote(
-      req.providerNote ||
-        (isRest
-          ? "Nhà hàng đã xác nhận tiếp nhận đặt bàn và chuẩn bị set ăn riêng theo đúng yêu cầu ăn uống/dị ứng của đoàn."
-          : "Khách sạn đã xem danh sách đoàn và bố trí phòng theo đúng nguyện vọng ghép phòng của khách. Giá trọn gói toàn đoàn đã gồm buffet sáng và thuế VAT.")
+      req.providerNote || providerQuoteCopy(req).note
     );
     setQuoteError("");
   };
@@ -241,7 +252,7 @@ export function ProviderGroupBookingRequests({
     if (!approvingRequest) return;
     const numPrice = Number(quoteInputPrice.replace(/\D/g, ""));
     if (!numPrice || numPrice <= 0) {
-      setQuoteError("Vui lòng nhập giá tổng hợp lệ cho toàn bộ đoàn khách.");
+      setQuoteError("Vui lòng nhập tổng chi phí hợp lệ cho khách trong yêu cầu này.");
       return;
     }
 
@@ -263,7 +274,7 @@ export function ProviderGroupBookingRequests({
     onRejectRequest(rejectingRequest.id, rejectionReason.trim());
     showToast(
       `Đã từ chối yêu cầu của đoàn ${rejectingRequest.agencyName}.`,
-      "error"
+      "success"
     );
     setRejectingRequest(null);
   };
@@ -282,7 +293,7 @@ export function ProviderGroupBookingRequests({
           }}
           onRejectRequest={(id, reason) => {
             onRejectRequest(id, reason);
-            showToast("Đã từ chối yêu cầu dịch vụ.", "error");
+            showToast("Đã từ chối yêu cầu dịch vụ.", "success");
           }}
         />
       );
@@ -291,21 +302,6 @@ export function ProviderGroupBookingRequests({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl text-white text-xs font-bold animate-in fade-in slide-in-from-bottom-2 ${
-            toastMessage.type === "success" ? "bg-emerald-600" : "bg-rose-600"
-          }`}
-        >
-          {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : (
-            <XCircle className="w-4 h-4" />
-          )}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
 
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -536,6 +532,7 @@ export function ProviderGroupBookingRequests({
                         </span>
                       )}
 
+                      {req.isSupplement && <span className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800">Bổ sung {req.numberOfGuests} khách · giữ nguyên khách cũ</span>}
                       <span className="font-mono text-xs font-bold text-gray-500">
                         #{req.id}
                       </span>
@@ -651,10 +648,10 @@ export function ProviderGroupBookingRequests({
                   )}
 
                   {/* Quoted Price Banner if available */}
-                  {req.quotedTotalPrice && (
+                  {!isCancelled && !!req.quotedTotalPrice && (
                     <div className="text-xs p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 flex items-center justify-between">
                       <span className="font-semibold text-emerald-800">
-                        {isRest ? "Báo giá bữa ăn toàn đoàn:" : "Báo giá lưu trú toàn đoàn:"}
+                        {providerQuoteCopy(req).title}:
                       </span>
                       <strong className="text-emerald-700 text-sm font-black">
                         {formatVND(req.quotedTotalPrice)}
@@ -750,9 +747,7 @@ export function ProviderGroupBookingRequests({
 
               <div className="space-y-1.5">
                 <Label className="font-bold text-gray-800 text-xs">
-                  {isRestaurantReq(approvingRequest)
-                    ? "Tổng giá tiền cho toàn bộ bữa ăn của đoàn (VNĐ) *"
-                    : "Tổng giá tiền trọn gói lưu trú cho đoàn (VNĐ) *"}
+                  {providerQuoteCopy(approvingRequest).label}
                 </Label>
                 <Input
                   type="text"
@@ -766,7 +761,7 @@ export function ProviderGroupBookingRequests({
                   className="text-sm font-black text-emerald-700"
                 />
                 <p className="text-[11px] text-gray-500">
-                  Giá tổng cho toàn bộ đoàn {approvingRequest.numberOfGuests} khách, không phải giá một người.
+                  {providerQuoteCopy(approvingRequest).hint}
                 </p>
                 {quoteError && <p className="text-rose-600 font-semibold">{quoteError}</p>}
               </div>

@@ -36,6 +36,8 @@ const STATUS_CONFIG: Record<
   CustomTourRequest["status"],
   { label: string; color: string; icon: React.ReactNode }
 > = {
+  booked: { label: "Đã đặt tour", color: "bg-emerald-50 text-emerald-700", icon: <CheckCircle className="w-3.5 h-3.5" /> },
+  closed: { label: "Đã đóng", color: "bg-slate-100 text-slate-600", icon: <XCircle className="w-3.5 h-3.5" /> },
   pending: { label: "Chờ xử lý", color: "bg-gray-100 text-gray-600 border-gray-200", icon: <Clock className="w-3.5 h-3.5" /> },
   reviewing: { label: "Đang xem xét", color: "bg-[#E0F2FE] text-[#075985] border-[#CBD5E1]", icon: <Clock className="w-3.5 h-3.5" /> },
   designed: { label: "Đã có Tour thiết kế", color: "bg-[#F97316]/15 text-[#EA580C] border-[#F97316]/30", icon: <Sparkles className="w-3.5 h-3.5 text-[#F97316]" /> },

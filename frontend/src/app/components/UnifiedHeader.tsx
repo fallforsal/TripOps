@@ -1,3 +1,4 @@
+import { ChatButton } from "./chat/ChatPanel";
 import { useState, useRef, useEffect } from "react";
 import {
   Compass,
@@ -147,6 +148,7 @@ export function UnifiedHeader({
               </button>
             )}
 
+            <ChatButton />
             {/* Login Button or Profile Dropdown */}
             {!currentUser ? (
               <button

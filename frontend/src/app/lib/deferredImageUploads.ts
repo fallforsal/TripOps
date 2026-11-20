@@ -18,6 +18,10 @@ export class DeferredImageUploads {
     });
   }
 
+  entries(urls: string[]): { url: string; file: File }[] {
+    return urls.flatMap(url => this.files.has(url) ? [{ url, file: this.files.get(url)! }] : []);
+  }
+
   async resolve(urls: string[], upload: ImageUploader): Promise<string[]> {
     const result: string[] = [];
     for (const url of urls) {

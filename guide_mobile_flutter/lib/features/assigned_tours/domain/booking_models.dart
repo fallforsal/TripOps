@@ -45,12 +45,13 @@ class BookingPage {
 }
 
 class Passenger {
-  const Passenger({required this.id, required this.name, required this.status, this.phone, this.recordStatus});
+  const Passenger({required this.id, required this.name, required this.status, this.phone, this.recordStatus, this.statusNote});
   final int id;
   final String name;
   final String status;
   final String? phone;
   final String? recordStatus;
+  final String? statusNote;
 
   factory Passenger.fromJson(Map<String, dynamic> j) => Passenger(
     id: (j['id'] as num).toInt(),
@@ -58,20 +59,32 @@ class Passenger {
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     phone: j['phoneNumber']?.toString(),
     recordStatus: j['status']?.toString(),
+    statusNote: j['statusNote']?.toString(),
   );
 }
 
 class TourStop {
-  const TourStop({required this.id, required this.name, required this.status, this.time});
+  const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const [], this.checkinNote,
+    this.checkoutPhotoUrls = const [], this.checkoutNote, this.checkoutAt});
   final int id;
   final String name;
   final String status;
   final DateTime? time;
+  final List<String> photoUrls;
+  final String? checkinNote;
+  final List<String> checkoutPhotoUrls;
+  final String? checkoutNote;
+  final DateTime? checkoutAt;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
     status: (j['attendanceStatus'] ?? 'Pending').toString(),
     time: j['time'] is String ? DateTime.tryParse(j['time'] as String) : null,
+    photoUrls: (j['photoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
+    checkinNote: j['checkinNote']?.toString(),
+    checkoutPhotoUrls: (j['checkoutPhotoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
+    checkoutNote: j['checkoutNote']?.toString(),
+    checkoutAt: j['checkoutAt'] is String ? DateTime.tryParse(j['checkoutAt'] as String) : null,
   );
 }
 
@@ -89,14 +102,29 @@ class TourDay {
 }
 
 class TourIncident {
-  const TourIncident({required this.title, required this.description, required this.status});
+  const TourIncident({
+    required this.title,
+    required this.description,
+    required this.status,
+    this.evidenceUrls = const [],
+    this.incidentType = '',
+  });
+  final String incidentType;
   final String title;
   final String description;
   final String status;
+  final List<String> evidenceUrls;
+  // Compatibility with older consumers of the incident evidence DTO.
+  List<String> get photoUrls => evidenceUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
+    incidentType: (j['incidentType'] ?? '').toString(),
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
     status: (j['status'] ?? '').toString(),
+    evidenceUrls: (j['evidenceUrls'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList(),
   );
 }
 
@@ -106,6 +134,10 @@ class BookingDetail {
     required this.startDate, required this.endDate, required this.totalGuests,
     required this.passengers, required this.days, required this.incidents,
     this.customerName, this.contactPhone, this.agencyName,
+    this.canRecordAttendance = false,
+    this.attendanceDate,
+    this.canCheckInLocations = false,
+    this.nextLocationCheckInId,
   });
   final int id;
   final String code;
@@ -120,6 +152,12 @@ class BookingDetail {
   final String? customerName;
   final String? contactPhone;
   final String? agencyName;
+  /// Backend-enforced departure/stage date in Vietnam.
+  final bool canRecordAttendance;
+  final DateTime? attendanceDate;
+  /// Backend-enforced departure date and itinerary state.
+  final bool canCheckInLocations;
+  final int? nextLocationCheckInId;
 
   factory BookingDetail.fromJson(Map<String, dynamic> j) => BookingDetail(
     id: (j['id'] as num).toInt(),
@@ -132,6 +170,10 @@ class BookingDetail {
     customerName: j['customerName']?.toString(),
     contactPhone: j['contactPhone']?.toString(),
     agencyName: j['agencyName']?.toString(),
+    canRecordAttendance: j['canRecordAttendance'] == true,
+    attendanceDate: j['attendanceDate'] == null ? null : parseCalendarDate(j['attendanceDate']),
+    canCheckInLocations: j['canCheckInLocations'] == true,
+    nextLocationCheckInId: (j['nextLocationCheckInId'] as num?)?.toInt(),
     passengers: (j['participants'] as List<dynamic>? ?? [])
         .map((e) => Passenger.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     days: (j['snapshotDays'] as List<dynamic>? ?? [])

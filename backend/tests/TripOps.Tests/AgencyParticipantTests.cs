@@ -20,7 +20,7 @@ public sealed partial class TourFlowTests
         var original = b.TotalAmount; var contractId = b.Contract?.Id;
         var input = new AgencyParticipantInput("Agency guest", new DateTime(2001, 1, 1), "Nữ", "GUEST-123",
             "Ở cùng người thân, hai giường đơn", "Ăn chay, dị ứng tôm", "Cần hỗ trợ xe lăn", price,
-            "Bổ sung người theo thỏa thuận", original, Guid.NewGuid());
+            "Bổ sung người theo thỏa thuận", original, Guid.NewGuid(), PhoneNumber: "0901234567");
         var url = $"/api/v1/agency/bookings/{b.Id}/participants";
         Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync(url, input)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync(url, input)).StatusCode);
@@ -33,7 +33,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(input.RoommateNote, passenger.RoommateNote);
         Assert.Equal(input.RestaurantNote, passenger.RestaurantNote);
         Assert.Equal(input.Note, passenger.Note); Assert.Equal(price, passenger.Price);
-        Assert.Null(passenger.PhoneNumber);
+        Assert.Equal("0901234567", passenger.PhoneNumber);
         if (approved) {
             Assert.Equal(contractId, b.Contract!.Id); Assert.Equal(original, b.BaseTourAmount);
             Assert.Equal(price, b.SurchargeAmount);
@@ -41,7 +41,8 @@ public sealed partial class TourFlowTests
         }
         await app.Inspect(async db => Assert.Single(await db.BookingParticipants.Where(p => p.BookingId == b.Id && p.CreationKey == input.RequestId).ToListAsync()));
         var providerRequests = await Read<ProviderRequestView[]>(await agency.GetAsync($"/api/v1/bookings/{b.Id}/quotations/supplier-requests"));
-        Assert.Equal(3, providerRequests.Single(r => r.ServiceId == 103 && r.Status != "Superseded").Quantity);
+        Assert.Equal(2, providerRequests.Single(r => r.ServiceId == 103 && !r.ParentRequestId.HasValue).Quantity);
+        Assert.Equal(1, providerRequests.Single(r => r.ServiceId == 103 && r.ParentRequestId.HasValue).Quantity);
         var reloaded = await Read<BookingDto>(await customer.GetAsync($"/api/v1/bookings/{b.Id}"));
         Assert.Equal(3, reloaded.TotalGuests);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync(url, input with { RequestId = Guid.NewGuid(), ExpectedTotal = b.TotalAmount })).StatusCode);
@@ -57,7 +58,7 @@ public sealed partial class TourFlowTests
         var people = b.Participants.Select(p => new ParticipantInput(p.FullName, null, p.DateOfBirth, p.Gender, p.IdentityNumber, null))
             .Append(new ParticipantInput("Not allowed", null, null, null, null, null)).ToArray();
         var response = await customer.PostAsJsonAsync($"/api/v1/bookings/{b.Id}/quotations/change-plan", new BookingPlanChange(b.TourId!.Value, Participants: people));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(2, (await Read<BookingDto>(await customer.GetAsync($"/api/v1/bookings/{b.Id}"))).TotalGuests);
     }
 }

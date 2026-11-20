@@ -1,0 +1,1030 @@
+{
+  "dataset": "REGIONAL-DEMO-2026",
+  "asOf": "2026-11-15",
+  "synthetic": true,
+  "boundarySource": "https://congbao.chinhphu.vn/tai-ve-van-ban-so-202-2025-qh15-45050-56708?format=pdf",
+  "notice": "Tài khoản, lịch trình, giá, sức chứa, booking, thanh toán và đánh giá là giả lập. Tên địa điểm/cơ sở tham khảo nguồn công khai. Không có hợp đồng hay giao dịch thực với các cơ sở.",
+  "provinces": [
+    {
+      "code": "THANH_HOA",
+      "administrativeCode": "38",
+      "name": "Thanh Hóa",
+      "hub": "Thanh Hóa",
+      "source": {
+        "url": "https://govietnam.travel/province/thanh-hoa/",
+        "title": "Du lịch Thanh Hoá — Sầm Sơn + Lam Kinh Lê Lợi & Pù Luông",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/04/bai-bien-sam-son-o-dau.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Sầm Sơn",
+        "Đền Độc Cước",
+        "Hòn Trống Mái",
+        "Thành nhà Hồ",
+        "Khu di tích Lam Kinh",
+        "Bảo tàng Thanh Hóa"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Grand Thanh Hóa",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-grand-thanh-hoa",
+            "title": "Khách sạn Mường Thanh Grand Thanh Hóa",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-thanh-hoa_1783735424.jpg",
+            "restaurants": [
+              "Nhà hàng Vĩnh Lộc",
+              "Nhà hàng Thọ Xuân"
+            ]
+          },
+          "address": "Mường Thanh Grand Thanh Hóa, Thanh Hóa; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "FLC Luxury Hotel Sầm Sơn",
+          "stars": 5,
+          "source": {
+            "url": "https://flchotelsresorts.com/flc-sam-son/",
+            "title": "FLC Hotels & Resorts - Thương hiệu du lịch, khách sạn, nghỉ dưỡng 5 sao hàng đầu Việt Nam",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://flchotelsresorts.com/images/config/logo1_1634281133.svg",
+            "restaurants": []
+          },
+          "address": "FLC Luxury Hotel Sầm Sơn, Thanh Hóa; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1650000
+    },
+    {
+      "code": "NGHE_AN",
+      "administrativeCode": "40",
+      "name": "Nghệ An",
+      "hub": "Cửa Lò",
+      "source": {
+        "url": "https://govietnam.travel/province/nghe-an/",
+        "title": "Du lịch Nghệ An — Tỉnh lớn nhất VN quê Bác Kim Liên",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/nghe-an-thuoc-mien-nao-3.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Biển Cửa Lò",
+        "Khu di tích Kim Liên",
+        "Quảng trường Hồ Chí Minh",
+        "Đền Ông Hoàng Mười",
+        "Đảo Lan Châu",
+        "Bảo tàng Xô Viết Nghệ Tĩnh"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Grand Cửa Lò",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-grand-cua-lo",
+            "title": "Khách sạn Mường Thanh Grand Cửa Lò",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-cua-lo_1783668311.jpg",
+            "restaurants": [
+              "Nhà hàng Xuân Hương",
+              "Nhà hàng Biển Ngọc"
+            ]
+          },
+          "address": "Mường Thanh Grand Cửa Lò, Nghệ An; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Luxury Sông Lam",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-song-lam",
+            "title": "Khách sạn Mường Thanh Luxury Sông Lam",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-song-lam_1693992901.jpg",
+            "restaurants": [
+              "Nhà hàng Yên Trường",
+              "Nhà hàng Yên Vinh"
+            ]
+          },
+          "address": "Mường Thanh Luxury Sông Lam, Nghệ An; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1900000
+    },
+    {
+      "code": "HA_TINH",
+      "administrativeCode": "42",
+      "name": "Hà Tĩnh",
+      "hub": "Thiên Cầm",
+      "source": {
+        "url": "https://govietnam.travel/province/ha-tinh/",
+        "title": "Du lịch Hà Tĩnh — Đèo Ngang + Sao La VQG Vũ Quang 1992",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/gioi-thieu-ha-tinh.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Biển Thiên Cầm",
+        "Chùa Cầm Sơn",
+        "Hồ Kẻ Gỗ",
+        "Ngã ba Đồng Lộc",
+        "Khu lưu niệm Nguyễn Du",
+        "Biển Xuân Thành"
+      ],
+      "hotels": [
+        {
+          "name": "Khách sạn Thiên Ý",
+          "stars": 3,
+          "source": {
+            "url": "https://khachsanthieny.com/",
+            "title": "Trang chủ - Khách sạn Thiên Ý - Thiên Cầm, Hà Tĩnh",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://khachsanthieny.com/wp-content/uploads/2021/04/bienthiencam1-1.jpg",
+            "restaurants": []
+          },
+          "address": "Khách sạn Thiên Ý, Hà Tĩnh; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Luxury Xuân Thành",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-xuan-thanh",
+            "title": "Khách sạn Mường Thanh Luxury Xuân Thành",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/292237364_2192550027587538_6298727641282758136_n-1_1677229673.jpg",
+            "restaurants": [
+              "Nhà hàng Nghi Xuân"
+            ]
+          },
+          "address": "Mường Thanh Luxury Xuân Thành, Hà Tĩnh; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2150000
+    },
+    {
+      "code": "QUANG_TRI",
+      "administrativeCode": "44",
+      "name": "Quảng Trị",
+      "hub": "Đồng Hới",
+      "source": {
+        "url": "https://govietnam.travel/province/quang-tri/",
+        "title": "Du lịch Quảng Trị — DMZ Vĩ tuyến 17 và Phong Nha Kẻ Bàng",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/z6913224145135f960ec5e471adadcb7ce43cb672b2fb3-1-1755333006319622416069.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Động Phong Nha",
+        "Động Thiên Đường",
+        "Biển Nhật Lệ",
+        "Cầu Hiền Lương",
+        "Địa đạo Vịnh Mốc",
+        "Thành cổ Quảng Trị"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Nhật Lệ",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-nhat-le",
+            "title": "Khách sạn Mường Thanh Luxury Nhật Lệ",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/img_0037-hdr_1741579463.jpg",
+            "restaurants": [
+              "Nhà hàng Lệ Thủy"
+            ]
+          },
+          "address": "Mường Thanh Luxury Nhật Lệ, Quảng Trị; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Grand Quảng Trị",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-grand-quang-tri",
+            "title": "Khách sạn Mường Thanh Grand Quảng Trị",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/grand-quang-tri_1696905375.jpg",
+            "restaurants": [
+              "Nhà hàng Cửa Tùng"
+            ]
+          },
+          "address": "Mường Thanh Grand Quảng Trị, Quảng Trị; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2400000
+    },
+    {
+      "code": "HUE",
+      "administrativeCode": "46",
+      "name": "TP. Huế",
+      "hub": "Huế",
+      "source": {
+        "url": "https://govietnam.travel/province/hue/",
+        "title": "Du lịch Huế — Cố đô Nguyễn 1802–1945 UNESCO 1993",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/du-lich-song-huong-hue-1.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Đại Nội Huế",
+        "Chùa Thiên Mụ",
+        "Sông Hương",
+        "Lăng Minh Mạng",
+        "Lăng Khải Định",
+        "Làng hương Thủy Xuân"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Holiday Huế",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-hue",
+            "title": "Khách sạn Mường Thanh Holiday Huế",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-holiday-hue_1783741826.jpg",
+            "restaurants": [
+              "Nhà hàng An Cựu"
+            ]
+          },
+          "address": "Mường Thanh Holiday Huế, TP. Huế; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Silk Path Grand Hue Hotel",
+          "stars": 5,
+          "source": {
+            "url": "https://silkpathhotel.com/hue/",
+            "title": "Silk Path Grand Hue Hotel | Ideally located 5* hotel in Hue | Family-friendly hotel in Vietnam",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://silkpathhotel.com/wp-content/uploads/2023/11/silkpath-hue-best-hotel-in-hue_3-20231015112216-vuwpf-1.jpg",
+            "restaurants": []
+          },
+          "address": "Silk Path Grand Hue Hotel, TP. Huế; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2650000
+    },
+    {
+      "code": "DA_NANG",
+      "administrativeCode": "48",
+      "name": "TP. Đà Nẵng",
+      "hub": "Đà Nẵng",
+      "source": {
+        "url": "https://govietnam.travel/province/da-nang/",
+        "title": "Du lịch Đà Nẵng — Cầu Vàng Bà Nà + Mỹ Khê + Hội An mở rộng",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/195d3103953t2794l2-1b4.webp",
+        "restaurants": []
+      },
+      "points": [
+        "Ngũ Hành Sơn",
+        "Bán đảo Sơn Trà",
+        "Biển Mỹ Khê",
+        "Phố cổ Hội An",
+        "Làng gốm Thanh Hà",
+        "Rừng dừa Bảy Mẫu"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Đà Nẵng",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-da-nang",
+            "title": "Khách sạn Mường Thanh Luxury Đà Nẵng",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-luxury-da-nang_1712563174.jpg",
+            "restaurants": [
+              "Nhà hàng Kim Sơn"
+            ]
+          },
+          "address": "Mường Thanh Luxury Đà Nẵng, TP. Đà Nẵng; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Holiday Hội An",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-hoi-an",
+            "title": "Khách sạn Mường Thanh Holiday Hội An",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/overview-02_1677205667.jpg",
+            "restaurants": [
+              "Nhà hàng Trà Quế"
+            ]
+          },
+          "address": "Mường Thanh Holiday Hội An, TP. Đà Nẵng; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2900000
+    },
+    {
+      "code": "QUANG_NGAI",
+      "administrativeCode": "51",
+      "name": "Quảng Ngãi",
+      "hub": "Lý Sơn",
+      "source": {
+        "url": "https://govietnam.travel/province/quang-ngai/",
+        "title": "Du lịch Quảng Ngãi — Đảo Lý Sơn vương quốc tỏi + Sa Huỳnh",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/7876_featured__sub8330.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Cổng Tò Vò",
+        "Núi Thới Lới",
+        "Chùa Hang Lý Sơn",
+        "Nhà thờ gỗ Kon Tum",
+        "Cầu treo Kon Klor",
+        "Hồ Đăk Ke"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Holiday Lý Sơn",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-ly-son",
+            "title": "Khách sạn Mường Thanh Holiday Lý Sơn",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/outside_1727855429.jpg",
+            "restaurants": [
+              "Nhà hàng An Hải",
+              "Nhà hàng An Bình"
+            ]
+          },
+          "address": "Mường Thanh Holiday Lý Sơn, Quảng Ngãi; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Khách sạn Indochine Kon Tum",
+          "stars": 3,
+          "source": {
+            "url": "https://indochinehotel.vn/",
+            "title": "Khách sạn Đông Dương KonTum",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": null,
+            "restaurants": []
+          },
+          "address": "Khách sạn Indochine Kon Tum, Quảng Ngãi; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1650000
+    },
+    {
+      "code": "GIA_LAI",
+      "administrativeCode": "52",
+      "name": "Gia Lai",
+      "hub": "Quy Nhơn",
+      "source": {
+        "url": "https://govietnam.travel/province/gia-lai/",
+        "title": "Du lịch Gia Lai — Chư Đăng Ya + Biển Hồ Pleiku",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/7872_featured__sub2978.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Kỳ Co",
+        "Eo Gió",
+        "Tháp Đôi Quy Nhơn",
+        "Biển Hồ T'Nưng",
+        "Chùa Minh Thành",
+        "Quảng trường Đại Đoàn Kết"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Quy Nhơn",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-quy-nhon",
+            "title": "Khách sạn Mường Thanh Quy Nhơn",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/z4168643485897_6b5e523e777a3b9f424dfc1837db8fa3_1678353664.jpg",
+            "restaurants": [
+              "Nhà hàng Hoa Hướng Dương",
+              "Nhà hàng Hoa Hải Đường"
+            ]
+          },
+          "address": "Mường Thanh Quy Nhơn, Gia Lai; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Grand Gia Lai",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-grand-gia-lai",
+            "title": "Khách sạn Mường Thanh Grand Gia Lai",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-grand-gia-lai_1726647663.jpg",
+            "restaurants": []
+          },
+          "address": "Mường Thanh Grand Gia Lai, Gia Lai; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1900000
+    },
+    {
+      "code": "DAK_LAK",
+      "administrativeCode": "66",
+      "name": "Đắk Lắk",
+      "hub": "Buôn Ma Thuột",
+      "source": {
+        "url": "https://govietnam.travel/province/dak-lak/",
+        "title": "Du lịch Đắk Lắk — Buôn Ma Thuột cà phê & hồ Lắk M'nông voi",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/6b67b720-ho-lak-dak-lak-5.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Bảo tàng Thế giới Cà phê",
+        "Buôn Ako Dhong",
+        "Bảo tàng Đắk Lắk",
+        "Gành Đá Đĩa",
+        "Tháp Nhạn",
+        "Bãi Xép Phú Yên"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Buôn Ma Thuột",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-buon-ma-thuot",
+            "title": "Khách sạn Mường Thanh Luxury Buôn Ma Thuột",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-luxury-bmt_1660535752_1663925749.jpg",
+            "restaurants": []
+          },
+          "address": "Mường Thanh Luxury Buôn Ma Thuột, Đắk Lắk; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Sala TuyHoa Beach Hotel",
+          "stars": 4,
+          "source": {
+            "url": "https://salahotelgroup.com/en/salatuyhoabeachhotel/",
+            "title": "Sala TuyHoa Beach Hotel - Sala Hotel Group, Vietnam | Official Website",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://salahotelgroup.com/wp-content/uploads/2022/04/Untitled-design.jpg",
+            "restaurants": []
+          },
+          "address": "Sala TuyHoa Beach Hotel, Đắk Lắk; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2150000
+    },
+    {
+      "code": "KHANH_HOA",
+      "administrativeCode": "56",
+      "name": "Khánh Hòa",
+      "hub": "Nha Trang",
+      "source": {
+        "url": "https://govietnam.travel/province/khanh-hoa/",
+        "title": "Du lịch Khánh Hoà — Nha Trang vịnh đẹp top 29 thế giới",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/7874_featured__sub8326.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Tháp Bà Ponagar",
+        "Hòn Chồng",
+        "Viện Hải dương học",
+        "Vịnh Vĩnh Hy",
+        "Tháp Po Klong Garai",
+        "Làng gốm Bàu Trúc"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Nha Trang",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-nha-trang",
+            "title": "Khách sạn Mường Thanh Luxury Nha Trang",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-luxury-nha-trang_1712570381.jpg",
+            "restaurants": [
+              "Nhà hàng Hòn Tre",
+              "Nhà hàng Hòn Gốm"
+            ]
+          },
+          "address": "Mường Thanh Luxury Nha Trang, Khánh Hòa; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Sài Gòn Ninh Chữ Hotel",
+          "stars": 4,
+          "source": {
+            "url": "https://saigonninhchuhotel.com.vn/",
+            "title": "Trang chủ - Khách sạn Sài Gòn Ninh Chữ",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": null,
+            "restaurants": []
+          },
+          "address": "Sài Gòn Ninh Chữ Hotel, Khánh Hòa; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2400000
+    },
+    {
+      "code": "LAM_DONG",
+      "administrativeCode": "68",
+      "name": "Lâm Đồng",
+      "hub": "Đà Lạt",
+      "source": {
+        "url": "https://govietnam.travel/province/lam-dong/",
+        "title": "Du lịch Lâm Đồng — Đà Lạt mộng mơ 1.500m + Tà Đùng + Mũi Né",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/lC3A2m20C491E1BB93ng1.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Hồ Xuân Hương",
+        "Ga Đà Lạt",
+        "Thác Datanla",
+        "Đồi cát Mũi Né",
+        "Làng chài Mũi Né",
+        "Suối Tiên Mũi Né"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Holiday Đà Lạt",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-da-lat",
+            "title": "Khách sạn Mường Thanh Holiday Đà Lạt",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/garden_03-2_1678441590.jpg",
+            "restaurants": [
+              "Nhà hàng Xuân Hương",
+              "Nhà hàng VIP"
+            ]
+          },
+          "address": "Mường Thanh Holiday Đà Lạt, Lâm Đồng; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Holiday Mũi Né",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-mui-ne",
+            "title": "Khách sạn Mường Thanh Holiday Mũi Né",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/toan-canh-4_1688712274.jpg",
+            "restaurants": [
+              "Nhà hàng Triều Dương"
+            ]
+          },
+          "address": "Mường Thanh Holiday Mũi Né, Lâm Đồng; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2650000
+    },
+    {
+      "code": "DONG_NAI",
+      "administrativeCode": "75",
+      "name": "TP. Đồng Nai",
+      "hub": "Biên Hòa",
+      "source": {
+        "url": "https://govietnam.travel/province/dong-nai/",
+        "title": "Du lịch Đồng Nai — Cát Tiên UNESCO & Biên Hòa CN",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/nct-2229-1658040528-1698599856871379016956.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Văn miếu Trấn Biên",
+        "Khu du lịch Bửu Long",
+        "Bảo tàng Đồng Nai",
+        "Vườn quốc gia Cát Tiên",
+        "Tà Lài",
+        "Bàu Sấu"
+      ],
+      "hotels": [
+        {
+          "name": "The Mira Central Park Hotel",
+          "stars": 5,
+          "source": {
+            "url": "https://themiracentralpark.com.vn/foods-and-beverages/",
+            "checkedAt": "2026-11-15",
+            "title": "Foods & Beverages - The Mira Central Park Hotel",
+            "restaurants": [
+              "Park Avenue Restaurant",
+              "SeaShell Restaurant"
+            ],
+            "verification": "Independent web-search verification",
+            "metadataFetchError": "SSLError"
+          },
+          "address": "The Mira Central Park Hotel, TP. Đồng Nai; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Orchard Home Nam Cát Tiên",
+          "stars": 4,
+          "source": {
+            "url": "https://orchardresort.vn/",
+            "checkedAt": "2026-11-15",
+            "title": "Trang chủ - Orchard Resort Nam Cát Tiên",
+            "restaurants": [],
+            "verification": "Independent web-search verification",
+            "metadataFetchError": "ConnectionError"
+          },
+          "address": "Orchard Home Nam Cát Tiên, TP. Đồng Nai; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2900000
+    },
+    {
+      "code": "TP_HCM",
+      "administrativeCode": "79",
+      "name": "TP. Hồ Chí Minh",
+      "hub": "TP. Hồ Chí Minh",
+      "source": {
+        "url": "https://govietnam.travel/province/ho-chi-minh-city/",
+        "title": "Du lịch TP Hồ Chí Minh — Sài Gòn đô thị lớn nhất Việt Nam",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/nha-tho-duc-ba-topbanner.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Dinh Độc Lập",
+        "Bưu điện Trung tâm Sài Gòn",
+        "Bảo tàng Chứng tích Chiến tranh",
+        "Bãi Sau Vũng Tàu",
+        "Hải đăng Vũng Tàu",
+        "Bảo tàng Bà Rịa - Vũng Tàu"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Grand Sài Gòn Centre",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-grand-sai-gon-centre",
+            "title": "Khách sạn Mường Thanh Grand Sài Gòn Centre",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-grand-sai-gon-centre_1712550562.jpg",
+            "restaurants": [
+              "Nhà hàng Gia Định"
+            ]
+          },
+          "address": "Mường Thanh Grand Sài Gòn Centre, TP. Hồ Chí Minh; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Mường Thanh Holiday Vũng Tàu",
+          "stars": 4,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-holiday-vung-tau",
+            "title": "Khách sạn Mường Thanh Holiday Vũng Tàu",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-vung-tau_1783743602.jpg",
+            "restaurants": [
+              "Nhà hàng Le Jardin",
+              "Nhà hàng Hải Đăng"
+            ]
+          },
+          "address": "Mường Thanh Holiday Vũng Tàu, TP. Hồ Chí Minh; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1650000
+    },
+    {
+      "code": "TAY_NINH",
+      "administrativeCode": "80",
+      "name": "Tây Ninh",
+      "hub": "Tây Ninh",
+      "source": {
+        "url": "https://govietnam.travel/province/tay-ninh/",
+        "title": "Du lịch Tây Ninh — Núi Bà Đen 986m & Tòa Thánh Cao Đài",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/tay-ninh-4-1.webp",
+        "restaurants": []
+      },
+      "points": [
+        "Núi Bà Đen",
+        "Tòa thánh Cao Đài Tây Ninh",
+        "Hồ Dầu Tiếng",
+        "Làng nổi Tân Lập",
+        "Nhà Trăm Cột",
+        "Làng cổ Phước Lộc Thọ"
+      ],
+      "hotels": [
+        {
+          "name": "Meliá Vinpearl Tây Ninh",
+          "stars": 5,
+          "source": {
+            "url": "https://www.melia.com/en/hotels/vietnam/tay-ninh/melia-vinpearl-tay-ninh",
+            "checkedAt": "2026-11-15",
+            "title": "Meliá Vinpearl Tay Ninh | Melia.com",
+            "restaurants": [
+              "Garbo 986"
+            ],
+            "verification": "Independent web-search verification",
+            "metadataFetchError": "HTTPError"
+          },
+          "address": "Meliá Vinpearl Tây Ninh, Tây Ninh; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Sunrise Hotel Tây Ninh",
+          "stars": 4,
+          "source": {
+            "url": "https://sunrisehotel.com.vn/en/",
+            "title": "Sunrise Hotel",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": null,
+            "restaurants": []
+          },
+          "address": "Sunrise Hotel Tây Ninh, Tây Ninh; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1900000
+    },
+    {
+      "code": "DONG_THAP",
+      "administrativeCode": "82",
+      "name": "Đồng Tháp",
+      "hub": "Cao Lãnh",
+      "source": {
+        "url": "https://govietnam.travel/province/dong-thap/",
+        "title": "Du lịch Đồng Tháp — Đất sen hồng & VQG Tràm Chim sếu đầu đỏ",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/Tram-Chim-E28093-Noi-dat-va-nuoc-dan-xen-thanh-ban-hoa-ca-thien-nhien.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Làng hoa Sa Đéc",
+        "Nhà cổ Huỳnh Thủy Lê",
+        "Khu di tích Nguyễn Sinh Sắc",
+        "Chùa Vĩnh Tràng",
+        "Cù lao Thới Sơn",
+        "Trại rắn Đồng Tâm"
+      ],
+      "hotels": [
+        {
+          "name": "Khách sạn Sao Mai Cao Lãnh",
+          "stars": 3,
+          "source": {
+            "url": "https://dulich.dongthap.gov.vn/iv/khachsansaomai",
+            "title": "Khách sạn Sao Mai",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://mediadulich.dongthap.gov.vn/resources/portal/Images/DTP/superadminportal.dtp/trangchu/portal/luutru/khachsan_/sao_mai/saomai_593518862.jpg",
+            "restaurants": []
+          },
+          "address": "Khách sạn Sao Mai Cao Lãnh, Đồng Tháp; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Khách sạn Sông Tiền",
+          "stars": 2,
+          "source": {
+            "url": "https://dulich.dongthap.gov.vn/vi/songtienhotel",
+            "title": "Khách sạn Sông Tiền",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://mediadulich.dongthap.gov.vn/resources/portal/Images/TGG/superadminportal1.tgg/public/hotel/songtien/hinhnen_636828146840977815.jpg",
+            "restaurants": []
+          },
+          "address": "Khách sạn Sông Tiền, Đồng Tháp; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2150000
+    },
+    {
+      "code": "VINH_LONG",
+      "administrativeCode": "86",
+      "name": "Vĩnh Long",
+      "hub": "Bến Tre",
+      "source": {
+        "url": "https://govietnam.travel/province/vinh-long/",
+        "title": "Du lịch Vĩnh Long — Miệt vườn Cồn An Bình & gốm Mang Thít",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/du-lich-vinh-long-ivivu.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Cồn Phụng",
+        "Làng nghề kẹo dừa Bến Tre",
+        "Chùa Vạn Phước",
+        "Văn Thánh Miếu Vĩnh Long",
+        "Cù lao An Bình",
+        "Làng gốm Mang Thít"
+      ],
+      "hotels": [
+        {
+          "name": "Ben Tre Riverside Resort",
+          "stars": 4,
+          "source": {
+            "url": "https://bentreriverside.com/",
+            "title": "Ben Tre Riverside Resort | Official Site",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://bentreriverside.com/wp-content/uploads/2022/06/Logo.png",
+            "restaurants": []
+          },
+          "address": "Ben Tre Riverside Resort, Vĩnh Long; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Khách sạn Cửu Long",
+          "stars": 3,
+          "source": {
+            "url": "https://vinhlongtourist.vn/vi/khachsancuulong",
+            "title": "Khách sạn Cửu Long",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://dltm-cdn.vnptit3.vn/resources/portal//Images/VLG/superadminportal.vlg/L%c6%b0u%20tr%c3%ba\\1.%20KS%20C%e1%bb%adu%20Long\\636524847770013297_logo.jpg",
+            "restaurants": []
+          },
+          "address": "Khách sạn Cửu Long, Vĩnh Long; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2400000
+    },
+    {
+      "code": "CAN_THO",
+      "administrativeCode": "92",
+      "name": "TP. Cần Thơ",
+      "hub": "Cần Thơ",
+      "source": {
+        "url": "https://govietnam.travel/province/can-tho/",
+        "title": "Du lịch Cần Thơ — Thủ phủ miền Tây Ninh Kiều Cái Răng nổi",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/den-ben-ninh-kieu-ngam-ve-dep-cua-tay-do-long-lay-ve-dem-02-1649167496.jpeg",
+        "restaurants": []
+      },
+      "points": [
+        "Chợ nổi Cái Răng",
+        "Nhà cổ Bình Thủy",
+        "Bến Ninh Kiều",
+        "Chùa Dơi",
+        "Chùa Som Rong",
+        "Chùa Đất Sét"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Cần Thơ",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-can-tho",
+            "title": "Khách sạn Mường Thanh Luxury Cần Thơ",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/_mg_1150_ok_1678844121_1698131857.jpg",
+            "restaurants": [
+              "Nhà hàng Tây Đô"
+            ]
+          },
+          "address": "Mường Thanh Luxury Cần Thơ, TP. Cần Thơ; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Victoria Can Tho Resort",
+          "stars": 4,
+          "source": {
+            "url": "https://www.victoriahotels.asia/en/victoria-can-tho-resort/",
+            "title": "Victoria Can Tho Resort | Mekong Delta Riverside Hotel",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://www.victoriahotels.asia/wp-content/uploads/2025/10/Victoria-Can-Tho-Resort-2.jpg",
+            "restaurants": []
+          },
+          "address": "Victoria Can Tho Resort, TP. Cần Thơ; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2650000
+    },
+    {
+      "code": "AN_GIANG",
+      "administrativeCode": "91",
+      "name": "An Giang",
+      "hub": "Phú Quốc",
+      "source": {
+        "url": "https://govietnam.travel/province/an-giang/",
+        "title": "Du lịch An Giang — Đầu nguồn ĐB Cửu Long + Bảy Núi Châu Đốc",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/vi-sao-rung-tram-tra-su-diem-den-noi-bat-an-giang-nu-cuoi-me-kong.webp",
+        "restaurants": []
+      },
+      "points": [
+        "Dinh Cậu Phú Quốc",
+        "Bãi Sao",
+        "Nhà tù Phú Quốc",
+        "Miếu Bà Chúa Xứ Núi Sam",
+        "Rừng tràm Trà Sư",
+        "Làng Chăm Châu Giang"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Phú Quốc",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-phu-quoc",
+            "title": "Khách sạn Mường Thanh Luxury Phú Quốc",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/mt-phu-quoc_1783588211.jpg",
+            "restaurants": [
+              "Nhà hàng An Thới"
+            ]
+          },
+          "address": "Mường Thanh Luxury Phú Quốc, An Giang; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Victoria Núi Sam Lodge",
+          "stars": 3,
+          "source": {
+            "url": "https://www.victoriahotels.asia/en/victoria-nui-sam-lodge/",
+            "title": "Victoria Nui Sam Lodge | Sam Mountain Retreat, An Giang",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://www.victoriahotels.asia/wp-content/uploads/2022/09/VNS.jpg",
+            "restaurants": []
+          },
+          "address": "Victoria Núi Sam Lodge, An Giang; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 2900000
+    },
+    {
+      "code": "CA_MAU",
+      "administrativeCode": "96",
+      "name": "Cà Mau",
+      "hub": "Cà Mau",
+      "source": {
+        "url": "https://govietnam.travel/province/ca-mau/",
+        "title": "Du lịch Cà Mau — Cực Nam Tổ quốc Mũi Cà Mau Đất Mũi",
+        "checkedAt": "2026-11-15",
+        "httpStatus": 200,
+        "image": "https://cdn.govietnam.travel/wp-content/uploads/2026/05/7879_featured__sub2985.jpg",
+        "restaurants": []
+      },
+      "points": [
+        "Vườn quốc gia Mũi Cà Mau",
+        "Cột mốc tọa độ quốc gia Đất Mũi",
+        "Đầm Thị Tường",
+        "Nhà Công tử Bạc Liêu",
+        "Chùa Xiêm Cán",
+        "Khu lưu niệm Cao Văn Lầu"
+      ],
+      "hotels": [
+        {
+          "name": "Mường Thanh Luxury Cà Mau",
+          "stars": 5,
+          "source": {
+            "url": "https://booking.muongthanh.com/khach-san-muong-thanh-luxury-ca-mau",
+            "title": "Khách sạn Mường Thanh Luxury Cà Mau",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://booking.muongthanh.com/images/hotels/hotels/original/muong-thanh-luxury-ca-mau_1783583625.jpg",
+            "restaurants": [
+              "Nhà hàng Viên An"
+            ]
+          },
+          "address": "Mường Thanh Luxury Cà Mau, Cà Mau; xem địa chỉ chi tiết tại website nguồn"
+        },
+        {
+          "name": "Khách sạn Sài Gòn Bạc Liêu",
+          "stars": 3,
+          "source": {
+            "url": "https://saigonbaclieuhotel.com/",
+            "title": "saigonbaclieuhotel",
+            "checkedAt": "2026-11-15",
+            "httpStatus": 200,
+            "image": "https://bizweb.dktcdn.net/100/518/738/themes/954272/assets/logo.png?1792057629164",
+            "restaurants": []
+          },
+          "address": "Khách sạn Sài Gòn Bạc Liêu, Cà Mau; xem địa chỉ chi tiết tại website nguồn"
+        }
+      ],
+      "basePrice": 1650000
+    }
+  ],
+  "administrativeUpdateSource": "https://chinhphu.vn/?classid=1&docid=218009&pageid=27160"
+}

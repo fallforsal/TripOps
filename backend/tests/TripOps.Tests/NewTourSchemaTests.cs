@@ -23,9 +23,9 @@ public sealed partial class TourFlowTests
             Assert.All(await db.TourMeals.ToListAsync(),m=>Assert.Equal(103,m.ServiceId));
             Assert.All(await db.TourAccommodations.ToListAsync(),h=>Assert.Equal(102,h.ServiceId));
         });
-        var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",new UpdateTourRequest(tour.Version,config with{Name="Edited"},"edit")));
-        var restored=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{tour.Id}/versions/1/restore",new TourCommand(edited.Version,"Restore baseline")));
-        Assert.Equal(102,restored.Configuration.Timelines![0].Accommodations![0].ServiceId);
+        var edited=await Read<TourDto>(await agency.PutAsJsonAsync($"{Root}/{tour.Id}",new UpdateTourRequest(tour.Revision,config with{Name="Edited"},"edit")));
+        var reloaded=await Read<TourDto>(await agency.GetAsync($"{Root}/{tour.Id}"));
+        Assert.Equal(102,reloaded.Configuration.Timelines![0].Accommodations![0].ServiceId);
         var wrong=config with{Timelines=[config.Timelines![0] with{Meals=[new("lunch","Wrong",ServiceId:102)]},config.Timelines[1]]};
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await agency.PostAsJsonAsync(Root,wrong)).StatusCode);
     }
@@ -35,10 +35,10 @@ public sealed partial class TourFlowTests
     {
         await using var app=new App();await app.Initialize();using var agency=await app.Login("agency");
         var draft=await Create(agency);
-        var completed=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete",new TourCommand(draft.Version)));
+        var completed=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete",new TourCommand(draft.Revision)));
         Assert.Equal("completed",completed.Status);Assert.Equal("hidden",completed.Visibility);
         Assert.Equal(HttpStatusCode.NotFound,(await app.CreateClient().GetAsync($"/api/v1/tours/{draft.Id}")).StatusCode);
-        var published=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/publish",new TourCommand(completed.Version)));
+        var published=await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/publish",new TourCommand(completed.Revision)));
         Assert.Equal("public",published.Visibility);
     }
 }

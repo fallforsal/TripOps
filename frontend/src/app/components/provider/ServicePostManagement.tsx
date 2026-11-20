@@ -1,3 +1,4 @@
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import { useState, useMemo } from "react";
 import { Service } from "@/app/types";
 import {
@@ -37,7 +38,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/app/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
 
 interface ServicePostManagementProps {
@@ -512,9 +513,9 @@ export function ServicePostManagement({
                             variant="ghost"
                             size="sm"
                             className="col-start-4 h-8 w-8 p-0 text-gray-600 hover:text-rose-600 hover:bg-rose-50"
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                confirm(
+                                await confirmAction(
                                   `Bạn có chắc chắn muốn xóa bài đăng "${service.name}"? Hành động này không thể hoàn tác.`
                                 )
                               ) {

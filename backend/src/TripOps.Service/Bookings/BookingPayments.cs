@@ -297,7 +297,7 @@ public sealed partial class BookingService
                 || (request.PaymentRequestId.HasValue && previous.PaymentRequestId != request.PaymentRequestId))
                 throw new BookingException(409, "Mã giao dịch đã được sử dụng.");
             await transaction.CommitAsync(ct);
-            return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+            return await Get(customerId,id,ct);
         }
 
         var now = UtcNow;
@@ -324,7 +324,7 @@ public sealed partial class BookingService
 
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return ToDto(booking, booking.Tour?.Name, booking.Tour?.AgencyId, booking.Tour?.Agency?.Name);
+        return await Get(customerId,id,ct);
     }
 
     // --------------------------------------------------------- Lịch thanh toán
@@ -509,7 +509,8 @@ public sealed partial class BookingService
         {
             var deposit = ActiveRequest(booking, DepositStage);
             var depositMissing = deposit is null ? Math.Max(0, PlannedDeposit(booking) - PaidAmount(booking)) : Outstanding(booking, deposit);
-            return Math.Max(0, Money(BaseTourAmount(booking) - BasePaidAmount(booking) - depositMissing));
+            var credits=booking.PaymentRequests.Where(p=>!IsSurcharge(p)&&p.Status!=PaymentRequestStatus.Cancelled).Sum(p=>p.CreditAmount);
+            return Math.Max(0, Money(BaseTourAmount(booking) - BasePaidAmount(booking) - depositMissing - credits));
         }
         var stageById = booking.PaymentRequests.Where(p => p.Id != 0).ToDictionary(p => p.Id, p => p.Stage);
         bool Legacy(PaymentTransaction t) => t.PaymentRequest is { } linked
@@ -520,11 +521,11 @@ public sealed partial class BookingService
             // Đợt cọc nhận cả tiền cũ chưa gắn đợt hoặc gắn khoản "Đặt cọc 30%" kiểu cũ.
             .Where(t => LinkedTo(t, request) || (request.Stage == DepositStage && Legacy(t)))
             .Sum(t => t.Amount);
-        return Math.Max(0, Money(request.Amount - credited));
+        return Math.Max(0, Money(request.Amount - request.CreditAmount - credited));
     }
 
     /// <summary>Tiền cọc hiển thị trên đơn: đợt cọc đang hiệu lực, nếu chưa có thì mức 50% dự kiến.</summary>
-    private static decimal DisplayDeposit(Booking booking) => ActiveRequest(booking, DepositStage)?.Amount ?? PlannedDeposit(booking);
+    private static decimal DisplayDeposit(Booking booking) => ActiveRequest(booking, DepositStage) is {} p ? p.Amount-p.CreditAmount : PlannedDeposit(booking);
 
     /// <summary>
     /// Lịch thanh toán của đơn. Chờ duyệt: chưa có lịch. Đã duyệt: Đợt 1 cọc + Đợt 2 phần còn lại (sau tour).
@@ -548,7 +549,7 @@ public sealed partial class BookingService
             var status = deposit.Status == PaymentRequestStatus.Paid || depositOutstanding == 0 ? "Paid"
                 : depositDeadline is { } due && now > due ? "Overdue" : "Pending";
             var full = IsFullPayment(booking, deposit);
-            items.Add(new(deposit.Id, full ? "full" : DepositStage, deposit.Description, deposit.Amount, status == "Paid" ? 0 : depositOutstanding,
+            items.Add(new(deposit.Id, full ? "full" : DepositStage, deposit.Description, deposit.Amount-deposit.CreditAmount, status == "Paid" ? 0 : depositOutstanding,
                 deposit.DueDate, Utc(depositDeadline), status, Utc(deposit.PaidAt),
                 depositDeadline is { } d && d > departure ? "Hạn thanh toán rơi sau thời điểm khởi hành."
                 : full ? "Tour sát ngày khởi hành: thanh toán toàn bộ một lần, không chia hai đợt." : null));
@@ -569,7 +570,7 @@ public sealed partial class BookingService
         var balanceDeadline = balance is not null ? Deadline(balance) : PaymentRules.BalanceDeadline(booking.StartDate);
         var balanceOutstanding = balance is not null ? Outstanding(booking, balance)
             : Math.Max(0, Money(BaseTourAmount(booking) - BasePaidAmount(booking) - depositOutstanding));
-        var balanceAmount = Math.Max(0, Money(BaseTourAmount(booking) - (deposit?.Amount ?? PlannedDeposit(booking))));
+        var balanceAmount = Math.Max(0, Money(BaseTourAmount(booking) - (deposit?.Amount ?? PlannedDeposit(booking)) - (balance?.CreditAmount??0)));
         var balanceStatus = balanceOutstanding == 0 && depositOutstanding == 0 ? "Paid"
             : balanceDeadline is { } balanceDue && now > balanceDue ? "Overdue"
             : depositOutstanding > 0 ? "Scheduled" : "Pending";
@@ -591,7 +592,7 @@ public sealed partial class BookingService
         foreach (var fee in booking.PaymentRequests.Where(p => IsSurcharge(p) && p.Status != PaymentRequestStatus.Cancelled).OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)) {
             var outstanding = Outstanding(booking, fee); var due = Deadline(fee);
             var status = outstanding == 0 ? "Paid" : due.HasValue && now > due ? "Overdue" : "Pending";
-            items.Add(new(fee.Id, "surcharge", fee.Description, fee.Amount, outstanding, fee.DueDate, Utc(due), status, Utc(fee.PaidAt), null));
+            items.Add(new(fee.Id, "surcharge", fee.Description, fee.Amount-fee.CreditAmount, outstanding, fee.DueDate, Utc(due), status, Utc(fee.PaidAt), null,fee.BeneficiaryAgencyId,booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==fee.BeneficiaryAgencyId)?.Agency?.BusinessProfile?.BusinessName??booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==fee.BeneficiaryAgencyId)?.Agency?.Name));
         }
     }
 

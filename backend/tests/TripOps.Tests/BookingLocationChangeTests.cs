@@ -18,8 +18,8 @@ public sealed partial class TourFlowTests
             Accommodations: [new AccommodationInput("Default hotel", "Da Lat", ServiceId: 102),
                 new AccommodationInput("Booked hotel", "Da Lat", IsDefault: false, SupplierSource: "AGENCY_SUPPLIER", Supplier: new("Booked hotel address", ReferencePrice: 500000))]),
             new TimelineInput(2, "Departure")] });
-        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Version)));
-        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Version)));
+        var plan = await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{draft.Id}/complete", new TourCommand(draft.Revision)));
+        await Read<TourDto>(await agency.PostAsJsonAsync($"{Root}/{plan.Id}/publish", new TourCommand(plan.Revision)));
         return await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings", new CreateBookingRequest(plan.Id,
             DateTime.UtcNow.Date.AddDays(20), "Customer", "0900000000", "customer@example.test", null,
             [new ParticipantInput("One", null, null, null, null, null), new ParticipantInput("Two", null, null, null, null, null)],

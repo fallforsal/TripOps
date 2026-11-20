@@ -95,6 +95,14 @@ export function fromApiBooking(
     updatedAt: dto.updatedAt || dto.createdAt,
   };
 
+  // Agency membership is frozen with the booking, independently of the tour's current version.
+  const bookedCoHosts= (dto.bookingAgencies || []).map(a=>({companyId:a.agencyId,companyName:a.agencyName,
+    companyLogo: matchedTour?.coHosts?.find(h=>h.companyId===a.agencyId)?.companyLogo || (a.agencyId===dto.agencyId ? matchedTour?.companyLogo : undefined),
+    role:a.isHost?"lead" as const:"partner" as const,status:"accepted" as const,assignedSegments:a.stageArea}));
+  const isBookedAlliance=!!dto.isPartnerView || new Set(bookedCoHosts.map(h=>h.companyId)).size>1;
+  const bookedTour:Tour={...(matchedTour || fallbackTour),coHosts:bookedCoHosts,isCoHosted:isBookedAlliance,
+    ...(dto.isPartnerView?{price:dto.totalAmount,coHosts:undefined,agencyPricing:undefined,pricingTiers:undefined}:{})};
+
   const statusMap: Record<string, Booking["status"]> = {
     pending: "pending",
     deposited: "deposited",
@@ -130,6 +138,7 @@ export function fromApiBooking(
         id: item.id ? String(item.id) : `pr-${item.stage}-${dto.id}`,
         bookingId: String(dto.id),
         stage: item.stage,
+        beneficiaryAgencyId:item.beneficiaryAgencyId,beneficiaryAgencyName:item.beneficiaryAgencyName,
         amount: status === "paid" ? item.amount : item.outstanding,
         totalAmount: item.amount,
         description: item.description,
@@ -198,12 +207,14 @@ export function fromApiBooking(
   return {
     id: String(dto.id),
     bookingCode: dto.bookingCode,
+    isPartnerView:dto.isPartnerView,
+    agencyDirectory:dto.agencyDirectory,
     tourId: String(dto.tourId || "0"),
-    tour: dto.snapshotDays?.length
+    tour: dto.snapshotDays?.length || dto.isPartnerView
       ? {
-          ...(matchedTour || fallbackTour),
-          numberOfDays: dto.snapshotDays.length,
-          itinerary: dto.snapshotDays.map((d) => ({
+          ...bookedTour,
+          numberOfDays: dto.snapshotDays?.length || 0,
+          itinerary: (dto.snapshotDays||[]).map((d) => ({
             id: String(d.id),
             day: d.dayNumber,
             date: new Date(
@@ -218,13 +229,15 @@ export function fromApiBooking(
               name: l.name,
               originalName: l.originalName,
               changeReason: l.changeReason,
+              createdByCompanyId:l.agencyId,
               address: "",
               time: l.time?.slice(11, 16),
-              checkedIn: l.attendanceStatus === "CheckedIn",
+              checkedIn: l.attendanceStatus === "CheckedIn" || l.attendanceStatus === "CheckedOut",
             })),
             meals: d.meals.map((m) => ({
               id: String(m.id),
               type: m.mealType,
+              createdByCompanyId:m.agencyId,
               serviceName: m.name,
               originalName: m.originalName,
               serviceId: m.serviceId ? String(m.serviceId) : undefined,
@@ -239,8 +252,10 @@ export function fromApiBooking(
             name: h.name,
             originalName: h.originalName,
             destination: h.destination,
+            createdByCompanyId:h.agencyId,
             stars: h.stars || 3,
             nights: h.nights,
+            dateFrom: h.dateFrom, dateTo: h.dateTo,
             pricePerNight: 0,
             serviceId: h.serviceId ? String(h.serviceId) : undefined,
             supplierSource: h.serviceId ? "PLATFORM_PARTNER" : "AGENCY_SUPPLIER",
@@ -248,7 +263,7 @@ export function fromApiBooking(
             address: h.supplier?.address,
           })),
         }
-      : matchedTour || fallbackTour,
+      : bookedTour,
     userId: dto.customerId || currentUser?.id || "",
     userName: dto.customerName || currentUser?.name || "",
     userEmail: dto.contactEmail || currentUser?.email || "",
@@ -261,6 +276,25 @@ export function fromApiBooking(
     baseTourPrice: dto.baseTourAmount ?? dto.totalAmount,
     surchargeAmount: dto.surchargeAmount ?? 0,
     hasBeenApproved: dto.hasBeenApproved ?? !!dto.contract,
+    locationChanges: (dto.snapshotDays || []).flatMap((d) =>
+      d.locations
+        .filter((l) => l.originalName && l.name && l.originalName !== l.name)
+        .map((l) => ({
+          dayId: String(d.id),
+          dayNumber: d.dayNumber,
+          locationId: String(l.id),
+          originalLocationName: l.originalName!,
+          originalLocations: [l.originalName!],
+          requestedLocations: l.name,
+          note: l.changeReason,
+        })),
+    ),
+    hasLocationCustomization:
+      (dto.snapshotDays || []).some((d) =>
+        d.locations.some(
+          (l) => l.originalName && l.name && l.originalName !== l.name,
+        ),
+      ) || undefined,
     originalTotalPrice: dto.originalTotalPrice,
     priceAdjustments: (dto.priceAdjustments || []).map(a => ({ ...a, id: String(a.id), bookingId: String(dto.id), createdAt: a.createdAt || dto.updatedAt || dto.createdAt })),
     status: normalizedStatus,
@@ -270,18 +304,57 @@ export function fromApiBooking(
     tourStartDate: dto.startDate
       ? dto.startDate.split("T")[0]
       : new Date().toISOString().split("T")[0],
+    attractionCheckins: dto.attractionCheckins?.map((c) => {
+      const location = dto.snapshotDays?.flatMap((d) => d.locations)
+        .find((l) => l.id === c.locationId);
+      const photos = c.photoUrls?.length ? c.photoUrls : location?.photoUrls;
+      const checkoutPhotos = c.checkoutPhotoUrls?.length
+        ? c.checkoutPhotoUrls : location?.checkoutPhotoUrls;
+      const status = c.status || location?.attendanceStatus;
+      const attendanceStatus =
+        status === "CheckedOut" ? "CHECKED_OUT" as const
+          : status === "CheckedIn" ? "CHECKED_IN" as const
+            : status === "Skipped" ? "SKIPPED" as const
+              : "PENDING" as const;
+      return {
+        id: String(c.id),
+        bookingId: String(dto.id),
+        locationName: location?.name || "",
+        dayNumber: dto.snapshotDays?.find((d) => d.locations.some((l) => l.id === c.locationId))?.dayNumber || 1,
+        bookingTimelineAttractionId: String(c.locationId),
+        agencyId: c.agencyId,
+        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
+        guideId: c.guideId,
+        guideName: c.guideName,
+        guideAvatar: c.guideAvatar || dto.assignedGuides?.find((g) => g.guideId === c.guideId)?.guideAvatar,
+        attendanceStatus,
+        checkedAt: c.checkedAt,
+        photoProofUrl: photos?.[0],
+        photoProofUrls: photos,
+        notes: c.note,
+        checkoutAt: c.checkoutAt || location?.checkoutAt,
+        checkoutNote: c.checkoutNote || location?.checkoutNote,
+        checkoutPhotoProofUrls: checkoutPhotos,
+        createdAt: dto.createdAt,
+      };
+    }),
+    bookingAgencies:dto.bookingAgencies?.map(a=>({...a,id:String(a.id),bookingId:String(dto.id),settlementStatus:a.settlementStatus.toLowerCase() as "unpaid"|"ready"|"paid"})),
+    coHosts:bookedCoHosts,
+    isCoHosted:isBookedAlliance,
     companyId: dto.agencyId,
     companyName: dto.agencyName,
     guideId: assignedLeadGuide?.guideId,
     guideName: assignedLeadGuide?.guideName,
     guidePhone: assignedLeadGuide?.guidePhone,
+    guideAvatar: assignedLeadGuide?.guideAvatar,
     assignedGuides: (dto.assignedGuides || []).map((ag) => ({
       id: String(ag.id),
       guideId: ag.guideId,
       guideName: ag.guideName,
       guidePhone: ag.guidePhone,
+      guideAvatar: ag.guideAvatar,
       companyId: ag.agencyId || dto.agencyId || "",
-      companyName: dto.agencyName || "",
+      companyName: dto.bookingAgencies?.find(a=>a.agencyId===ag.agencyId)?.agencyName || dto.agencyName || "",
       role: guideRole(ag.role),
       assignedAt: ag.assignedAt || dto.updatedAt || dto.createdAt,
       notes: ag.notes,
@@ -303,6 +376,27 @@ export function fromApiBooking(
     paymentTransactions,
     cancellation: dto.cancellation ?? undefined,
     travelContract: dto.contract ?? undefined,
+    incidents: (dto.incidents || []).map((i) => ({
+      id: String(i.id),
+      bookingId: String(dto.id),
+      agencyId: i.agencyId || dto.agencyId || "",
+      agencyName: dto.agencyName || undefined,
+      reportedById: i.reportedById || "",
+      reportedByName: i.reportedByName || "Hướng dẫn viên",
+      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER"].find(
+        (c) => (i.incidentType || "").toUpperCase() === c || i.title.toUpperCase().startsWith(`[${c}]`),
+      ) || "OTHER") as import("../types/index.ts").IncidentCategory,
+      title: i.title,
+      description: i.description,
+      evidenceUrls: i.evidenceUrls || [],
+      status:
+        i.status === "Resolved"
+          ? "RESOLVED"
+          : i.status === "Acknowledged"
+            ? "IN_PROGRESS"
+            : "REPORTED",
+      reportedAt: i.createdAt,
+    })),
     guideIncidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),
@@ -323,11 +417,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      severity: ["low", "medium", "high", "critical"].includes(
-        i.resolutionNotes?.toLowerCase() || "",
-      )
-        ? (i.resolutionNotes!.toLowerCase() as IncidentReport["severity"])
-        : "medium",
       status:
         i.status === "Resolved"
           ? "resolved"
@@ -352,6 +441,7 @@ export function fromApiBooking(
       roommateNote: p.roommateNote,
       dietaryNote: p.restaurantNote,
       notes: p.note,
+      statusNote: p.statusNote,
       participantIndex: p.participantIndex,
       agencyId: p.agencyId,
       isPrimary: p.isPrimary,

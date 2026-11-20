@@ -1,0 +1,24 @@
+name: Guide Departure-day Attendance Backend Test
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/guide-attendance-backend.yml'
+  push:
+    branches:
+      - fix/guide-attendance-departure-day-20261110
+    paths:
+      - 'backend/**'
+      - '.github/workflows/guide-attendance-backend.yml'
+jobs:
+  guide-attendance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore backend tests
+        run: dotnet restore backend/tests/TripOps.Tests/TripOps.Tests.csproj
+      - name: Run departure-day attendance integration test
+        run: dotnet test backend/tests/TripOps.Tests/TripOps.Tests.csproj --configuration Release --no-restore --filter FullyQualifiedName~CustomerCanCreateBooking_AndFlowEndToEnd

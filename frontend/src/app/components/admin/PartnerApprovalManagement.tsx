@@ -1,7 +1,8 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { partnerService, type PartnerApplication } from "@/app/services/partnerService";
 import { usePartnerApplications } from "@/app/hooks/usePartnerApplications";
 import { useState, useMemo, useEffect } from "react";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import {
   Building2,
   CheckCircle2,
@@ -76,11 +77,11 @@ const toUnifiedItem = (item: PartnerApplication): UnifiedPartnerItem => ({
 export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
   focusUserId?: string | null; onFocusHandled?: () => void;
 }) {
-  // Filters & Search (Mặc định mở tab "Đã phê duyệt")
+  // Show every application when entering the management page.
   const [searchTerm, updateSearchTerm] = useState("");
   const [statusFilter, updateStatusFilter] = useState<
-    "approved" | "pending" | "rejected"
-  >("approved");
+    "all" | "approved" | "pending" | "rejected"
+  >("all");
   const [roleFilter, updateRoleFilter] = useState<
     "all" | "agency" | "provider"
   >("all");
@@ -91,7 +92,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
     setPage(1);
   };
   const setStatusFilter = (
-    value: "approved" | "pending" | "rejected",
+    value: "all" | "approved" | "pending" | "rejected",
   ) => {
     updateStatusFilter(value);
     setPage(1);
@@ -389,6 +390,18 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
             </button>
           </div>
         </div>
+      </div>
+
+      <div role="tablist" aria-label="Trạng thái hồ sơ đối tác" className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2">
+        {([
+          { id: "all", label: "Tất cả" },
+          { id: "pending", label: "Chờ phê duyệt" },
+          { id: "approved", label: "Đã phê duyệt" },
+          { id: "rejected", label: "Bị từ chối" },
+        ] as const).map(item => <button key={item.id} type="button" role="tab" aria-selected={statusFilter === item.id} onClick={() => setStatusFilter(item.id)}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${statusFilter === item.id ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          {item.label} <span className="ml-1.5 opacity-80">({counts[item.id]})</span>
+        </button>)}
       </div>
 
       {/* PARTNER LIST TABLE */}
@@ -743,11 +756,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
                   )}
                 </div>
 
-                {reviewError && (
-                  <p role="alert" className="text-xs text-rose-700 mb-2">
-                    {reviewError}
-                  </p>
-                )}
+                {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
                 <DialogFooter className="gap-2 sm:gap-0">
                   <Button
@@ -820,11 +829,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
             </div>
           </div>
 
-          {reviewError && (
-            <p role="alert" className="text-xs text-rose-700">
-              {reviewError}
-            </p>
-          )}
+          {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
@@ -939,11 +944,7 @@ export function PartnerApprovalManagement({ focusUserId, onFocusHandled }: {
             </div>
           </div>
 
-          {reviewError && (
-            <p role="alert" className="text-xs text-rose-700">
-              {reviewError}
-            </p>
-          )}
+          {reviewError && <NotificationMessage tone="error" message={reviewError} />}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button

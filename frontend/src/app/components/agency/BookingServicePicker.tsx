@@ -10,8 +10,8 @@ export type BookingReplacement = {
   supplier?: { address?: string; contactPhone?: string; referencePrice?: number };
 };
 
-export function BookingServicePicker({ kind, value, onChange }:
-  { kind: "hotel" | "meal"; value: BookingReplacement | null; onChange: (value: BookingReplacement | null) => void }) {
+export function BookingServicePicker({ kind, value, onChange, platformOnly = false, allowManual = true }:
+  { kind: "hotel" | "meal"; value: BookingReplacement | null; onChange: (value: BookingReplacement | null) => void; platformOnly?: boolean; allowManual?: boolean }) {
   const services = useServiceCatalogue();
   const [source, setSource] = useState<"platform" | "directory" | "manual">("platform");
   const [suppliers, setSuppliers] = useState<AgencySupplier[]>([]);
@@ -19,14 +19,16 @@ export function BookingServicePicker({ kind, value, onChange }:
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
+  const [provinceFilter, setProvinceFilter] = useState("all");
   const [preview, setPreview] = useState(false);
   useEffect(() => {
+    if (platformOnly) { setLoading(false); return; }
     const abort = new AbortController();
     agencySuppliers(kind === "hotel" ? "HOTEL" : "RESTAURANT", "", abort.signal)
       .then(setSuppliers).catch(e => !abort.signal.aborted && setError(e.message))
       .finally(() => !abort.signal.aborted && setLoading(false));
     return () => abort.abort();
-  }, [kind]);
+  }, [kind, platformOnly]);
   const label = kind === "hotel" ? "khách sạn" : "nhà hàng";
   const Icon = kind === "hotel" ? Building2 : Utensils;
   const address = (s: typeof services[number]) => s.fullAddress || [s.street, s.ward, s.province].filter(Boolean).join(", ");
@@ -36,22 +38,27 @@ export function BookingServicePicker({ kind, value, onChange }:
     : s.priceFrom ?? s.price;
   const match = (text: string) => text.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"));
   const catalogue = services.filter(s => s.category === (kind === "hotel" ? "hotel" : "fnb") && s.status === "approved" && !s.isPaused);
+  const catalogueProvinces = Array.from(new Set(catalogue.map(s => (s.province || s.location || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, "vi"));
   const selected = catalogue.find(s => Number(s.id) === value?.serviceId);
   const selectedReferencePrice = selected ? displayedPrice(selected) : value?.supplier?.referencePrice;
   useEffect(() => { if (!selected) setPreview(false); }, [selected]);
-  const candidates = catalogue.filter(s => match(`${s.name} ${address(s)}`));
+  const candidates = catalogue.filter(s =>
+    (provinceFilter === "all" || (s.province || s.location || "").trim() === provinceFilter) &&
+    match(`${s.name} ${address(s)}`),
+  );
   const privateCandidates = suppliers.filter(s => s.status === "ACTIVE" && match(`${s.name} ${s.address || s.area || ""}`));
   const switchSource = (next: typeof source) => { setSource(next); setExpanded(false); setSearch(""); onChange(null); };
   const choose = (next: BookingReplacement) => { onChange(next); setExpanded(false); setSearch(""); };
   return <div className="min-w-0 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <span className="font-semibold text-slate-800">Dịch vụ thay thế</span>
-      <button type="button" className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5 font-medium text-sky-800 hover:bg-sky-50"
+      {!platformOnly && <button type="button" className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5 font-medium text-sky-800 hover:bg-sky-50"
         onClick={() => switchSource(source === "platform" ? "directory" : "platform")}>
         {source === "platform" ? `+ Nhập ${label} ngoài sàn` : "Chọn dịch vụ trên sàn"}
-      </button>
+      </button>}
     </div>
-    {source !== "platform" && <div className="grid grid-cols-2 rounded-lg bg-violet-50 p-1 text-xs" aria-label="Nguồn ngoài sàn">
+    {allowManual && source !== "platform" && <div className="grid grid-cols-2 rounded-lg bg-violet-50 p-1 text-xs" aria-label="Nguồn ngoài sàn">
       <button type="button" onClick={() => switchSource("directory")} className={`rounded-md px-3 py-2 font-semibold ${source === "directory" ? "bg-white text-violet-900 shadow-sm" : "text-slate-500"}`}>Từ danh bạ Agency</button>
       <button type="button" onClick={() => switchSource("manual")} className={`rounded-md px-3 py-2 font-semibold ${source === "manual" ? "bg-white text-violet-900 shadow-sm" : "text-slate-500"}`}>Nhập nhà cung cấp mới</button>
     </div>}
@@ -62,8 +69,22 @@ export function BookingServicePicker({ kind, value, onChange }:
         <span className="min-w-0 truncate">{value?.name || (source === "directory" && loading ? "Đang tải danh bạ…" : `Chọn ${label} ${source === "platform" ? "trên sàn" : "đã lưu"}`)}</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
       {expanded && <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b px-3"><Search className="h-4 w-4 shrink-0 text-slate-400" />
-          <input aria-label="Tìm dịch vụ thay thế" autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, địa chỉ…" className="h-10 min-w-0 flex-1 bg-transparent outline-none" />
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+            <input aria-label="Tìm dịch vụ thay thế" autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, địa chỉ…" className="h-9 min-w-0 flex-1 bg-transparent outline-none" />
+          </div>
+          {source === "platform" && catalogueProvinces.length > 0 && (
+            <select
+              aria-label="Lọc theo tỉnh thành"
+              value={provinceFilter}
+              onChange={e => setProvinceFilter(e.target.value)}
+              className="h-8 max-w-[180px] rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 outline-none focus:border-sky-500"
+            >
+              <option value="all">Tất cả tỉnh/thành</option>
+              {catalogueProvinces.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
         </div>
         <div id="replacement-options" role="listbox" aria-label="Dịch vụ thay thế" className="max-h-44 overflow-y-auto overscroll-contain">
           {source === "platform" ? candidates.map(s => <button key={s.id} type="button" role="option" aria-selected={Number(s.id) === value?.serviceId}

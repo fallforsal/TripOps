@@ -1,3 +1,4 @@
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import { Service } from "@/app/types";
 import {
   Plus,
@@ -175,9 +176,9 @@ export function ServiceManagement({
                     Sửa
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (
-                        confirm(
+                        await confirmAction(
                           `Bạn có chắc chắn muốn xóa dịch vụ "${service.name}"?`,
                         )
                       ) {

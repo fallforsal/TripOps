@@ -6,6 +6,8 @@ public int? AcceptedQuotationId { get; set; }
 public string BookingCode { get; set; } = string.Empty;
 public string? CustomerId { get; set; }
 public int? TourId { get; set; }
+public int TourVersion { get; set; } = 1;
+public string? TourConfigurationData { get; set; }
 public int? DesignRequestId { get; set; }
 public DateTime StartDate { get; set; }
 public string ContactName { get; set; } = string.Empty;
@@ -19,6 +21,8 @@ public decimal TotalAmount { get; set; }
 public BookingStatus? Status { get; set; } = BookingStatus.Pending;
 public string? CancelReason { get; set; }
 public DateTime? CancelledAt { get; set; }
+/// <summary>Bản chụp chính sách hủy và điều khoản bổ sung của Agency chủ trì lúc đặt tour (JSON). Null = chính sách mặc định của TripOps.</summary>
+public string? ContractTermsSnapshot { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual User Customer { get; set; } = null!;
@@ -86,6 +90,7 @@ public string AgencyId { get; set; } = string.Empty;
 public int ParticipantIndex { get; set; }
 public bool IsPrimary { get; set; } = true;
 public string FullName { get; set; } = string.Empty;
+public string? PhoneNumber { get; set; }
 public DateTime? DateOfBirth { get; set; }
 public string? Gender { get; set; }
 public string? IdentityNumber { get; set; }
@@ -145,6 +150,7 @@ public virtual ICollection<BookingAttractionCheckin> Checkins { get; set; } = ne
 }
 
 public class BookingTimelineMeal : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int? ServiceId { get; set; }
 public int BookingTimelineId { get; set; }
 public DateTime? DateService { get; set; }
@@ -163,6 +169,7 @@ public virtual BookingTimeline BookingTimeline { get; set; } = null!;
 }
 
 public class BookingAccommodation : BaseEntity<int> {
+public string? AgencyId { get; set; }
 public int BookingId { get; set; }
 public int? ServiceId { get; set; }
 public string Destination { get; set; } = string.Empty;
@@ -191,6 +198,9 @@ public AttractionCheckinStatus? AttendanceStatus { get; set; } = AttractionCheck
 public DateTime? CheckinTime { get; set; }
 public string? PhotoUrl { get; set; }
 public string? Note { get; set; }
+public DateTime? CheckoutTime { get; set; }
+public string? CheckoutPhotoUrl { get; set; }
+public string? CheckoutNote { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual BookingTimelineAttraction BookingTimelineAttraction { get; set; } = null!;
@@ -237,6 +247,28 @@ public decimal? NetPayout { get; set; } = 0m;
 public SettlementStatus? SettlementStatus { get; set; } = TripOps.Data.Enums.SettlementStatus.Unpaid;
 public DateTime? PayoutTransferredAt { get; set; }
 public string? BankReferenceCode { get; set; }
+/// <summary>Thời điểm Agency chủ trì bấm hoàn thành tour (UTC). Mốc tính ngày chuyển tiền tự động.</summary>
+public DateTime? TourCompletedAt { get; set; }
+/// <summary>Từ thời điểm này hệ thống được tự chuyển tiền (UTC). NULL = chỉ Admin chuyển tay.</summary>
+public DateTime? AutoPayoutAt { get; set; }
+/// <summary>Tỷ lệ phí sàn (%) áp dụng cho khoản quyết toán này, chốt lúc tour hoàn thành.</summary>
+public decimal? FeePercent { get; set; }
+/// <summary>Cách đã/đang chuyển: PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay).</summary>
+public string? PayoutMethod { get; set; }
+/// <summary>Mã lệnh chi phía TripOps (SETTLE-{id}-{lần}), cũng là khóa chống tạo lệnh trùng gửi payOS.</summary>
+public string? PayoutReference { get; set; }
+/// <summary>Mã lệnh chi phía payOS.</summary>
+public string? PayoutGatewayId { get; set; }
+/// <summary>Số lần đã tạo lệnh chi hộ.</summary>
+public int PayoutAttempts { get; set; }
+/// <summary>Ghi chú gần nhất: lỗi chi hộ, lý do tạm giữ, ghi chú của Admin.</summary>
+public string? PayoutNote { get; set; }
+/// <summary>Tài khoản nhận tại thời điểm chuyển (bản chụp, không đổi theo hồ sơ Agency).</summary>
+public string? PayoutBankName { get; set; }
+public string? PayoutAccountNumber { get; set; }
+public string? PayoutAccountHolder { get; set; }
+/// <summary>Admin thực hiện (NULL khi hệ thống tự chuyển).</summary>
+public string? SettledBy { get; set; }
 public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
 public DateTime? UpdatedAt { get; set; } = DateTime.UtcNow;
 public virtual Booking Booking { get; set; } = null!;

@@ -1,3 +1,5 @@
+import { toast } from "@/app/lib/notifications";
+import { confirmAction } from "@/app/lib/notificationDialogs";
 import {
   CreditCard,
   Plus,
@@ -78,14 +80,14 @@ export function PaymentCardsPage() {
     );
   };
 
-  const removeCard = (cardId: string) => {
-    if (confirm("Bạn có chắc muốn xóa thẻ này?")) {
+  const removeCard = async (cardId: string) => {
+    if (await confirmAction("Bạn có chắc muốn xóa thẻ này?")) {
       setCards(cards.filter((card) => card.id !== cardId));
     }
   };
 
   const handleAddCard = () => {
-    alert(
+    toast.info(
       "Chức năng thêm thẻ sẽ được phát triển với form nhập thông tin thẻ và tích hợp cổng thanh toán bảo mật.",
     );
     setShowAddCard(false);

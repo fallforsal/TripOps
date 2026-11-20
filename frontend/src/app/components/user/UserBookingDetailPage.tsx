@@ -1,5 +1,8 @@
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
+import { BookingFinancialChangesPanel } from "@/app/components/agency/BookingFinancialChangesPanel";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { bookingRefusalReason, bookingCancellationReason } from "@/app/lib/bookingRefusal";
 import { useState, useMemo } from "react";
-import { CustomerBookingPlanEditor } from "./CustomerBookingPlanEditor";
 import { CustomerBookingServiceCard, useCustomerBookingServices } from "./CustomerBookingServiceCard";
 import type { Tour, Service } from "@/app/types";
 import { Booking, BookingPassenger, PaymentRequest, TourContract, CustomLocationChange, CustomHotelChange, CustomMealChange, SystemBankAccount } from "@/app/types";
@@ -53,12 +56,11 @@ import {
 import { CancelTourModal } from "./CancelTourModal";
 import { CancellationStatusCard } from "@/app/components/common/CancellationStatusCard";
 import { ContractCard } from "@/app/components/common/ContractCard";
+import { TourReviewDialog } from "@/app/components/reviews/TourReviewDialog";
 import type { ContractDto, RefundAccountInput, SignSessionStartDto } from "@/app/services/wf05Bookings";
 import { formatVietnamDateTime, formatVietnamDeadline, type PaymentOutcome } from "@/app/services/payos";
 
 interface UserBookingDetailPageProps {
-  plans?: Tour[];
-  onPlanChanged?: () => void;
   onSubmitRefundRequest?: React.ComponentProps<typeof CancelTourModal>["onSubmitRefundRequest"];
   booking: Booking;
   systemBank?: SystemBankAccount;
@@ -73,7 +75,6 @@ interface UserBookingDetailPageProps {
   /** Yêu cầu backend kiểm tra lại trạng thái thanh toán payOS. */
   onCheckPayment?: (bookingId: string) => void;
   onNavigateToComplaint?: (booking: Booking) => void;
-  onNavigateToReview?: (booking: Booking) => void;
   /** Khách bổ sung tài khoản nhận hoàn cho yêu cầu hủy đang chờ duyệt. */
   onUpdateRefundAccount?: (bookingId: string, input: RefundAccountInput) => Promise<boolean>;
   /** Khách tải bản hợp đồng đã ký (bắt buộc trước thanh toán đầu tiên). */
@@ -144,8 +145,6 @@ function calculateAge(dobStr?: string, refDateStr?: string): number | null {
 }
 
 export function UserBookingDetailPage({
-  plans = [],
-  onPlanChanged,
   booking,
   systemBank = defaultSystemBankAccount,
   onBack,
@@ -155,7 +154,6 @@ export function UserBookingDetailPage({
   paymentCheck,
   onCheckPayment,
   onNavigateToComplaint,
-  onNavigateToReview,
   onSubmitRefundRequest,
   onUpdateRefundAccount,
   onUploadSignedContract,
@@ -165,11 +163,14 @@ export function UserBookingDetailPage({
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequest | null>(null);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
   const [priceAdjustmentsModalOpen, setPriceAdjustmentsModalOpen] = useState(false);
+
+  const [passengersExpanded, setPassengersExpanded] = useState(true);
 
   // Passenger management state
   const passengersList = booking.passengers || [];
@@ -214,6 +215,8 @@ export function UserBookingDetailPage({
     }
   };
 
+  const isRejectedBooking = booking.status === "rejected";
+  const isClosedBooking = isRejectedBooking || booking.status === "cancelled";
   const st = statusMap[booking.status] ?? { label: booking.status, color: "bg-gray-100 text-gray-700" };
   const pst =
     (booking.paymentStatus && paymentStatusMap[booking.paymentStatus]) ??
@@ -234,10 +237,10 @@ export function UserBookingDetailPage({
   const canCancel = cancellableStatus && !cancellationPending && !hasPendingGatewayPayment;
   const cancelBlockedReason = canCancel
     ? paidSoFar > 0
-      ? "Đơn đã có khoản thanh toán: bạn gửi yêu cầu hủy, phí hủy tính theo chính sách chung và đơn chỉ bị hủy sau khi Admin duyệt."
+      ? "Đơn đã có khoản thanh toán: đơn được hủy ngay khi bạn gửi yêu cầu, phí hủy tính theo chính sách chung và Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn."
       : null
     : cancellationPending
-      ? "Đơn đang có yêu cầu hủy chờ Admin duyệt nên tạm khóa thanh toán."
+      ? "Đơn đã hủy, đang chờ Admin hoàn tiền."
       : hasPendingGatewayPayment && cancellableStatus
         ? "Đơn đang có link thanh toán payOS còn hiệu lực. Bấm \"Kiểm tra thanh toán\" hoặc chờ link hết hạn trước khi hủy."
         : null;
@@ -263,12 +266,8 @@ export function UserBookingDetailPage({
   };
 
   // Multi-company co-hosting logic
-  const isCoHosted = Boolean(booking.isCoHosted || booking.tour?.isCoHosted);
-  const coHosts = (booking.coHosts && booking.coHosts.length > 0)
-    ? booking.coHosts
-    : (booking.tour?.coHosts && booking.tour.coHosts.length > 0)
-    ? booking.tour.coHosts
-    : [];
+  const isCoHosted = booking.isCoHosted ?? booking.tour?.isCoHosted ?? false;
+  const coHosts = booking.coHosts ?? booking.tour?.coHosts ?? [];
   const leadCoHost = coHosts.find((c) => c.role === "lead");
   const partnerCoHosts = coHosts.filter((c) => c.role !== "lead");
 
@@ -287,31 +286,8 @@ export function UserBookingDetailPage({
   return (
     <div className="min-h-screen bg-gray-50/70 py-6 sm:py-8">
       <div className="w-full min-w-0 px-4 sm:px-6 lg:px-8 space-y-6 pb-16">
-        <CustomerBookingPlanEditor bookingId={booking.id} plans={plans}
-          currentTourId={booking.tourId} currentStartDate={booking.tourStartDate} passengers={booking.passengers || []}
-          currentTourSnapshot={booking.tour} currentSpecialRequests={booking.bookingNotes}
-          canChange={booking.status === "pending" && !booking.hasBeenApproved && booking.paymentStatus === "unpaid"}
-          onChanged={onPlanChanged} />
         {/* PAYMENT SUCCESS TOAST */}
-        {paymentSuccessToast && (
-          <div className="bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-lg flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 flex-shrink-0" />
-              <div>
-                <p className="font-bold text-base">Thanh toán đợt thành công!</p>
-                <p className="text-xs text-emerald-100">
-                  Hệ thống đã ghi nhận khoản thanh toán của bạn.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setPaymentSuccessToast(false)}
-              className="text-white hover:text-emerald-100 text-xs underline ml-4"
-            >
-              Đóng
-            </button>
-          </div>
-        )}
+        {paymentSuccessToast && <NotificationMessage tone="success" message="Thanh toán đợt thành công! Hệ thống đã ghi nhận khoản thanh toán của bạn." />}
 
         {/* Top Header & Breadcrumb */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs">
@@ -328,14 +304,15 @@ export function UserBookingDetailPage({
 
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  Chi tiết đơn đặt tour #{booking.id}
+                  Chi tiết đơn đặt tour {booking.bookingCode || `#${booking.id}`}
                 </h1>
+                <ChatWithButton userId={booking.companyId || booking.tour.companyId} context={{kind:"booking",id:Number(booking.id),title:`Booking ${booking.bookingCode || `#${booking.id}`}`,thumbnailUrl:booking.tour.image}}>Chat với Agency</ChatWithButton>
                 <span className={`text-xs px-3 py-1 rounded-full font-bold border ${st.color}`}>
                   {st.label}
                 </span>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold border ${pst.color}`}>
+                {!isClosedBooking && <span className={`text-xs px-3 py-1 rounded-full font-bold border ${pst.color}`}>
                   {pst.label}
-                </span>
+                </span>}
                 {booking.hasLocationCustomization && (
                   <span className="text-xs px-3 py-1 rounded-full font-bold bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
@@ -346,10 +323,10 @@ export function UserBookingDetailPage({
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
-              {booking.status === "completed" && onNavigateToReview && (
+              {booking.status === "completed" && (
                 <Button
                   variant="outline"
-                  onClick={() => onNavigateToReview(booking)}
+                  onClick={() => setReviewOpen(true)}
                   className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-[#075985] bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] font-semibold rounded-[6px] text-xs transition-colors"
                 >
                   <Star className="w-3.5 h-3.5 fill-[#B45309] text-[#B45309]" />
@@ -357,7 +334,8 @@ export function UserBookingDetailPage({
                 </Button>
               )}
 
-              {onNavigateToComplaint && (
+              {/* Khiếu nại chuyến đi chỉ gửi sau khi tour kết thúc (hạn 1 ngày, kiểm tra ở form). */}
+              {booking.status === "completed" && onNavigateToComplaint && (
                 <Button
                   variant="outline"
                   onClick={() => onNavigateToComplaint(booking)}
@@ -368,14 +346,14 @@ export function UserBookingDetailPage({
                 </Button>
               )}
 
-              <Button
+              {!isClosedBooking && (<Button
                 variant="outline"
                 onClick={() => setContractModalOpen(true)}
                 className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 font-semibold rounded-[6px] text-xs transition-colors"
               >
                 <FileText className="w-4 h-4 text-[#075985]" />
                 Xem hợp đồng dịch vụ
-              </Button>
+              </Button>)}
 
               {canCancel && (
                 <Button
@@ -390,6 +368,11 @@ export function UserBookingDetailPage({
             </div>
           </div>
         </div>
+
+        {isClosedBooking && <div role="status" className="rounded-2xl border border-rose-300 bg-rose-50 p-5 text-rose-900">
+          <h2 className="font-bold">{isRejectedBooking ? "Agency đã từ chối tiếp nhận đoàn" : "Đơn đặt tour đã được hủy"}</h2>
+          <p className="mt-1 whitespace-pre-line text-sm">{isRejectedBooking ? bookingRefusalReason(booking.bookingNotes, booking.cancellationReason) : bookingCancellationReason(booking.bookingNotes, booking.cancellationReason)}</p>
+        </div>}
 
         {/* 2-Columns Main Layout (Similar to Company Booking Detail Page) */}
         <div className="grid grid-cols-1 min-[1800px]:grid-cols-[minmax(0,1fr)_360px] gap-6">
@@ -444,7 +427,7 @@ export function UserBookingDetailPage({
             </div>
 
             {/* CO-HOSTING ALLIANCE BREAKDOWN CARD FOR CUSTOMER */}
-            {isCoHosted && coHosts.length > 0 && (
+            {!isClosedBooking && isCoHosted && coHosts.length > 0 && (
               <div className="bg-gradient-to-br from-amber-50/80 via-purple-50/50 to-blue-50/50 rounded-2xl border-2 border-amber-300 p-5 sm:p-6 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
                   <div className="flex items-center gap-2.5">
@@ -656,7 +639,9 @@ export function UserBookingDetailPage({
                               Gốc: {lc.originalLocations.join(", ")}
                             </p>
                           )}
-                          {lc.note && <p className="text-gray-500 italic">Lý do/Ghi chú: {lc.note}</p>}
+                          {lc.note && lc.note !== "__CUSTOMER_CHANGED__" && lc.note !== "__AGENCY_CHANGED__" && (
+                            <p className="text-gray-500 italic">Lý do/Ghi chú: {lc.note}</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -720,14 +705,15 @@ export function UserBookingDetailPage({
                     Thông tin hành khách phục vụ bảo hiểm du lịch và điểm danh đoàn. Vui lòng liên hệ Agency nếu cần thay đổi.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-
-                </div>
+                <Button variant="outline" size="sm" aria-expanded={passengersExpanded} aria-controls="customer-passengers" onClick={() => setPassengersExpanded(value => !value)}>
+                  {passengersExpanded ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+                  {passengersExpanded ? "Thu gọn danh sách đoàn" : "Mở danh sách đoàn"}
+                </Button>
               </div>
 
-              {bookedServices.error && <p role="alert" className="text-xs text-amber-700">Không tải được bài dịch vụ. Vui lòng tải lại trang.</p>}
+              {bookedServices.error && <NotificationMessage tone="error" message="Không tải được bài dịch vụ. Vui lòng tải lại trang." />}
 
-              {displayPassengers.length > 0 ? (
+              {passengersExpanded && <div id="customer-passengers">{displayPassengers.length > 0 ? (
                 <div className="w-full overflow-x-auto" role="region" aria-label="Danh sách hành khách" tabIndex={0}>
                   <table className="w-full min-w-[1080px] text-sm [&_td]:align-top [&_th]:align-top">
                     <thead>
@@ -766,7 +752,7 @@ export function UserBookingDetailPage({
                                 {p.idNumber !== undefined && p.idNumber !== null && String(p.idNumber).trim() !== "" && (
                                   <span className="mt-0.5 font-mono text-xs text-gray-500">{String(p.idNumber)}</span>
                                 )}
-                                {p.phone && <span className="text-xs text-[#075985]">{p.phone}</span>}
+                                {p.phone && <a href={`tel:${p.phone}`} className="text-xs text-[#075985] hover:underline">SĐT: {p.phone}</a>}
                                 {p.status === "INACTIVE" && (
                                   <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full w-fit">
                                     Đã rút khỏi toàn bộ tour
@@ -832,7 +818,7 @@ export function UserBookingDetailPage({
                   </p>
 
                 </div>
-              )}
+              )}</div>}
             </div>
 
             {/* DEDICATED ACCOMMODATION / HOTEL SECTION (MATCHING TourDetailPage.tsx & BookingFormPage.tsx) */}
@@ -1038,12 +1024,8 @@ export function UserBookingDetailPage({
                             </div>
                             <div>
                               <p className="font-bold text-gray-900 text-sm">
-                                Ngày {day.day}: {day.title}
-                                {day.meals && day.meals.length > 0 && (
-                                  <span className="text-xs text-gray-400 font-normal ml-1.5">
-                                    (Ăn {day.meals.map((m) => m.type === "breakfast" ? "sáng" : m.type === "lunch" ? "trưa" : "tối").join(", ")})
-                                  </span>
-                                )}
+                                {day.title || "Chưa nhập tiêu đề"}
+
                               </p>
                             </div>
                           </div>
@@ -1088,7 +1070,7 @@ export function UserBookingDetailPage({
                                 };
 
                             const timelineItems: UnifiedItem[] = [
-                              ...(day.locations || []).map((loc, lIdx) => {
+                              ...(day.locations || []).filter((loc) => !loc.notes?.startsWith("[MEAL:")).map((loc, lIdx) => {
                                 const time = loc.time || "08:30";
                                 return {
                                   kind: "location" as const,
@@ -1177,15 +1159,14 @@ export function UserBookingDetailPage({
                                               <div className="flex-1 min-w-0">
                                                 {isLocChanged ? (
                                                   <>
-                                                    <p className="text-xs text-gray-500">Lúc đặt: {originalLocationName}</p>
-                                                    <p className="text-sm font-medium text-amber-800 mt-0.5">
-                                                      {currentLocationName}
+                                                    <p className="text-xs text-gray-500">
+                                                      Địa điểm gốc: <del className="text-gray-400">{originalLocationName}</del>
                                                     </p>
-                                                    {locationReason && (
-                                                      <p className="text-xs text-amber-700 italic mt-0.5">
-                                                        Lý do đổi: {locationReason}
-                                                      </p>
-                                                    )}
+                                                    <p className="text-sm font-medium text-amber-800 mt-0.5">
+                                                      {locationReason === "__AGENCY_CHANGED__"
+                                                        ? `Địa điểm công ty đổi: ${currentLocationName}`
+                                                        : `Địa điểm khách đổi: ${currentLocationName}`}
+                                                    </p>
                                                   </>
                                                 ) : (
                                                   <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
@@ -1398,7 +1379,7 @@ export function UserBookingDetailPage({
                     </span>
                   </div>
                 )}
-                {booking.bookingNotes && (
+                {booking.bookingNotes && !isClosedBooking && (
                   <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-amber-900 mt-2">
                     <span className="font-bold block mb-1">Ghi chú của bạn:</span>
                     <p className="leading-relaxed">{booking.bookingNotes}</p>
@@ -1407,6 +1388,8 @@ export function UserBookingDetailPage({
               </div>
             </div>
 
+            {!isClosedBooking && <>
+            <BookingFinancialChangesPanel customer bookingId={booking.id} expectedTotal={booking.totalPrice} refreshKey={booking.totalPrice} />
             {/* FINANCE & PAYMENT STATUS CARD */}
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -1424,6 +1407,7 @@ export function UserBookingDetailPage({
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
                   {booking.hasBeenApproved && <div className="space-y-1 border-b border-slate-200 pb-2 text-xs">
                     <div className="flex justify-between gap-2"><span className="text-slate-500">Giá tour đã chốt</span><strong>{formatVND(booking.baseTourPrice ?? booking.totalPrice)}</strong></div>
+                    {(booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)>booking.totalPrice&&<div className="flex justify-between gap-2 text-emerald-700"><span>Giảm giá đã duyệt</span><strong>−{formatVND((booking.baseTourPrice??booking.totalPrice)+(booking.surchargeAmount??0)-booking.totalPrice)}</strong></div>}
                     <div className="flex justify-between gap-2"><span className="text-slate-500">Phụ thu phát sinh</span><strong className="text-amber-700">+{formatVND(booking.surchargeAmount ?? 0)}</strong></div>
                   </div>}
                   <div className="flex justify-between items-center flex-wrap gap-2">
@@ -1445,7 +1429,7 @@ export function UserBookingDetailPage({
                     </div>
                   </div>
 
-                  {booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
+                  {(booking.priceAdjustments?.length ?? 0) > 0 && booking.originalTotalPrice && booking.originalTotalPrice !== booking.totalPrice && (
                     <div className="flex items-center gap-2 text-[11px] pt-0.5">
                       <span className="text-gray-400 line-through">Giá ban đầu: {formatVND(booking.originalTotalPrice)}</span>
                       <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
@@ -1740,16 +1724,6 @@ export function UserBookingDetailPage({
                   <FileText className="w-4 h-4" />
                   Xem hợp đồng dịch vụ lữ hành
                 </Button>
-                {canCancel && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCancelModal(true)}
-                    className="w-full border-rose-300 text-rose-700 hover:bg-rose-50 text-xs h-9 font-semibold gap-2"
-                  >
-                    <XCircle className="w-4 h-4 text-rose-600" />
-                    Hủy đơn đặt tour này
-                  </Button>
-                )}
                 {cancelBlockedReason && (
                   <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed flex items-start gap-1.5">
                     <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
@@ -1759,68 +1733,72 @@ export function UserBookingDetailPage({
               </div>
             </div>
 
-            {/* DEDICATED SUPPORT HOTLINES CARD */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <Phone className="w-4 h-4 text-teal-600" />
-                Đường dây nóng hỗ trợ đoàn
-              </h3>
+            </>}
 
-              <div className="space-y-2.5 text-xs">
-                {isCoHosted && coHosts.length > 0 ? (
-                  coHosts.map((ch) => (
-                    <div
-                      key={ch.id}
-                      className="p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-center justify-between"
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="font-bold text-gray-900 text-xs truncate">{ch.companyName}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
-                        </p>
+            {/* LIÊN HỆ CÔNG TY */}
+            {(() => {
+              const leadCoHost = isCoHosted ? coHosts.find((ch) => ch.role === "lead") : undefined;
+              const companyName = booking.tour.companyName || leadCoHost?.companyName || "Công ty lữ hành";
+              const companyPhone = booking.tour.companyPhone || leadCoHost?.companyPhone;
+              const companyEmail = booking.tour.companyEmail;
+              const companyId = booking.companyId || booking.tour.companyId;
+              return (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-2.5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Liên hệ công ty
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-gray-800">
+                    {booking.tour.companyLogo ? (
+                      <img src={booking.tour.companyLogo} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                    ) : (
+                      <Building2 className="w-5 h-5 text-[#075985] flex-shrink-0" />
+                    )}
+                    <span className="font-semibold">{companyName}</span>
+                  </div>
+                  <div className="space-y-1 text-xs text-gray-600 pl-0.5">
+                    {companyPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <span>
+                          SĐT: <strong className="text-gray-900 font-medium">{companyPhone}</strong>
+                        </span>
                       </div>
-                      <a
-                        href={`tel:${(ch.companyPhone || "19001234").replace(/\s+/g, "")}`}
-                        className="font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 hover:bg-teal-100 flex items-center gap-1 text-xs flex-shrink-0"
-                      >
-                        <Phone className="w-3 h-3 text-teal-600" />
-                        {ch.companyPhone || "1900 1234"}
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-gray-900 text-xs">
-                        {booking.tour.companyName || "Công ty lữ hành"}
-                      </p>
-                      <p className="text-[10px] text-gray-500">Đơn vị tổ chức tour</p>
-                    </div>
-                    <span className="font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 flex items-center gap-1 text-xs">
-                      <Phone className="w-3 h-3 text-teal-600" />
-                      1900 1234
-                    </span>
+                    )}
+                    {companyEmail && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <span className="break-all">
+                          Email: <strong className="text-gray-900 font-medium">{companyEmail}</strong>
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                <div className="p-2.5 rounded-xl border border-[#CBD5E1] bg-[#F0F9FF]/60 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-blue-950 text-xs">Sàn Du Lịch Việt Nam</p>
-                    <p className="text-[10px] text-[#075985]">Tổng đài bảo vệ & Ký quỹ 24/7</p>
-                  </div>
-                  <a
-                    href="tel:19006868"
-                    className="font-bold text-blue-800 bg-[#E0F2FE]/80 px-2.5 py-1 rounded-lg border border-blue-300 hover:bg-blue-200 flex items-center gap-1 text-xs flex-shrink-0"
+                  <ChatWithButton
+                    userId={companyId}
+                    context={{
+                      kind: "booking",
+                      id: Number(booking.id),
+                      title: `Booking ${booking.bookingCode || `#${booking.id}`}`,
+                      thumbnailUrl: booking.tour.image,
+                    }}
+                    className="w-full"
                   >
-                    <Phone className="w-3 h-3 text-[#075985]" />
-                    1900 6868
-                  </a>
+                    Tin nhắn
+                  </ChatWithButton>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       </div>
+
+      {/* Đánh giá chuyến đi: mở ngay tại chi tiết booking */}
+      <TourReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        bookingId={Number(booking.id)}
+        onComplain={onNavigateToComplaint ? () => onNavigateToComplaint(booking) : undefined}
+      />
 
       {/* CANCEL MODAL */}
       {showCancelModal && (
@@ -2010,7 +1988,7 @@ export function UserBookingDetailPage({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
               <History className="w-5 h-5 text-teal-600" />
-              Nhật ký điều chỉnh giá từ công ty lữ hành #{booking.id}
+              Nhật ký điều chỉnh giá từ công ty lữ hành {booking.bookingCode || `#${booking.id}`}
             </DialogTitle>
           </DialogHeader>
 
@@ -2058,7 +2036,7 @@ export function UserBookingDetailPage({
                           </span>
                         </div>
                         <span className="text-[11px] text-gray-500 font-medium">
-                          {new Date(adj.createdAt).toLocaleString("vi-VN")}
+                          {new Date(adj.createdAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}
                         </span>
                       </div>
 

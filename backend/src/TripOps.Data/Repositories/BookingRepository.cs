@@ -4,11 +4,31 @@ using TripOps.Data.Enums;
 
 namespace TripOps.Data.Repositories;
 
+public sealed record GuideBookingSummary(
+    int Id, string BookingCode, string? TourName, string? ThumbnailUrls, string? TourImages,
+    string? CustomerName, string? ContactPhone, DateTime StartDate, int Guests,
+    decimal TotalAmount, decimal PaidAmount, BookingStatus? Status, PaymentStatus? PaymentStatus, DateTime? CreatedAt);
+
 public sealed class BookingRepository(TripOpsDbContext db)
 {
+    public void Notify(string recipient, string message, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.Queue(db, recipient, message, bookingId: bookingId, actorId: actor);
+
+    public Task NotifyAdmins(string message, CancellationToken ct, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.QueueAdminsAsync(db, message, ct, bookingId, actor);
+
+    public void NotifyAgencies(Booking booking, string message, string? actor = null)
+    {
+        foreach (var agency in booking.BookingAgencies.Select(a => a.AgencyId)
+                     .Append(booking.Tour!.AgencyId).Distinct())
+            Notify(agency, message, booking.Id, actor);
+    }
+
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
     public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
         .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);
+    public Task<int> LockBooking(int bookingId, CancellationToken ct) => db.Bookings.IgnoreQueryFilters().Where(b => b.Id == bookingId)
+        .ExecuteUpdateAsync(s => s.SetProperty(b => b.UpdatedAt, b => b.UpdatedAt), ct);
     public async Task<bool> GuideHasConflict(string guideId, int bookingId, DateTime start, DateTime end, CancellationToken ct)
     {
         var trips = await db.Bookings.AsNoTracking().IgnoreQueryFilters().Include(b => b.Timelines).Include(b => b.Tour)
@@ -19,17 +39,19 @@ public sealed class BookingRepository(TripOpsDbContext db)
             b.StartDate.Date.AddDays(Math.Max(1, b.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(b.Tour?.DurationDays ?? 1).Max()) - 1) >= start.Date);
     }
     private IQueryable<Booking> Details() => db.Bookings
+        .Include(b => b.BookingAgencies).ThenInclude(a=>a.Agency).ThenInclude(a=>a.BusinessProfile)
         .Include(b => b.Customer)
         .Include(b => b.Tour!).ThenInclude(t => t.Agency).ThenInclude(a => a.BusinessProfile)
         .Include(b => b.Participants!).ThenInclude(p => p.AssignedGuide)
         .Include(b => b.AssignedGuides!).ThenInclude(ag => ag.Guide)
-        .Include(b => b.Incidents)
+        .Include(b => b.Incidents!).ThenInclude(i => i.Reporter)
         .Include(b => b.PaymentTransactions)
         .Include(b => b.PaymentRequests)
         .Include(b => b.RefundRequests)
         .Include(b => b.Contracts)
         .Include(b => b.PriceAdjustments).ThenInclude(a => a.Adjuster)
         .Include(b => b.Timelines).ThenInclude(t => t.Attractions)
+        .Include(b => b.Timelines).ThenInclude(t => t.Attractions).ThenInclude(a=>a.Checkins).ThenInclude(c=>c.Guide)
         .Include(b => b.Timelines).ThenInclude(t => t.Meals)
         .Include(b => b.Accommodations)
         .AsSplitQuery();
@@ -48,6 +70,8 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
+            .Include(b => b.RefundRequests)
+            .Include(b => b.Contracts)
             .Include(b => b.PaymentRequests).AsSplitQuery()
             .Where(b => b.CustomerId == customerId);
 
@@ -65,13 +89,15 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public async Task<(List<Booking> Rows, int Total)> ListForAgency(
         string agencyId, BookingStatus? status, string? search, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Bookings.AsNoTracking()
+        var query = db.Bookings.AsNoTracking().Include(b=>b.BookingAgencies)
             .Include(b => b.Tour)
             .Include(b => b.Customer)
             .Include(b => b.Participants)
             .Include(b => b.PaymentTransactions)
+            .Include(b => b.RefundRequests)
+            .Include(b => b.Contracts)
             .Include(b => b.PaymentRequests).AsSplitQuery()
-            .Where(b => b.Tour != null && b.Tour.AgencyId == agencyId);
+            .Where(b => b.Tour != null && (b.Tour.AgencyId == agencyId || b.BookingAgencies.Any(a=>a.AgencyId==agencyId)));
 
         if (status.HasValue)
             query = query.Where(b => b.Status == status.Value);
@@ -93,36 +119,54 @@ public sealed class BookingRepository(TripOpsDbContext db)
         return (rows, total);
     }
 
-    public async Task<(List<Booking> Rows, int Total)> ListForGuide(
+    public async Task<(List<GuideBookingSummary> Rows, int Total)> ListForGuide(
         string guideId, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Bookings.AsNoTracking()
-            .Include(b => b.Tour)
-            .Include(b => b.Customer)
-            .Include(b => b.Participants)
-            .Include(b => b.PaymentTransactions)
-            .Include(b => b.PaymentRequests).AsSplitQuery()
+        var baseQuery = db.Bookings.AsNoTracking()
             .Where(b => b.AssignedGuides.Any(ag => ag.GuideId == guideId));
 
-        var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(b => b.StartDate)
+        var total = await baseQuery.CountAsync(ct);
+        var rows = await baseQuery
+            .OrderByDescending(b => b.StartDate)
             .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(b => new GuideBookingSummary(
+                b.Id,
+                b.BookingCode,
+                b.Tour != null ? b.Tour.Name : null,
+                b.Tour != null ? b.Tour.ThumbnailUrls : null,
+                b.Tour != null ? b.Tour.Images : null,
+                b.Customer != null ? b.Customer.Name : null,
+                b.ContactPhone,
+                b.StartDate,
+                b.Participants
+                    .Where(p => p.Status != "INACTIVE" &&
+                                b.AssignedGuides.Any(ag => ag.GuideId == guideId && ag.AgencyId == p.AgencyId))
+                    .Select(p => p.ParticipantIndex)
+                    .Distinct()
+                    .Count(),
+                b.TotalAmount,
+                b.PaymentTransactions
+                    .Where(t => t.Status == PaymentTransactionStatus.Success)
+                    .Sum(t => (decimal?)t.Amount) ?? 0m,
+                b.Status,
+                b.PaymentStatus,
+                b.CreatedAt))
             .ToListAsync(ct);
 
         return (rows, total);
     }
 
     public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>
-        db.Tours.Include(t => t.PricingTiers)
+        db.Tours.AsNoTracking().Include(t => t.PricingTiers)
             .Include(t => t.Agency)
             .Include(t => t.Timelines).ThenInclude(t => t.Attractions)
             .Include(t => t.Timelines).ThenInclude(t => t.Meals)
             .Include(t => t.Accommodations).AsSplitQuery()
             .SingleOrDefaultAsync(t => t.Id == tourId &&
-                                       t.Status == TourStatus.Completed &&
-                                       ((t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
-                                        (t.IsRequest == true && t.IsSharedToCustomer == true && t.DesignRequestId.HasValue &&
-                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId))) &&
+                                       t.Status != TourStatus.Deleted &&
+                                       ((t.Status == TourStatus.Completed && t.Visibility == TourVisibility.Public && t.IsRequest != true) ||
+                                        (t.IsRequest == true && t.SharedVersion.HasValue && t.DesignRequestId.HasValue &&
+                                         db.TourDesignRequests.Any(r => r.Id == t.DesignRequestId && r.CustomerId == customerId && (r.Status == CustomRequestStatus.InProgress || r.Status == CustomRequestStatus.Closed || r.Status == CustomRequestStatus.Booked)))) &&
                                        t.Agency.Status == UserStatus.Active && t.Agency.BusinessProfile != null &&
                                        t.Agency.BusinessProfile.Status == BusinessProfileStatus.Approved, ct);
 
@@ -132,7 +176,7 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);
 
     public Task<List<User>> AvailableGuides(string agencyId, CancellationToken ct) =>
-        db.Users.AsNoTracking()
+        db.Users.AsNoTracking().Include(u => u.GuideProfile)
             .Where(u => u.Role == UserRole.TourGuide && u.Status == UserStatus.Active && u.AgencyId == agencyId)
             .OrderBy(u => u.Name).ToListAsync(ct);
 
@@ -140,12 +184,20 @@ public sealed class BookingRepository(TripOpsDbContext db)
         db.BookingParticipants.Include(p => p.Booking)
             .SingleOrDefaultAsync(p => p.Id == participantId, ct);
 
-    public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct)
+    public async Task MarkDesignBooked(int? requestId,CancellationToken ct)
+    {
+        if(!requestId.HasValue)return;
+        var request=await db.TourDesignRequests.SingleAsync(r=>r.Id==requestId,ct);
+        request.Status=CustomRequestStatus.Booked;request.UpdatedAt=DateTime.UtcNow;
+    }
+    public async Task<bool> CanStartDesignBooking(Tour tour, string customerId, CancellationToken ct, int? expectedVersion = null, int? expectedRevision = null)
     {
         if (!tour.DesignRequestId.HasValue) return true;
         await db.TourDesignRequests.Where(r => r.Id == tour.DesignRequestId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Revision, r => r.Revision + 1), ct);
         var request = await db.TourDesignRequests.AsNoTracking().SingleOrDefaultAsync(r => r.Id == tour.DesignRequestId && r.CustomerId == customerId, ct);
-        return request != null && request.AgreedTourId == tour.Id && request.AgreedTourVersion == tour.Version &&
+        return request != null && request.Status == CustomRequestStatus.InProgress && expectedVersion.HasValue && expectedRevision.HasValue && tour.Revision == expectedRevision && tour.SharedVersion.HasValue &&
+            await db.Tours.AnyAsync(t => t.Id == tour.Id && t.SharedVersion.HasValue && t.Revision == expectedRevision, ct) &&
+            await db.TourVersions.AnyAsync(v=>v.TourId==tour.Id && v.VersionNumber==expectedVersion && (v.SharedAt!=null || v.VersionNumber==tour.SharedVersion),ct) &&
             !await db.Bookings.AnyAsync(b => b.DesignRequestId == request.Id && b.Status != BookingStatus.Cancelled && b.Status != BookingStatus.Rejected, ct);
     }
     public void NotifyPayment(Booking booking)

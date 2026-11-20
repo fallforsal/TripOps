@@ -140,12 +140,6 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                             icon: const Icon(Icons.play_arrow_rounded),
                             label: const Text('Bắt đầu tour'),
                           ),
-                        if (d.status == 'InProgress')
-                          FilledButton.icon(
-                            onPressed: acting ? null : () => confirmComplete(d),
-                            icon: const Icon(Icons.check_circle_outline_rounded),
-                            label: const Text('Hoàn tất tour'),
-                          ),
                         space(20),
                         const GuideSectionTitle('Thao tác nhanh'),
                         space(10),
@@ -267,15 +261,4 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     );
   }
 
-  Future<void> confirmComplete(BookingDetail d) async {
-    final approved = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-      title: const Text('Hoàn tất tour?'),
-      content: const Text('Tour sẽ được chuyển sang trạng thái Completed trên server.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
-      ],
-    ));
-    if (approved == true) await mutate(() => widget.guides.complete(d.id));
-  }
 }

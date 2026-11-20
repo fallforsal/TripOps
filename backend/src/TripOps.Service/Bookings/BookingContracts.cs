@@ -10,10 +10,12 @@ public sealed record CreateBookingRequest(
     [Required, EmailAddress, StringLength(191)] string ContactEmail,
     [StringLength(1000)] string? SpecialRequests,
     [Required, MinLength(1)] ParticipantInput[] Participants,
-    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null);
+    HotelChoiceInput[]? HotelChoices = null, MealChoiceInput[]? MealChoices = null, int? TourVersion = null, int? TourRevision = null,
+    LocationChoiceInput[]? LocationChoices = null);
 
 public sealed record HotelChoiceInput(string Destination, string Name, int? ServiceId = null);
 public sealed record MealChoiceInput(int DayNumber, string MealType, string Name, int? ServiceId = null);
+public sealed record LocationChoiceInput(int DayNumber, [Required, StringLength(255)] string OriginalLocationName, [Required, StringLength(255)] string RequestedLocationName, [StringLength(500)] string? Note = null);
 
 public sealed record ParticipantInput(
     [Required, StringLength(150)] string FullName,
@@ -45,13 +47,14 @@ public sealed record GuideAssignmentRequest(
 
 public sealed record AttendanceCheckinRequest(
     [Range(1, int.MaxValue)] int ParticipantId,
-    [Required, AllowedValues("CheckedIn", "Absent", "Pending")] string Status);
+    [Required, AllowedValues("CheckedIn", "Absent", "Pending")] string Status,
+    [StringLength(500)] string? Note = null);
 
 public sealed record ReportIncidentRequest(
-    [Required, StringLength(100)] string IncidentType,
+    [StringLength(100)] string? IncidentType,
     [Required, StringLength(255)] string Title,
     [Required, StringLength(2000)] string Description,
-    [StringLength(50)] string? Severity);
+    [StringLength(50)] string? Severity = null);
 
 public sealed record BookingDto(
     int Id,
@@ -87,7 +90,19 @@ public sealed record BookingDto(
     ContractDto? Contract = null,
     decimal? OriginalTotalPrice = null,
     IReadOnlyList<BookingPriceAdjustmentDto>? PriceAdjustments = null,
-    decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false);
+    decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
+    IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null,
+    bool CanRecordAttendance = false, DateTime? AttendanceDate = null,
+    bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
+public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
+public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
+    IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null,
+    DateTime? CheckoutAt = null, string? CheckoutNote = null,
+    IReadOnlyList<string>? CheckoutPhotoUrls = null);
+
+public sealed record BookingAgencyDto(int Id,string AgencyId,string AgencyName,bool IsHost,decimal OriginalAmount,decimal FinalAmount,decimal NetPayout,
+    string SettlementStatus,string? StageArea=null,TripOps.Service.Tours.PricingTierInput[]? PricingTiers=null,decimal PaidSurchargeAmount=0,decimal UnpaidSurchargeAmount=0,
+    decimal SurchargeAmount=0,decimal ReductionAmount=0,decimal PendingRefundAmount=0,decimal PlatformFee=0);
 
 /// <summary>
 /// Hợp đồng hiện hành của đơn. Status: AwaitingSignature | Signed | Verified | ResignRequested.
@@ -139,7 +154,11 @@ public sealed record CancellationRequestDto(
 /// </summary>
 public sealed record CancellationQuoteDto(
     int BookingId, string Mode, int DaysBeforeDeparture, bool CoolingOff, decimal FeePercent,
-    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation);
+    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation)
+{
+    /// <summary>Chính sách hủy ghi trong hợp đồng của đơn (của Agency chủ trì, hoặc mặc định TripOps).</summary>
+    public Contracts.CancellationPolicyDto? Policy { get; init; }
+}
 
 public sealed record CustomerCancellationRequest(
     [Required, AllowedValues("CUSTOMER_REQUEST", "WEATHER_FORCE_MAJEURE", "SERVICE_QUALITY", "OTHER")] string Reason,
@@ -192,7 +211,7 @@ public sealed record AdminRefundDto(
 /// </summary>
 public sealed record PaymentScheduleItemDto(
     int? Id, string Stage, string Description, decimal Amount, decimal Outstanding,
-    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, string? Warning);
+    DateTime? DueDate, DateTime? DueAt, string Status, DateTime? PaidAt, string? Warning,string? BeneficiaryAgencyId=null,string? BeneficiaryAgencyName=null);
 
 /// <summary>
 /// Giao dịch tiền. Method: PAYOS | DEMO (mô phỏng Development) | VNPAY (lịch sử cũ).
@@ -213,13 +232,24 @@ public sealed record PaymentSyncResultDto(string Outcome, string Message, Bookin
 public sealed record PayOsWebhookAckDto(bool Success, string Result);
 
 public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string? AttendanceStatus,
-    string? OriginalName = null, string? ChangeReason = null);
-public sealed record BookingSupplierDto(string? Address, string? ContactPhone);
-public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null);
+    string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null,
+    IReadOnlyList<string>? PhotoUrls = null, string? CheckinNote = null,
+    IReadOnlyList<string>? CheckoutPhotoUrls = null, string? CheckoutNote = null,
+    DateTime? CheckoutAt = null);
+public sealed record BookingSupplierDto(
+    string? Address,
+    string? ContactPhone,
+    string? Area = null,
+    string? ContactName = null,
+    decimal? ReferencePrice = null,
+    string? Conditions = null,
+    string? ContactEmail = null,
+    string? Notes = null);
+public sealed record BookingMealDto(int Id,string MealType,string Name,DateTime? DateService,DateTime? Time,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null);
 public sealed record BookingDayDto(int Id,int DayNumber,string Title,string? Description,IReadOnlyList<BookingLocationDto> Locations,IReadOnlyList<BookingMealDto> Meals);
-public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null);
+public sealed record BookingHotelDto(int Id,string Destination,string Name,int? Stars,int? Nights,int? ServiceId,decimal PriceDifference, BookingSupplierDto? Supplier = null, string? OriginalName = null,string? AgencyId=null,DateTime? DateFrom=null,DateTime? DateTo=null);
 
-public sealed record AvailableGuideDto(string Id, string Name, string? Phone);
+public sealed record AvailableGuideDto(string Id, string Name, string? Phone, string? Avatar = null, bool IsAvailable = true, string? UnavailableReason = null);
 
 public sealed record BookingListItem(
     int Id,
@@ -252,7 +282,7 @@ public sealed record ParticipantDto(
     int? ParticipantIndex = null,
     bool? IsPrimary = null,
     string? Note = null, string? RoommateNote = null, string? RestaurantNote = null,
-    string? CheckedBy = null, DateTime? CheckedAt = null, string? AssignedGuideId = null);
+    string? CheckedBy = null, DateTime? CheckedAt = null, string? AssignedGuideId = null, string? StatusNote = null);
 
 public sealed record AssignedGuideDto(
     int Id,
@@ -263,7 +293,7 @@ public sealed record AssignedGuideDto(
     string Status,
     string? Notes,
     DateTime? AssignedAt = null,
-    string? AgencyId = null);
+    string? AgencyId = null, string? GuideAvatar = null);
 
 public sealed record IncidentDto(
     int Id,
@@ -272,6 +302,11 @@ public sealed record IncidentDto(
     string Description,
     string? ResolutionNotes,
     string Status,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    IReadOnlyList<string>? EvidenceUrls = null,
+    string? ReportedById = null,
+    string? ReportedByName = null,
+    string? AgencyId = null,
+    string? IncidentType = null);
 
 public sealed record BookingPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

@@ -144,6 +144,9 @@ public sealed class AgencyGuideService(TripOpsDbContext db, CloudinaryStorage im
         guide.Status = request.Action == "suspend" ? UserStatus.Inactive : UserStatus.Active;
         profile.SuspendedAt = request.Action == "suspend" ? DateTime.UtcNow : null;
         profile.SuspendedReason = request.Action == "suspend" ? request.Reason?.Trim() : null;
+        TripOps.Data.WorkflowNotice.Queue(db, id,
+            request.Action == "suspend" ? $"Agency đã tạm khóa tài khoản hướng dẫn viên. {request.Reason?.Trim()}"
+                : "Agency đã kích hoạt lại tài khoản hướng dẫn viên.", actorId: agencyId);
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return new((await Detail(agencyId, id, ct)).Guide, affected);
     }
@@ -190,7 +193,7 @@ public sealed class AgencyGuideService(TripOpsDbContext db, CloudinaryStorage im
             var role = (a.Role ?? "").ToLowerInvariant() switch { "support" or "support_guide" => "support_guide", "stage" or "stage_guide" => "stage_guide", "logistics" => "logistics", _ => "lead_guide" };
             return new GuideAssignmentDto(a.Id.ToString(), b.Id.ToString(), b.BookingCode, b.TourId?.ToString() ?? "", b.Tour?.Code ?? "", b.Tour?.Name ?? "Tour đã lưu trữ",
                 b.Tour?.Destination ?? "", b.StartDate.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"),
-                b.Participants.Count(p => p.IsPrimary && p.Status != "INACTIVE"), b.ContactName, b.ContactPhone, role, status, a.Notes);
+                TripOps.Service.Bookings.BookingAlliance.GuestCount(b,agencyId), b.ContactName, b.ContactPhone, role, status, a.Notes);
         }).OrderByDescending(a => a.StartDate).ToList());
     }
 }

@@ -1,0 +1,173 @@
+﻿role,email,name,province
+Admin,admin@regional-demo.tripops.test,[Mẫu] Quản trị bộ dữ liệu vùng,
+TravelAgency,agency.thanh-hoa@regional-demo.tripops.test,[Mẫu] Du lịch Thanh Hóa,Thanh Hóa
+Provider,provider.hotel.thanh-hoa@regional-demo.tripops.test,[Mẫu] Lưu trú Thanh Hóa,Thanh Hóa
+Provider,provider.dining.thanh-hoa@regional-demo.tripops.test,[Mẫu] Ẩm thực Thanh Hóa,Thanh Hóa
+Provider,provider.local.thanh-hoa@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Thanh Hóa,Thanh Hóa
+TourGuide,guide.1.thanh-hoa@regional-demo.tripops.test,[Mẫu] HDV Thanh Hóa 01,Thanh Hóa
+TourGuide,guide.2.thanh-hoa@regional-demo.tripops.test,[Mẫu] HDV Thanh Hóa 02,Thanh Hóa
+Customer,customer.1.thanh-hoa@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 01,Thanh Hóa
+Customer,customer.2.thanh-hoa@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 01,Thanh Hóa
+Customer,customer.3.thanh-hoa@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 01,Thanh Hóa
+TravelAgency,agency.nghe-an@regional-demo.tripops.test,[Mẫu] Du lịch Nghệ An,Nghệ An
+Provider,provider.hotel.nghe-an@regional-demo.tripops.test,[Mẫu] Lưu trú Nghệ An,Nghệ An
+Provider,provider.dining.nghe-an@regional-demo.tripops.test,[Mẫu] Ẩm thực Nghệ An,Nghệ An
+Provider,provider.local.nghe-an@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Nghệ An,Nghệ An
+TourGuide,guide.1.nghe-an@regional-demo.tripops.test,[Mẫu] HDV Cửa Lò 01,Nghệ An
+TourGuide,guide.2.nghe-an@regional-demo.tripops.test,[Mẫu] HDV Cửa Lò 02,Nghệ An
+Customer,customer.1.nghe-an@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 02,Nghệ An
+Customer,customer.2.nghe-an@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 02,Nghệ An
+Customer,customer.3.nghe-an@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 02,Nghệ An
+TravelAgency,agency.ha-tinh@regional-demo.tripops.test,[Mẫu] Du lịch Hà Tĩnh,Hà Tĩnh
+Provider,provider.hotel.ha-tinh@regional-demo.tripops.test,[Mẫu] Lưu trú Hà Tĩnh,Hà Tĩnh
+Provider,provider.dining.ha-tinh@regional-demo.tripops.test,[Mẫu] Ẩm thực Hà Tĩnh,Hà Tĩnh
+Provider,provider.local.ha-tinh@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Hà Tĩnh,Hà Tĩnh
+TourGuide,guide.1.ha-tinh@regional-demo.tripops.test,[Mẫu] HDV Thiên Cầm 01,Hà Tĩnh
+TourGuide,guide.2.ha-tinh@regional-demo.tripops.test,[Mẫu] HDV Thiên Cầm 02,Hà Tĩnh
+Customer,customer.1.ha-tinh@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 03,Hà Tĩnh
+Customer,customer.2.ha-tinh@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 03,Hà Tĩnh
+Customer,customer.3.ha-tinh@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 03,Hà Tĩnh
+TravelAgency,agency.quang-tri@regional-demo.tripops.test,[Mẫu] Du lịch Quảng Trị,Quảng Trị
+Provider,provider.hotel.quang-tri@regional-demo.tripops.test,[Mẫu] Lưu trú Quảng Trị,Quảng Trị
+Provider,provider.dining.quang-tri@regional-demo.tripops.test,[Mẫu] Ẩm thực Quảng Trị,Quảng Trị
+Provider,provider.local.quang-tri@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Quảng Trị,Quảng Trị
+TourGuide,guide.1.quang-tri@regional-demo.tripops.test,[Mẫu] HDV Đồng Hới 01,Quảng Trị
+TourGuide,guide.2.quang-tri@regional-demo.tripops.test,[Mẫu] HDV Đồng Hới 02,Quảng Trị
+Customer,customer.1.quang-tri@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 04,Quảng Trị
+Customer,customer.2.quang-tri@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 04,Quảng Trị
+Customer,customer.3.quang-tri@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 04,Quảng Trị
+TravelAgency,agency.hue@regional-demo.tripops.test,[Mẫu] Du lịch Huế,TP. Huế
+Provider,provider.hotel.hue@regional-demo.tripops.test,[Mẫu] Lưu trú Huế,TP. Huế
+Provider,provider.dining.hue@regional-demo.tripops.test,[Mẫu] Ẩm thực Huế,TP. Huế
+Provider,provider.local.hue@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Huế,TP. Huế
+TourGuide,guide.1.hue@regional-demo.tripops.test,[Mẫu] HDV Huế 01,TP. Huế
+TourGuide,guide.2.hue@regional-demo.tripops.test,[Mẫu] HDV Huế 02,TP. Huế
+Customer,customer.1.hue@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 05,TP. Huế
+Customer,customer.2.hue@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 05,TP. Huế
+Customer,customer.3.hue@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 05,TP. Huế
+TravelAgency,agency.da-nang@regional-demo.tripops.test,[Mẫu] Du lịch Đà Nẵng,TP. Đà Nẵng
+Provider,provider.hotel.da-nang@regional-demo.tripops.test,[Mẫu] Lưu trú Đà Nẵng,TP. Đà Nẵng
+Provider,provider.dining.da-nang@regional-demo.tripops.test,[Mẫu] Ẩm thực Đà Nẵng,TP. Đà Nẵng
+Provider,provider.local.da-nang@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Đà Nẵng,TP. Đà Nẵng
+TourGuide,guide.1.da-nang@regional-demo.tripops.test,[Mẫu] HDV Đà Nẵng 01,TP. Đà Nẵng
+TourGuide,guide.2.da-nang@regional-demo.tripops.test,[Mẫu] HDV Đà Nẵng 02,TP. Đà Nẵng
+Customer,customer.1.da-nang@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 06,TP. Đà Nẵng
+Customer,customer.2.da-nang@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 06,TP. Đà Nẵng
+Customer,customer.3.da-nang@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 06,TP. Đà Nẵng
+TravelAgency,agency.quang-ngai@regional-demo.tripops.test,[Mẫu] Du lịch Quảng Ngãi,Quảng Ngãi
+Provider,provider.hotel.quang-ngai@regional-demo.tripops.test,[Mẫu] Lưu trú Quảng Ngãi,Quảng Ngãi
+Provider,provider.dining.quang-ngai@regional-demo.tripops.test,[Mẫu] Ẩm thực Quảng Ngãi,Quảng Ngãi
+Provider,provider.local.quang-ngai@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Quảng Ngãi,Quảng Ngãi
+TourGuide,guide.1.quang-ngai@regional-demo.tripops.test,[Mẫu] HDV Lý Sơn 01,Quảng Ngãi
+TourGuide,guide.2.quang-ngai@regional-demo.tripops.test,[Mẫu] HDV Lý Sơn 02,Quảng Ngãi
+Customer,customer.1.quang-ngai@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 07,Quảng Ngãi
+Customer,customer.2.quang-ngai@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 07,Quảng Ngãi
+Customer,customer.3.quang-ngai@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 07,Quảng Ngãi
+TravelAgency,agency.gia-lai@regional-demo.tripops.test,[Mẫu] Du lịch Gia Lai,Gia Lai
+Provider,provider.hotel.gia-lai@regional-demo.tripops.test,[Mẫu] Lưu trú Gia Lai,Gia Lai
+Provider,provider.dining.gia-lai@regional-demo.tripops.test,[Mẫu] Ẩm thực Gia Lai,Gia Lai
+Provider,provider.local.gia-lai@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Gia Lai,Gia Lai
+TourGuide,guide.1.gia-lai@regional-demo.tripops.test,[Mẫu] HDV Quy Nhơn 01,Gia Lai
+TourGuide,guide.2.gia-lai@regional-demo.tripops.test,[Mẫu] HDV Quy Nhơn 02,Gia Lai
+Customer,customer.1.gia-lai@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 08,Gia Lai
+Customer,customer.2.gia-lai@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 08,Gia Lai
+Customer,customer.3.gia-lai@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 08,Gia Lai
+TravelAgency,agency.dak-lak@regional-demo.tripops.test,[Mẫu] Du lịch Đắk Lắk,Đắk Lắk
+Provider,provider.hotel.dak-lak@regional-demo.tripops.test,[Mẫu] Lưu trú Đắk Lắk,Đắk Lắk
+Provider,provider.dining.dak-lak@regional-demo.tripops.test,[Mẫu] Ẩm thực Đắk Lắk,Đắk Lắk
+Provider,provider.local.dak-lak@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Đắk Lắk,Đắk Lắk
+TourGuide,guide.1.dak-lak@regional-demo.tripops.test,[Mẫu] HDV Buôn Ma Thuột 01,Đắk Lắk
+TourGuide,guide.2.dak-lak@regional-demo.tripops.test,[Mẫu] HDV Buôn Ma Thuột 02,Đắk Lắk
+Customer,customer.1.dak-lak@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 09,Đắk Lắk
+Customer,customer.2.dak-lak@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 09,Đắk Lắk
+Customer,customer.3.dak-lak@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 09,Đắk Lắk
+TravelAgency,agency.khanh-hoa@regional-demo.tripops.test,[Mẫu] Du lịch Khánh Hòa,Khánh Hòa
+Provider,provider.hotel.khanh-hoa@regional-demo.tripops.test,[Mẫu] Lưu trú Khánh Hòa,Khánh Hòa
+Provider,provider.dining.khanh-hoa@regional-demo.tripops.test,[Mẫu] Ẩm thực Khánh Hòa,Khánh Hòa
+Provider,provider.local.khanh-hoa@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Khánh Hòa,Khánh Hòa
+TourGuide,guide.1.khanh-hoa@regional-demo.tripops.test,[Mẫu] HDV Nha Trang 01,Khánh Hòa
+TourGuide,guide.2.khanh-hoa@regional-demo.tripops.test,[Mẫu] HDV Nha Trang 02,Khánh Hòa
+Customer,customer.1.khanh-hoa@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 10,Khánh Hòa
+Customer,customer.2.khanh-hoa@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 10,Khánh Hòa
+Customer,customer.3.khanh-hoa@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 10,Khánh Hòa
+TravelAgency,agency.lam-dong@regional-demo.tripops.test,[Mẫu] Du lịch Lâm Đồng,Lâm Đồng
+Provider,provider.hotel.lam-dong@regional-demo.tripops.test,[Mẫu] Lưu trú Lâm Đồng,Lâm Đồng
+Provider,provider.dining.lam-dong@regional-demo.tripops.test,[Mẫu] Ẩm thực Lâm Đồng,Lâm Đồng
+Provider,provider.local.lam-dong@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Lâm Đồng,Lâm Đồng
+TourGuide,guide.1.lam-dong@regional-demo.tripops.test,[Mẫu] HDV Đà Lạt 01,Lâm Đồng
+TourGuide,guide.2.lam-dong@regional-demo.tripops.test,[Mẫu] HDV Đà Lạt 02,Lâm Đồng
+Customer,customer.1.lam-dong@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 11,Lâm Đồng
+Customer,customer.2.lam-dong@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 11,Lâm Đồng
+Customer,customer.3.lam-dong@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 11,Lâm Đồng
+TravelAgency,agency.dong-nai@regional-demo.tripops.test,[Mẫu] Du lịch Đồng Nai,TP. Đồng Nai
+Provider,provider.hotel.dong-nai@regional-demo.tripops.test,[Mẫu] Lưu trú Đồng Nai,TP. Đồng Nai
+Provider,provider.dining.dong-nai@regional-demo.tripops.test,[Mẫu] Ẩm thực Đồng Nai,TP. Đồng Nai
+Provider,provider.local.dong-nai@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Đồng Nai,TP. Đồng Nai
+TourGuide,guide.1.dong-nai@regional-demo.tripops.test,[Mẫu] HDV Biên Hòa 01,TP. Đồng Nai
+TourGuide,guide.2.dong-nai@regional-demo.tripops.test,[Mẫu] HDV Biên Hòa 02,TP. Đồng Nai
+Customer,customer.1.dong-nai@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 12,TP. Đồng Nai
+Customer,customer.2.dong-nai@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 12,TP. Đồng Nai
+Customer,customer.3.dong-nai@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 12,TP. Đồng Nai
+TravelAgency,agency.tp-hcm@regional-demo.tripops.test,[Mẫu] Du lịch Hồ Chí Minh,TP. Hồ Chí Minh
+Provider,provider.hotel.tp-hcm@regional-demo.tripops.test,[Mẫu] Lưu trú Hồ Chí Minh,TP. Hồ Chí Minh
+Provider,provider.dining.tp-hcm@regional-demo.tripops.test,[Mẫu] Ẩm thực Hồ Chí Minh,TP. Hồ Chí Minh
+Provider,provider.local.tp-hcm@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Hồ Chí Minh,TP. Hồ Chí Minh
+TourGuide,guide.1.tp-hcm@regional-demo.tripops.test,[Mẫu] HDV TP. Hồ Chí Minh 01,TP. Hồ Chí Minh
+TourGuide,guide.2.tp-hcm@regional-demo.tripops.test,[Mẫu] HDV TP. Hồ Chí Minh 02,TP. Hồ Chí Minh
+Customer,customer.1.tp-hcm@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 13,TP. Hồ Chí Minh
+Customer,customer.2.tp-hcm@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 13,TP. Hồ Chí Minh
+Customer,customer.3.tp-hcm@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 13,TP. Hồ Chí Minh
+TravelAgency,agency.tay-ninh@regional-demo.tripops.test,[Mẫu] Du lịch Tây Ninh,Tây Ninh
+Provider,provider.hotel.tay-ninh@regional-demo.tripops.test,[Mẫu] Lưu trú Tây Ninh,Tây Ninh
+Provider,provider.dining.tay-ninh@regional-demo.tripops.test,[Mẫu] Ẩm thực Tây Ninh,Tây Ninh
+Provider,provider.local.tay-ninh@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Tây Ninh,Tây Ninh
+TourGuide,guide.1.tay-ninh@regional-demo.tripops.test,[Mẫu] HDV Tây Ninh 01,Tây Ninh
+TourGuide,guide.2.tay-ninh@regional-demo.tripops.test,[Mẫu] HDV Tây Ninh 02,Tây Ninh
+Customer,customer.1.tay-ninh@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 14,Tây Ninh
+Customer,customer.2.tay-ninh@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 14,Tây Ninh
+Customer,customer.3.tay-ninh@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 14,Tây Ninh
+TravelAgency,agency.dong-thap@regional-demo.tripops.test,[Mẫu] Du lịch Đồng Tháp,Đồng Tháp
+Provider,provider.hotel.dong-thap@regional-demo.tripops.test,[Mẫu] Lưu trú Đồng Tháp,Đồng Tháp
+Provider,provider.dining.dong-thap@regional-demo.tripops.test,[Mẫu] Ẩm thực Đồng Tháp,Đồng Tháp
+Provider,provider.local.dong-thap@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Đồng Tháp,Đồng Tháp
+TourGuide,guide.1.dong-thap@regional-demo.tripops.test,[Mẫu] HDV Cao Lãnh 01,Đồng Tháp
+TourGuide,guide.2.dong-thap@regional-demo.tripops.test,[Mẫu] HDV Cao Lãnh 02,Đồng Tháp
+Customer,customer.1.dong-thap@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 15,Đồng Tháp
+Customer,customer.2.dong-thap@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 15,Đồng Tháp
+Customer,customer.3.dong-thap@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 15,Đồng Tháp
+TravelAgency,agency.vinh-long@regional-demo.tripops.test,[Mẫu] Du lịch Vĩnh Long,Vĩnh Long
+Provider,provider.hotel.vinh-long@regional-demo.tripops.test,[Mẫu] Lưu trú Vĩnh Long,Vĩnh Long
+Provider,provider.dining.vinh-long@regional-demo.tripops.test,[Mẫu] Ẩm thực Vĩnh Long,Vĩnh Long
+Provider,provider.local.vinh-long@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Vĩnh Long,Vĩnh Long
+TourGuide,guide.1.vinh-long@regional-demo.tripops.test,[Mẫu] HDV Bến Tre 01,Vĩnh Long
+TourGuide,guide.2.vinh-long@regional-demo.tripops.test,[Mẫu] HDV Bến Tre 02,Vĩnh Long
+Customer,customer.1.vinh-long@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 16,Vĩnh Long
+Customer,customer.2.vinh-long@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 16,Vĩnh Long
+Customer,customer.3.vinh-long@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 16,Vĩnh Long
+TravelAgency,agency.can-tho@regional-demo.tripops.test,[Mẫu] Du lịch Cần Thơ,TP. Cần Thơ
+Provider,provider.hotel.can-tho@regional-demo.tripops.test,[Mẫu] Lưu trú Cần Thơ,TP. Cần Thơ
+Provider,provider.dining.can-tho@regional-demo.tripops.test,[Mẫu] Ẩm thực Cần Thơ,TP. Cần Thơ
+Provider,provider.local.can-tho@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Cần Thơ,TP. Cần Thơ
+TourGuide,guide.1.can-tho@regional-demo.tripops.test,[Mẫu] HDV Cần Thơ 01,TP. Cần Thơ
+TourGuide,guide.2.can-tho@regional-demo.tripops.test,[Mẫu] HDV Cần Thơ 02,TP. Cần Thơ
+Customer,customer.1.can-tho@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 17,TP. Cần Thơ
+Customer,customer.2.can-tho@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 17,TP. Cần Thơ
+Customer,customer.3.can-tho@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 17,TP. Cần Thơ
+TravelAgency,agency.an-giang@regional-demo.tripops.test,[Mẫu] Du lịch An Giang,An Giang
+Provider,provider.hotel.an-giang@regional-demo.tripops.test,[Mẫu] Lưu trú An Giang,An Giang
+Provider,provider.dining.an-giang@regional-demo.tripops.test,[Mẫu] Ẩm thực An Giang,An Giang
+Provider,provider.local.an-giang@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe An Giang,An Giang
+TourGuide,guide.1.an-giang@regional-demo.tripops.test,[Mẫu] HDV Phú Quốc 01,An Giang
+TourGuide,guide.2.an-giang@regional-demo.tripops.test,[Mẫu] HDV Phú Quốc 02,An Giang
+Customer,customer.1.an-giang@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 18,An Giang
+Customer,customer.2.an-giang@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 18,An Giang
+Customer,customer.3.an-giang@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 18,An Giang
+TravelAgency,agency.ca-mau@regional-demo.tripops.test,[Mẫu] Du lịch Cà Mau,Cà Mau
+Provider,provider.hotel.ca-mau@regional-demo.tripops.test,[Mẫu] Lưu trú Cà Mau,Cà Mau
+Provider,provider.dining.ca-mau@regional-demo.tripops.test,[Mẫu] Ẩm thực Cà Mau,Cà Mau
+Provider,provider.local.ca-mau@regional-demo.tripops.test,[Mẫu] Trải nghiệm & xe Cà Mau,Cà Mau
+TourGuide,guide.1.ca-mau@regional-demo.tripops.test,[Mẫu] HDV Cà Mau 01,Cà Mau
+TourGuide,guide.2.ca-mau@regional-demo.tripops.test,[Mẫu] HDV Cà Mau 02,Cà Mau
+Customer,customer.1.ca-mau@regional-demo.tripops.test,[Mẫu] Nguyễn Minh An 19,Cà Mau
+Customer,customer.2.ca-mau@regional-demo.tripops.test,[Mẫu] Trần Ngọc Linh 19,Cà Mau
+Customer,customer.3.ca-mau@regional-demo.tripops.test,[Mẫu] Lê Hoàng Nam 19,Cà Mau

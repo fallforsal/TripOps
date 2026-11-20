@@ -150,21 +150,163 @@ The Flutter UI is styled after `TripOps_TourGuide_Mobile_Prototype_v2.html` / th
 **Verification:** `flutter analyze`, `flutter test`, and Android debug build run on GitHub Actions. Check final CI status before merging. Use an Android emulator to evaluate accessibility, small-screen wrapping, keyboard input, and operational flows against a working TripOps backend.
 
 
-## Tour thumbnails in guide booking cards
+## Attendance: departure or assigned stage day
 
-The assigned-tour list now consumes the optional `thumbnailUrl` value returned by
-`GET /api/v1/guide/bookings`. The backend chooses the first valid entry from
-`Tour.ThumbnailUrls` (JSON array), then falls back to `Tour.Images`; the
-field remains `null` when neither contains an image.
+The backend now enforces that **passenger attendance can be changed only when the
+booking's `startDate` (single Agency), or the Agency's first assigned stage day
+(alliance booking), equals today's **Vietnam-local calendar date (UTC+7)**,
+using the existing backend `PaymentRules.VietnamDate` helper. Earlier or later requests return
+HTTP 409 and do not change attendance, `checkedBy` or `checkedAt`.
 
-`TourCard` is shared by the home, tour-list and history screens. It renders
-the image with `BoxFit.cover`, falls back to the existing landscape icon while
-loading or on error, and supports both HTTPS media URLs and public
-`/api/v1/files/tours/...` paths (resolved against `API_BASE_URL`).
+`GET /api/v1/guide/bookings/{id}` now includes the backward-compatible
+`canRecordAttendance` boolean and optional `attendanceDate`. The app uses this server-authoritative value
+to disable "Có mặt", "Vắng mặt" and "Đặt lại: Chưa rõ" outside departure day
+and shows an explanation with the scheduled date. HDVs can still view prior
+attendance statuses. Older backend versions omit this field, so the app
+**fails closed** (disables attendance) until the backend update is deployed.
 
-**Backend change required:** the updated ASP.NET Core backend must be deployed
-and restarted; an older backend will omit `thumbnailUrl`, leaving the fallback
-icon visible. No new DB migration is needed because tour images are already
-stored. For local Android HTTP image loading, keep the development-only
-cleartext policy described above. If a tour has no uploaded image, the icon is
-expected.
+The value is a snapshot of the time when the detail was fetched. Reopen
+or refresh the tour details after crossing midnight. The server always
+re-checks on write, even if a screen remains open past midnight.
+
+**Timezone note:** Attendance uses the entire Vietnam-local day, 00:00–23:59
+UTC+7, regardless of the phone's timezone. The existing start-tour endpoint
+still uses a UTC calendar comparison, a separate pre-existing policy that
+should be aligned in a future backend change. The app respects the
+server-supplied `canRecordAttendance` for attendance controls.
+
+
+## Passenger contacts (attendance)
+The passenger card no longer shows a decorative avatar. It now displays a clearly
+labeled **SĐT** field from `BookingDto.participants[].phoneNumber`, or
+**Chưa cập nhật** if the backend does not supply one. When provided, there are
+buttons to **copy** the number or open the device dialer (via `url_launcher`).
+Calling opens the phone application; it does not place an automatic call.
+
+In the existing backend, each participant's `phoneNumber` is extracted from
+the participant note line `Điện thoại: ...`. If a passenger has no such contact
+data, Flutter intentionally does **not** substitute the booking contact's number.
+The assigned guide can still see attendance status normally; call/copy actions
+are independent of the departure-day attendance restriction.
+
+From this point on, development changes to the Guide Flutter app are committed
+to the persistent `hiep` branch, based on `develop`. Pull `hiep` to run
+new changes before merging them to `develop`.
+
+## Check-in địa điểm theo scope mới (nhánh `hiep`)
+
+Đã đối chiếu nhánh `develop` mới nhất và giữ nghiệp vụ tour liên minh/Agency theo code team.
+
+- HDV chỉ check-in khi **ngày Việt Nam đã tới hoặc qua ngày khởi hành**, booking còn hoạt động.
+- **Check-in đúng thứ tự** theo ngày lịch trình, giờ thăm quan (nếu có), rồi ID điểm để ổn định khi dữ liệu legacy không có thứ tự tường minh.
+- Điểm trước chưa CheckedIn thì điểm sau bị khóa. Không hỗ trợ bỏ qua; điểm đã check-in không thể check-in lại.
+- Không dùng GPS, kinh/vĩ độ, bán kính hay quyền Location. Không phải chạy migration geofence.
+- Backend là nơi kiểm tra thật, Flutter chỉ biểu diễn trạng thái và gửi `{status:"CheckedIn",note?}`.
+- Không làm thay đổi việc điểm danh hành khách, nghiệp vụ Booking Alliance và phân quyền check-in chặng của Agency.
+
+### Seed tour khởi hành hôm nay
+
+Seed kiểm thử được giữ lại, nhưng **đã bỏ toàn bộ dữ liệu GPS**. Để seed ngày hiện hành theo Việt Nam, ở môi trường Development:
+
+```powershell
+git switch hiep
+git pull --ff-only origin hiep
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:SeedGuideGpsDemo = "true"
+dotnet run --project backend/src/TripOps.Api
+Remove-Item Env:SeedGuideGpsDemo
+Remove-Item Env:ASPNETCORE_ENVIRONMENT
+```
+
+Tên cờ `SeedGuideGpsDemo` được giữ để tương thích lệnh cũ, **không sử dụng GPS**.
+
+- HDV demo: `guide-gps-demo@tripops.test`
+- Mật khẩu chỉ khi tài khoản mới tạo: `DemoGps#2026!`
+- Booking: `GPS-TEST-YYYYMMDD` (giữ mã cũ để chạy lại không nhân bản)
+- Tour có 3 điểm **A → B → C**, 4 hành khách; không yêu cầu Emulator Location.
+
+Script chỉ seed và thoát; khởi động lại backend bình thường sau đó. Chạy lại trong cùng ngày không reset check-in, nên muốn thử lại từ đầu hãy dùng database test mới.
+
+Nếu đã chạy migration GPS ở nhánh `hiep` cũ, các cột thừa không ảnh hưởng check-in; cần quản lý/rollback lịch sử migration theo kế hoạch DB riêng, **không tự xóa cột trên database đang dùng chung**.
+
+
+## Ảnh minh chứng khi check-in địa điểm
+
+Sau khi tới ngày khởi hành và đến lượt điểm dừng, HDV có thể xác nhận
+check-in **không cần ảnh** hoặc đính kèm **1–5 ảnh JPEG/PNG/WebP**.
+
+| Giới hạn | Giá trị |
+|---|---|
+| Số ảnh | 1–5 nếu có chọn |
+| Mỗi ảnh | Tối đa 5 MiB |
+| Tổng dung lượng | Tối đa 20 MiB |
+| Upload multipart | Request tối đa 22 MiB (kể cả multipart overhead) |
+
+App có lựa chọn camera/thư viện, xem trước và xóa ảnh. Ảnh được resize
+tối đa 1800 px và nén chất lượng 78 khi định dạng hỗ trợ. Cả app và backend
+đều kiểm tra dung lượng. Không cần quyền vị trí GPS.
+
+API JSON cũ vẫn hoạt động:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in`
+với `{"status":"CheckedIn","note":"..."}`.
+
+API mới để gửi ảnh:
+`POST /api/v1/guide/bookings/{bookingId}/locations/{locationId}/check-in-with-images`
+(`multipart/form-data`) với `Status=CheckedIn`, `Note` tùy chọn,
+và nhiều phần `Images` (mỗi phần là một file).
+
+Server dùng chung điều kiện ngày khởi hành, thứ tự điểm đến và
+quyền HDV được phân công. Không được upload ảnh cho điểm
+không hợp lệ, đã check-in hoặc chưa đến lượt.
+
+Backend lưu danh sách URL ảnh dưới dạng JSON trong cột
+`booking_attraction_checkins.photo_proof_url` vốn có sẵn, không cần
+migration mới. Dữ liệu `photoUrls` trong `snapshotDays[].locations[]`
+giúp hiển thị lại các ảnh đã nộp.
+
+Development `Storage:UseLocal=true` lưu ảnh dưới
+`App_Data/uploads/guide-checkins/<guideId>/`, API
+`GET /api/v1/files/guide-checkins/{owner}/{name}` yêu cầu đăng nhập
+với vai trò HDV đã gửi hoặc Agency quản lý chặng. Production sử dụng
+Cloudinary authenticated image upload/signed delivery URL.
+Không sử dụng ảnh check-in làm thumbnail công khai của tour.
+
+Nếu mạng lỗi trong khi gửi, giao diện không xác nhận thành công;
+HDV cần kiểm tra trạng thái bằng nút làm mới trước khi gửi lại.
+Đối với lỗi upload từng phần lên storage, có thể còn file chưa được
+gắn vào booking (cần lifecycle cleanup định kỳ khi đưa vào production).
+
+**Lần đầu cài image_picker:** chạy `flutter pub get` và build lại ứng dụng.
+Trên iOS phải thêm `NSCameraUsageDescription` và
+`NSPhotoLibraryUsageDescription` vào Info.plist theo hướng dẫn package.
+
+## Incident Report (Hướng dẫn viên → Agency)
+
+- HDV chọn **loại sự cố** từ dropdown 8 giá trị thống nhất với backend và Agency:
+  `HEALTH`, `VEHICLE`, `WEATHER`, `CUSTOMER`, `SECURITY`,
+  `SERVICE_PROVIDER`, `SCHEDULE`, `OTHER`. Không còn ô nhập tự do
+  hoặc trường mức độ nghiêm trọng.
+- Chỉ **một endpoint** `POST /api/v1/guide/bookings/{id}/incidents`
+  nhận `multipart/form-data`, bất kể có ảnh hay không. Các field:
+  `IncidentType` (một trong 8 mã trên), `Title`, `Description`,
+  và `Images` (tùy chọn, lặp field cho từng ảnh).
+- Endpoint `/incidents-with-images` và payload JSON cho `/incidents`
+  đã được thay bằng hợp đồng multipart duy nhất. Các client cũ cần cập nhật.
+- Hạn mức **5 MiB mỗi ảnh, 20 MiB tổng**, tối đa 5 ảnh.
+  App và server đều xác thực; chọn camera hoặc thư viện, có thể bỏ ảnh.
+- Backend lưu JSON nhiều URL trong cột `booking_incidents.evidence_urls`
+  vốn có sẵn, nên không cần migration. Storage dùng
+  Cloudinary authenticated hoặc local Development
+  `App_Data/uploads/guide-incidents/<guideId>/`.
+- Backend chi tiết booking trả `incidents[].incidentType`,
+  `incidents[].agencyId`, `incidents[].reportedByName`,
+  `incidents[].evidenceUrls`; HDV và Agency có quyền đọc ảnh.
+  API local: `GET /api/v1/files/guide-incidents/{owner}/{name}`
+  kiểm tra quyền reporter/Agency phụ trách/Agency chủ trì.
+  Khách không nhận URL ảnh minh chứng riêng tư.
+- Web Agency: `Đặt tour & Khách → Chi tiết Booking →
+  Lịch trình → Nhật ký sự cố Tour`. Booking được tải lại khi mở chi tiết
+  để nhìn thấy báo cáo mới do HDV vừa gửi.
+- Một incident chỉ được lưu sau khi upload ảnh thành công. Nếu storage
+  upload thành công một phần rồi DB lỗi, cần quy trình dọn file mồ côi
+  khi triển khai production.

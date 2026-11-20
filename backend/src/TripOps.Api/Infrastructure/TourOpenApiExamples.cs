@@ -44,20 +44,23 @@ internal static class TourOpenApiExamples
                 Request("minimalDraft", "Bản nháp tối thiểu; bổ sung cấu hình bằng PUT trước khi gửi duyệt", new TourConfiguration("Bản nháp tour Đà Nẵng – Hội An"));
                 break;
             case ("AgencyTours", "Update"):
-                Request("configureThreeDayTour", "Thay toàn bộ cấu hình của bản nháp v1: lịch trình, dịch vụ và giá", new UpdateTourRequest(1, ThreeDayTour(), "Hoàn thiện lịch trình 3 ngày và hai đêm lưu trú"));
+                Request("configureThreeDayTour", "Thay toàn bộ cấu hình của bản nháp (revision 1): lịch trình, dịch vụ và giá", new UpdateTourRequest(1, ThreeDayTour(), "Hoàn thiện lịch trình 3 ngày và hai đêm lưu trú"));
                 break;
             case ("AgencyTours", "Publish"):
                 Request("publishCompleteTour", "Agency công bố trực tiếp bản nháp đầy đủ v1", new TourCommand(1)); break;
             case ("AgencyTours", "Hide"): case ("AdminTours", "Hide"):
                 Request("hidePublishedTour", "Ẩn phiên bản v5 đang công khai", new TourCommand(5, "Tạm ẩn để rà soát lịch khởi hành")); break;
-            case ("AgencyTours", "Restore"):
-                Request("restoreAsNewDraft", "Thay version bằng phiên bản hiện tại; number trên URL là phiên bản nguồn", new TourCommand(6, "Khôi phục lịch trình trước đó để chỉnh sửa")); break;
             case ("AgencyTours", "Duplicate"):
-                Request("duplicateDraft", "Tạo tour và lịch sử độc lập", new DuplicateTourRequest("Đà Nẵng – Hội An: phương án mới")); break;
+                Request("duplicateDraft", "Tạo tour độc lập", new DuplicateTourRequest("Đà Nẵng – Hội An: phương án mới")); break;
             case ("AgencyTours", "CandidateAgencies"):
                 Response(new CandidateAgencyDto[] { new("agency-001", "TripOps Travel", "agency@tripops.test", "0901234567", null, ["DA_NANG", "QUANG_NAM"], 2) }); break;
             case ("ItineraryDrafts", "Create"):
                 Request("optionalAiDraft", "Trả 503 khi chưa cấu hình AI", new AiDraftRequest("Đà Nẵng, Hội An", 3, "Nghỉ dưỡng gia đình")); break;
+            case ("ItineraryDrafts", "Preview"):
+                Request("aiOutline", "AI soạn khung tour, chưa lưu; tối đa 14 ngày, trả 503 khi chưa cấu hình AI",
+                    new AiDraftRequest("Đà Lạt", 3, "Đoàn công ty 40 người, có team building, ăn đặc sản")); break;
+            case ("ItineraryDrafts", "Save"):
+                Request("saveAiOutline", "Gửi lại cấu hình nhận từ /preview (có thể đã sửa) để lưu thành bản nháp ẩn", ThreeDayTour()); break;
             case ("Tours", "Get"):
                 Response(new PublicTourDto(42, "TOUR-EXAMPLE-DANANG", 5, ThreeDayTour())); break;
             case ("Tours", "List"):
@@ -65,7 +68,7 @@ internal static class TourOpenApiExamples
         }
         if (action.ControllerName is "AgencyTours" or "AdminTours" or "Tours" or "ItineraryDrafts")
         {
-            operation.Description += "\n\nExamples use manual service entries (null IDs). Replace every version with the latest response version and every tour id with the actual created id. " +
+            operation.Description += "\n\nExamples use manual service entries (null IDs). Replace every revision with the latest response revision and every tour id with the actual created id. " +
                 "A hotel group is one continuous stay on its starting day; alternatives cover that same stay and are not additive. " +
                 "TimeSpan JSON uses strings such as 08:30:00, not a time object or ISO 8601 PT8H30M. See backend/WF02_TESTING.md for the exact testing order.";
         }

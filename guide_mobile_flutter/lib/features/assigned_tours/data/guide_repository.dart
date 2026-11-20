@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import '../../../core/network/api_client.dart';
+import '../../location_checkin/domain/checkin_photo.dart';
 import '../domain/booking_models.dart';
 
 class GuideRepository {
@@ -30,13 +33,11 @@ class GuideRepository {
   Future<BookingDetail> start(int id) async =>
       BookingDetail.fromJson(await api.postMap('guide/bookings/$id/start'));
 
-  Future<BookingDetail> complete(int id) async =>
-      BookingDetail.fromJson(await api.postMap('guide/bookings/$id/complete'));
-
-  Future<void> attendance(int bookingId, int participantId, String status) async {
+  Future<void> attendance(int bookingId, int participantId, String status, {String? note}) async {
     await api.postMap('guide/bookings/$bookingId/attendance', {
       'participantId': participantId,
       'status': status,
+      if (note != null) 'note': note,
     });
   }
 
@@ -47,13 +48,85 @@ class GuideRepository {
         {'status': status, 'note': note},
       ));
 
-  Future<void> incident(int id, {required String type, required String title,
-    required String description, String? severity}) async {
-    await api.postMap('guide/bookings/$id/incidents', {
-      'incidentType': type,
-      'title': title,
-      'description': description,
-      'severity': severity,
-    });
+  Future<BookingDetail> checkInWithImages(
+    int bookingId, int locationId, String? note, List<CheckinPhoto> photos,
+  ) async {
+    final validation = CheckinPhoto.validate(photos);
+    if (photos.isEmpty || validation != null) {
+      throw ApiFailure(validation ?? 'Vui lòng chọn ảnh.');
+    }
+    final form = FormData();
+    form.fields.add(const MapEntry('Status', 'CheckedIn'));
+    if (note != null && note.trim().isNotEmpty) {
+      form.fields.add(MapEntry('Note', note.trim()));
+    }
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path,
+        filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    return BookingDetail.fromJson(await api.postForm(
+      'guide/bookings/$bookingId/locations/$locationId/check-in-with-images',
+      form,
+    ));
+  }
+
+  Future<BookingDetail> checkOutWithImages(
+    int bookingId, int locationId, String? note, List<CheckinPhoto> photos,
+  ) async {
+    final validation = CheckinPhoto.validate(photos);
+    if (photos.isEmpty || validation != null) {
+      throw ApiFailure(validation ?? 'Vui lòng chụp ít nhất một ảnh.');
+    }
+    final form = FormData();
+    if (note != null && note.trim().isNotEmpty) {
+      form.fields.add(MapEntry('Note', note.trim()));
+    }
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path, filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    return BookingDetail.fromJson(await api.postForm(
+      'guide/bookings/$bookingId/locations/$locationId/check-out-with-images',
+      form,
+    ));
+  }
+
+  Future<Uint8List> imageBytes(String url) => api.imageBytes(url);
+
+  Future<void> incident(int id, {
+    String type = 'OTHER',
+    required String title,
+    required String description,
+    String? severity,
+    List<CheckinPhoto> photos = const [],
+  }) async {
+    final validation = CheckinPhoto.validate(photos);
+    if (validation != null) throw ApiFailure(validation);
+
+    // The backend accepts one multipart endpoint with optional evidence images.
+    // Send the same content type even when no images are attached.
+    final form = FormData();
+    form.fields.add(MapEntry('IncidentType', type));
+    form.fields.add(MapEntry('Title', title));
+    form.fields.add(MapEntry('Description', description));
+    if (severity != null && severity.isNotEmpty) {
+      form.fields.add(MapEntry('Severity', severity));
+    }
+    for (final photo in photos) {
+      final part = await MultipartFile.fromFile(
+        photo.path,
+        filename: photo.name,
+        contentType: DioMediaType.parse(photo.mime),
+      );
+      form.files.add(MapEntry('Images', part));
+    }
+    await api.postForm('guide/bookings/$id/incidents', form);
   }
 }

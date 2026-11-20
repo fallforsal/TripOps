@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { useEffect, useMemo, useState } from "react";
 import { Service } from "@/app/types";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -20,6 +21,8 @@ import {
   Filter,
   Clock,
   PauseCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -30,7 +33,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ProviderServiceDetailPage } from "@/app/components/provider/ProviderServiceDetailPage";
-import { toast } from "sonner";
+import { toast } from "@/app/lib/notifications";
 import { ProviderProfileLink } from "./ProviderProfileLink";
 import { ServiceModerationReason } from "@/app/components/ServiceModerationReason";
 import { RejectServiceModal } from "./RejectServiceModal";
@@ -38,6 +41,7 @@ import { matchesServicePostFilter, servicePostCounts, servicePostState, serviceP
 
 const STATUS_FILTERS: ServicePostFilter[] = ["all", "pending", "approved", "paused", "hidden", "rejected"];
 const STATUS_ICONS = { pending: Clock, approved: CheckCircle2, paused: PauseCircle, hidden: EyeOff, rejected: XCircle };
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 interface ServicePostApprovalProps {
   services: Service[];
@@ -57,6 +61,8 @@ export function ServicePostApproval({
   const [selectedStatus, setSelectedStatus] = useState<ServicePostFilter>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
   const [selectedServiceForDetail, setSelectedServiceForDetail] = useState<Service | null>(null);
 
   // Modals state
@@ -94,6 +100,24 @@ export function ServicePostApproval({
       return true;
     });
   }, [services, selectedStatus, selectedCategory, searchQuery]);
+
+  // Apply pagination after all filters so search, counts and page numbers stay consistent.
+  const totalPages = Math.max(1, Math.ceil(filteredServices.length / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+  const firstIndex = (activePage - 1) * pageSize;
+  const paginatedServices = useMemo(
+    () => filteredServices.slice(firstIndex, firstIndex + pageSize),
+    [filteredServices, firstIndex, pageSize],
+  );
+  const visiblePages = useMemo(() => {
+    const candidates = new Set([1, totalPages, activePage - 1, activePage, activePage + 1]);
+    return [...candidates].filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b);
+  }, [activePage, totalPages]);
+
+  // Deleting the last post on the final page should take Admin to the prior page.
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const handleApprove = async (service: Service) => {
     if (busyId || !onApproveService) return;
@@ -290,7 +314,7 @@ export function ServicePostApproval({
           ].map((cat) => (
             <button
               key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
+              onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 selectedCategory === cat.id
                   ? "bg-[#075985] text-white shadow-xs"
@@ -309,7 +333,7 @@ export function ServicePostApproval({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               placeholder="Tìm theo tên dịch vụ, nhà cung cấp, địa bàn..."
               className="w-full pl-9 pr-4 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
             />
@@ -317,7 +341,7 @@ export function ServicePostApproval({
 
           <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto" aria-label="Lọc trạng thái bài đăng">
             {STATUS_FILTERS.map((status) => (
-              <button key={status} type="button" onClick={() => setSelectedStatus(status)}
+              <button key={status} type="button" onClick={() => { setSelectedStatus(status); setCurrentPage(1); }}
                 aria-pressed={selectedStatus === status}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   selectedStatus === status ? "bg-[#075985] text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -368,7 +392,7 @@ export function ServicePostApproval({
                   </td>
                 </tr>
               ) : (
-                filteredServices.map((service, index) => {
+                paginatedServices.map((service, index) => {
                   const imageCount = service.images?.length || 1;
                   const isHidden = service.status === "hidden";
                   const state = servicePostState(service);
@@ -382,7 +406,7 @@ export function ServicePostApproval({
                     >
                       {/* # STT */}
                       <td className="py-3.5 px-4 text-center text-xs text-gray-500 font-medium">
-                        {index + 1}
+                        {firstIndex + index + 1}
                       </td>
 
                       {/* Service Info */}
@@ -526,14 +550,71 @@ export function ServicePostApproval({
           </table>
         </div>
 
-        {/* Footer info */}
-        <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500 gap-2">
-          <span>
-            Hiển thị <strong>{filteredServices.length}</strong> bài đăng trong danh sách quản lý
-          </span>
-          <span className="text-[11px] text-gray-400 font-medium">
-            Dạng hiển thị: Bảng dữ liệu (Table View)
-          </span>
+        {/* Pagination after filtering */}
+        <div className="p-4 border-t border-gray-100 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-gray-500 gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span>
+              Hiển thị <strong>{filteredServices.length ? firstIndex + 1 : 0}–{firstIndex + paginatedServices.length}</strong>
+              {" / "}<strong>{filteredServices.length}</strong> bài đăng
+            </span>
+            <label className="inline-flex items-center gap-2">
+              Số bài/trang:
+              <select
+                aria-label="Số bài đăng mỗi trang"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
+          </div>
+          {totalPages > 1 && (
+            <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang bài đăng dịch vụ">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={activePage === 1}
+                onClick={() => setCurrentPage(activePage - 1)}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang trước"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Trước</span>
+              </Button>
+              {visiblePages.map((page, index) => (
+                <div key={page} className="inline-flex items-center gap-1">
+                  {index > 0 && page > visiblePages[index - 1] + 1 && (
+                    <span aria-hidden="true" className="px-1 text-gray-400">…</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={page === activePage ? "default" : "outline"}
+                    size="sm"
+                    aria-label={`Trang ${page}`}
+                    aria-current={page === activePage ? "page" : undefined}
+                    onClick={() => setCurrentPage(page)}
+                    className={`h-8 min-w-8 px-2 text-xs ${page === activePage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                  >
+                    {page}
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={activePage === totalPages}
+                onClick={() => setCurrentPage(activePage + 1)}
+                className="h-8 gap-1 px-2 text-xs"
+                aria-label="Trang sau"
+              >
+                <span className="hidden sm:inline">Sau</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </nav>
+          )}
         </div>
       </div>
 
@@ -619,14 +700,14 @@ export function ServicePostApproval({
       </Dialog>
 
       {/* Delete Confirmation Modal */}
-      <Dialog open={!!deletingService} onOpenChange={() => setDeletingService(null)}>
-        <DialogContent className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
+      <AlertDialog open={!!deletingService} onOpenChange={() => setDeletingService(null)}>
+        <AlertDialogContent aria-describedby={undefined} tone="error" className="max-w-md bg-white text-gray-900 border border-gray-200 shadow-2xl rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-rose-600" />
               Xóa bài đăng dịch vụ
-            </DialogTitle>
-          </DialogHeader>
+            </AlertDialogTitle>
+          </AlertDialogHeader>
 
           {deletingService && (
             <div className="space-y-4 pt-2">
@@ -635,16 +716,16 @@ export function ServicePostApproval({
                 <strong className="text-gray-900 font-bold">"{deletingService.name}"</strong>? Hành động này sẽ gỡ bỏ hoàn toàn dịch vụ khỏi hệ thống và không thể hoàn tác.
               </p>
 
-              <DialogFooter className="gap-2 pt-2 border-t border-gray-100">
-                <Button
+              <AlertDialogFooter className="gap-2 pt-2 border-t border-gray-100">
+                <AlertDialogCancel asChild><Button data-slot="alert-dialog-cancel"
                   variant="outline"
                   size="sm"
                   onClick={() => setDeletingService(null)}
                   className="rounded-xl text-xs font-semibold"
                 >
                   Hủy bỏ
-                </Button>
-                <Button
+                </Button></AlertDialogCancel>
+                <Button data-slot="alert-dialog-action"
                   size="sm"
                   onClick={handleConfirmDelete}
                   disabled={busyId === deletingService.id}
@@ -652,11 +733,11 @@ export function ServicePostApproval({
                 >
                   {busyId === deletingService.id ? "Đang xóa..." : "Xác nhận xóa vĩnh viễn"}
                 </Button>
-              </DialogFooter>
+              </AlertDialogFooter>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

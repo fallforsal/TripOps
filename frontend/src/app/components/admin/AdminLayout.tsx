@@ -1,9 +1,10 @@
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { useState } from "react";
 import { TRIPOPS_LOGO, TRIPOPS_ICON } from "@/app/constants/logo";
 import {
+  MessageSquareWarning,
   LayoutDashboard,
-  Package,
   Calendar,
   Settings,
   ChevronLeft,
@@ -19,6 +20,7 @@ import {
   Compass,
   FileText,
   RotateCcw,
+  Banknote,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -55,6 +57,11 @@ export function AdminLayout({
       icon: UserCheck,
     },
     {
+      id: "users",
+      label: "Quản lý Người dùng",
+      icon: Users,
+    },
+    {
       id: "approve-tours",
       label: "Quản lý Tour",
       icon: Compass,
@@ -73,19 +80,19 @@ export function AdminLayout({
       badge: pendingRefundsCount > 0 ? pendingRefundsCount : undefined,
     },
     {
+      id: "complaints",
+      label: "Khiếu nại",
+      icon: MessageSquareWarning,
+    },
+    {
+      id: "settlements",
+      label: "Quyết toán Agency",
+      icon: Banknote,
+    },
+    {
       id: "finance",
-      label: "STK Sàn & Quyết toán",
+      label: "STK Sàn",
       icon: Landmark,
-    },
-    {
-      id: "providers",
-      label: "Mạng lưới Dịch vụ",
-      icon: Package,
-    },
-    {
-      id: "users",
-      label: "Quản lý Người dùng",
-      icon: Users,
     },
   ];
 
@@ -222,6 +229,10 @@ export function AdminLayout({
           >
             <Menu className="w-6 h-6 text-gray-600" />
           </button>
+        </div>
+
+        <div className="sticky top-0 z-20 flex justify-end border-b border-slate-200 bg-white px-6 py-2">
+          <WorkflowNotifications role="admin" onNavigate={onNavigate} />
         </div>
 
         {/* Content */}

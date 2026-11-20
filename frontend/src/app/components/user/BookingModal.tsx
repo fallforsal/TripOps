@@ -1,3 +1,4 @@
+import { toast } from "@/app/lib/notifications";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { useState } from "react";
 import { Tour } from "@/app/types";
@@ -32,7 +33,7 @@ export function BookingModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate) {
-      alert("Vui lòng chọn ngày khởi hành");
+      toast.warning("Vui lòng chọn ngày khởi hành");
       return;
     }
     onConfirm(numberOfGuests, startDate);

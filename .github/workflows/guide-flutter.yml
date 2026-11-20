@@ -6,7 +6,7 @@ on:
       - '.github/workflows/guide-flutter.yml'
   push:
     branches:
-      - feat/guide-flutter-clean-20261108
+      - hiep
     paths:
       - 'guide_mobile_flutter/**'
       - '.github/workflows/guide-flutter.yml'
@@ -21,6 +21,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.41.9'
           cache: true
       - name: Restore dependencies
         run: flutter pub get

@@ -70,7 +70,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task Agency_verifies_or_asks_to_sign_again_and_a_price_change_needs_a_new_version()
+    public async Task Agency_verifies_or_asks_to_sign_again_and_a_surcharge_preserves_the_signed_base_contract()
     {
         using var app = new App(); await app.Initialize();
         var (customer, agency, booking) = await ApprovedUnsigned(app);
@@ -94,22 +94,18 @@ public sealed partial class BookingFlowTests
         Assert.Equal(BookingService.ContractVerified, verified.Contract!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await UploadContract(customer, booking.Id, SignedPdf)).StatusCode); // đã xác nhận
 
-        // Giá đổi sau khi duyệt: hợp đồng cũ bị thay, khách phải ký phiên bản mới trước khi trả tiền.
-        using (var scope = app.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
-            var row = await db.Bookings.SingleAsync(b => b.Id == booking.Id);
-            row.TotalAmount += 500000;
-            await db.SaveChangesAsync();
-        }
+        // Sau khi duyệt, giá tour/hợp đồng gốc được khóa; phần tăng là phụ thu riêng.
+        await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/surcharges",
+            new BookingSurchargeInput(500000, "Phụ thu đã thỏa thuận với khách", verified.TotalAmount, Guid.NewGuid())));
         Assert.Equal(HttpStatusCode.OK, (await customer.GetAsync($"/api/v1/files/contracts/{booking.Id}/document")).StatusCode);
         var current = (await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{booking.Id}"))!;
-        Assert.Equal(2, current.Contract!.Version);
-        Assert.Equal(BookingService.ContractAwaiting, current.Contract.Status);
-        Assert.Equal(current.TotalAmount, current.Contract.TotalAmount);
-        Assert.True(current.Contract.RequiredBeforePayment);
+        Assert.Equal(1, current.Contract!.Version);
+        Assert.Equal(BookingService.ContractVerified, current.Contract.Status);
+        Assert.Equal(verified.TotalAmount, current.Contract.TotalAmount);
+        Assert.Equal(verified.TotalAmount + 500000, current.TotalAmount);
+        Assert.False(current.Contract.RequiredBeforePayment);
         using var check = app.Services.CreateScope();
-        Assert.Equal(BookingService.ContractSuperseded, (await check.ServiceProvider.GetRequiredService<TripOpsDbContext>()
-            .BookingContracts.SingleAsync(c => c.BookingId == booking.Id && c.Version == 1)).Status);
+        Assert.Equal(1, await check.ServiceProvider.GetRequiredService<TripOpsDbContext>()
+            .BookingContracts.CountAsync(c => c.BookingId == booking.Id));
     }
 }

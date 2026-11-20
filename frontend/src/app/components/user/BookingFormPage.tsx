@@ -1,5 +1,7 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { toast } from "@/app/lib/notifications";
 import { Textarea } from "@/app/components/ui/textarea";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   parseDateString,
   calculateAge,
@@ -17,6 +19,7 @@ export {
   parseDateString,
 } from "@/app/utils/guestValidation";
 import * as XLSX from "xlsx";
+import { isValidPassengerPhone, phoneFromSpreadsheet } from "@/app/lib/passengerPhone";
 import {
   Tour,
   BookingPassenger,
@@ -50,6 +53,7 @@ import {
   Sparkles,
   Download,
   FileSpreadsheet,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -69,6 +73,7 @@ interface BookingFormPageProps {
   customHotelChanges?: CustomHotelChange[];
   customMealChanges?: CustomMealChange[];
   locationChanges?: CustomLocationChange[];
+  defaultStartDate?: string;
   onBack: () => void;
   onSubmit: (data: BookingSubmitData) => void | Promise<unknown>;
   onGoHome?: () => void;
@@ -154,6 +159,7 @@ export function BookingFormPage({
   customHotelChanges = [],
   customMealChanges = [],
   locationChanges = [],
+  defaultStartDate,
   onBack,
   onSubmit,
   onGoHome,
@@ -163,10 +169,17 @@ export function BookingFormPage({
 
   // Step 2 state
   const initialStartDate =
-    tour.departureDates && tour.departureDates.length > 0
+    defaultStartDate ||
+    (tour.departureDates && tour.departureDates.length > 0
       ? tour.departureDates[0].date
-      : new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+      : new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]);
   const [tourStartDate, setTourStartDate] = useState(initialStartDate);
+
+  useEffect(() => {
+    if (defaultStartDate) {
+      setTourStartDate(defaultStartDate);
+    }
+  }, [defaultStartDate]);
 
   const [passengers, setPassengers] = useState<BookingPassenger[]>([
     newPassenger("p1", tour),
@@ -273,8 +286,12 @@ export function BookingFormPage({
       );
       return sum + (option?.priceDifference || 0);
     }, 0);
+  // Chênh lệch dịch vụ tự chọn chỉ áp cho vé tính tiền (vé miễn phí giữ 0đ) và
+  // không làm giá vé âm — khớp với cách backend tính khi tạo booking.
+  const priceWithExtra = (base: number) =>
+    base > 0 ? Math.max(0, base + extraPerGuest) : 0;
   const totalPrice = passengers.reduce(
-    (s, p) => s + p.price + extraPerGuest,
+    (s, p) => s + priceWithExtra(p.price),
     0,
   );
   const depositAmount = 0;
@@ -360,6 +377,7 @@ export function BookingFormPage({
             "Muốn ở cùng Trần Thị Bình (STT 2), ưu tiên hai giường đơn",
           "Yêu cầu ăn uống / Dị ứng thực phẩm": "Ăn chay nhẹ, không ăn cay",
           "Ghi chú cá nhân": "Người đại diện đoàn",
+          "Số điện thoại": "0901234567",
         },
         {
           STT: 2,
@@ -372,6 +390,7 @@ export function BookingFormPage({
             "Muốn ở cùng Nguyễn Văn An (STT 1)",
           "Yêu cầu ăn uống / Dị ứng thực phẩm": "Không ăn thịt bò",
           "Ghi chú cá nhân": "Hay say xe ngồi đầu xe",
+          "Số điện thoại": "0912345678",
         },
         {
           STT: 3,
@@ -385,6 +404,7 @@ export function BookingFormPage({
           "Yêu cầu ăn uống / Dị ứng thực phẩm":
             "Dị ứng hải sản, tôm cua, kiêng đậu phộng",
           "Ghi chú cá nhân": "Trẻ nhỏ cần chú ý",
+          "Số điện thoại": "",
         },
         {
           STT: 4,
@@ -398,6 +418,7 @@ export function BookingFormPage({
           "Yêu cầu ăn uống / Dị ứng thực phẩm":
             "Dùng thức ăn mềm / cháo dinh dưỡng",
           "Ghi chú cá nhân": "Trẻ nhỏ cần hỗ trợ",
+          "Số điện thoại": "",
         },
       ];
 
@@ -405,7 +426,7 @@ export function BookingFormPage({
 
       // Định dạng kiểu text 's' và format '@' cho cột CCCD (Cột C) để không bị mất số 0 đầu
       Object.keys(ws).forEach((cellKey) => {
-        if (/^C\d+$/.test(cellKey) && cellKey !== "C1") {
+        if (/^[CJ]\d+$/.test(cellKey) && !["C1", "J1"].includes(cellKey)) {
           if (ws[cellKey]) {
             ws[cellKey].t = "s";
             ws[cellKey].z = "@";
@@ -423,6 +444,7 @@ export function BookingFormPage({
         { wch: 45 }, // Nguyện vọng xếp phòng / Muốn ở cùng ai
         { wch: 40 }, // Yêu cầu ăn uống / Dị ứng thực phẩm
         { wch: 35 }, // Ghi chú cá nhân
+        { wch: 22 }, // Số điện thoại (text)
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Danh_Sach_Khach");
@@ -431,7 +453,7 @@ export function BookingFormPage({
         `Mau_Danh_Sach_Khach_Tour_${tour.tourCode || "Tour"}.xlsx`,
       );
     } catch (err: any) {
-      alert(
+      toast.error(
         "Không thể tải file mẫu: " + (err?.message || "Lỗi không xác định"),
       );
     }
@@ -599,6 +621,8 @@ export function BookingFormPage({
 
           const price = getPassengerPrice(tour, ageGroup, calculatedAge);
 
+          const phone = phoneFromSpreadsheet(row);
+          if (!isValidPassengerPhone(phone)) throw new Error(`Dòng ${i + 2}: Số điện thoại của ${fullName} không hợp lệ (tối đa 30 ký tự).`);
           parsed.push({
             id: `p_excel_${Date.now()}_${i}`,
             fullName,
@@ -607,6 +631,7 @@ export function BookingFormPage({
             ageGroup,
             price,
             idNumber,
+            phone,
             roommateNote: roommateNote || "",
             dietaryNote: dietaryNote || "",
             notes: notes || "",
@@ -648,7 +673,7 @@ export function BookingFormPage({
   const isStep2Valid =
     guestValidation.isValid &&
     tourStartDate.trim() &&
-    passengers.every((p) => p.fullName.trim() && p.dateOfBirth) &&
+    passengers.every((p) => p.fullName.trim() && p.dateOfBirth && isValidPassengerPhone(p.phone)) &&
     contactName.trim() &&
     contactPhone.trim() &&
     contactEmail.trim();
@@ -657,7 +682,7 @@ export function BookingFormPage({
   const [submitError, setSubmitError] = useState("");
   const handleConfirm = async () => {
     if (!guestValidation.isValid || !isStep2Valid) {
-      alert(
+      toast.warning(
         guestValidation.warningMessage ||
           "Vui lòng kiểm tra lại điều kiện số lượng khách tối thiểu của tour.",
       );
@@ -841,8 +866,7 @@ export function BookingFormPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {tour.priceTable ? (
-                      tour.priceTable.map((row, i) => (
+                    {(tour.priceTable ?? [{ ageGroup: "Người lớn", ageGroupLabel: "Người lớn", ageRange: undefined, price: tour.price }]).map((row, i) => (
                         <tr key={i}>
                           <td className="py-2.5">
                             <p className="font-medium text-gray-800">
@@ -855,25 +879,46 @@ export function BookingFormPage({
                             )}
                           </td>
                           <td className="py-2.5 text-right font-semibold text-[#075985]">
-                            {row.price === 0
-                              ? "Miễn phí"
-                              : formatVND(row.price)}
+                            {row.price === 0 ? (
+                              "Miễn phí"
+                            ) : extraPerGuest !== 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span>{formatVND(priceWithExtra(row.price))}</span>
+                                <span className="text-xs font-normal text-gray-400 line-through">
+                                  {formatVND(row.price)}
+                                </span>
+                              </div>
+                            ) : (
+                              formatVND(row.price)
+                            )}
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-2.5 font-medium text-gray-800">
-                          Người lớn
-                        </td>
-                        <td className="py-2.5 text-right font-semibold text-[#075985]">
-                          {formatVND(tour.price)}
-                        </td>
-                      </tr>
-                    )}
+                      ))}
                   </tbody>
                 </table>
               </div>
+              {extraPerGuest !== 0 && (
+                <div
+                  className={`mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${
+                    extraPerGuest > 0
+                      ? "border-amber-200 bg-amber-50 text-amber-900"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  }`}
+                >
+                  <span>
+                    {extraPerGuest > 0
+                      ? "Phụ thu dịch vụ tự chọn (khách sạn / bữa ăn)"
+                      : "Giảm giá dịch vụ tự chọn (khách sạn / bữa ăn)"}
+                    <span className="block text-[11px] opacity-80">
+                      Áp dụng cho mỗi vé tính tiền; vé miễn phí không bị tính.
+                    </span>
+                  </span>
+                  <strong className="whitespace-nowrap">
+                    {extraPerGuest > 0 ? "+" : "−"}
+                    {formatVND(Math.abs(extraPerGuest))}/khách
+                  </strong>
+                </div>
+              )}
             </div>
 
             {/* Contact info */}
@@ -1023,37 +1068,9 @@ export function BookingFormPage({
               </div>
 
               {/* Excel Feedback Alerts */}
-              {excelSuccess && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs text-emerald-800 mb-4 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="font-semibold">{excelSuccess}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExcelSuccess(null)}
-                    className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
+              {excelSuccess && <NotificationMessage tone="success" message={excelSuccess} />}
 
-              {excelError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between text-xs text-red-800 mb-4 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                    <span className="font-semibold">{excelError}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExcelError(null)}
-                    className="text-red-700 hover:text-red-900 font-bold ml-2 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
+              {excelError && <NotificationMessage tone="error" message={excelError} />}
 
               {/* Fast Excel Guide Tip */}
               <div className="bg-[#E0F2FE]/60 border border-[#075985]/15/80 rounded-xl p-3 mb-4 flex items-center justify-between text-xs text-[#075985]">
@@ -1241,6 +1258,15 @@ export function BookingFormPage({
                           <option value="female">Nữ</option>
                         </select>
                       </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs text-gray-500">Số điện thoại hành khách (tùy chọn)</Label>
+                        <Input type="tel" inputMode="tel" autoComplete="tel" maxLength={30}
+                          value={p.phone ?? ""} onChange={e => updatePassenger(p.id, { phone: e.target.value })}
+                          placeholder="VD: 0901234567 hoặc +84901234567" className="mt-1 text-sm"
+                          aria-invalid={!isValidPassengerPhone(p.phone)} />
+                        {!isValidPassengerPhone(p.phone) && <p className="mt-1 text-xs text-red-600">Số điện thoại không hợp lệ.</p>}
+                        <p className="mt-1 text-xs text-slate-500">Có thể để trống nếu hành khách không có số riêng.</p>
+                      </div>
                       {/* Nguyện vọng xếp phòng / Muốn ở cùng ai */}
                       <div className="sm:col-span-2 space-y-1">
                         <Label className="text-xs font-semibold text-gray-700">
@@ -1359,7 +1385,7 @@ export function BookingFormPage({
                             <span className="font-bold text-[#075985]">
                               {p.price === 0
                                 ? "Miễn phí (0đ)"
-                                : formatVND(p.price + extraPerGuest)}
+                                : formatVND(priceWithExtra(p.price))}
                             </span>
                           </div>
                         </div>
@@ -1409,7 +1435,7 @@ export function BookingFormPage({
                 disabled={!isStep2Valid || !guestValidation.isValid}
                 onClick={() => {
                   if (!guestValidation.isValid || !isStep2Valid) {
-                    alert(
+                    toast.warning(
                       guestValidation.warningMessage ||
                         "Vui lòng kiểm tra lại điều kiện số lượng khách tối thiểu của tour.",
                     );
@@ -1574,6 +1600,7 @@ export function BookingFormPage({
                             <td className="px-3 py-3 min-w-[170px]">
                               <p className="font-semibold text-gray-900">{p.fullName}</p>
                               {p.idNumber && <p className="mt-0.5 font-mono text-xs text-gray-500">{p.idNumber}</p>}
+                              {p.phone && <p className="mt-0.5 text-xs text-sky-800">SĐT: {p.phone}</p>}
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap">
                               <p className="text-gray-800">{dob}</p>
@@ -1595,7 +1622,7 @@ export function BookingFormPage({
                             <td className="px-3 py-3">{noteCell(p.dietaryNote)}</td>
                             <td className="px-3 py-3">{noteCell(p.notes)}</td>
                             <td className="px-3 py-3 text-right font-semibold text-[#075985] whitespace-nowrap">
-                              {p.price === 0 ? "Miễn phí" : formatVND(p.price + extraPerGuest)}
+                              {p.price === 0 ? "Miễn phí" : formatVND(priceWithExtra(p.price))}
                             </td>
                           </tr>
                         );
@@ -1615,6 +1642,306 @@ export function BookingFormPage({
                   </table>
                 </div>
               </div>
+
+              {/* LỘ TRÌNH & KHÁCH SẠN CHI TIẾT CỦA TOUR (LUÔN HIỂN THỊ ĐỂ KHÁCH XEM LẠI) */}
+              {(tour.hotels?.length || tour.itinerary?.length) ? (
+                <div className="bg-white rounded-2xl border border-[#CBD5E1] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-xs text-[#075985] uppercase flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-[#0284C7]" />
+                      Khách sạn &amp; Lịch trình chi tiết chuyến đi
+                    </h4>
+                    <span className="text-[11px] text-slate-500">
+                      {tour.duration || `${tour.itinerary?.length || 0} ngày`}
+                    </span>
+                  </div>
+
+                  {tour.hotels && tour.hotels.length > 0 && (
+                    <div className="bg-[#F8FAFC] rounded-xl p-3 border border-slate-200 space-y-1.5">
+                      <p className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#0284C7]" />
+                        Khách sạn lưu trú:
+                      </p>
+                      <div className="space-y-1 pl-5 text-xs">
+                        {tour.hotels.map((hotel, idx) => {
+                          const matchedChange = customHotelChanges?.find(
+                            (hc) =>
+                              (hotel.destination && hc.destination === hotel.destination) ||
+                              hc.originalHotelName === hotel.name,
+                          );
+                          const displayName = matchedChange ? matchedChange.newHotelName : hotel.name;
+                          const displayStars = matchedChange?.stars ?? hotel.stars;
+                          return (
+                            <div key={hotel.id || idx} className="flex flex-wrap items-center gap-1.5 text-slate-700">
+                              <span className="font-semibold text-slate-900">
+                                {hotel.destination ? `${hotel.destination}: ` : ""}
+                                {displayName}
+                              </span>
+                              {displayStars ? (
+                                <span className="text-amber-600 font-semibold">({displayStars}★)</span>
+                              ) : null}
+                              {hotel.nights ? (
+                                <span className="text-slate-500">· {hotel.nights} đêm</span>
+                              ) : null}
+                              {matchedChange && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-[#075985] border border-sky-200 font-medium">
+                                  Đã tùy chỉnh
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {tour.itinerary && tour.itinerary.length > 0 && (
+                    <div className="space-y-4">
+                      {tour.itinerary.map((day) => {
+                        const parseMinutes = (t?: string) => {
+                          if (!t) return 9999;
+                          const m = t.match(/(\d{1,2}):(\d{2})/);
+                          return m ? Number(m[1]) * 60 + Number(m[2]) : 9999;
+                        };
+                        const dayLocChanges = (locationChanges || []).filter(
+                          (lc) => lc.dayNumber === day.day,
+                        );
+                        type TimelineAct =
+                          | {
+                              kind: "location";
+                              key: string;
+                              time: string;
+                              name: string;
+                              customName?: string;
+                            }
+                          | {
+                              kind: "meal";
+                              key: string;
+                              time: string;
+                              label: string;
+                              name: string;
+                              defaultName: string;
+                              customized: boolean;
+                            };
+
+                        const activities: TimelineAct[] = [];
+                        (day.locations || []).forEach((loc, lIdx) => {
+                          const matched =
+                            dayLocChanges.find(
+                              (lc) =>
+                                (lc.locationId && lc.locationId === loc.id) ||
+                                (lc.originalLocationName &&
+                                  lc.originalLocationName === loc.name),
+                            ) ||
+                            (dayLocChanges.length === 1 &&
+                            (day.locations?.length || 0) === 1
+                              ? dayLocChanges[0]
+                              : undefined);
+                          activities.push({
+                            kind: "location",
+                            key: `loc-${loc.id || lIdx}`,
+                            time: loc.time || "08:00",
+                            name: loc.name,
+                            customName: matched?.requestedLocations,
+                          });
+                        });
+                        (day.meals || []).forEach((meal, mIdx) => {
+                          const mealChange = customMealChanges?.find(
+                            (mc) =>
+                              mc.dayNumber === day.day &&
+                              mc.mealType === meal.type,
+                          );
+                          const mealLabel =
+                            meal.type === "breakfast"
+                              ? "Bữa sáng"
+                              : meal.type === "lunch"
+                                ? "Bữa trưa"
+                                : "Bữa tối";
+                          const defaultTime =
+                            meal.type === "breakfast"
+                              ? "07:00"
+                              : meal.type === "lunch"
+                                ? "12:00"
+                                : "18:30";
+                          const defaultName =
+                            meal.serviceName ||
+                            meal.description ||
+                            "Nhà hàng theo tour";
+                          activities.push({
+                            kind: "meal",
+                            key: `meal-${meal.id || mIdx}`,
+                            time: meal.time || defaultTime,
+                            label: mealLabel,
+                            name: mealChange ? mealChange.newMealName : defaultName,
+                            defaultName,
+                            customized: !!mealChange,
+                          });
+                        });
+                        activities.sort(
+                          (a, b) => parseMinutes(a.time) - parseMinutes(b.time),
+                        );
+
+                        return (
+                          <div
+                            key={day.id || day.day}
+                            className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 rounded-full bg-[#F97316] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                  {day.day}
+                                </span>
+                                <p className="font-bold text-slate-900 text-sm">
+                                  {day.title}
+                                </p>
+                              </div>
+                              {day.destinationCity && (
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {day.destinationCity}
+                                </span>
+                              )}
+                            </div>
+
+                            {day.description && (
+                              <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                                {day.description}
+                              </div>
+                            )}
+
+                            {activities.length > 0 && (
+                              <div className="relative pl-1">
+                                <div className="absolute left-[95px] top-4 bottom-4 w-0.5 bg-gray-200" />
+                                <div className="space-y-3">
+                                  {activities.map((act) => {
+                                    if (act.kind === "location") {
+                                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                        (act.customName || act.name) +
+                                          (day.destinationCity
+                                            ? " " + day.destinationCity
+                                            : ""),
+                                      )}`;
+                                      return (
+                                        <div
+                                          key={act.key}
+                                          className="relative flex items-start gap-2.5"
+                                        >
+                                          <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                                              <Clock className="w-3 h-3 text-blue-500" />
+                                              {act.time}
+                                            </span>
+                                          </div>
+                                          <div
+                                            className={`relative z-10 flex-shrink-0 mt-2 w-7 h-7 rounded-full flex items-center justify-center border-2 ${
+                                              act.customName
+                                                ? "bg-amber-400 border-amber-400 text-white"
+                                                : "bg-white border-blue-400 text-blue-500"
+                                            }`}
+                                          >
+                                            <MapPin className="w-3.5 h-3.5" />
+                                          </div>
+                                          <div
+                                            className={`flex-1 rounded-xl border p-3 ${
+                                              act.customName
+                                                ? "border-amber-200 bg-amber-50"
+                                                : "border-gray-200 bg-white"
+                                            }`}
+                                          >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <div className="space-y-0.5">
+                                                {act.customName ? (
+                                                  <>
+                                                    <p className="text-xs text-gray-400 line-through">
+                                                      {act.name}
+                                                    </p>
+                                                    <a
+                                                      href={mapsUrl}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="font-semibold text-amber-800 text-sm hover:underline inline-flex items-center gap-1.5"
+                                                    >
+                                                      <span>→ {act.customName}</span>
+                                                      <ExternalLink className="w-3 h-3 text-amber-600" />
+                                                    </a>
+                                                  </>
+                                                ) : (
+                                                  <a
+                                                    href={mapsUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="font-medium text-gray-900 text-sm hover:text-blue-600 hover:underline inline-flex items-center gap-1.5 group"
+                                                  >
+                                                    <span>{act.name}</span>
+                                                    <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-blue-600" />
+                                                  </a>
+                                                )}
+                                              </div>
+                                              {act.customName && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-semibold">
+                                                  Đã tùy chỉnh
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div
+                                        key={act.key}
+                                        className="relative flex items-start gap-2.5"
+                                      >
+                                        <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-orange-50 text-orange-700 border border-orange-200">
+                                            <Clock className="w-3 h-3 text-orange-500" />
+                                            {act.time}
+                                          </span>
+                                        </div>
+                                        <div className="relative z-10 flex-shrink-0 mt-2 w-7 h-7 rounded-full bg-white border-2 border-[#F97316] text-[#F97316] flex items-center justify-center">
+                                          <Utensils className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div
+                                          className={`flex-1 rounded-xl border p-3 ${
+                                            act.customized
+                                              ? "border-amber-200 bg-amber-50/70"
+                                              : "border-gray-200 bg-[#F8FAFC]"
+                                          }`}
+                                        >
+                                          <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                              <span className="w-7 h-7 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center shrink-0">
+                                                <Utensils className="w-3.5 h-3.5" />
+                                              </span>
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-900">
+                                                  {act.label}: {act.name}
+                                                </p>
+                                                <p className="text-[11px] text-slate-500">
+                                                  Mặc định: {act.defaultName}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            {act.customized && (
+                                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-[#075985] border border-sky-200 font-semibold">
+                                                Đã tùy chỉnh
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* CUSTOMIZATION HIGHLIGHTS (NẾU CÓ TÙY CHỈNH) */}
               {isCustomized && (
@@ -1807,11 +2134,7 @@ export function BookingFormPage({
                 <ArrowLeft className="w-4 h-4" />
                 Quay lại
               </Button>
-              {submitError && (
-                <p role="alert" className="text-red-700">
-                  {submitError}
-                </p>
-              )}
+              {submitError && <NotificationMessage tone="error" message={submitError} />}
               <Button
                 disabled={
                   submitting || !isStep2Valid || !guestValidation.isValid

@@ -1,509 +1,837 @@
-import { DesignRequestMessages } from "@/app/components/common/DesignRequestMessages";
-import { DesignVersionHistory } from "@/app/components/common/DesignVersionHistory";
-import { http } from "@/app/lib/http";
-import { fromApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
-import { useEffect, useState } from "react";
-import { agencyPlanProposals, replyPlanProposal, type TourPlanProposal } from "@/app/services/customTourRequests";
-import { CustomTourRequest, Tour, TourCompany, TourCoHost } from "@/app/types";
-import { mockTourCompanies } from "@/app/data/mockData";
+import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
+import { confirmAction, requestText } from "@/app/lib/notificationDialogs";
+import { TourDetailPage } from "@/app/components/user/TourDetailPage";
+import { selectCustomerDesignVersion } from "@/app/lib/designVersionSelection";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from "@/app/components/ui/alert-dialog";
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { DesignVersionSelector } from "./DesignVersionSelector";
+import { DesignCollaborationPanel } from "./DesignCollaborationPanel";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "@/app/lib/notifications";
 import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  ChevronDown,
-  ChevronUp,
-  MapPin,
-  Users,
-  Calendar,
-  Sparkles,
   Building2,
+  CalendarDays,
+  CheckCircle2,
+  Copy,
+  Eye,
+  FileText,
   Handshake,
-  ArrowRight,
-  Filter,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Search,
+  Sparkles,
+  Users,
+  XCircle,
 } from "lucide-react";
+import { http } from "@/app/lib/http";
+import { fromApiTour, type ApiTour, type TourConfiguration } from "@/app/services/wf02Tours";
+import { cloneDesignTour, shareDesignTour, saveDesignTour, getDesignVersion, designRequestLifecycle } from "@/app/services/customTourRequests";
+import type { CustomTourRequest, Tour, TourCompany, Service } from "@/app/types";
+import { Button } from "@/app/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import { TourFormPage } from "@/app/components/agency/AgencyTourManagement";
-import { TourVersionHistoryModal } from "@/app/components/agency/TourVersionHistoryModal";
-import { CoHostInvitationModal } from "@/app/components/agency/CoHostInvitationModal";
+import { CustomRequestDetailModal } from "@/app/components/common/CustomRequestDetailModal";
+import type { DesignRequestDecision } from "./DesignRequestAgencyActions";
 
-interface AgencyCustomRequestsProps {
+interface Props {
+  embedded?: boolean;
+  onDetailChange?: (open: boolean) => void;
+  onViewBooking?: (id: string) => void;
+  services?: Service[];
   requests: CustomTourRequest[];
   company: TourCompany;
   tours: Tour[];
   allCompanies?: TourCompany[];
   onUpdateRequest: (id: string, update: Partial<CustomTourRequest>) => void | Promise<void>;
   onCreateTour: (tour: Omit<Tour, "id"> & { id?: string }) => Tour | void | Promise<Tour | void>;
-  onEditTour: (tourId: string, tour: Partial<Tour>) => void | Promise<void>;
-  onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
+  onEditTour: (id: string, tour: Partial<Tour>) => void | Promise<void>;
   onViewTour?: (tour: Tour) => void;
 }
 
-const STATUS_CONFIG: Record<CustomTourRequest["status"], { label: string; bg: string; text: string }> = {
-  pending: { label: "Chờ xử lý", bg: "bg-amber-50 border-amber-200", text: "text-amber-800" },
-  reviewing: { label: "Đang xem xét", bg: "bg-[#E0F2FE] border-[#075985]/15", text: "text-[#075985]" },
-  designed: { label: "Đã thiết kế Tour", bg: "bg-[#F97316]/10 border-[#F97316]/30", text: "text-[#F97316]" },
-  quoted: { label: "Đã báo giá", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-800" },
-  accepted: { label: "Khách chốt tour", bg: "bg-teal-50 border-teal-200", text: "text-teal-800" },
-  rejected: { label: "Từ chối", bg: "bg-red-50 border-red-200", text: "text-red-700" },
-  cancelled: { label: "Đã huỷ", bg: "bg-gray-50 border-gray-200", text: "text-gray-500" },
+const labels: Record<string, string> = {
+  pending: "Chờ xử lý",
+  reviewing: "Đã tiếp nhận",
+  designed: "Khách đang xem",
+  rejected: "Đã từ chối",
+  cancelled: "Đã hủy",
+  booked: "Đã đặt tour",
+  closed: "Đã đóng",
+  archived: "Lưu trữ",
 };
 
-function formatDate(iso: string) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("vi-VN");
-}
+const statusPillStyle = (status: string, sharedVersion?: number) => {
+  if (status === "rejected") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "cancelled" || status === "closed") return "border-slate-200 bg-slate-100 text-slate-600";
+  if (status === "booked") return "border-teal-200 bg-teal-50 text-teal-800";
+  if (sharedVersion) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-sky-200 bg-sky-50 text-[#075985]";
+};
 
-function formatVND(n: number) {
-  return n.toLocaleString("vi-VN") + " ₫";
-}
+const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
+const date = (value: string) => new Date(value).toLocaleDateString("vi-VN");
 
 export function AgencyCustomRequests({
   requests,
   company,
   tours,
-  allCompanies,
   onUpdateRequest,
-  onCreateTour,
-  onEditTour,
-  onRestoreTourVersion,
-  onViewTour,
-}: AgencyCustomRequestsProps) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [designingRequest, setDesigningRequest] = useState<CustomTourRequest | null>(null);
-  const [templateTour, setTemplateTour] = useState<Tour | null>(null);
-  const [editingTourForRequest, setEditingTourForRequest] = useState<Tour | null>(null);
-  const [versionHistoryTour, setVersionHistoryTour] = useState<Tour | null>(null);
-  const [invitingRequest, setInvitingRequest] = useState<CustomTourRequest | null>(null);
-  const [pendingProposalCounts, setPendingProposalCounts] = useState<Record<string, number>>({});
-  const [proposalRefresh, setProposalRefresh] = useState(0);
-  const requestIds = requests.filter((r) => r.status === "designed" || r.status === "quoted" || r.status === "accepted")
-    .map((r) => r.id).join(",");
-  useEffect(() => {
-    const ids = requestIds.split(",").filter(Boolean);
-    if (!ids.length) return;
-    let active = true;
-    void Promise.all(ids.map(async (id) => {
-      try { return [id, (await agencyPlanProposals(id)).filter((p) => p.status === "Pending").length] as const; }
-      catch { return [id, 0] as const; }
-    })).then((rows) => { if (active) setPendingProposalCounts(Object.fromEntries(rows)); });
-    return () => { active = false; };
-  }, [requestIds, proposalRefresh]);
-  // Filter requests
-  const pending = requests.filter((r) => r.status === "pending" || r.status === "reviewing");
-  const designed = requests.filter((r) => r.status === "designed" || r.status === "quoted" || r.status === "accepted");
-  const others = requests.filter((r) => r.status === "rejected" || r.status === "cancelled");
+  onViewBooking,
+  services = [],
+  embedded = false,
+  onDetailChange,
+}: Props) {
+  const [preview, setPreview] = useState<Tour | null>(null);
+  const [collaborating, setCollaborating] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(() => new URLSearchParams(window.location.hash.split("?")[1]).get("requestId"));
+  const [designing, setDesigning] = useState<CustomTourRequest | null>(null);
+  const [editing, setEditing] = useState<Tour | null>(null);
+  const [template, setTemplate] = useState<Tour | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, Tour>>({});
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const [updatingVersion, setUpdatingVersion] = useState<{ requestId: string; version: number | "all" } | null>(null);
+  const [rejecting, setRejecting] = useState<CustomTourRequest | null>(null);
+  const [reason, setReason] = useState("");
+  const [cloning, setCloning] = useState<CustomTourRequest | null>(null);
+  const [sourceId, setSourceId] = useState("");
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
 
-  const handleStartDesignTour = async (req: CustomTourRequest, existingTour?: Tour | null) => {
-    setTemplateTour(null);
-    if (!existingTour) {
+  const currentTour = (request: CustomTourRequest) =>
+    overrides[request.id] || tours.find(t => t.id === request.designedTourId || t.customRequestId === request.id) || null;
+  const active = (request: CustomTourRequest) => request.status === "reviewing" || request.status === "designed";
+
+  const perform = async (fn: () => Promise<void>) => {
+    if (lock.current) return false;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Không thể thực hiện thao tác. Vui lòng thử lại.";
+      setError(message);
+      toast.error(message);
+      return false;
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+
+  const decide = async (request: CustomTourRequest, decision: DesignRequestDecision) => {
+    if (decision === "rejected") {
+      if (request.status !== "pending") return;
+      setViewing(null);
+      setReason("");
+      setError("");
+      setRejecting(request);
+      return;
+    }
+    await perform(async () => {
+      await onUpdateRequest(request.id, { status: decision });
+      toast.success("Đã tiếp nhận yêu cầu thiết kế.");
+    });
+  };
+
+  const beginDesign = (request: CustomTourRequest, existing?: Tour | null, version?: number) => {
+    if (!active(request)) return;
+    if (!existing) {
+      setSourceId("");
+      setError("");
+      setCloning(request);
+      return;
+    }
+    void start(request, existing, version);
+  };
+
+  const start = async (request: CustomTourRequest, existing?: Tour | null, version?: number) => {
+    if (!active(request)) return;
+    await perform(async () => {
+      setTemplate(null);
+      if (existing) {
+        const saved = await getDesignVersion(request.id, version ?? overrides[request.id]?.version ?? existing.version ?? 1);
+        setEditing(saved);
+      } else {
+        setEditing(null);
+        const source = await http<TourConfiguration | null>(`/agency/tour-design-requests/${request.id}/source`);
+        if (source) {
+          const base = fromApiTour({
+            id: 0,
+            agencyId: company.id,
+            code: null,
+            status: "draft",
+            visibility: "hidden",
+            isRequest: true,
+            isAiGenerated: false,
+            version: 1,
+            configuration: { ...source, code: null },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          const initial = await http<CustomTourRequest["initialChanges"] | null>(`/agency/tour-design-requests/${request.id}/initial-changes`);
+          setTemplate(initial ? { ...base, itinerary: initial.itinerary, hotels: initial.hotels } : base);
+        }
+      }
+      setDesigning(request);
+    });
+  };
+
+  const save = async (data: Partial<Tour>) => {
+    if (!designing) return;
+    const saved = await saveDesignTour(designing.id, { ...(editing || template), ...data, is_request: true }, editing?.revision);
+    setOverrides(prev => ({ ...prev, [designing.id]: saved }));
+    await onUpdateRequest(designing.id, {});
+    setDesigning(null);
+    setEditing(null);
+    setRevision(n => n + 1);
+    toast.success("Đã lưu tour. Chọn phiên bản khách xem để cập nhật phương án.");
+  };
+
+  const openWorkspace = (request: CustomTourRequest) => {
+    setError("");
+    setCollaborating(request.id);
+  };
+
+  const chooseVersion = async (request: CustomTourRequest, selection: number | "all" | null) =>
+    perform(async () => {
+      setUpdatingVersion({ requestId: request.id, version: selection ?? 0 });
       try {
-        const configuration = await http<TourConfiguration | null>(`/agency/tour-design-requests/${req.id}/source`);
-        const initialChanges = await http<CustomTourRequest["initialChanges"] | null>(`/agency/tour-design-requests/${req.id}/initial-changes`);
-        if (configuration) { const template = fromApiTour({ id: 0, agencyId: company.id, code: null, status: "draft", visibility: "hidden", isRequest: true, isAiGenerated: false, version: 1,
-          configuration: { ...configuration, code: null }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-          setTemplateTour(initialChanges ? { ...template, itinerary: initialChanges.itinerary, hotels: initialChanges.hotels } : template); }
-      } catch { /* Request details remain available for manual design. */ }
+        const shareAll = selection === "all";
+        const targetVersion = shareAll ? currentTour(request)?.version || 1 : selection;
+        const saved =
+          targetVersion === null
+            ? await shareDesignTour(request.id, (await getDesignVersion(request.id, currentTour(request)?.version || 1)).revision!, null, false)
+            : await selectCustomerDesignVersion(
+                targetVersion,
+                selected => getDesignVersion(request.id, selected),
+                (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected, shareAll),
+              );
+        setOverrides(previous => ({ ...previous, [request.id]: saved }));
+        setRevision(value => value + 1);
+        try {
+          await onUpdateRequest(request.id, {});
+        } catch {
+          toast.warning("Đã cập nhật phiên bản cho khách. Danh sách yêu cầu chưa tải lại được, vui lòng tải lại trang khi kết nối ổn định.");
+        }
+        toast.success(
+          selection === null
+            ? "Đã ẩn tất cả phương án với khách."
+            : shareAll
+              ? "Khách hàng có thể xem và đặt toàn bộ các phiên bản của tour."
+              : `Khách hàng chỉ được xem và đặt phiên bản v${selection}.`,
+        );
+      } finally {
+        setUpdatingVersion(null);
+      }
+    });
+
+  const collaborationChanged = async (request: CustomTourRequest) => {
+    await onUpdateRequest(request.id, {});
+    if (request.designedTourId || currentTour(request)) {
+      const fresh = fromApiTour(await http<ApiTour>(`/agency/tour-design-requests/${request.id}/working-tour`));
+      setOverrides(previous => ({ ...previous, [request.id]: fresh }));
     }
-    setDesigningRequest(req);
-    setEditingTourForRequest(existingTour || null);
+    setRevision(value => value + 1);
   };
 
-  const handleSaveTourFromRequest = async (tourData: Partial<Tour>) => {
-    if (!designingRequest) return;
-    if (editingTourForRequest) {
-      await onEditTour(editingTourForRequest.id, { ...tourData, is_request: true });
-    } else {
-      await onCreateTour({
-        ...(tourData as any),
-        customRequestId: designingRequest.id,
-        is_request: true,
-        companyId: company.id,
-        companyName: company.name,
-        companyLogo: company.logo,
+  const matchesTab = (r: CustomTourRequest, tab: string) =>
+    tab === "all" || (tab === "closed" ? ["closed", "rejected", "cancelled"].includes(r.status) : r.status === tab);
+
+  const lifecycle = async (request: CustomTourRequest, action: "archive" | "unarchive" | "close" | "reopen") => {
+    let closeReasonInput: string | undefined;
+    if (action === "close") {
+      const input = await requestText("Khách hàng sẽ thấy lý do này và không thể booking mới cho đến khi Agency mở lại.", "", {
+        title: "Đóng yêu cầu thiết kế",
+        confirmLabel: "Đóng yêu cầu",
+        tone: "warning",
       });
+      if (input == null) return;
+      closeReasonInput = input.trim();
+      if (!closeReasonInput) {
+        toast.warning("Hãy nhập lý do đóng yêu cầu.");
+        return;
+      }
     }
-    await onUpdateRequest(designingRequest.id, {});
-    setDesigningRequest(null);
-    setEditingTourForRequest(null);
+    if (action === "reopen" && !(await confirmAction("Mở lại yêu cầu để tiếp tục thiết kế và cho khách booking?", { title: "Mở lại yêu cầu", confirmLabel: "Mở lại" }))) {
+      return;
+    }
+    await perform(async () => {
+      await designRequestLifecycle(request.id, action, closeReasonInput);
+      await onUpdateRequest(request.id, {});
+      toast.success(
+        action === "close"
+          ? "Đã đóng yêu cầu."
+          : action === "reopen"
+            ? "Đã mở lại yêu cầu."
+            : action === "archive"
+              ? "Đã chuyển vào lưu trữ. Phương án khách đang xem vẫn giữ nguyên."
+              : "Đã bỏ lưu trữ.",
+      );
+    });
   };
 
-  if (designingRequest) {
+  const rows = useMemo(
+    () =>
+      requests
+        .filter(
+          r =>
+            r.targetCompanyId === company.id &&
+            matchesTab(r, filter) &&
+            [r.id, r.destinations, r.contactName, r.contactEmail, r.contactPhone, r.businessName].some(v =>
+              v?.toLowerCase().includes(search.toLowerCase()),
+            ),
+        )
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+    [requests, filter, search, company.id],
+  );
+
+  const collaboration = requests.find(r => r.id === collaborating);
+  const detailOpen = !!(
+    preview ||
+    collaboration ||
+    designing ||
+    (viewing && requests.some(r => r.id === viewing) && new URLSearchParams(window.location.hash.split("?")[1]).has("requestId"))
+  );
+  useEffect(() => {
+    onDetailChange?.(detailOpen);
+  }, [detailOpen, onDetailChange]);
+  useEffect(() => () => onDetailChange?.(false), [onDetailChange]);
+
+  if (preview) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-[#075985]">
+          Xem trước phiên bản v{preview.version} · Nội dung này chưa thay đổi phiên bản khách đang xem.
+        </div>
+        <TourDetailPage tour={preview} services={services} currentUser={company} previewOnly onBack={() => setPreview(null)} />
+      </div>
+    );
+  }
+  if (collaboration) {
+    return <DesignCollaborationPanel request={collaboration} company={company} onClose={() => setCollaborating(null)} onChanged={() => collaborationChanged(collaboration)} />;
+  }
+  if (designing) {
     return (
       <TourFormPage
+        key={`${designing.id}-${editing?.version ?? "new"}`}
         company={company}
-        tour={editingTourForRequest || templateTour || null}
-        onBack={() => {
-          setDesigningRequest(null);
-          setEditingTourForRequest(null);
-        }}
-        onSubmit={handleSaveTourFromRequest}
-        customRequest={designingRequest}
+        tour={editing || template}
+        customRequest={designing}
         isCustomTour={true}
-        companyId={company.id}
-        companyName={company.name}
-        companyLogo={company.logo}
-        onSave={handleSaveTourFromRequest}
-        onCancel={() => {
-          setDesigningRequest(null);
-          setEditingTourForRequest(null);
+        ownershipCollaboration
+        designVersions={designing.collaborationVersions}
+        onDesignVersionChange={editing ? async version => { await perform(async () => setEditing(await getDesignVersion(designing.id, version))); } : undefined}
+        onManageCoHosts={() => {
+          setCollaborating(designing.id);
+          setDesigning(null);
         }}
-        isCustomDesign={true}
-        customRequestData={{
-          id: designingRequest.id,
-          destinations: designingRequest.destinations,
-          departureDate: designingRequest.departureDate,
-          returnDate: designingRequest.returnDate,
-          numberOfPeople: designingRequest.numberOfPeople,
-          budgetPerPerson: designingRequest.budgetPerPerson,
-          contactName: designingRequest.contactName,
-          businessName: designingRequest.businessName,
-          specialRequirements: designingRequest.additionalInfo,
-          version: editingTourForRequest ? (editingTourForRequest.version || 1) + 1 : 1,
+        onBack={() => setDesigning(null)}
+        onSubmit={save}
+      />
+    );
+  }
+
+  const viewed = requests.find(r => r.id === viewing) || null;
+  if (viewed && new URLSearchParams(window.location.hash.split("?")[1]).has("requestId")) {
+    return (
+      <CustomRequestDetailModal
+        embedded
+        isOpen
+        onClose={() => {
+          setViewing(null);
+          window.location.hash = "#/agency/custom-requests";
         }}
-        initialTour={editingTourForRequest || templateTour || undefined}
+        request={viewed}
+        matchingTour={currentTour(viewed)}
+        userRole="agency"
+        agencyActionBusy={busy}
+        onAgencyDecision={decide}
+        onStartDesignTour={beginDesign}
+        onViewTour={setPreview}
       />
     );
   }
 
   return (
-    <div className="space-y-8 font-sans">
-      {/* Editorial Header */}
-      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-[#CBD5E1] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {!embedded && (
+        <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-1">
           <div>
-            <span className="text-xs uppercase font-semibold tracking-widest text-[#F97316]">
-              Điều phối hành trình riêng
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-serif text-[#075985] mt-1">
-              Yêu cầu thiết kế tour từ khách hàng
-            </h2>
-            <p className="text-xs text-[#475569] font-light mt-0.5">
-              Tiếp nhận, phân tích nhu cầu và xây dựng lịch trình may đo riêng biệt cho khách đoàn & doanh nghiệp.
-            </p>
+            <h1 className="text-2xl font-semibold text-slate-900">Yêu cầu thiết kế tour</h1>
+            <p className="mt-1.5 text-sm text-slate-500">Tiếp nhận nhu cầu, xây dựng hành trình và chọn phiên bản khách được xem.</p>
           </div>
+          <p className="pt-2 text-sm text-slate-500">
+            <strong className="font-semibold text-slate-800">{requests.filter(r => r.targetCompanyId === company.id).length}</strong> yêu cầu
+            <span className="mx-2 text-slate-300">/</span>
+            <span className="text-amber-800">{requests.filter(r => r.targetCompanyId === company.id && r.status === "pending").length} chờ tiếp nhận</span>
+          </p>
+        </header>
+      )}
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 border-t-4 border-t-[#075985] bg-white shadow-2xs" aria-label="Danh sách yêu cầu thiết kế tour">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="relative min-w-[240px] flex-1 sm:max-w-lg">
+            <Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input
+              aria-label="Tìm yêu cầu thiết kế"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-9 pr-3 text-sm outline-none transition focus:border-[#075985] focus:bg-white focus:ring-2 focus:ring-sky-100"
+              placeholder="Tìm khách hàng, điểm đến, mã yêu cầu…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <Eye className="h-4 w-4 text-[#075985]" />
+            Bản mới giữ riêng tư đến khi bạn cho khách xem
+          </p>
         </div>
 
-        {/* Status Metrics Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-[#CBD5E1]">
-          {(["pending", "reviewing", "designed", "quoted"] as const).map((s) => {
-            const count = requests.filter((r) => r.status === s).length;
-            const cfg = STATUS_CONFIG[s];
-            return (
-              <div key={s} className="bg-[#F0F9FF] border border-[#CBD5E1] rounded-xl p-3.5 space-y-1">
-                <span className="text-[10px] uppercase tracking-wider text-[#475569] block font-medium">
-                  {cfg.label}
-                </span>
-                <span className="text-2xl font-serif font-bold text-[#075985]">
-                  {count}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Group 1: Pending & In-Review */}
-      {pending.length > 0 && (
-        <RequestGroupSection
-          title="Yêu cầu chờ thiết kế & Đang xử lý"
-          requests={pending}
-          tours={tours}
-          expanded={expanded}
-          setExpanded={setExpanded}
-          onStartDesignTour={handleStartDesignTour}
-          onViewTour={onViewTour}
-          onOpenVersionHistory={(tour) => setVersionHistoryTour(tour)}
-          onOpenInviteCoHost={(req) => setInvitingRequest(req)}
-          pendingProposalCounts={pendingProposalCounts}
-          onProposalReviewed={() => setProposalRefresh((n) => n + 1)}
-        />
-      )}
-
-      {/* Group 2: Designed */}
-      {designed.length > 0 && (
-        <RequestGroupSection
-          title="Hành trình đã thiết kế & Đang phục vụ khách"
-          requests={designed}
-          tours={tours}
-          expanded={expanded}
-          setExpanded={setExpanded}
-          onStartDesignTour={handleStartDesignTour}
-          onViewTour={onViewTour}
-          onOpenVersionHistory={(tour) => setVersionHistoryTour(tour)}
-          onOpenInviteCoHost={(req) => setInvitingRequest(req)}
-          pendingProposalCounts={pendingProposalCounts}
-          onProposalReviewed={() => setProposalRefresh((n) => n + 1)}
-        />
-      )}
-
-      {/* Modals */}
-      {versionHistoryTour && (
-        <TourVersionHistoryModal
-          isOpen={Boolean(versionHistoryTour)}
-          onClose={() => setVersionHistoryTour(null)}
-          tour={versionHistoryTour}
-          onRestoreVersion={(tourId, verNum) => {
-            onRestoreTourVersion?.(tourId, verNum);
-            setVersionHistoryTour(null);
-          }}
-        />
-      )}
-
-      {invitingRequest && (
-        <CoHostInvitationModal
-          open={Boolean(invitingRequest)}
-          onClose={() => setInvitingRequest(null)}
-          customRequest={invitingRequest}
-          tour={tours.find(
-            (t) => t.id === invitingRequest.designedTourId || t.customRequestId === invitingRequest.id
-          )}
-          currentCompany={company}
-          availableCompanies={allCompanies || mockTourCompanies}
-          onSendInvitation={() => setInvitingRequest(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-interface RequestGroupSectionProps {
-  title: string;
-  requests: CustomTourRequest[];
-  tours: Tour[];
-  expanded: string | null;
-  setExpanded: (id: string | null) => void;
-  onStartDesignTour: (req: CustomTourRequest, existingTour?: Tour | null) => void;
-  onViewTour?: (tour: Tour) => void;
-  onOpenVersionHistory?: (tour: Tour) => void;
-  onOpenInviteCoHost: (req: CustomTourRequest) => void;
-  pendingProposalCounts: Record<string, number>;
-  onProposalReviewed: () => void;
-}
-
-function RequestGroupSection({
-  title,
-  requests,
-  tours,
-  expanded,
-  setExpanded,
-  onStartDesignTour,
-  onViewTour,
-  onOpenVersionHistory,
-  onOpenInviteCoHost,
-  pendingProposalCounts,
-  onProposalReviewed,
-}: RequestGroupSectionProps) {
-  const [proposalRows, setProposalRows] = useState<TourPlanProposal[]>([]);
-  const [proposalReply, setProposalReply] = useState<Record<number, string>>({});
-  const [proposalError, setProposalError] = useState("");
-  useEffect(() => {
-    if (!expanded || !requests.some((r) => r.id === expanded)) return;
-    setProposalError("");
-    setProposalRows([]);
-    void agencyPlanProposals(expanded).then(setProposalRows)
-      .catch((e) => setProposalError(e instanceof Error ? e.message : "Không tải được bản khách chỉnh."));
-  }, [expanded, requests]);
-  const reply = async (requestId: string, proposalId: number, decision: "reviewed" | "needs_changes") => {
-    setProposalError("");
-    try {
-      await replyPlanProposal(requestId, proposalId, decision, proposalReply[proposalId] || "");
-      setProposalRows(await agencyPlanProposals(requestId));
-      setProposalReply((previous) => ({ ...previous, [proposalId]: "" }));
-      onProposalReviewed();
-    } catch (e) { setProposalError(e instanceof Error ? e.message : "Không gửi được phản hồi."); }
-  };
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1]">
-        <h3 className="text-base font-serif font-semibold text-[#075985] flex items-center gap-2">
-          <span>{title}</span>
-          <span className="text-xs bg-[#E0F2FE] text-[#075985] px-2 py-0.5 rounded-full font-sans">
-            {requests.length}
-          </span>
-        </h3>
-      </div>
-
-      <div className="space-y-3">
-        {requests.map((req) => {
-          const cfg = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
-          const isExp = expanded === req.id;
-          const matchingTour = tours.find(
-            (t) => t.id === req.designedTourId || t.customRequestId === req.id
-          );
-
-          return (
-            <div
-              key={req.id}
-              className="bg-white rounded-2xl border border-[#CBD5E1] hover:border-[#075985] shadow-sm transition-all overflow-hidden"
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/40 px-4" role="tablist" aria-label="Trạng thái yêu cầu">
+          {["all", "pending", "reviewing", "designed", "booked", "closed"].map(status => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filter === status}
+              aria-controls="agency-design-request-rows"
+              key={status}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-3 text-sm transition-colors ${
+                filter === status ? "border-[#075985] font-semibold text-[#075985]" : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+              onClick={() => setFilter(status)}
             >
-              {/* Header Card Row */}
-              <div
-                onClick={() => setExpanded(isExp ? null : req.id)}
-                className="p-5 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4"
+              {status === "all" ? "Tất cả" : labels[status]}
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${
+                  filter === status ? "bg-sky-100 text-[#075985]" : "bg-slate-200/70 text-slate-600"
+                }`}
               >
-                {/* Left meta */}
-                <div className="space-y-2 flex-1 min-w-0">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.text}`}>
-                      {cfg.label}
-                    </span>
-                    <h4 className="text-base font-serif font-semibold text-[#075985] truncate">
-                      {req.destinations}
-                    </h4>
-                    {matchingTour && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#E0F2FE] text-[#075985] font-medium border border-[#CBD5E1]">
-                        Phiên bản v{matchingTour.version || 1}
-                      </span>
-                    )}
-                    {pendingProposalCounts[req.id] > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800">
-                      {pendingProposalCounts[req.id]} bản khách chỉnh cần xem
-                    </span>}
-                    {req.isCoHosted && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F97316]/10 text-[#F97316] font-medium border border-[#F97316]/20 flex items-center gap-1">
-                        <Handshake className="w-3 h-3" />
-                        Liên minh lữ hành
-                      </span>
-                    )}
-                  </div>
+                {requests.filter(r => r.targetCompanyId === company.id && matchesTab(r, status)).length}
+              </span>
+            </button>
+          ))}
+        </div>
 
-                  <div className="flex items-center gap-4 text-xs text-[#475569] flex-wrap">
-                    <span className="flex items-center gap-1 font-medium text-[#075985]">
-                      <Users className="w-3.5 h-3.5 text-[#F97316]" />
-                      {req.contactName} ({req.contactPhone})
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {formatDate(req.departureDate)} – {formatDate(req.returnDate)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      {req.numberOfPeople} khách
-                    </span>
-                    {req.businessName && (
-                      <span className="flex items-center gap-1 text-[#075985] font-medium">
-                        <Building2 className="w-3.5 h-3.5" />
-                        {req.businessName}
-                      </span>
-                    )}
-                  </div>
-                </div>
+        <div id="agency-design-request-rows" role="tabpanel" className="divide-y divide-slate-100">
+          {rows.map(request => {
+            const tour = currentTour(request);
+            const sharedVersion = overrides[request.id]?.sharedVersion ?? request.sharedVersion;
+            const shareAllVersions = overrides[request.id]?.shareAllVersions ?? request.shareAllVersions;
+            const editable = active(request);
+            const budget = Number(request.budgetPerPerson);
+            const partnerCount = request.coHosts?.filter(h => h.role === "partner" && h.status === "accepted").length || 0;
 
-                {/* Right price & action */}
-                <div className="flex items-center gap-4 self-end md:self-center">
-                  {(req.quotedPricePerPerson || matchingTour?.price) && (
-                    <div className="text-right">
-                      <span className="text-[10px] uppercase tracking-wider text-[#475569] block">Định mức / Khách</span>
-                      <span className="text-base font-serif font-semibold text-[#075985]">
-                        {formatVND(matchingTour?.price ?? req.quotedPricePerPerson ?? 0)}
+            return (
+              <article key={request.id} className="p-5 transition-colors hover:bg-slate-50/60">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,1.15fr)_minmax(230px,1.1fr)_minmax(290px,1.15fr)]">
+                  {/* Cột 1: Khách hàng & Liên hệ */}
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-600">
+                        #{request.id}
                       </span>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusPillStyle(request.status, sharedVersion)}`}>
+                        {request.status === "pending" && <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                        {labels[request.status] || request.status}
+                      </span>
+                      {(request.hasCollaborations || partnerCount > 0) && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800">
+                          <Handshake className="h-3 w-3" />
+                          Liên minh{partnerCount > 0 ? ` (${partnerCount + 1})` : ""}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400">Gửi {date(request.createdAt)}</span>
                     </div>
-                  )}
 
-                  <div className="w-7 h-7 rounded-full border border-[#CBD5E1] flex items-center justify-center text-[#475569]">
-                    {isExp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
-              </div>
+                    <div>
+                      <p className="font-semibold text-slate-900" title={request.contactName}>
+                        {request.contactName}
+                      </p>
+                      {request.businessName && (
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-600" title={request.businessName}>
+                          <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          {request.businessName}
+                        </p>
+                      )}
+                    </div>
 
-              {/* Collapsible Details */}
-              {isExp && (
-                <div className="p-6 bg-[#F0F9FF] border-t border-[#CBD5E1] space-y-6">
-                  <DesignRequestMessages requestId={req.id} agency />
-                  <DesignVersionHistory requestId={req.id} agency />
-                  {req.additionalInfo && (
-                    <div className="space-y-1 bg-white p-4 rounded-xl border border-[#CBD5E1]">
-                      <span className="text-xs uppercase font-semibold tracking-wider text-[#F97316]">
-                        Yêu cầu & Ghi chú từ khách hàng:
-                      </span>
-                      <p className="text-xs text-[#0F172A]/80 font-light leading-relaxed">
-                        {req.additionalInfo}
+                    <div className="space-y-1 text-xs text-slate-500">
+                      <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" />{request.contactPhone}</p>
+                      <p className="flex items-center gap-1.5 truncate" title={request.contactEmail}>
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />{request.contactEmail}
                       </p>
                     </div>
-                  )}
 
-                  <section className="space-y-3 rounded-xl border border-sky-300 bg-white p-4 text-sm">
-                    <h4 className="font-bold text-sky-900">Bản khách tùy biến và trao đổi</h4>
-                    {proposalError && <p role="alert" className="text-red-700">{proposalError}</p>}
-                    {!proposalRows.length && <p className="text-slate-500">Khách chưa gửi bản chỉnh nào cho yêu cầu này.</p>}
-                    {proposalRows.map((proposal) => {
-                      const base = tours.find((t) => t.id === String(proposal.tourId));
-                      return <div key={proposal.id} className="space-y-2 rounded border p-3">
-                        <p className="font-semibold">Bản #{proposal.id} · Plan v{proposal.baseTourVersion} · {proposal.status}</p>
-                        <p>{proposal.message}</p>
-              {proposal.proposal.quotation && <p className="text-xs text-sky-800">Giá gắn với bản gửi này · Plan v{proposal.proposal.quotation.tourVersion}: {proposal.proposal.quotation.pricePerPerson.toLocaleString("vi-VN")} ₫/khách · Tổng {proposal.proposal.quotation.total.toLocaleString("vi-VN")} ₫ ({proposal.proposal.quotation.preliminary ? "dự kiến" : "báo giá chính thức"})</p>}
-                        {proposal.proposal.requestedChanges && <p>Điều chỉnh đề xuất: {Object.entries(proposal.proposal.requestedChanges).filter(([, v]) => v).map(([k, v]) => `${({ numberOfPeople: "Số khách", budgetPerPerson: "Ngân sách/người", hotelStars: "Tiêu chuẩn sao", departureDate: "Ngày đi", returnDate: "Ngày về" } as Record<string, string>)[k] || k}: ${v}`).join(" · ")}</p>}
-                        {base && base.version !== proposal.baseTourVersion &&
-                          <p className="text-amber-800">Plan hiện là v{base.version}; hãy đối chiếu các thay đổi cũ trước khi lưu.</p>}
-                        <p className="text-xs text-slate-600">Khách đã chỉnh địa điểm, khách sạn hoặc nhà hàng trong bản sao. Kiểm tra tính khả dụng và giá trước khi công bố plan mới.</p>
-                        {base && <button className="rounded border border-sky-700 px-3 py-2 text-sky-800"
-                          onClick={() => onStartDesignTour(req, { ...base,
-                            itinerary: proposal.proposal.itinerary, hotels: proposal.proposal.hotels })}>
-                          Mở bản khách chỉnh để tạo phiên bản Agency</button>}
-                        {proposal.agencyReply && <p className="text-sky-800">Đã phản hồi: {proposal.agencyReply}</p>}
-                        <textarea aria-label={`Phản hồi bản ${proposal.id}`} className="w-full rounded border p-2" rows={2}
-                          placeholder="Thông báo phần nào được chấp nhận, cần đổi hoặc sẽ báo giá lại…"
-                          value={proposalReply[proposal.id] || ""} onChange={(e) => setProposalReply({ ...proposalReply, [proposal.id]: e.target.value })} />
-                        <div className="flex gap-2"><button className="rounded bg-sky-800 px-3 py-2 text-white"
-                          onClick={() => void reply(req.id, proposal.id, "reviewed")}>Đã xem, sẽ cập nhật plan</button>
-                          <button className="rounded border px-3 py-2" onClick={() => void reply(req.id, proposal.id, "needs_changes")}>Yêu cầu khách làm rõ</button></div>
-                      </div>;
-                    })}
-                  </section>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                    <div className="w-full flex flex-wrap gap-2">
-                      {tours.filter((t) => t.customRequestId === req.id).map((plan) =>
-                        <button key={plan.id} onClick={() => onStartDesignTour(req, plan)}
-                          className="px-3 py-2 rounded border border-[#CBD5E1] bg-white text-xs text-[#075985]">
-                          {plan.name} · v{plan.version || 1} · Chỉnh sửa
-                        </button>)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {matchingTour && onViewTour && (
-                        <button
-                          onClick={() => onViewTour(matchingTour)}
-                          className="px-4 py-2 rounded-full border border-[#CBD5E1] bg-white text-xs font-medium text-[#075985] hover:border-[#075985] transition-colors"
-                        >
-                          Xem demo tour
-                        </button>
-                      )}
-                      {matchingTour && onOpenVersionHistory && (
-                        <button
-                          onClick={() => onOpenVersionHistory(matchingTour)}
-                          className="px-4 py-2 rounded-full border border-[#CBD5E1] bg-white text-xs font-medium text-[#075985] hover:border-[#075985] transition-colors"
-                        >
-                          Lịch sử phiên bản
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onOpenInviteCoHost(req)}
-                        className="px-4 py-2 rounded-full border border-[#F97316]/30 bg-[#F97316]/10 text-xs font-medium text-[#F97316] hover:bg-[#F97316]/20 transition-colors"
+                    <div>
+                      <ChatWithButton
+                        userId={request.userId}
+                        context={{ kind: "design-request", id: Number(request.id), title: `Yêu cầu thiết kế #${request.id}`, subtitle: request.destinations }}
                       >
-                        Mời liên minh đối tác
-                      </button>
+                        Chat với khách
+                      </ChatWithButton>
                     </div>
+                  </div>
 
-                    {req.status !== "cancelled" && req.status !== "rejected" && (
-                      <div className="flex gap-2">
-                      {matchingTour && <button onClick={() => onStartDesignTour(req, null)}
-                        className="px-4 py-2.5 rounded-full border border-[#075985] text-[#075985] text-xs font-semibold">
-                        Thêm Tour plan mới
-                      </button>}
-                      <button
-                        onClick={() => onStartDesignTour(req, matchingTour)}
-                        className="px-6 py-2.5 rounded-full bg-[#075985] text-white text-xs font-semibold hover:bg-[#F97316] transition-all duration-300 flex items-center gap-2 shadow-sm"
-                      >
-                        <span>{matchingTour ? "Chỉnh sửa thiết kế tour" : "Bắt đầu thiết kế hành trình"}</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Cột 2: Hành trình & Ngân sách */}
+                  <div className="space-y-3">
+                    <div>
+                      <p className="flex items-start gap-1.5 text-base font-semibold text-slate-900">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#075985]" />
+                        <span>{request.destinations}</span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                        <span className="flex items-center gap-1.5">
+                          <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+                          {date(request.departureDate)} – {date(request.returnDate)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-slate-400" />
+                          {request.numberOfPeople} khách
+                        </span>
                       </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5">
+                      {budget > 0 ? (
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <div>
+                            <span className="block text-[11px] font-medium text-slate-500">Ngân sách dự kiến</span>
+                            <span className="text-sm font-bold tabular-nums text-slate-900">
+                              {money(budget)} <span className="text-xs font-normal text-slate-500">/ khách</span>
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="block text-[11px] text-slate-400">Tổng đoàn</span>
+                            <span className="text-xs font-semibold tabular-nums text-slate-700">
+                              {money(budget * Number(request.numberOfPeople))}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Ngân sách dự kiến</span>
+                          <span className="font-semibold text-slate-700">Thỏa thuận</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {(request.closeReason || request.rejectionReason) && (
+                      <p className="rounded-lg border border-rose-200/70 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                        {request.closeReason || request.rejectionReason}
+                      </p>
                     )}
                   </div>
+
+                  {/* Cột 3: Phương án & Thao tác */}
+                  <div className="flex flex-col justify-start gap-2.5 self-start">
+                    {tour ? (
+                      <DesignVersionSelector
+                        requestId={request.id}
+                        tour={tour}
+                        sharedVersion={sharedVersion}
+                        shareAllVersions={shareAllVersions}
+                        reload={revision}
+                        disabled={busy || !editable}
+                        updatingVersion={updatingVersion?.requestId === request.id ? updatingVersion.version : undefined}
+                        onChange={version => void chooseVersion(request, version)}
+                      />
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/40 p-3.5 text-xs leading-relaxed text-slate-500">
+                        <p className="font-semibold text-slate-700">Chưa có phương án tour</p>
+                        <p className="mt-1">
+                          {request.status === "pending"
+                            ? "Tiếp nhận yêu cầu để bắt đầu thiết kế hành trình cho khách."
+                            : editable
+                              ? "Nhấn Thiết kế tour để soạn mới hoặc chọn Dùng tour có sẵn."
+                              : "Yêu cầu đã đóng."}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        onClick={() => setViewing(request.id)}
+                      >
+                        <FileText className="h-3.5 w-3.5 text-[#075985]" />
+                        Hồ sơ
+                      </Button>
+
+                      {request.status === "pending" ? (
+                        <>
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            className="bg-[#075985] text-white hover:bg-[#0369a1]"
+                            onClick={() => void decide(request, "reviewing")}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Tiếp nhận
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            className="border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                            onClick={() => void decide(request, "rejected")}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Từ chối
+                          </Button>
+                        </>
+                      ) : editable ? (
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          className="bg-[#075985] text-white hover:bg-[#0369a1]"
+                          onClick={() => beginDesign(request, tour, tour?.version)}
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Thiết kế tour
+                        </Button>
+                      ) : null}
+
+                      {request.bookingId && (
+                        <Button size="sm" variant="outline" className="border-teal-200 bg-teal-50/70 text-teal-800 hover:bg-teal-100" onClick={() => onViewBooking?.(request.bookingId!)}>
+                          Xem booking
+                        </Button>
+                      )}
+
+                      {tour && editable && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                          onClick={() => openWorkspace(request)}
+                        >
+                          <Handshake className="h-3.5 w-3.5 text-teal-700" />
+                          Mời đối tác
+                        </Button>
+                      )}
+
+                      {(active(request) || request.status === "pending") && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          className="border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                          onClick={() => void lifecycle(request, "close")}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Đóng yêu cầu
+                        </Button>
+                      )}
+
+                      {request.status === "closed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          className="border-sky-200 bg-white text-[#075985] hover:bg-sky-50"
+                          onClick={() => void lifecycle(request, "reopen")}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Mở lại yêu cầu
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
+              </article>
+            );
+          })}
+
+          {!rows.length && (
+            <div className="px-5 py-16 text-center">
+              <Search className="mx-auto h-8 w-8 text-slate-300" />
+              <p className="mt-3 text-sm font-semibold text-slate-700">Không tìm thấy yêu cầu</p>
+              <p className="mt-1 text-xs text-slate-500">Thử từ khóa khác hoặc đổi bộ lọc trạng thái.</p>
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+
+        <p className="border-t border-slate-100 bg-slate-50/50 px-5 py-3 text-xs text-slate-500">
+          Hiển thị {rows.length} yêu cầu · Mới nhất trước
+        </p>
+      </section>
+
+      <CustomRequestDetailModal
+        isOpen={Boolean(viewed)}
+        onClose={() => setViewing(null)}
+        request={viewed}
+        matchingTour={viewed ? currentTour(viewed) : null}
+        userRole="agency"
+        agencyActionBusy={busy}
+        onAgencyDecision={decide}
+        onStartDesignTour={beginDesign}
+        onViewTour={setPreview}
+      />
+
+      <Dialog open={Boolean(historyRequestId)} onOpenChange={open => { if (!busy && !open) setHistoryRequestId(null); }}>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden bg-white sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#075985]">
+              <Handshake className="h-5 w-5" />
+              Mời và quản lý đối tác · Yêu cầu #{historyRequestId}
+            </DialogTitle>
+            <DialogDescription>
+              Chọn phiên bản tour để mời hoặc gỡ Agency đối tác. Quyền chỉnh sửa chỉ áp dụng cho phiên bản được mời.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto pr-1">
+            {requests
+              .filter(r => r.id === historyRequestId)
+              .map(request => (
+                <DesignCollaborationPanel
+                  key={request.id}
+                  embedded
+                  request={request}
+                  company={company}
+                  onClose={() => setHistoryRequestId(null)}
+                  onChanged={() => collaborationChanged(request)}
+                />
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(rejecting)} onOpenChange={open => { if (!busy && !open) setRejecting(null); }}>
+        <AlertDialogContent tone="error" className="bg-white sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Từ chối yêu cầu thiết kế #{rejecting?.id}</AlertDialogTitle>
+            <AlertDialogDescription>Cho khách biết vì sao Agency chưa thể tổ chức chuyến đi này.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="space-y-2 text-sm">
+            Lý do từ chối <span className="text-rose-600">*</span>
+            <textarea
+              aria-label="Lý do từ chối"
+              maxLength={2000}
+              rows={4}
+              className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-[#075985] focus:ring-2 focus:ring-sky-100"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+            />
+          </label>
+          {error && <NotificationMessage tone="error" message={error} />}
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel asChild>
+              <Button data-slot="alert-dialog-cancel" variant="outline" disabled={busy} onClick={() => setRejecting(null)}>
+                Hủy
+              </Button>
+            </AlertDialogCancel>
+            <Button
+              data-slot="alert-dialog-action"
+              disabled={busy || !reason.trim()}
+              onClick={() =>
+                void perform(async () => {
+                  if (!rejecting) return;
+                  await onUpdateRequest(rejecting.id, { status: "rejected", rejectionReason: reason.trim() });
+                  setRejecting(null);
+                  toast.success("Đã từ chối và gửi lý do cho khách.");
+                })
+              }
+            >
+              {busy && <Loader2 className="animate-spin" />}
+              Xác nhận từ chối
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={Boolean(cloning)} onOpenChange={open => { if (!busy && !open) setCloning(null); }}>
+        <DialogContent className="bg-white sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#075985]">
+              <Sparkles className="h-5 w-5" />
+              Bắt đầu thiết kế tour · Yêu cầu #{cloning?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Bạn muốn dùng một tour có sẵn của Agency làm mẫu hay thiết kế mới hoàn toàn từ đầu?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <Copy className="h-4 w-4 text-[#075985]" />
+                Dùng tour có sẵn làm mẫu
+              </div>
+              <p className="text-xs text-slate-500">
+                Tạo bản sao riêng cho yêu cầu này để chỉnh sửa nhanh. Tour gốc không bị thay đổi.
+              </p>
+              <select
+                aria-label="Tour mẫu để clone"
+                value={sourceId}
+                onChange={e => setSourceId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm outline-none focus:border-[#075985] focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="">— Chọn tour của Agency —</option>
+                {tours
+                  .filter(t => !t.is_request && t.status !== "deleted")
+                  .map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </select>
+              {error && <NotificationMessage tone="error" message={error} />}
+              <div className="flex justify-end">
+                <Button
+                  disabled={busy || !sourceId}
+                  className="bg-[#075985] text-white hover:bg-[#0369a1]"
+                  onClick={() =>
+                    void perform(async () => {
+                      if (!cloning) return;
+                      const saved = await cloneDesignTour(cloning.id, sourceId);
+                      setOverrides(prev => ({ ...prev, [cloning.id]: saved }));
+                      await onUpdateRequest(cloning.id, {});
+                      setEditing(saved);
+                      setTemplate(null);
+                      setDesigning(cloning);
+                      setCloning(null);
+                      toast.success("Đã tạo bản sao thành tour riêng. Bạn có thể chỉnh sửa ngay.");
+                    })
+                  }
+                >
+                  <Copy className="h-4 w-4" />
+                  Dùng tour đã chọn &amp; Thiết kế
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 bg-white p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Không dùng tour mẫu?</p>
+                <p className="text-xs text-slate-500">Tự thiết kế lịch trình và bảng giá mới hoàn toàn từ đầu.</p>
+              </div>
+              <Button
+                variant="outline"
+                disabled={busy}
+                className="border-sky-200 text-[#075985] hover:bg-sky-50"
+                onClick={() => {
+                  const target = cloning;
+                  setCloning(null);
+                  if (target) void start(target, null);
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                Thiết kế mới từ đầu
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

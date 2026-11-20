@@ -14,6 +14,7 @@ using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
 using TripOps.Service.Bookings;
+using TripOps.Service.Payments;
 
 namespace TripOps.Tests;
 
@@ -34,6 +35,14 @@ public sealed partial class BookingFlowTests
                 ["PayOsPayout:ClientId"] = "",
                 ["PayOsPayout:ApiKey"] = "",
                 ["PayOsPayout:ChecksumKey"] = "",
+                // Tác vụ tự chuyển tiền quyết toán không chạy trong test (test gọi lượt quét qua API).
+                ["Settlement:AutoPayoutEnabled"] = "false",
+                // Không dùng khóa OpenAI thật trên máy dev trong test (tốn phí, kết quả không cố định).
+                ["OpenAI:ApiKey"] = "",
+                // Always use the Development OTP fallback, regardless of local SMTP user-secrets.
+                ["Smtp:Host"] = "",
+                ["Smtp:UserName"] = "",
+                ["Smtp:Password"] = "",
             }));
             builder.ConfigureServices(services =>
             {
@@ -293,20 +302,60 @@ public sealed partial class BookingFlowTests
         Assert.Single(guideTrips.Items);
         Assert.Equal(bookingId, guideTrips.Items[0].Id);
 
-        // 7. Guide điểm danh hành khách
+        // 7. Guide may check attendance only on the Vietnam-local departure date.
         int participantId = assigned.Participants[0].Id;
-        var attendRes = await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{bookingId}/attendance", new AttendanceCheckinRequest(participantId, "CheckedIn"));
+        var departureToday = PaymentRules.VietnamDate(DateTime.UtcNow);
+        var attendanceUrl = $"/api/v1/guide/bookings/{bookingId}/attendance";
+        var checkedInRequest = new AttendanceCheckinRequest(participantId, "CheckedIn");
+        Assert.False(assigned.CanRecordAttendance);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest)).StatusCode);
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var futureParticipant = await db.BookingParticipants.SingleAsync(p => p.Id == participantId);
+            Assert.Equal(AttendanceStatus.Pending, futureParticipant.AttendanceStatus);
+            Assert.Null(futureParticipant.CheckedAt);
+            var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            trip.StartDate = departureToday.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest)).StatusCode);
+        var pastDayDetail = await guide.GetFromJsonAsync<BookingDto>(
+            $"/api/v1/guide/bookings/{bookingId}");
+        Assert.False(pastDayDetail!.CanRecordAttendance);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var pastParticipant = await db.BookingParticipants.SingleAsync(p => p.Id == participantId);
+            Assert.Equal(AttendanceStatus.Pending, pastParticipant.AttendanceStatus);
+            Assert.Null(pastParticipant.CheckedAt);
+            var trip = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            trip.StartDate = departureToday;
+            await db.SaveChangesAsync();
+        }
+        var departureDayDetail =
+            await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.True(departureDayDetail!.CanRecordAttendance);
+        var attendRes = await guide.PostAsJsonAsync(attendanceUrl, checkedInRequest);
         Assert.Equal(HttpStatusCode.OK, attendRes.StatusCode);
         var attended = await attendRes.Content.ReadFromJsonAsync<ParticipantDto>();
         Assert.NotNull(attended);
         Assert.Equal("CheckedIn", attended.AttendanceStatus);
 
-        // 8. Guide báo cáo sự cố
-        var incidentRes = await guide.PostAsJsonAsync($"/api/v1/guide/bookings/{bookingId}/incidents", new ReportIncidentRequest("Thời tiết", "Mưa lớn", "Lịch trình lùi 30 phút", "Low"));
+        // 8. Guide báo cáo sự cố qua một API multipart, không đính kèm ảnh.
+        using var incidentForm = new MultipartFormDataContent();
+        incidentForm.Add(new StringContent("WEATHER"), "IncidentType");
+        incidentForm.Add(new StringContent("Mưa lớn"), "Title");
+        incidentForm.Add(new StringContent("Lịch trình lùi 30 phút"), "Description");
+        var incidentRes = await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/incidents", incidentForm);
         Assert.Equal(HttpStatusCode.OK, incidentRes.StatusCode);
         var incident = await incidentRes.Content.ReadFromJsonAsync<IncidentDto>();
         Assert.NotNull(incident);
-        Assert.Contains("Thời tiết", incident.Title);
+        Assert.Equal("WEATHER", incident.IncidentType);
+        Assert.Contains("Mưa lớn", incident.Title);
 
         var reloaded = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal("CheckedIn", reloaded!.Participants.Single(p => p.Id == participantId).AttendanceStatus);
@@ -323,7 +372,7 @@ public sealed partial class BookingFlowTests
             Assert.NotNull(assignment.AssignedAt);
             var incidentSnapshot = await db.BookingIncidents.AsNoTracking().SingleAsync(i => i.Id == incident.Id);
             Assert.Equal("agency1", incidentSnapshot.AgencyId);
-            Assert.Equal("Thời tiết", incidentSnapshot.IncidentType);
+            Assert.Equal("WEATHER", incidentSnapshot.IncidentType);
         }
     }
 

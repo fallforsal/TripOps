@@ -1,3 +1,4 @@
+import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { register } from "@/app/services/authService";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -5,7 +6,6 @@ import {
   Compass,
   Building2,
   Store,
-  Users,
   Mail,
   Lock,
   Eye,
@@ -34,7 +34,8 @@ interface RegisterScreenProps {
   onShowLogin?: () => void;
 }
 
-type RegisterableRole = "user" | "agency" | "provider" | "guide";
+/** Hướng dẫn viên không tự đăng ký: tài khoản HDV do Agency tạo. */
+type RegisterableRole = "user" | "agency" | "provider";
 
 interface RoleCardConfig {
   id: RegisterableRole;
@@ -113,25 +114,6 @@ const ROLES_CONFIG: RoleCardConfig[] = [
     demoAccountName: "Heritage Resorts & Villas Đà Lạt",
     demoAccountEmail: "provider.heritage@gmail.com",
   },
-  {
-    id: "guide",
-    title: "Hướng dẫn viên",
-    badge: "Tour Guide",
-    badgeBg: "bg-purple-100",
-    badgeText: "text-purple-800",
-    icon: Users,
-    tagline: "Dẫn tour & Điểm danh",
-    desc: "Nhận lịch dẫn đoàn từ các công ty lữ hành, xem danh sách khách, check-in điểm đến trên tour.",
-    borderColor: "border-slate-200",
-    activeBorderColor: "border-purple-500",
-    activeBgColor: "bg-purple-500/5",
-    iconBg: "bg-purple-600",
-    iconColor: "text-white",
-    onboardingNote:
-      "ℹ️ Đăng ký tài khoản nhanh. Thẻ hành nghề hướng dẫn viên có thể tải lên sau trong trang cá nhân.",
-    demoAccountName: "Trần Thị Bích (HDV Lữ Hành)",
-    demoAccountEmail: "guide@demo.com",
-  },
 ];
 
 // Helper tạo tài khoản Demo có sẵn dữ liệu chuẩn theo từng Role
@@ -166,18 +148,6 @@ function createUnverifiedDemoUser(
         taxCode: "",
         avatar:
           "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200",
-      };
-    case "guide":
-      return {
-        id: "guide-new",
-        name: customName?.trim() || "Lê Văn Hùng",
-        email: customEmail?.trim() || "guide.new@tripops.vn",
-        phone: customPhone?.trim() || "0909 111 222",
-        role: "guide",
-        companyId: "company-3",
-        companyName: "Fiditour",
-        avatar:
-          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
       };
     case "user":
     default:
@@ -221,17 +191,6 @@ function createDemoUser(
         accountStatus: "approved",
         avatar:
           "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200",
-      };
-    case "guide":
-      return {
-        id: "guide-1",
-        name: customName?.trim() || "Trần Thị Bích (HDV)",
-        email: customEmail?.trim() || "guide@demo.com",
-        role: "guide",
-        companyId: "company-1",
-        companyName: "Viettravel",
-        avatar:
-          "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200",
       };
     case "user":
     default:
@@ -291,10 +250,6 @@ export function RegisterScreen({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (selectedRole === "guide") {
-      setError("Tài khoản HDV do Agency quản lý.");
-      return;
-    }
     if (password !== confirmPassword) {
       setError("Mật khẩu xác nhận không khớp.");
       return;
@@ -333,22 +288,19 @@ export function RegisterScreen({
       <div className="max-w-4xl mx-auto space-y-8">
         {/* TOP BRAND HEADER */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center gap-2.5 bg-white px-5 py-2 rounded-full border border-slate-200 shadow-2xs mb-1">
+          <div className="inline-flex items-center justify-center bg-white px-5 py-2 rounded-full border border-slate-200 shadow-2xs mb-1">
             <img
               src={TRIPOPS_LOGO}
               alt="TripOps Logo"
               className="h-7 w-auto object-contain"
             />
-            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-              Sign Up v2
-            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Đăng ký tài khoản thành viên
           </h1>
           <p className="text-sm text-slate-600 max-w-xl mx-auto">
             Hệ sinh thái kết nối thông minh giữa Doanh nghiệp lữ hành, Nhà cung
-            cấp dịch vụ, Hướng dẫn viên và Du khách
+            cấp dịch vụ và Du khách
           </p>
         </div>
 
@@ -377,7 +329,7 @@ export function RegisterScreen({
             </div>
 
             {/* Grid 4 Cards Vai Trò với AnimateUI motion */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {ROLES_CONFIG.map((role) => {
                 const IconComponent = role.icon;
                 const isSelected = selectedRole === role.id;
@@ -599,16 +551,7 @@ export function RegisterScreen({
             </div>
 
             {/* Error Message */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-medium flex items-center gap-2"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
-                {error}
-              </motion.div>
-            )}
+            {error && <NotificationMessage message={error} /> }
 
             {/* Tùy chọn 2: Form 4 trường cơ bản */}
             <form onSubmit={handleSubmit} className="space-y-4">

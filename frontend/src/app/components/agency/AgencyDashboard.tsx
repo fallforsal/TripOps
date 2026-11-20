@@ -1,3 +1,5 @@
+import { countPendingCoHostInvites } from "@/app/lib/designAlliance";
+import { AgencyDesignWorkspace } from "./AgencyDesignWorkspace";
 import { useEffect, useState } from "react";
 import {
   Tour,
@@ -6,7 +8,6 @@ import {
   Service,
   GuideSchedule,
   TourCompany,
-  PaymentRequest,
   CustomTourRequest,
   BookingAgencyShare,
   BookingAssignedGuide,
@@ -17,16 +18,22 @@ import {
 import { mockTourCompanies } from "@/app/data/mockData";
 import { AgencyLayout } from "./AgencyLayout";
 import { AgencyOverview } from "./AgencyOverview";
-import { AgencyTourManagement, TourFormPage } from "./AgencyTourManagement";
+import { AgencyTourManagement } from "./AgencyTourManagement";
 import { AgencyBookingManagement } from "./AgencyBookingManagement";
 import { AgencyGuideManagement } from "./AgencyGuideManagement";
-import { AgencyCustomRequests } from "./AgencyCustomRequests";
 import { AgencyBookingDetailPage } from "./AgencyBookingDetailPage";
-import { AgencyCoHostManagement } from "./AgencyCoHostManagement";
 import { AgencyServicesExplorer } from "./AgencyServicesExplorer";
 import { AgencySupplierDirectory } from "./AgencySupplierDirectory";
 import { BusinessProfileOnboardingPage } from "@/app/components/auth/BusinessProfileOnboardingPage";
 import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccountContainer";
+import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
+import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
+import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
+import { AgencyContractTemplatePage } from "@/app/components/agency/AgencyContractTemplatePage";
+
+import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
+import { toast } from "@/app/lib/notifications";
+import type { ItineraryFocus, NotificationDestination } from "@/app/lib/notificationNavigation";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -47,7 +54,6 @@ interface AgencyDashboardProps {
   onRejectBooking: (bookingId: string, reason?: string) => void;
   onAssignGuide: (bookingId: string, guideId: string) => void;
   onUpdateAssignedGuides?: (bookingId: string, guides: BookingAssignedGuide[]) => void;
-  onCreatePaymentRequest: (bookingId: string, request: Omit<PaymentRequest, "id" | "bookingId" | "createdAt" | "status">) => void;
   onMarkDepositPaid?: (bookingId: string) => void;
   onMarkFullyPaid?: (bookingId: string) => void;
   onBookingChanged?: (booking: import("@/app/services/wf05Bookings").BookingDto) => void;
@@ -59,7 +65,6 @@ interface AgencyDashboardProps {
   onCancelBooking?: (bookingId: string, reason: string) => Promise<boolean>;
   onReviewContract?: (bookingId: string, decision: "verify" | "resign", note?: string) => Promise<boolean>;
   onUpdateCustomRequest?: (id: string, update: Partial<CustomTourRequest>) => void;
-  onRestoreTourVersion?: (tourId: string, versionNumber: number) => void;
   onViewTour?: (tour: Tour) => void;
   onGuidesChanged?: () => void | Promise<void>;
   onLogout?: () => void;
@@ -83,7 +88,6 @@ export function AgencyDashboard({
   onRejectBooking,
   onAssignGuide,
   onUpdateAssignedGuides,
-  onCreatePaymentRequest,
   onMarkDepositPaid,
   onMarkFullyPaid,
   onUpdateBookingPrice,
@@ -95,22 +99,33 @@ export function AgencyDashboard({
   onCancelBooking,
   onReviewContract,
   onUpdateCustomRequest,
-  onRestoreTourVersion,
   onViewTour,
   onGuidesChanged,
   onLogout,
 }: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [focusedItineraryTab, setFocusedItineraryTab] = useState<ItineraryFocus | null>(null);
+  const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
   // Hash routing for reload / Back / Forward
   useEffect(() => {
     const handleHash = () => {
       const match = window.location.hash.match(/^#\/?agency\/([^/?]+)(?:\/([^/?]+))?/);
       if (match) {
-        const sec = match[1];
-        const bId = match[2] || null;
+        let sec = match[1];
+        if (sec === "custom-requests") {
+          const reqId = new URLSearchParams(window.location.hash.split("?")[1]).get("requestId");
+          if (reqId && customTourRequests.some(r => r.id === reqId && r.targetCompanyId !== company.id)) {
+            sec = "co-hosting";
+          }
+        }
+        const bId = sec === "bookings" ? match[2] || null : null;
+        const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+        const tab = params.get("tab");
         setActiveSection(sec);
-        if (bId) setSelectedBookingId(bId);
+        setSelectedBookingId(bId);
+        setFocusedItineraryTab(bId && (tab === "incidents" || tab === "live_checkin") ? tab : null);
+        if (bId) setNotificationFocusVersion(v => v + 1);
       }
     };
     handleHash();
@@ -118,10 +133,20 @@ export function AgencyDashboard({
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  const [editingCoHostItem, setEditingCoHostItem] = useState<{
-    tour?: Tour | null;
-    customRequest?: CustomTourRequest | null;
-  } | null>(null);
+  // Refresh stale booking details when Agency enters a booking after a Guide's report.
+  useEffect(() => {
+    if (activeSection !== "bookings" || !selectedBookingId) return;
+    const id = Number(selectedBookingId);
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    let cancelled = false;
+    void getAgencyBookingDetail(id)
+      .then((dto) => { if (!cancelled) onBookingChanged?.(dto); })
+      .catch((error) => {
+        if (!cancelled) toast.error(error instanceof Error
+          ? error.message : "Không tải được dữ liệu booking mới nhất.");
+      });
+    return () => { cancelled = true; };
+  }, [activeSection, selectedBookingId, notificationFocusVersion]);
 
   const companyTours = tours.filter(
     (t) =>
@@ -147,128 +172,23 @@ export function AgencyDashboard({
   ).length;
 
   // Count incoming pending co-host invitations for this company
-  const pendingCoHostInvitesCount =
-    customTourRequests.filter((r) =>
-      r.coHosts?.some(
-        (ch) => ch.companyId === company.id && ch.status === "pending"
-      )
-    ).length +
-    tours.filter((t) =>
-      t.coHosts?.some(
-        (ch) => ch.companyId === company.id && ch.status === "pending"
-      )
-    ).length;
+  const pendingCoHostInvitesCount = countPendingCoHostInvites(customTourRequests,tours,company.id);
 
   const currentSelectedBooking = selectedBookingId
     ? companyBookings.find((b) => b.id === selectedBookingId) || bookings.find((b) => b.id === selectedBookingId)
     : null;
 
-  const handleNavigateSection = (section: string) => {
+  const handleNavigateSection = (section: string, destination?: NotificationDestination) => {
     setActiveSection(section);
-    setSelectedBookingId(null);
-    setEditingCoHostItem(null);
-    window.location.hash = `#/agency/${section}`;
-  };
-
-  const handleEditTourSegment = (item: Tour | CustomTourRequest) => {
-    if ("customerName" in item || "contactName" in item) {
-      // It's a CustomTourRequest
-      const req = item as CustomTourRequest;
-      const matchingTour = tours.find(
-        (t) => t.id === req.designedTourId || t.customRequestId === req.id
-      );
-      setEditingCoHostItem({ tour: matchingTour || null, customRequest: req });
+    if (section === "bookings" && destination?.bookingId) {
+      setSelectedBookingId(String(destination.bookingId));
+      setFocusedItineraryTab(destination.tab ?? null);
+      setNotificationFocusVersion(v => v + 1);
     } else {
-      // It's a Tour
-      const tour = item as Tour;
-      const matchingReq = customTourRequests.find(
-        (r) => r.id === tour.customRequestId || r.designedTourId === tour.id
-      );
-      setEditingCoHostItem({ tour, customRequest: matchingReq || null });
+      setSelectedBookingId(null);
+      setFocusedItineraryTab(null);
     }
-  };
-
-  const handleAcceptCoHostInvitation = (requestIdOrTourId: string, isTour: boolean) => {
-    if (!isTour) {
-      const targetReq = customTourRequests.find((r) => r.id === requestIdOrTourId);
-      if (targetReq && targetReq.coHosts) {
-        const updatedCoHosts = targetReq.coHosts.map((ch) =>
-          ch.companyId === company.id
-            ? { ...ch, status: "accepted" as const, respondedAt: new Date().toISOString() }
-            : ch
-        );
-        onUpdateCustomRequest?.(requestIdOrTourId, {
-          coHosts: updatedCoHosts,
-          companyNote: `${company.name} đã chấp nhận tham gia liên minh dẫn tour.`,
-        });
-
-        // Also sync to matching tour if exists
-        const matchingTour = tours.find(
-          (t) => t.id === targetReq.designedTourId || t.customRequestId === targetReq.id
-        );
-        if (matchingTour && matchingTour.coHosts) {
-          const updatedTourCoHosts = matchingTour.coHosts.map((ch) =>
-            ch.companyId === company.id
-              ? { ...ch, status: "accepted" as const, respondedAt: new Date().toISOString() }
-              : ch
-          );
-          onEditTour(matchingTour.id, {
-            coHosts: updatedTourCoHosts,
-          });
-        }
-      }
-    } else {
-      const targetTour = tours.find((t) => t.id === requestIdOrTourId);
-      if (targetTour && targetTour.coHosts) {
-        const updatedTourCoHosts = targetTour.coHosts.map((ch) =>
-          ch.companyId === company.id
-            ? { ...ch, status: "accepted" as const, respondedAt: new Date().toISOString() }
-            : ch
-        );
-        onEditTour(requestIdOrTourId, {
-          coHosts: updatedTourCoHosts,
-        });
-      }
-    }
-  };
-
-  const handleRejectCoHostInvitation = (requestIdOrTourId: string, isTour: boolean, reason?: string) => {
-    if (!isTour) {
-      const targetReq = customTourRequests.find((r) => r.id === requestIdOrTourId);
-      if (targetReq && targetReq.coHosts) {
-        const updatedCoHosts = targetReq.coHosts.map((ch) =>
-          ch.companyId === company.id
-            ? {
-                ...ch,
-                status: "rejected" as const,
-                notes: reason ? `${ch.notes || ""}\nLý do từ chối: ${reason}` : ch.notes,
-                respondedAt: new Date().toISOString(),
-              }
-            : ch
-        );
-        onUpdateCustomRequest?.(requestIdOrTourId, {
-          coHosts: updatedCoHosts,
-          companyNote: `${company.name} đã từ chối lời mời: ${reason || "Không thể sắp xếp lịch"}`,
-        });
-      }
-    } else {
-      const targetTour = tours.find((t) => t.id === requestIdOrTourId);
-      if (targetTour && targetTour.coHosts) {
-        const updatedTourCoHosts = targetTour.coHosts.map((ch) =>
-          ch.companyId === company.id
-            ? {
-                ...ch,
-                status: "rejected" as const,
-                notes: reason ? `${ch.notes || ""}\nLý do từ chối: ${reason}` : ch.notes,
-                respondedAt: new Date().toISOString(),
-              }
-            : ch
-        );
-        onEditTour(requestIdOrTourId, {
-          coHosts: updatedTourCoHosts,
-        });
-      }
-    }
+    window.location.hash = destination?.href ?? `#/agency/${section}`;
   };
 
   const renderContent = () => {
@@ -291,7 +211,6 @@ export function AgencyDashboard({
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
             onDeleteTour={onDeleteTour} onDuplicateTour={onDuplicateTour}
-            onRestoreTourVersion={onRestoreTourVersion}
           />
         );
       case "bookings":
@@ -299,15 +218,17 @@ export function AgencyDashboard({
           return (
             <AgencyBookingDetailPage
               booking={currentSelectedBooking}
+              focusItineraryTab={focusedItineraryTab}
+              notificationFocusVersion={notificationFocusVersion}
               guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}
               companyId={company.id}
-              onBack={() => setSelectedBookingId(null)}
+              onBack={() => handleNavigateSection("bookings")}
               onApproveBooking={onApproveBooking}
               onRejectBooking={onRejectBooking}
               onAssignGuide={onAssignGuide}
               onUpdateAssignedGuides={onUpdateAssignedGuides}
-              onCreatePaymentRequest={onCreatePaymentRequest}
+
               onMarkDepositPaid={onMarkDepositPaid}
               onMarkFullyPaid={onMarkFullyPaid}
               onUpdateBookingPrice={onUpdateBookingPrice}
@@ -329,11 +250,13 @@ export function AgencyDashboard({
             onApproveBooking={onApproveBooking}
             onRejectBooking={onRejectBooking}
             onAssignGuide={onAssignGuide}
-            onCreatePaymentRequest={onCreatePaymentRequest}
+
             onMarkDepositPaid={onMarkDepositPaid}
             onMarkFullyPaid={onMarkFullyPaid}
             onGenerateContract={(id) => {}}
-            onViewBookingDetail={(b) => setSelectedBookingId(b.id)}
+            onViewBookingDetail={(b) => handleNavigateSection("bookings", {
+              section: "bookings", bookingId: Number(b.id), href: `#/agency/bookings/${encodeURIComponent(b.id)}`
+            })}
           />
         );
       case "services":
@@ -357,9 +280,12 @@ export function AgencyDashboard({
             onViewBookingDetail={(id) => { setSelectedBookingId(id); setActiveSection("bookings"); }}
           />
         );
-      case "custom-requests":
+      case "co-hosting":
         return (
-          <AgencyCustomRequests
+          <AgencyDesignWorkspace
+            mode="partners"
+            onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
+            services={services}
             requests={companyCustomRequests}
             company={company}
             tours={companyTours}
@@ -367,81 +293,41 @@ export function AgencyDashboard({
             onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
             onCreateTour={onCreateTour}
             onEditTour={onEditTour}
-            onRestoreTourVersion={onRestoreTourVersion}
+            onViewTour={onViewTour}
+          />
+        );
+      case "custom-requests":
+        return (
+          <AgencyDesignWorkspace
+            mode="customers"
+            onViewBooking={id=>{setSelectedBookingId(id);setActiveSection("bookings");window.location.hash="#/agency/bookings";}}
+            services={services}
+            requests={companyCustomRequests}
+            company={company}
+            tours={companyTours}
+            allCompanies={allCompanies || mockTourCompanies}
+            onUpdateRequest={(id, update) => onUpdateCustomRequest?.(id, update)}
+            onCreateTour={onCreateTour}
+            onEditTour={onEditTour}
             onViewTour={onViewTour}
           />
         );
       
-      case "business-account":
-  return <BusinessAccountContainer />;
+      case "contract-template":
+        return <AgencyContractTemplatePage />;
 
-      case "co-hosting":
-        if (editingCoHostItem) {
-          return (
-            <TourFormPage
-              tour={editingCoHostItem.tour || null}
-              company={company}
-              customRequest={editingCoHostItem.customRequest || null}
-              isCustomTour={
-                !!editingCoHostItem.customRequest ||
-                editingCoHostItem.tour?.tourType === "custom_request"
-              }
-              onBack={() => setEditingCoHostItem(null)}
-              onSubmit={(data) => {
-                if (editingCoHostItem.tour) {
-                  onEditTour(editingCoHostItem.tour.id, data);
-                  if (editingCoHostItem.customRequest) {
-                    onUpdateCustomRequest?.(editingCoHostItem.customRequest.id, {
-                      status: "designed",
-                      currentVersion: data.version,
-                      companyNote: data.changeNote,
-                      quotedPricePerPerson: data.price,
-                      responseAt: new Date().toISOString(),
-                    });
-                  }
-                } else if (editingCoHostItem.customRequest) {
-                  const newTourId = `tour-custom-${Date.now().toString().slice(-6)}`;
-                  const newTourPayload: any = {
-                    ...data,
-                    id: newTourId,
-                    tourType: "custom_request",
-                    customRequestId: editingCoHostItem.customRequest.id,
-                    targetUserId: editingCoHostItem.customRequest.userId,
-                    targetCustomerName: editingCoHostItem.customRequest.contactName,
-                    targetCustomerPhone: editingCoHostItem.customRequest.contactPhone,
-                    targetCustomerEmail: editingCoHostItem.customRequest.contactEmail,
-                    version: 1,
-                    changeNote: data.changeNote || "Bản thiết kế ban đầu theo yêu cầu liên minh",
-                    versionHistory: [],
-                  };
-                  onCreateTour(newTourPayload);
-                  onUpdateCustomRequest?.(editingCoHostItem.customRequest.id, {
-                    status: "designed",
-                    designedTourId: newTourId,
-                    currentVersion: 1,
-                    companyNote: data.changeNote || "Bản thiết kế ban đầu theo yêu cầu liên minh",
-                    quotedPricePerPerson: data.price,
-                    responseAt: new Date().toISOString(),
-                  });
-                }
-                setEditingCoHostItem(null);
-              }}
-            />
-          );
-        }
-        return (
-          <AgencyCoHostManagement
-            company={company}
-            tours={tours}
-            customTourRequests={customTourRequests}
-            bookings={bookings}
-            allCompanies={allCompanies || mockTourCompanies}
-            onAcceptInvitation={handleAcceptCoHostInvitation}
-            onRejectInvitation={handleRejectCoHostInvitation}
-            onViewTour={onViewTour}
-            onEditTourSegment={handleEditTourSegment}
-          />
-        );
+      case "business-account":
+        return <BusinessAccountContainer />;
+
+      case "finance":
+        return <AgencyFinancePage />;
+
+      case "reviews":
+        return <AgencyReviewsPage />;
+
+      case "complaints":
+        return <AgencyComplaintsPage />;
+
       default:
         return null;
     }
@@ -464,6 +350,7 @@ export function AgencyDashboard({
       onNavigate={handleNavigateSection}
       company={company}
       currentUser={currentUser}
+      customRequestsBadgeCount={pendingCustomRequestsCount}
       coHostingBadgeCount={pendingCoHostInvitesCount}
       onLogout={onLogout}
     >
