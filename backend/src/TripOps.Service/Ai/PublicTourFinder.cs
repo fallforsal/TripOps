@@ -40,16 +40,32 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         var query = GuestAssistantKnowledge.Fold(criteria.Text);
         if (query.Length == 0) return rows.Take(limit).ToList();
 
-        var words = query.Split(' ').Where(w => w.Length >= 2 && !StopWords.Contains(w)).ToArray();
-        var allWords = query.Split(' ');
-        var bigrams = allWords.Zip(allWords.Skip(1), (a, b) => $"{a} {b}")
-            .Where(b => b.Split(' ').Any(w => !StopWords.Contains(w))).Distinct().ToArray();
+        // "tour miền Tây", "Tây Bắc 4 ngày": lọc theo tỉnh/địa danh thuộc vùng, phần còn lại của câu dùng để xếp hạng.
+        if (VietnamRegions.Detect(query) is { } region)
+        {
+            var inRegion = rows.Where(t => VietnamRegions.Matches(t.Provinces.Select(p => p.ProvinceCode),
+                $"{GuestAssistantKnowledge.Fold(t.Name)} {GuestAssistantKnowledge.Fold(t.Destination)}", region.Codes)).ToList();
+            var (restWords, restBigrams) = Terms(region.Remainder);
+            return inRegion.Select(t => (Tour: t, Score: Score(t, restWords, restBigrams)))
+                .OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList();
+        }
+
+        var (words, bigrams) = Terms(query);
         if (words.Length == 0 && bigrams.Length == 0) return rows.Take(limit).ToList();
 
         var scored = rows.Select(t => (Tour: t, Score: Score(t, words, bigrams))).Where(x => x.Score > 0).ToList();
         if (scored.Count == 0) return [];
         var best = scored.Max(x => x.Score);
         return scored.Where(x => x.Score * 2 >= best).OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList();
+    }
+
+    private static (string[] Words, string[] Bigrams) Terms(string query)
+    {
+        var allWords = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var words = allWords.Where(w => w.Length >= 2 && !StopWords.Contains(w)).ToArray();
+        var bigrams = allWords.Zip(allWords.Skip(1), (a, b) => $"{a} {b}")
+            .Where(b => b.Split(' ').Any(w => !StopWords.Contains(w))).Distinct().ToArray();
+        return (words, bigrams);
     }
 
     public Task<Tour?> Detail(int id, CancellationToken ct) => tours.Find(id, null, true, ct);

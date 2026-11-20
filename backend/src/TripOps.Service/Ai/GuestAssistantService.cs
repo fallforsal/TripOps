@@ -81,7 +81,7 @@ public sealed partial class GuestAssistantService(
               "parameters": {
                 "type": "object",
                 "properties": {
-                  "query": { "type": "string", "description": "Điểm đến hoặc từ khóa tên tour, ví dụ 'Đà Lạt', 'Phú Quốc', 'Sapa'. Bỏ trống để lấy tour mới." },
+                  "query": { "type": "string", "description": "Điểm đến, vùng miền hoặc từ khóa tên tour, ví dụ 'Đà Lạt', 'Phú Quốc', 'Sapa', 'miền Tây', 'Tây Bắc', 'miền Trung', 'Tây Nguyên'. Giữ nguyên tên vùng miền khách dùng. Bỏ trống để lấy tour mới." },
                   "max_price_vnd": { "type": "number", "description": "Giá tối đa mỗi khách (VND)." },
                   "guests": { "type": "integer", "description": "Số khách trong đoàn." },
                   "max_days": { "type": "integer", "description": "Số ngày tối đa của tour." }
