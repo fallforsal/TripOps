@@ -292,4 +292,90 @@ public sealed partial class BookingFlowTests
         Assert.Equal("Skipped", detail.SnapshotDays![0].Locations[2].AttendanceStatus);
         Assert.Single(detail.SnapshotDays[0].Locations[2].PhotoUrls!);
     }
+
+    [Fact]
+    public async Task Two_guides_assigned_to_same_stops_checkin_and_checkout_independently()
+    {
+        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
+        await app.Initialize();
+        var today = PaymentRules.VietnamDate(DateTime.UtcNow);
+        int bookingId, firstId, secondId;
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var guide2 = await db.Users.SingleAsync(u => u.Id == "guide2");
+            guide2.AgencyId = "agency1";
+            var booking = new Booking
+            {
+                BookingCode = "CO-GUIDE-" + Guid.NewGuid().ToString("N"),
+                TourId = 1, CustomerId = "customer1",
+                StartDate = today,
+                ContactName = "Test", ContactPhone = "0900000000",
+                ContactEmail = "customer1@example.test",
+                Status = BookingStatus.Confirmed, TotalAmount = 1000000m,
+                BookingAgencies = [new BookingAgency { AgencyId = "agency1", IsHost = true }],
+                Timelines =
+                [
+                    new BookingTimeline
+                    {
+                        DayNumber = 1, Title = "Day one",
+                        Attractions =
+                        [
+                            new BookingTimelineAttraction { AgencyId = "agency1", OriginalLocationName = "Stop 1", CurrentLocationName = "Stop 1", AttendanceStatus = "Pending", Time = today.AddHours(8) },
+                            new BookingTimelineAttraction { AgencyId = "agency1", OriginalLocationName = "Stop 2", CurrentLocationName = "Stop 2", AttendanceStatus = "Pending", Time = today.AddHours(10) }
+                        ]
+                    }
+                ]
+            };
+            db.Bookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+            var days = await db.BookingTimelines.Include(x => x.Attractions)
+                .Where(x => x.BookingId == bookingId).ToListAsync();
+            var ordered = GuideLocationCheckinRules.OrderedStops(days);
+            firstId = ordered[0].Id;
+            secondId = ordered[1].Id;
+        }
+
+        using var agency = await app.Client("agency1@example.test");
+        (await agency.PutAsJsonAsync($"/api/v1/agency/bookings/{bookingId}/guide-routing", new
+        {
+            locations = new[]
+            {
+                new { locationId = firstId, guideIds = new[] { "guide1", "guide2" } },
+                new { locationId = secondId, guideIds = new[] { "guide1", "guide2" } }
+            }
+        })).EnsureSuccessStatusCode();
+
+        using var g1 = await app.Client("guide1@example.test");
+        using var g2 = await app.Client("guide2@example.test");
+
+        // Guide 1 checks in & checks out Stop 1 -> advances to Stop 2 for Guide 1.
+        using (var form = PhotoForm(1, note: "G1 in"))
+            (await g1.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{firstId}/check-in-with-images", form)).EnsureSuccessStatusCode();
+        using (var form = PhotoForm(1, note: "G1 out"))
+            (await g1.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{firstId}/check-out-with-images", form)).EnsureSuccessStatusCode();
+
+        var g1View = (await g1.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}"))!;
+        Assert.Equal(secondId, g1View.NextLocationCheckInId);
+        Assert.Equal("CheckedOut", g1View.SnapshotDays![0].Locations[0].AttendanceStatus);
+
+        // Guide 2 must still see Stop 1 as Pending with no photos and check in & out independently.
+        var g2ViewBefore = (await g2.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}"))!;
+        Assert.Equal(firstId, g2ViewBefore.NextLocationCheckInId);
+        Assert.Equal("Pending", g2ViewBefore.SnapshotDays![0].Locations[0].AttendanceStatus);
+        Assert.Empty(g2ViewBefore.SnapshotDays[0].Locations[0].PhotoUrls ?? []);
+
+        using (var form = PhotoForm(1, note: "G2 in"))
+            (await g2.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{firstId}/check-in-with-images", form)).EnsureSuccessStatusCode();
+        using (var form = PhotoForm(1, note: "G2 out"))
+            (await g2.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{firstId}/check-out-with-images", form)).EnsureSuccessStatusCode();
+
+        var g2ViewAfter = (await g2.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}"))!;
+        Assert.Equal(secondId, g2ViewAfter.NextLocationCheckInId);
+        Assert.Equal("CheckedOut", g2ViewAfter.SnapshotDays![0].Locations[0].AttendanceStatus);
+        Assert.Equal("G2 in", g2ViewAfter.SnapshotDays[0].Locations[0].CheckinNote);
+        Assert.Equal("G2 out", g2ViewAfter.SnapshotDays[0].Locations[0].CheckoutNote);
+    }
 }

@@ -39,13 +39,36 @@ public static class GuideLocationCheckinRules
             .ToList();
     }
 
+    public static string GuideStopStatus(BookingTimelineAttraction attraction, string guideId)
+    {
+        var own = attraction.Checkins.SingleOrDefault(c => c.GuideId == guideId);
+        if (own is not null)
+            return own.AttendanceStatus?.ToString() ?? "Pending";
+        return attraction.Checkins.Count == 0
+            ? (attraction.AttendanceStatus ?? "Pending")
+            : "Pending";
+    }
+
+    public static void SyncAttractionStatus(BookingTimelineAttraction location)
+    {
+        var statuses = location.Checkins
+            .Select(c => c.AttendanceStatus ?? AttractionCheckinStatus.Pending)
+            .ToList();
+        if (statuses.Count == 0) return;
+        location.AttendanceStatus =
+            statuses.All(s => s == AttractionCheckinStatus.Skipped) ? "Skipped" :
+            statuses.All(s => s is AttractionCheckinStatus.CheckedOut or AttractionCheckinStatus.Skipped) ? "CheckedOut" :
+            statuses.Any(s => s is AttractionCheckinStatus.CheckedIn or AttractionCheckinStatus.CheckedOut) ? "CheckedIn" :
+            "Pending";
+    }
+
     public static int? NextUncheckedStopId(IEnumerable<BookingTimeline> days) =>
         OrderedStops(days).FirstOrDefault(a => a.AttendanceStatus is not ("CheckedOut" or "Skipped"))?.Id;
 
     public static int? NextUncheckedStopIdForGuide(
         Booking booking, string guideId, string agencyId) =>
         OrderedStopsForGuide(booking, guideId, agencyId)
-            .FirstOrDefault(a => a.AttendanceStatus is not ("CheckedOut" or "Skipped"))?.Id;
+            .FirstOrDefault(a => GuideStopStatus(a, guideId) is not ("CheckedOut" or "Skipped"))?.Id;
 
     public static bool CanCheckIn(Booking booking, DateTime utcNow) =>
         booking.StartDate.Date <= PaymentRules.VietnamDate(utcNow) &&

@@ -152,14 +152,12 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
             throw new BookingException(403, "HDV chỉ check-out điểm thuộc chặng công ty mình.");
         if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Tour chưa khởi hành hoặc đã đóng.");
-        if (location.AttendanceStatus != "CheckedIn" ||
-            GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId) != locationId)
-            throw new BookingException(409, "Chỉ được check-out điểm đang check-in.");
         var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
             x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
         if (checkin is null || checkin.AttendanceStatus != AttractionCheckinStatus.CheckedIn ||
-            checkin.CheckoutTime.HasValue)
-            throw new BookingException(409, "HDV chưa check-in hoặc đã check-out điểm này.");
+            checkin.CheckoutTime.HasValue ||
+            GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId) != locationId)
+            throw new BookingException(409, "Chỉ được check-out điểm đang check-in.");
 
         var urls = new List<string>();
         foreach (var file in request.Images)
@@ -175,7 +173,7 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         checkin.CheckoutNote = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         checkin.CheckoutTime = DateTime.UtcNow;
         checkin.AttendanceStatus = AttractionCheckinStatus.CheckedOut;
-        location.AttendanceStatus = "CheckedOut";
+        GuideLocationCheckinRules.SyncAttractionStatus(location);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
@@ -213,7 +211,13 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         // Check ownership before lifecycle rules, including before departure.
         if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
-        if (location.AttendanceStatus is "CheckedIn" or "CheckedOut" or "Skipped")
+
+        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
+            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
+        var guideAlreadyHandled = checkin is not null
+            ? checkin.AttendanceStatus is AttractionCheckinStatus.CheckedIn or AttractionCheckinStatus.CheckedOut or AttractionCheckinStatus.Skipped
+            : location.Checkins.Count == 0 && location.AttendanceStatus is "CheckedIn" or "CheckedOut" or "Skipped";
+        if (guideAlreadyHandled)
             throw new BookingException(409, "Điểm đến này đã được xử lý.");
 
         var nextId = GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId);
@@ -221,8 +225,6 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
             throw new BookingException(409, "Phải check-out hoặc bỏ qua điểm trước khi xử lý điểm tiếp theo.");
 
         // No GPS, coordinates, location permission, or device-location payload.
-        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
-            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
         if (checkin is null)
         {
             checkin = new BookingAttractionCheckin
@@ -249,7 +251,7 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         checkin.CheckinTime = DateTime.UtcNow;
         checkin.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         location.GuideId = Actor;
-        location.AttendanceStatus = skipped ? "Skipped" : "CheckedIn";
+        GuideLocationCheckinRules.SyncAttractionStatus(location);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Ok(await bookings.Get(Actor, id, ct));
