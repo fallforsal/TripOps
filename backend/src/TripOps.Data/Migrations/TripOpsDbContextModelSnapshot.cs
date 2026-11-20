@@ -4129,7 +4129,46 @@ namespace TripOps.Data.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("TripOps.Data.Entities.WorkflowNotification", b =>
+                        modelBuilder.Entity("TripOps.Data.Entities.NotificationDeviceToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "LastSeenAt");
+
+                    b.ToTable("notification_device_tokens", (string)null);
+                });
+
+modelBuilder.Entity("TripOps.Data.Entities.WorkflowNotification", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -4141,6 +4180,15 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DispatchAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DispatchClaimedUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DispatchedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Message")
@@ -4160,6 +4208,8 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(36)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DispatchedAt", "DispatchClaimedUntil");
 
                     b.HasIndex("UserId", "CreatedAt");
 
