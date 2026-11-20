@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
+import '../core/notifications/guide_push_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
@@ -40,6 +41,8 @@ class _GuideShellState extends State<GuideShell> {
   Map<int, DateTime> endDates = {};
   int unreadNotices = 0;
   Timer? _notificationsPoll;
+  StreamSubscription<int?>? _openedPush;
+  late final VoidCallback _inboxPushListener;
 
   @override
   void initState() {
@@ -48,11 +51,23 @@ class _GuideShellState extends State<GuideShell> {
     refreshNotices();
     _notificationsPoll = Timer.periodic(
       const Duration(seconds: 15), (_) => refreshNotices());
+    _inboxPushListener = () { if (mounted) unawaited(refreshNotices()); };
+    GuidePushService.inboxRevision.addListener(_inboxPushListener);
+    _openedPush = GuidePushService.openedBooking.listen((id) {
+      if (mounted) unawaited(openPushBooking(id));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pending = GuidePushService.takePendingBooking();
+      if (pending != null) unawaited(openPushBooking(pending));
+    });
   }
 
   @override
   void dispose() {
     _notificationsPoll?.cancel();
+    _openedPush?.cancel();
+    GuidePushService.inboxRevision.removeListener(_inboxPushListener);
     super.dispose();
   }
 
@@ -64,6 +79,22 @@ class _GuideShellState extends State<GuideShell> {
     } catch (_) {
       // Bookings remain usable even when notification fetching fails.
     }
+  }
+
+  Future<void> openPushBooking(int? bookingId) async {
+    if (!mounted) return;
+    if (bookingId == null) {
+      await openNotices();
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => TourDetailScreen(
+        id: bookingId,
+        guides: widget.guides,
+        onSessionExpired: widget.onSessionExpired,
+      ),
+    ));
+    if (mounted) await refreshNotices();
   }
 
   Future<void> openNotices() async {

@@ -89,9 +89,17 @@ class TripOpsApi {
   }
 
   /// Supports workflow API endpoints that return HTTP 204 with no JSON body.
-  Future<void> postVoid(String route) async {
+  Future<void> postVoid(String route, {Map<String, dynamic>? data}) async {
     try {
-      await _dio.post<void>(route);
+      await _dio.post<void>(route, data: data);
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  Future<void> deleteVoid(String route, {Map<String, dynamic>? data}) async {
+    try {
+      await _dio.delete<void>(route, data: data);
     } on DioException catch (e) {
       throw _failure(e);
     }
