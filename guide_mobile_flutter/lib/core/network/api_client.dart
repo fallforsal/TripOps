@@ -78,6 +78,25 @@ class TripOpsApi {
     }
   }
 
+  Future<List<dynamic>> getList(String route) async {
+    try {
+      final response = await _dio.get<dynamic>(route);
+      if (response.data is List) return response.data as List<dynamic>;
+      throw const ApiFailure('Phản hồi danh sách không hợp lệ.');
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// Supports workflow API endpoints that return HTTP 204 with no JSON body.
+  Future<void> postVoid(String route) async {
+    try {
+      await _dio.post<void>(route);
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
   Future<Map<String, dynamic>> postMap(
     String route, [
     Map<String, dynamic>? body,
