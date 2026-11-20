@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { http } from "@/app/lib/http";
+import { toast } from "@/app/lib/notifications";
+import { WorkflowPopupTracker } from "@/app/lib/workflowPopupTracker";
 import { notificationDestination, type NotificationDestination, type NotificationRole } from "@/app/lib/notificationNavigation";
 
 interface Notice {
@@ -25,6 +27,9 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const popupTracker = useRef(new WorkflowPopupTracker());
+  // Toast actions are long-lived; always navigate with the current role/callback.
+  const openNoticeRef = useRef<(notice: Notice) => Promise<void>>(async () => undefined);
 
   const reload = useCallback(async () => {
     try {
@@ -35,10 +40,34 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
       setItems(notices);
       setUnread(summary.count);
       setError(null);
+
+      // Initial fetch is a baseline, NOT an invitation to replay old unread
+      // notices. Subsequent SignalR events or polling reveal only new IDs.
+      const incoming = popupTracker.current.collect(notices);
+      if (incoming.length > 3) {
+        toast.info(`${incoming.length} thông báo mới`, {
+          id: `workflow:batch:${role}:${incoming[0].id}`,
+          description: "Có nhiều cập nhật mới. Mở danh sách để xem chi tiết.",
+          duration: 10_000,
+          action: { label: "Xem thông báo", onClick: () => setOpen(true) },
+        });
+      } else {
+        for (const notice of incoming) {
+          toast.info("Thông báo mới", {
+            id: `workflow:${role}:${notice.id}`,
+            description: notice.message,
+            duration: 10_000,
+            action: {
+              label: "Xem chi tiết",
+              onClick: () => { void openNoticeRef.current(notice); },
+            },
+          });
+        }
+      }
     } catch {
       setError("Không tải được thông báo. Hãy thử lại.");
     }
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     void reload();
@@ -48,7 +77,12 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build();
-    connection.on("NotificationCreated", () => { void reload(); });
+    connection.on("NotificationCreated", (event: { id?: number } | undefined) => {
+      // Remember the server event ID even if the initial inbox request races
+      // with this event. The API remains authoritative for displayed content.
+      popupTracker.current.signal(event?.id);
+      void reload();
+    });
     connection.onreconnected(() => { void reload(); });
     // Network hiccups or unconfigured proxies must not break the inbox:
     // periodic polling below remains the authoritative fallback.
@@ -112,6 +146,8 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
     onNavigate?.(destination.section, destination);
     if (window.location.hash !== destination.href) window.location.hash = destination.href;
   }
+
+  openNoticeRef.current = choose;
 
   return (
     <div className="relative shrink-0">

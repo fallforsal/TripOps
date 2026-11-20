@@ -30,5 +30,7 @@ jobs:
         run: node --experimental-strip-types --test --test-name-pattern='agency booking adapter preserves checked-out|a checked-in but not checked-out' tests/bookingAdapter.test.ts
       - name: Notification deep link regression
         run: node --experimental-strip-types --test tests/notificationNavigation.test.ts
+      - name: Notification popup regression
+        run: node --experimental-strip-types --test tests/workflowPopupTracker.test.ts
       - name: Vite production build
         run: npm run build
