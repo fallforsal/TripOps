@@ -88,7 +88,13 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
       onNavigate(destination.section, destination);
       return;
     }
-    // Customer's booking details and Provider's request details are hash-routed.
+    // Customer routes already have their own hash listener in App; avoid first
+    // navigating to the list, which would add a redundant browser history entry.
+    if (role === "user") {
+      if (window.location.hash !== destination.href) window.location.hash = destination.href;
+      return;
+    }
+    // Provider and Admin dashboards handle section state as well as URL state.
     onNavigate?.(destination.section, destination);
     if (window.location.hash !== destination.href) window.location.hash = destination.href;
   }
