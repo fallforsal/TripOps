@@ -326,7 +326,7 @@ The notification inbox works without Firebase. To activate background push on An
    through `GOOGLE_APPLICATION_CREDENTIALS` pointing to a **local** service
    account file. Never add the service account to Git.
 
-The app registers a device token through `POST /api/v1/notifications/devices`
+The app registers a Firebase Installation ID (FID) through `POST /api/v1/notifications/devices`
 after guide login and unregisters it on logout. Tapping a push with a booking
 ID opens the assigned Tour Detail. A foreground push refreshes the inbox
 badge; polling remains the fallback. Android 13+ requires notification

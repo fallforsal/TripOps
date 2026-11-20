@@ -41,8 +41,10 @@ class GuidePushService {
   }
 
   static void _pushOpened(RemoteMessage message) {
-    _pendingBooking = _bookingFromMessage(message);
-    _opened.add(_pendingBooking);
+    final bookingId = _bookingFromMessage(message);
+    // If the shell is not mounted yet, preserve the booking for post-login.
+    if (!_opened.hasListener) _pendingBooking = bookingId;
+    _opened.add(bookingId);
     inboxRevision.value += 1;
   }
 
@@ -70,12 +72,13 @@ class GuidePushService {
     if (!initialized) return;
     try {
       await FirebaseMessaging.instance.requestPermission();
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null && token.isNotEmpty) await _register(api, token);
+      // Firebase Messaging 17 uses installation IDs instead of deprecated
+      // registration tokens. Subscribe before register() to avoid missing it.
       await _refreshSubscription?.cancel();
-      _refreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen(
-        (token) => unawaited(_register(api, token)),
+      _refreshSubscription = FirebaseMessaging.instance.onRegistered.listen(
+        (installationId) => unawaited(_register(api, installationId)),
       );
+      await FirebaseMessaging.instance.register();
     } catch (_) {
       debugPrint('FCM registration unavailable; retry on next login.');
     }
@@ -87,7 +90,16 @@ class GuidePushService {
         'token': token,
         'platform': Platform.isIOS ? 'ios' : 'android',
       });
+      final previous = _registeredToken;
       _registeredToken = token;
+      if (previous != null && previous != token) {
+        try {
+          await api.deleteVoid('notifications/devices', data: {
+            'token': previous,
+            'platform': Platform.isIOS ? 'ios' : 'android',
+          });
+        } catch (_) { /* Registration TTL eventually expires unused IDs. */ }
+      }
     } catch (_) {
       // Inbox will keep working without a registered push token.
     }
@@ -108,7 +120,7 @@ class GuidePushService {
       // Do not block local logout if the network is unavailable.
     }
     try {
-      await FirebaseMessaging.instance.deleteToken();
+      await FirebaseMessaging.instance.unregister();
     } catch (_) { }
   }
 }
