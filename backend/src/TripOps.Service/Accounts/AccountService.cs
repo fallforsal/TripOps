@@ -129,6 +129,8 @@ public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storag
         profile.BusinessAddress = request.BusinessAddress.Trim(); profile.Description = request.Description?.Trim();
         profile.BusinessLicenseUrl = url; profile.Status = BusinessProfileStatus.Pending;
         profile.RejectionReason = null; profile.ApprovedAt = null; user.Phone = request.Phone.Trim();
+        await TripOps.Data.WorkflowNotice.QueueAdminsAsync(db,
+            $"Có hồ sơ doanh nghiệp mới chờ xét duyệt: {profile.BusinessName}.", ct, actorId: id);
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException e) when (e.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
         { throw new AccountException(409, "Hồ sơ đã được nộp. Vui lòng tải lại trạng thái."); }

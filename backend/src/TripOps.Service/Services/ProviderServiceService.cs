@@ -44,6 +44,8 @@ public sealed class ProviderServiceService(TripOpsDbContext db, AccountService a
         service.Status = ServiceStatus.Pending;
         service.Rating = 0;
         db.Services.Add(service);
+        await TripOps.Data.WorkflowNotice.QueueAdminsAsync(db,
+            $"Provider đăng dịch vụ mới chờ duyệt: {service.Name}.", ct, actorId: actor);
         await db.SaveChangesAsync(ct);
         return ServiceModerationService.Map(service);
     }
@@ -71,6 +73,9 @@ public sealed class ProviderServiceService(TripOpsDbContext db, AccountService a
                 .SetProperty(s => s.RejectionReason, (string?)null)
                 .SetProperty(s => s.HiddenReason, (string?)null).SetProperty(s => s.UpdatedAt, now), ct);
         if (changed == 0) throw new ServiceModerationException(409, "Bài đăng vừa thay đổi. Vui lòng tải lại trước khi sửa.");
+        await TripOps.Data.WorkflowNotice.QueueAdminsAsync(db,
+            $"Provider cập nhật dịch vụ cần duyệt lại: {next.Name}.", ct, actorId: actor);
+        await db.SaveChangesAsync(ct);
         return ServiceModerationService.Map(await Owned(actor, id, ct));
     }
 

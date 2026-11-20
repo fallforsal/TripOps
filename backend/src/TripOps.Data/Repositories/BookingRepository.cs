@@ -14,6 +14,9 @@ public sealed class BookingRepository(TripOpsDbContext db)
     public void Notify(string recipient, string message, int? bookingId = null, string? actor = null) =>
         WorkflowNotice.Queue(db, recipient, message, bookingId: bookingId, actorId: actor);
 
+    public Task NotifyAdmins(string message, CancellationToken ct, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.QueueAdminsAsync(db, message, ct, bookingId, actor);
+
     public void NotifyAgencies(Booking booking, string message, string? actor = null)
     {
         foreach (var agency in booking.BookingAgencies.Select(a => a.AgencyId)

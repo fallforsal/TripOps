@@ -115,6 +115,11 @@ public sealed partial class BookingService
         booking.RefundRequests.Add(refund);
         CancelNow(booking, refund, $"Khách hủy: {request.ReasonDetail.Trim()}", now);
         await RememberRefundAccount(customerId, account, ct);
+        Repo.NotifyAgencies(booking, $"Khách đã hủy booking {booking.BookingCode}. Lý do: {request.ReasonDetail.Trim()}", customerId);
+        foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
+            Repo.Notify(guide, $"Booking {booking.BookingCode} đã bị hủy.", id, customerId);
+        if (refund.Status != RefundStatus.Completed)
+            await Repo.NotifyAdmins($"Có yêu cầu hoàn tiền mới cho booking {booking.BookingCode}.", ct, id, customerId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -182,6 +187,11 @@ public sealed partial class BookingService
             // Tài khoản nhận hoàn lấy theo hồ sơ khách (nếu khách đã lưu).
             await UseProfileAccount(booking, refund, ct);
         }
+        Repo.Notify(booking.CustomerId!, $"Agency đã hủy booking {booking.BookingCode}. Lý do: {reason}.", id, agencyId);
+        foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
+            Repo.Notify(guide, $"Booking {booking.BookingCode} đã bị hủy.", id, agencyId);
+        if (quote.Mode != "immediate")
+            await Repo.NotifyAdmins($"Agency hủy booking {booking.BookingCode}; cần xử lý hoàn tiền.", ct, id, agencyId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(agencyId,id,ct);
@@ -237,7 +247,8 @@ public sealed partial class BookingService
             });
         }
         CompleteCancellation(booking, refund, amount, now);
-
+        Repo.Notify(booking.CustomerId!, $"Khoản hoàn tiền booking {booking.BookingCode} đã được xử lý: {amount:N0}đ.", booking.Id, adminId);
+        Repo.NotifyAgencies(booking, $"Admin đã xử lý hoàn tiền booking {booking.BookingCode}.", adminId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return AdminRefund(refund);
@@ -391,6 +402,16 @@ public sealed partial class BookingService
             refund.Status = RefundStatus.Pending;
             refund.ApprovedRefundAmount = null;
             refund.AdminNote = Truncate($"Chi hộ payOS không thành công ({reason}). {refund.AdminNote}".Trim(), 4000);
+        }
+        if (payment.Status == PaymentTransactionStatus.Refunded)
+        {
+            Repo.Notify(booking.CustomerId!, $"Đã chuyển hoàn tiền booking {booking.BookingCode}: {payment.Amount:N0}đ.", booking.Id);
+            Repo.NotifyAgencies(booking, $"Hoàn tiền booking {booking.BookingCode} đã hoàn tất.");
+        }
+        else if (payment.Status == PaymentTransactionStatus.Failed)
+        {
+            Repo.Notify(booking.CustomerId!, $"Hoàn tiền booking {booking.BookingCode} chưa thành công. TripOps sẽ xử lý lại.", booking.Id);
+            await Repo.NotifyAdmins($"Lệnh hoàn tiền booking {booking.BookingCode} thất bại, cần kiểm tra.", ct, booking.Id);
         }
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
