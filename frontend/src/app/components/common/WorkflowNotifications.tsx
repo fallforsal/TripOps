@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { http } from "@/app/lib/http";
 import { notificationDestination, type NotificationDestination, type NotificationRole } from "@/app/lib/notificationNavigation";
 
@@ -41,6 +42,17 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
 
   useEffect(() => {
     void reload();
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    const connection = new HubConnectionBuilder()
+      .withUrl(`${baseUrl}/hubs/notifications`, { withCredentials: true })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+    connection.on("NotificationCreated", () => { void reload(); });
+    connection.onreconnected(() => { void reload(); });
+    // Network hiccups or unconfigured proxies must not break the inbox:
+    // periodic polling below remains the authoritative fallback.
+    void connection.start().catch(() => undefined);
     const timer = window.setInterval(() => {
       if (!document.hidden) void reload();
     }, 15000);
@@ -49,6 +61,8 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
+      connection.off("NotificationCreated");
+      void connection.stop().catch(() => undefined);
     };
   }, [reload]);
 
