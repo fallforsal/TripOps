@@ -49,7 +49,9 @@ public sealed class FcmPushGateway(
             message = new
             {
                 token = device.Token,
-                notification = new { title = "TripOps", body = notification.Message },
+                // Avoid showing potentially sensitive incident/customer details
+                // on the lock screen; authenticated inbox displays full content.
+                notification = new { title = "TripOps", body = "Bạn có thông báo mới. Mở ứng dụng để xem chi tiết." },
                 data = new Dictionary<string, string>
                 {
                     ["notificationId"] = notification.Id.ToString(),

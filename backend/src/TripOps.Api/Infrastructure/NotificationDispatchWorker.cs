@@ -81,11 +81,14 @@ public sealed class NotificationDispatchWorker(
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                // Lease expires and eligible deliveries retry (at-least-once).
+                // Back off instead of exhausting attempts in a few seconds
+                // when Firebase credentials or the network are unavailable.
                 logger.LogWarning(ex, "Notification {NotificationId} delivery failed (will retry)", id);
+                var seconds = Math.Min(1800, Math.Pow(2, Math.Min(notification.DispatchAttempts, 9)) * 3);
+                var retryAt = DateTime.UtcNow.AddSeconds(seconds);
                 await db.WorkflowNotifications.Where(n => n.Id == id)
                     .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(n => n.DispatchClaimedUntil, (DateTime?)null), ct);
+                        .SetProperty(n => n.DispatchClaimedUntil, retryAt), ct);
             }
         }
     }
