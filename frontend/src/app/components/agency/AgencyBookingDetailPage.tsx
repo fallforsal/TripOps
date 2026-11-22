@@ -1641,23 +1641,19 @@ export function AgencyBookingDetailPage({
           {/* CO-HOSTING ALLIANCE BREAKDOWN CARD */}
           {/* ======================================================== */}
           {!isClosedBooking && isCoHostedTour && (
-            <div className="bg-gradient-to-br from-amber-50/70 via-purple-50/50 to-blue-50/50 rounded-2xl border-2 border-amber-300 p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 flex-shrink-0 shadow-2xs">
-                    <Handshake className="w-5 h-5 text-amber-700" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-extrabold text-amber-950 flex items-center gap-2 flex-wrap">
-                      {isCurrentCompanyLead ? "Tour Liên Minh" : "Chặng phụ trách của bạn"}
-                    </h2>
-                    {!isCurrentCompanyLead && (
-                      <p className="text-xs text-amber-800 mt-0.5">Bạn chỉ xem được thông tin khách, dịch vụ và doanh thu thuộc chặng của mình.</p>
-                    )}
-                  </div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
+              <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+                <div className="w-9 h-9 rounded-xl bg-[#E0F2FE] flex items-center justify-center flex-shrink-0">
+                  <Handshake className="w-4.5 h-4.5 text-[#075985]" />
                 </div>
-
-
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">
+                    {isCurrentCompanyLead ? "Tour Liên Minh" : "Chặng phụ trách của bạn"}
+                  </h2>
+                  {!isCurrentCompanyLead && (
+                    <p className="text-xs text-gray-500 mt-0.5">Bạn chỉ xem được thông tin khách, dịch vụ và doanh thu thuộc chặng của mình.</p>
+                  )}
+                </div>
               </div>
 
               {/* Both Companies Agency Shares (from booking_agencies) */}
@@ -1677,77 +1673,54 @@ export function AgencyBookingDetailPage({
                   return (
                     <div
                       key={agency.id || agency.agencyId}
-                      className={`p-5 rounded-2xl border-2 space-y-3.5 ${isLead
-                          ? "border-blue-400 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 shadow-xs"
-                          : "border-purple-300 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 shadow-xs"
-                        } ${isMyAgency ? "ring-2 ring-blue-500/50" : ""}`}
+                      className={`rounded-xl border p-4 space-y-3 ${isMyAgency ? "border-[#075985]/40 bg-[#F0F9FF]/40" : "border-gray-200 bg-white"}`}
                     >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           {coHostInfo?.companyLogo ? (
-                            <img src={coHostInfo.companyLogo} alt="" className="w-9 h-9 rounded-xl object-cover border border-gray-200 shadow-2xs" />
+                            <img src={coHostInfo.companyLogo} alt="" className="w-9 h-9 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
                           ) : (
-                            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-700 border">
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 border border-gray-200 flex-shrink-0">
                               {agency.agencyName?.slice(0, 1)}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <span className="font-extrabold text-gray-900 text-sm block truncate">
+                            <span className="font-semibold text-gray-900 text-sm block truncate" title={agency.agencyName}>
                               {agency.agencyName}
                             </span>
-                            <span className="text-[11px] font-semibold block">
-                              {isLead ? (
-                                <span className="text-[#075985]">{isMyAgency ? " Đơn vị của bạn (Chủ trì)" : " Đơn vị chủ trì điều phối"}</span>
-                              ) : (
-                                <span className="text-[#EA580C]">{isMyAgency ? " Đơn vị của bạn (Đối tác)" : " Đối tác liên minh địa phương"}</span>
-                              )}
+                            <span className="text-[11px] text-gray-500 block">
+                              {isLead ? "Đơn vị chủ trì" : "Đối tác đồng dẫn"}{isMyAgency ? " · Đơn vị của bạn" : ""}
                             </span>
                           </div>
                         </div>
-
-                        {isLead ? (
-                          <span className="text-xs font-black px-3 py-1 rounded-full bg-[#075985] text-white shadow-xs border border-blue-700 flex items-center gap-1.5 shrink-0">
-                            <Building2 className="w-3.5 h-3.5" />
-                            ĐƠN VỊ CHỦ TRÌ
-                          </span>
-                        ) : (
-                          <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-[#F97316]/15 text-purple-900 border border-purple-300 shadow-xs flex items-center gap-1.5 shrink-0">
-                            <Handshake className="w-3.5 h-3.5 text-[#EA580C]" />
-                            ĐỐI TÁC ĐỒNG DẪN
-                          </span>
-                        )}
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${isLead ? "bg-[#075985] text-white" : "border border-gray-300 text-gray-700"}`}>
+                          {isLead ? "Chủ trì" : "Đối tác"}
+                        </span>
                       </div>
 
-                      {/* Role and segment clarification */}
-                      <div className="text-xs text-gray-600 space-y-2 pt-1 border-t border-gray-100">
-                        <p className="text-[11px]">
-                          <strong className="text-gray-700">Chặng phụ trách:</strong>{" "}
-                          <span className="font-semibold text-gray-900">
-                            {coHostInfo?.assignedSegments || (isLead ? "Chặng đón đoàn & Điều phối tổng thể" : "Chặng trải nghiệm địa phương")}
-                          </span>
-                        </p>
+                      <p className="text-xs text-gray-600">
+                        <span className="text-gray-500">Chặng phụ trách:</span>{" "}
+                        <span className="font-medium text-gray-900">
+                          {coHostInfo?.assignedSegments || (isLead ? "Chặng đón đoàn & Điều phối tổng thể" : "Chặng trải nghiệm địa phương")}
+                        </span>
+                      </p>
 
-                        <div className="bg-white/80 rounded-xl p-2.5 border border-gray-200 space-y-1.5 shadow-2xs">
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-gray-500">Báo giá chặng gốc ban đầu:</span>
-                            <span className="font-semibold text-gray-700">{formatVND(agency.originalAmount)}</span>
-                          </div>
-
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-gray-800">Doanh thu chặng chốt:</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-black text-emerald-700 text-sm">{formatVND(agency.finalAmount)}</span>
-                              {isAdjusted && (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${diff > 0 ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                                  }`}>
-                                  {diff > 0 ? `+${formatVND(diff)}` : `-${formatVND(Math.abs(diff))}`}
-                                </span>
-                              )}
-                            </div>
+                      <div className="rounded-lg bg-gray-50 px-3 py-2.5 space-y-1.5 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-500">Báo giá chặng ban đầu</span>
+                          <span className="text-gray-700 tabular-nums">{formatVND(agency.originalAmount)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-800">Doanh thu chặng chốt</span>
+                          <div className="flex items-center gap-1.5">
+                            {isAdjusted && (
+                              <span className="text-[10px] text-gray-500 tabular-nums">
+                                ({diff > 0 ? `+${formatVND(diff)}` : `-${formatVND(Math.abs(diff))}`})
+                              </span>
+                            )}
+                            <span className="font-bold text-[#075985] tabular-nums">{formatVND(agency.finalAmount)}</span>
                           </div>
                         </div>
-
-
                       </div>
                     </div>
                   );
@@ -1756,31 +1729,17 @@ export function AgencyBookingDetailPage({
 
               {/* Happy Case Action Notice if Booking is Pending */}
               {booking.status === "pending" && (
-                <div className="bg-[#F0F9FF]/90 border border-[#CBD5E1] rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-blue-950 text-xs flex items-center gap-1.5">
-                      <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <p className="font-semibold text-gray-800 text-xs">
                       Quy trình duyệt booking &amp; Thỏa thuận liên minh
                     </p>
-                    <p className="text-[11px] text-blue-800 leading-relaxed">
+                    <p className="text-[11px] text-gray-600 leading-relaxed">
                       Công ty chủ trì chủ động duyệt booking. Khách ký hợp đồng và thanh toán theo lịch; phản hồi Provider được theo dõi riêng cho từng dịch vụ.
                     </p>
                   </div>
                 </div>
               )}
-
-              {/* Escrow Guarantee Policy Note */}
-              <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex items-start gap-3 text-xs text-emerald-900">
-                <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold text-emerald-950">
-                    Quyết toán cho từng Agency:
-                  </p>
-                  <p className="text-emerald-800 leading-relaxed text-[11px]">
-                    {isCurrentCompanyLead ? `Khách thanh toán theo lịch của booking. Sàn đối soát và quyết toán cho từng Agency sau khi tour kết thúc.` : "Sàn đối soát phần doanh thu và phụ thu thuộc công ty bạn trước khi quyết toán."}
-                  </p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -1996,8 +1955,8 @@ export function AgencyBookingDetailPage({
                     onClick={() => setItinerarySubTab("standard")}
                     aria-pressed={itinerarySubTab === "standard"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${itinerarySubTab === "standard"
-                        ? "bg-white text-[#075985] shadow-2xs"
-                        : "text-gray-600 hover:text-gray-900"
+                      ? "bg-white text-[#075985] shadow-2xs"
+                      : "text-gray-600 hover:text-gray-900"
                       }`}
                   >
                     <FileText className="w-3.5 h-3.5 text-[#075985]" />
@@ -2008,8 +1967,8 @@ export function AgencyBookingDetailPage({
                     onClick={() => setItinerarySubTab("live_checkin")}
                     aria-pressed={itinerarySubTab === "live_checkin"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${itinerarySubTab === "live_checkin"
-                        ? "bg-white text-[#EA580C] shadow-2xs"
-                        : "text-gray-600 hover:text-gray-900"
+                      ? "bg-white text-[#EA580C] shadow-2xs"
+                      : "text-gray-600 hover:text-gray-900"
                       }`}
                   >
                     <Navigation className="w-3.5 h-3.5 text-[#F97316]" />
@@ -2023,8 +1982,8 @@ export function AgencyBookingDetailPage({
                     onClick={() => setItinerarySubTab("incidents")}
                     aria-pressed={itinerarySubTab === "incidents"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${itinerarySubTab === "incidents"
-                        ? "bg-white text-rose-700 shadow-2xs"
-                        : "text-gray-600 hover:text-gray-900"
+                      ? "bg-white text-rose-700 shadow-2xs"
+                      : "text-gray-600 hover:text-gray-900"
                       }`}
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
@@ -2252,8 +2211,8 @@ export function AgencyBookingDetailPage({
                           type="button"
                           onClick={() => setTrackerGuideFilter("all")}
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${trackerGuideFilter === "all"
-                              ? "bg-[#075985] text-white shadow-2xs"
-                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            ? "bg-[#075985] text-white shadow-2xs"
+                            : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                             }`}
                         >
                           Tất cả HDV ({totalCheckins})
@@ -2264,8 +2223,8 @@ export function AgencyBookingDetailPage({
                             type="button"
                             onClick={() => setTrackerGuideFilter(g.guideId)}
                             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${trackerGuideFilter === g.guideId
-                                ? "bg-[#F97316] text-white shadow-2xs"
-                                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                              ? "bg-[#F97316] text-white shadow-2xs"
+                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             {g.guideAvatar ? <img src={g.guideAvatar} alt={g.guideName} className="h-5 w-5 rounded-full object-cover" /> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-800">{g.guideName.charAt(0)}</span>}
@@ -2357,12 +2316,12 @@ export function AgencyBookingDetailPage({
                                       {/* Timeline Node on the line */}
                                       <div
                                         className={`absolute -left-[70px] sm:-left-[78px] top-0.5 w-14 h-7 rounded-lg flex items-center justify-center text-xs font-bold tabular-nums ring-4 ring-white transition-all shadow-xs ${isAllCheckedOut
-                                            ? "bg-emerald-500 text-white shadow-emerald-200"
-                                            : isPartial
-                                              ? "bg-blue-500 text-white shadow-blue-200"
-                                              : isAllSkipped
-                                                ? "bg-rose-100 text-rose-700 border-2 border-rose-300"
-                                                : "bg-white border-2 border-slate-300 text-slate-500"
+                                          ? "bg-emerald-500 text-white shadow-emerald-200"
+                                          : isPartial
+                                            ? "bg-blue-500 text-white shadow-blue-200"
+                                            : isAllSkipped
+                                              ? "bg-rose-100 text-rose-700 border-2 border-rose-300"
+                                              : "bg-white border-2 border-slate-300 text-slate-500"
                                           }`}
                                         title={
                                           isAllCheckedOut
@@ -2439,8 +2398,8 @@ export function AgencyBookingDetailPage({
                                                           key={g.guideId}
                                                           onClick={() => handleToggleGuideForAttraction(loc.id || loc.name, loc.name, day.day, g)}
                                                           className={`w-full text-left disabled:opacity-50 flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${isAssigned
-                                                              ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
-                                                              : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
+                                                            ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
+                                                            : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
                                                             }`}
                                                         >
                                                           <div className="flex items-center gap-2.5 min-w-0">
@@ -2464,8 +2423,8 @@ export function AgencyBookingDetailPage({
 
                                                           <div
                                                             className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all shrink-0 ${isAssigned
-                                                                ? "bg-[#F97316] border-purple-600 text-white shadow-2xs"
-                                                                : "border-gray-300 bg-white"
+                                                              ? "bg-[#F97316] border-purple-600 text-white shadow-2xs"
+                                                              : "border-gray-300 bg-white"
                                                               }`}
                                                           >
                                                             {isAssigned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2514,12 +2473,12 @@ export function AgencyBookingDetailPage({
                                                       key={chk.id}
                                                       title={`HDV: ${chk.guideName}`}
                                                       className={`w-full sm:w-fit sm:min-w-[295px] sm:max-w-[340px] rounded-xl border p-2.5 text-xs transition-all space-y-2 ${isCheckedOut
-                                                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
-                                                          : isChecked
-                                                            ? "bg-sky-50/80 border-sky-200 text-sky-950"
-                                                            : isSkip
-                                                              ? "bg-rose-50/70 border-rose-200 text-rose-950"
-                                                              : "bg-slate-50 border-slate-200 text-slate-800"
+                                                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                                                        : isChecked
+                                                          ? "bg-sky-50/80 border-sky-200 text-sky-950"
+                                                          : isSkip
+                                                            ? "bg-rose-50/70 border-rose-200 text-rose-950"
+                                                            : "bg-slate-50 border-slate-200 text-slate-800"
                                                         }`}
                                                     >
                                                       {/* Guide Header Row */}
@@ -2610,8 +2569,8 @@ export function AgencyBookingDetailPage({
                                                                       setPreviewProofModalOpen(true);
                                                                     }}
                                                                     className={`font-semibold underline inline-flex items-center gap-1 whitespace-nowrap ${isSkip
-                                                                        ? "text-rose-700 hover:text-rose-900"
-                                                                        : "text-[#075985] hover:text-blue-800"
+                                                                      ? "text-rose-700 hover:text-rose-900"
+                                                                      : "text-[#075985] hover:text-blue-800"
                                                                       }`}
                                                                     title={isSkip ? "Xem ảnh minh chứng bỏ qua do HDV gửi lên" : "Xem ảnh xác nhận check-in thực tế do HDV gửi lên"}
                                                                   >
@@ -2756,8 +2715,8 @@ export function AgencyBookingDetailPage({
                                                             key={g.guideId}
                                                             onClick={() => handleToggleGuideForAttraction(loc.id || loc.name, loc.name, day.day, g)}
                                                             className={`w-full text-left disabled:opacity-50 flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer select-none ${isAssigned
-                                                                ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
-                                                                : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
+                                                              ? "bg-[#F0F9FF]/80 border-purple-300 shadow-2xs font-semibold"
+                                                              : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200"
                                                               }`}
                                                           >
                                                             <div className="flex items-center gap-2.5 min-w-0">
@@ -2781,8 +2740,8 @@ export function AgencyBookingDetailPage({
 
                                                             <div
                                                               className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all shrink-0 ${isAssigned
-                                                                  ? "bg-[#F97316] border-purple-600 text-white shadow-2xs"
-                                                                  : "border-gray-300 bg-white"
+                                                                ? "bg-[#F97316] border-purple-600 text-white shadow-2xs"
+                                                                : "border-gray-300 bg-white"
                                                                 }`}
                                                             >
                                                               {isAssigned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2964,8 +2923,8 @@ export function AgencyBookingDetailPage({
                                           {/* Dot */}
                                           <div
                                             className={`relative z-10 flex-shrink-0 mt-1.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${isLocChanged
-                                                ? "bg-amber-400 border-amber-400 text-white"
-                                                : "bg-white border-blue-400 text-blue-500"
+                                              ? "bg-amber-400 border-amber-400 text-white"
+                                              : "bg-white border-blue-400 text-blue-500"
                                               }`}
                                           >
                                             <MapPin className="w-3.5 h-3.5" />
@@ -3045,10 +3004,10 @@ export function AgencyBookingDetailPage({
                                           {/* Time pill */}
                                           <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2">
                                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${mealType === "breakfast"
-                                                ? "bg-amber-50 text-amber-800 border-amber-200"
-                                                : mealType === "lunch"
-                                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                                  : "bg-purple-50 text-[#EA580C] border-purple-200"
+                                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                                              : mealType === "lunch"
+                                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                                : "bg-purple-50 text-[#EA580C] border-purple-200"
                                               }`}>
                                               <Clock className={`w-3 h-3 ${mealType === "breakfast" ? "text-amber-600" : mealType === "lunch" ? "text-emerald-600" : "text-[#F97316]"
                                                 }`} />
@@ -3059,10 +3018,10 @@ export function AgencyBookingDetailPage({
                                           {/* Dot */}
                                           <div
                                             className={`relative z-10 flex-shrink-0 mt-1.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${mealType === "breakfast"
-                                                ? "bg-amber-100 border-amber-400 text-amber-700"
-                                                : mealType === "lunch"
-                                                  ? "bg-emerald-100 border-emerald-500 text-emerald-700"
-                                                  : "bg-[#F97316]/15 border-purple-500 text-[#EA580C]"
+                                              ? "bg-amber-100 border-amber-400 text-amber-700"
+                                              : mealType === "lunch"
+                                                ? "bg-emerald-100 border-emerald-500 text-emerald-700"
+                                                : "bg-[#F97316]/15 border-purple-500 text-[#EA580C]"
                                               }`}
                                           >
                                             {mealType === "breakfast" ? (
@@ -3077,22 +3036,22 @@ export function AgencyBookingDetailPage({
                                           {/* Meal card */}
                                           <div
                                             className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${isChanged
-                                                ? "border-emerald-300 bg-emerald-50/30"
-                                                : mealType === "breakfast"
-                                                  ? "border-amber-200 bg-amber-50/30"
-                                                  : mealType === "lunch"
-                                                    ? "border-emerald-200 bg-emerald-50/30"
-                                                    : "border-purple-200 bg-[#F0F9FF]/40"
+                                              ? "border-emerald-300 bg-emerald-50/30"
+                                              : mealType === "breakfast"
+                                                ? "border-amber-200 bg-amber-50/30"
+                                                : mealType === "lunch"
+                                                  ? "border-emerald-200 bg-emerald-50/30"
+                                                  : "border-purple-200 bg-[#F0F9FF]/40"
                                               }`}
                                           >
                                             <div className="flex items-center justify-between gap-2 flex-wrap">
                                               <div className="flex items-center gap-2.5 min-w-0">
                                                 <div
                                                   className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${mealType === "breakfast"
-                                                      ? "bg-amber-100 text-amber-700"
-                                                      : mealType === "lunch"
-                                                        ? "bg-emerald-100 text-emerald-700"
-                                                        : "bg-[#F97316]/15 text-[#EA580C]"
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : mealType === "lunch"
+                                                      ? "bg-emerald-100 text-emerald-700"
+                                                      : "bg-[#F97316]/15 text-[#EA580C]"
                                                     }`}
                                                 >
                                                   {mealType === "breakfast" ? (
@@ -3106,10 +3065,10 @@ export function AgencyBookingDetailPage({
                                                 <div className="min-w-0">
                                                   <div className="flex items-center gap-2 mb-0.5">
                                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${mealType === "breakfast"
-                                                        ? "bg-amber-100 text-amber-800 border-amber-300"
-                                                        : mealType === "lunch"
-                                                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                          : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
+                                                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                                                      : mealType === "lunch"
+                                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                        : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
                                                       }`}>
                                                       {mealLabel}
                                                     </span>
@@ -3418,12 +3377,12 @@ export function AgencyBookingDetailPage({
                               <p className="font-semibold text-gray-800">{pr.description}</p>
                             </div>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${pr.status === "paid"
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                                : pr.status === "overdue"
-                                  ? "bg-red-100 text-red-800 border-red-200"
-                                  : pr.status === "scheduled"
-                                    ? "bg-gray-100 text-gray-700 border-gray-200"
-                                    : "bg-amber-100 text-amber-800 border-amber-200"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              : pr.status === "overdue"
+                                ? "bg-red-100 text-red-800 border-red-200"
+                                : pr.status === "scheduled"
+                                  ? "bg-gray-100 text-gray-700 border-gray-200"
+                                  : "bg-amber-100 text-amber-800 border-amber-200"
                               }`}>
                               {pr.status === "paid" ? "Đã thanh toán" : pr.status === "overdue" ? "Quá hạn" : pr.status === "scheduled" ? (pr.stage === "surcharge" ? "Chờ thanh toán các khoản trước" : "Mở sau khi đủ cọc") : pr.status === "not_issued" ? "Chưa phát hành" : "Chờ khách thanh toán"}
                             </span>
@@ -3591,10 +3550,10 @@ export function AgencyBookingDetailPage({
                             if (!isAlreadyAssigned) setSelectedGuideToAdd(g.id);
                           }}
                           className={`flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${isAlreadyAssigned
-                              ? "opacity-50 border-gray-200 bg-gray-50 cursor-not-allowed"
-                              : isSelected
-                                ? "border-blue-500 bg-[#F0F9FF]/70 ring-2 ring-blue-400/30 cursor-pointer"
-                                : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 cursor-pointer"
+                            ? "opacity-50 border-gray-200 bg-gray-50 cursor-not-allowed"
+                            : isSelected
+                              ? "border-blue-500 bg-[#F0F9FF]/70 ring-2 ring-blue-400/30 cursor-pointer"
+                              : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 cursor-pointer"
                             }`}
                         >
                           {g.avatar ? (
@@ -3702,10 +3661,10 @@ export function AgencyBookingDetailPage({
                           if (!isAlreadyAssigned) setNewReplacementGuideId(g.id);
                         }}
                         className={`flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${isAlreadyAssigned
-                            ? "opacity-50 border-gray-200 bg-gray-50 cursor-not-allowed"
-                            : isSelected
-                              ? "border-blue-500 bg-[#F0F9FF]/70 ring-2 ring-blue-400/30 cursor-pointer"
-                              : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 cursor-pointer"
+                          ? "opacity-50 border-gray-200 bg-gray-50 cursor-not-allowed"
+                          : isSelected
+                            ? "border-blue-500 bg-[#F0F9FF]/70 ring-2 ring-blue-400/30 cursor-pointer"
+                            : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 cursor-pointer"
                           }`}
                       >
                         {g.avatar ? (
@@ -3951,8 +3910,8 @@ export function AgencyBookingDetailPage({
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${adj.adjustmentAmount === 0 ? "bg-slate-100 text-slate-700 border border-slate-200" : isPositive
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                              : "bg-rose-100 text-rose-800 border border-rose-200"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : "bg-rose-100 text-rose-800 border border-rose-200"
                             }`}>
                             {adj.adjustmentAmount === 0 ? "Giữ nguyên giá" : isPositive ? `+${formatVND(adj.adjustmentAmount)}` : `−${formatVND(Math.abs(adj.adjustmentAmount))}`}
                           </span>
@@ -4054,8 +4013,8 @@ export function AgencyBookingDetailPage({
                 type="button"
                 onClick={() => setAssignPresetMode("single")}
                 className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${assignPresetMode === "single"
-                    ? "bg-white text-purple-900 shadow-2xs ring-purple-400/40"
-                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                  ? "bg-white text-purple-900 shadow-2xs ring-purple-400/40"
+                  : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                   }`}
               >
                 <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-[#EA580C]">
@@ -4071,8 +4030,8 @@ export function AgencyBookingDetailPage({
                 type="button"
                 onClick={() => setAssignPresetMode("co_guides")}
                 className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${assignPresetMode === "co_guides"
-                    ? "bg-white text-blue-900 shadow-2xs ring-blue-400/40"
-                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                  ? "bg-white text-blue-900 shadow-2xs ring-blue-400/40"
+                  : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                   }`}
               >
                 <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-[#075985]">
@@ -4088,8 +4047,8 @@ export function AgencyBookingDetailPage({
                 type="button"
                 onClick={() => setAssignPresetMode("custom")}
                 className={`flex h-full flex-col justify-start p-2.5 rounded-lg text-left ring-2 transition-all cursor-pointer ${assignPresetMode === "custom"
-                    ? "bg-white text-emerald-900 shadow-2xs ring-emerald-400/40"
-                    : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
+                  ? "bg-white text-emerald-900 shadow-2xs ring-emerald-400/40"
+                  : "ring-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-200/60"
                   }`}
               >
                 <div className="flex h-5 items-center gap-1.5 text-xs leading-5 font-bold mb-1 text-emerald-700">
@@ -4122,8 +4081,8 @@ export function AgencyBookingDetailPage({
                         key={g.guideId}
                         onClick={() => setSelectedSingleGuideId(g.guideId)}
                         className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected
-                            ? "bg-[#F97316]/15/70 border-purple-400 ring-2 ring-purple-400/30 font-bold"
-                            : "bg-white border-gray-200 hover:bg-gray-50"
+                          ? "bg-[#F97316]/15/70 border-purple-400 ring-2 ring-purple-400/30 font-bold"
+                          : "bg-white border-gray-200 hover:bg-gray-50"
                           }`}
                       >
                         {g.guideAvatar ? (
@@ -4176,8 +4135,8 @@ export function AgencyBookingDetailPage({
                           }
                         }}
                         className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked
-                            ? "bg-[#E0F2FE]/70 border-blue-400 ring-2 ring-blue-400/30 font-bold"
-                            : "bg-white border-gray-200 hover:bg-gray-50"
+                          ? "bg-[#E0F2FE]/70 border-blue-400 ring-2 ring-blue-400/30 font-bold"
+                          : "bg-white border-gray-200 hover:bg-gray-50"
                           }`}
                       >
                         <input
@@ -4254,8 +4213,8 @@ export function AgencyBookingDetailPage({
                                   });
                                 }}
                                 className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1.5 ${isAssigned
-                                    ? "bg-emerald-600 text-white font-bold shadow-2xs"
-                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                  ? "bg-emerald-600 text-white font-bold shadow-2xs"
+                                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                   }`}
                               >
                                 {isAssigned && <Check className="w-3 h-3 text-white" />}
