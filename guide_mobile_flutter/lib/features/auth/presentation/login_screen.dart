@@ -53,22 +53,19 @@ class _LoginScreenState extends State<LoginScreen> {
               key: form,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(child: Container(
-                    width: 75, height: 75,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [
-                        Color(0xFF193E57), Color(0xFF108980),
-                      ]),
-                      borderRadius: BorderRadius.circular(22),
+                  Center(
+                    child: Image.asset(
+                      'assets/images/TripOps_logo_transparent.png',
+                      height: 54,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'TripOps Logo',
                     ),
-                    child: const Icon(Icons.explore_rounded,
-                      color: Colors.white, size: 39),
-                  )),
-                  space(16),
-                  const Text('TRIPOPS GUIDE',
+                  ),
+                  space(12),
+                  const Text('GUIDE',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: teal, fontSize: 11,
-                      fontWeight: FontWeight.w900, letterSpacing: 2)),
+                      fontWeight: FontWeight.w900, letterSpacing: 2.5)),
                   space(7),
                   const Text('Chào mừng trở lại',
                     textAlign: TextAlign.center,

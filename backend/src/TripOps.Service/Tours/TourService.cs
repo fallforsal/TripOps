@@ -9,7 +9,7 @@ using TripOps.Service.Accounts;
 
 namespace TripOps.Service.Tours;
 
-public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery)
+public sealed partial class TourService(TourRepository repository, AccountService accounts, IItineraryDraftGenerator generator, TripOps.Data.TripOpsDbContext db, AgencyDiscoveryService discovery, Contracts.ContractTemplateService contractTemplates)
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tour, TourConfiguration> pending = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -191,7 +191,6 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             Require(config.ProvinceCodes is { Length: > 0 }, "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua trước khi hoàn tất hoặc đăng bán tour.");
             Require(!string.IsNullOrWhiteSpace(config.CancellationPolicy), "Cancellation policy is required for publication.");
             Require(tiers.Length > 0, "Pricing tiers are required for publication.");
-            Require(days.Length == config.DurationDays, "An itinerary for every day is required for publication.");
             Require(config.MinGuests != null && config.MaxGuests != null, "Guest limits are required for publication.");
         }
     }
@@ -449,7 +448,11 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         config = SingleAgencyConfiguration(config,actor);
         await Validate(config, false, ct, actor);
         if(!string.IsNullOrWhiteSpace(config.Code) && await repository.CodeExists(config.Code.Trim().ToUpperInvariant(),0,ct))throw new TourException(409,"Mã tour đã được sử dụng.");
-        var tour = new Tour { AgencyId = actor, Code = $"TOUR-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}", IsAiGenerated = aiGenerated };
+        // Không nhập mã: tự tạo mã dễ đọc theo điểm đến + thời lượng (VD: Đà Lạt 4N3Đ → DL4N3D), trùng thì thêm "-2", "-3"...
+        var code = string.IsNullOrWhiteSpace(config.Code)
+            ? await TourCodes.Unique(TourCodes.Suggest(config.Destination, config.DurationDays, config.DurationNights), c => repository.CodeExists(c, 0, ct))
+            : config.Code.Trim().ToUpperInvariant();
+        var tour = new Tour { AgencyId = actor, Code = code, IsAiGenerated = aiGenerated };
         Apply(tour, config); repository.Add(tour);
         return await Save(tour, actor, "Created draft", ct);
     }
@@ -477,7 +480,14 @@ public sealed partial class TourService(TourRepository repository, AccountServic
     public async Task<PublicTourDto> PublicGet(int id, CancellationToken ct)
     {
         var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
-        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct));
+        return new(tour.Id, tour.Code, tour.Version ?? 1, DesignRequestService.CustomerConfiguration(await EnrichAgencyLogos(Configuration(tour),ct)), tour.AgencyId, await AgencyContact(tour.AgencyId, ct),
+            Contracts.CancellationPolicyDto.Of(await contractTemplates.TermsFor(tour.AgencyId, ct)));
+    }
+    /// <summary>Hợp đồng mẫu của tour công khai theo mẫu hợp đồng Agency đã lưu, để khách xem trước khi đặt.</summary>
+    public async Task<byte[]> PublicContractSample(int id, CancellationToken ct)
+    {
+        var tour = await repository.Find(id, null, true, ct) ?? throw new TourException(404, "Tour not found.");
+        return await contractTemplates.SamplePdf(tour.AgencyId, await contractTemplates.TermsFor(tour.AgencyId, ct), tour.Name, ct);
     }
     internal async Task<TourConfiguration> EnrichAgencyLogos(TourConfiguration c,CancellationToken ct) {
         if(c.CoHosts is not {Length:>0})return c;

@@ -93,7 +93,8 @@ public sealed record BookingDto(
     decimal? BaseTourAmount = null, decimal SurchargeAmount = 0, bool HasBeenApproved = false,
     IReadOnlyList<BookingAgencyDto>? BookingAgencies = null,IReadOnlyList<BookingCheckinDto>? AttractionCheckins=null,bool IsPartnerView=false,IReadOnlyList<BookingAgencyIdentityDto>? AgencyDirectory=null,
     bool CanRecordAttendance = false, DateTime? AttendanceDate = null,
-    bool CanCheckInLocations = false, int? NextLocationCheckInId = null);
+    bool CanCheckInLocations = false, int? NextLocationCheckInId = null,
+    bool CanStartTour = false);
 public sealed record BookingAgencyIdentityDto(string AgencyId,string AgencyName);
 public sealed record BookingCheckinDto(int Id,int LocationId,string AgencyId,string GuideId,string GuideName,string Status,DateTime? CheckedAt,string? Note,
     IReadOnlyList<string>? PhotoUrls = null, string? GuideAvatar = null,
@@ -154,7 +155,11 @@ public sealed record CancellationRequestDto(
 /// </summary>
 public sealed record CancellationQuoteDto(
     int BookingId, string Mode, int DaysBeforeDeparture, bool CoolingOff, decimal FeePercent,
-    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation);
+    decimal TotalAmount, decimal PaidAmount, decimal Fee, decimal RefundAmount, string Explanation)
+{
+    /// <summary>Chính sách hủy ghi trong hợp đồng của đơn (của Agency chủ trì, hoặc mặc định TripOps).</summary>
+    public Contracts.CancellationPolicyDto? Policy { get; init; }
+}
 
 public sealed record CustomerCancellationRequest(
     [Required, AllowedValues("CUSTOMER_REQUEST", "WEATHER_FORCE_MAJEURE", "SERVICE_QUALITY", "OTHER")] string Reason,
@@ -260,7 +265,8 @@ public sealed record BookingListItem(
     string Status,
     string PaymentStatus,
     DateTime CreatedAt,
-    string? ThumbnailUrl = null);
+    string? ThumbnailUrl = null,
+    DateTime? EndDate = null);
 
 public sealed record ParticipantDto(
     int Id,
@@ -297,7 +303,6 @@ public sealed record IncidentDto(
     string Title,
     string Description,
     string? ResolutionNotes,
-    string Status,
     DateTime CreatedAt,
     IReadOnlyList<string>? EvidenceUrls = null,
     string? ReportedById = null,

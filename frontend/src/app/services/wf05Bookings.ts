@@ -1,4 +1,5 @@
 import { http } from "@/app/lib/http";
+import type { CancellationPolicyDto } from "@/app/services/contractTemplate";
 import type { PaymentOutcome } from "./payos";
 import { buildSignPageUrl } from "./contractSigning";
 
@@ -176,6 +177,7 @@ export interface BookingDto {
   cancellation?: CancellationRequestDto | null;
   /** Hợp đồng lữ hành hiện hành (lập khi Agency duyệt). */
   contract?: ContractDto | null;
+  canStartTour?: boolean;
 }
 
 /** Hợp đồng hiện hành. requiredBeforePayment: phải ký (tải bản đã ký) thì mới thanh toán được. */
@@ -318,6 +320,8 @@ export interface CancellationQuoteDto {
   fee: number;
   refundAmount: number;
   explanation: string;
+  /** Chính sách hủy trong hợp đồng của đơn (của công ty lữ hành chủ trì, hoặc mặc định TripOps). */
+  policy?: CancellationPolicyDto | null;
 }
 
 export interface RefundAccountInput {
@@ -447,7 +451,6 @@ export interface IncidentDto {
   bookingId: number;
   title: string;
   description: string;
-  status: string;
   createdAt: string;
   reportedById?: string;
 }

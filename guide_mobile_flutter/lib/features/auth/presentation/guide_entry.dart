@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/notifications/guide_push_service.dart';
 import '../../../app/guide_shell.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
@@ -31,6 +33,7 @@ class _GuideEntryState extends State<GuideEntry> {
       final account = await widget.auth.restore();
       if (!mounted) return;
       setState(() { _account = account; _errorMessage = null; _loading = false; });
+      if (account != null) unawaited(GuidePushService.attach(widget.auth.api));
     } catch (e) {
       if (!mounted) return;
       setState(() { _errorMessage = readableError(e); _loading = false; });
@@ -41,9 +44,11 @@ class _GuideEntryState extends State<GuideEntry> {
     final account = await widget.auth.login(email, password);
     if (!mounted) return;
     setState(() { _account = account; _errorMessage = null; });
+    unawaited(GuidePushService.attach(widget.auth.api));
   }
 
   Future<void> _sessionExpired() async {
+    await GuidePushService.detach(widget.auth.api);
     await widget.auth.api.discardSession();
     if (!mounted) return;
     setState(() {
@@ -54,6 +59,7 @@ class _GuideEntryState extends State<GuideEntry> {
 
   Future<void> _logout() async {
     Object? failure;
+    await GuidePushService.detach(widget.auth.api);
     try {
       await widget.auth.logout();
     } catch (e) { failure = e; }

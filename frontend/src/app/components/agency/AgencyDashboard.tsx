@@ -30,9 +30,11 @@ import { BusinessAccountContainer } from "@/app/components/agency/BusinessAccoun
 import { AgencyFinancePage } from "@/app/components/agency/AgencyFinancePage";
 import { AgencyReviewsPage } from "@/app/components/agency/AgencyReviewsPage";
 import { AgencyComplaintsPage } from "@/app/components/agency/AgencyComplaintsPage";
+import { AgencyContractTemplatePage } from "@/app/components/agency/AgencyContractTemplatePage";
 
 import { getAgencyBookingDetail } from "@/app/services/wf05Bookings";
 import { toast } from "@/app/lib/notifications";
+import type { ItineraryFocus, NotificationDestination } from "@/app/lib/notificationNavigation";
 
 interface AgencyDashboardProps {
   providerGroupRequests?: ProviderGroupReservationRequest[];
@@ -104,6 +106,8 @@ export function AgencyDashboard({
 }: AgencyDashboardProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [focusedItineraryTab, setFocusedItineraryTab] = useState<ItineraryFocus | null>(null);
+  const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
   // Hash routing for reload / Back / Forward
   useEffect(() => {
     const handleHash = () => {
@@ -116,9 +120,13 @@ export function AgencyDashboard({
             sec = "co-hosting";
           }
         }
-        const bId = match[2] || null;
+        const bId = sec === "bookings" ? match[2] || null : null;
+        const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+        const tab = params.get("tab");
         setActiveSection(sec);
-        if (bId) setSelectedBookingId(bId);
+        setSelectedBookingId(bId);
+        setFocusedItineraryTab(bId && (tab === "incidents" || tab === "live_checkin") ? tab : null);
+        if (bId) setNotificationFocusVersion(v => v + 1);
       }
     };
     handleHash();
@@ -139,7 +147,7 @@ export function AgencyDashboard({
           ? error.message : "Không tải được dữ liệu booking mới nhất.");
       });
     return () => { cancelled = true; };
-  }, [activeSection, selectedBookingId]);
+  }, [activeSection, selectedBookingId, notificationFocusVersion]);
 
   const companyTours = tours.filter(
     (t) =>
@@ -171,10 +179,17 @@ export function AgencyDashboard({
     ? companyBookings.find((b) => b.id === selectedBookingId) || bookings.find((b) => b.id === selectedBookingId)
     : null;
 
-  const handleNavigateSection = (section: string) => {
+  const handleNavigateSection = (section: string, destination?: NotificationDestination) => {
     setActiveSection(section);
-    setSelectedBookingId(null);
-    window.location.hash = `#/agency/${section}`;
+    if (section === "bookings" && destination?.bookingId) {
+      setSelectedBookingId(String(destination.bookingId));
+      setFocusedItineraryTab(destination.tab ?? null);
+      setNotificationFocusVersion(v => v + 1);
+    } else {
+      setSelectedBookingId(null);
+      setFocusedItineraryTab(null);
+    }
+    window.location.hash = destination?.href ?? `#/agency/${section}`;
   };
 
   const renderContent = () => {
@@ -205,10 +220,12 @@ export function AgencyDashboard({
           return (
             <AgencyBookingDetailPage
               booking={currentSelectedBooking}
+              focusItineraryTab={focusedItineraryTab}
+              notificationFocusVersion={notificationFocusVersion}
               guides={companyGuides.filter(g => g.guideStatus !== "inactive")}
               companyName={company.name}
               companyId={company.id}
-              onBack={() => setSelectedBookingId(null)}
+              onBack={() => handleNavigateSection("bookings")}
               onApproveBooking={onApproveBooking}
               onRejectBooking={onRejectBooking}
               onAssignGuide={onAssignGuide}
@@ -239,7 +256,9 @@ export function AgencyDashboard({
             onMarkDepositPaid={onMarkDepositPaid}
             onMarkFullyPaid={onMarkFullyPaid}
             onGenerateContract={(id) => {}}
-            onViewBookingDetail={(b) => setSelectedBookingId(b.id)}
+            onViewBookingDetail={(b) => handleNavigateSection("bookings", {
+              section: "bookings", bookingId: Number(b.id), href: `#/agency/bookings/${encodeURIComponent(b.id)}`
+            })}
           />
         );
       case "services":
@@ -296,6 +315,9 @@ export function AgencyDashboard({
           />
         );
       
+      case "contract-template":
+        return <AgencyContractTemplatePage />;
+
       case "business-account":
         return <BusinessAccountContainer />;
 

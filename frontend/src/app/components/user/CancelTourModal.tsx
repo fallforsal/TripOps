@@ -168,6 +168,14 @@ export function CancelTourModal({
   }, [bookingId, hasPaidMoney]);
 
   const daysRemaining = quote?.daysBeforeDeparture ?? 0;
+  const activePolicyRowIndex = quote?.policy && !quote.coolingOff
+    ? daysRemaining <= 0
+      ? quote.policy.rows.length - 1
+      : quote.policy.rows.findIndex((row) => {
+          const minimumDays = row.range.match(/\d+/)?.[0];
+          return minimumDays !== undefined && daysRemaining >= Number(minimumDays);
+        })
+    : -1;
   const actualPaidAmount = quote?.paidAmount ?? booking?.paidAmount ?? 0;
   const refundFee = quote?.fee ?? 0;
   const approvedRefundAmount = quote?.refundAmount ?? 0;
@@ -464,17 +472,30 @@ export function CancelTourModal({
                 )}
 
                 <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-50/80 p-3 rounded-xl border border-slate-200/80">
-                  <strong>Chính sách hủy chung của TripOps</strong> (phí tính trên tổng giá trị tour, theo số ngày còn lại trước khởi hành lúc bạn gửi yêu cầu):
-                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
-                    {CANCELLATION_TIERS.map((tier) => (
-                      <li
-                        key={tier.label}
-                        className={quote && tier.match(quote) ? "text-amber-800 font-bold" : ""}
-                      >
-                        {tier.label}: phí {tier.fee}
-                      </li>
-                    ))}
-                  </ul>
+                  <strong>{quote?.policy && !quote.policy.isDefault ? "Chính sách hủy của công ty lữ hành (ghi trong hợp đồng)" : "Chính sách hủy chung của TripOps"}</strong> (phí tính trên tổng giá trị tour, theo số ngày còn lại trước khởi hành lúc bạn gửi yêu cầu):
+                  {quote?.policy ? (
+                    <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
+                      <li className={quote.coolingOff ? "text-amber-800 font-bold" : ""}>Trong 72 giờ sau khi thanh toán và còn ít nhất 15 ngày: phí 0%</li>
+                      {quote.policy.rows.map((row, index) => (
+                        <li key={row.range} className={index === activePolicyRowIndex ? "font-bold text-amber-900" : ""}
+                          aria-current={index === activePolicyRowIndex ? "true" : undefined}>
+                          {row.range}: phí {row.fee}
+                        </li>
+                      ))}
+                      {quote.policy.note && <li className="list-none italic">Ghi chú: {quote.policy.note}</li>}
+                    </ul>
+                  ) : (
+                    <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
+                      {CANCELLATION_TIERS.map((tier) => (
+                        <li
+                          key={tier.label}
+                          className={quote && tier.match(quote) ? "text-amber-800 font-bold" : ""}
+                        >
+                          {tier.label}: phí {tier.fee}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <p className="mt-1">Số tiền hoàn = số đã thanh toán − phí hủy (không âm). Đơn được hủy ngay khi gửi yêu cầu; Admin chuyển tiền hoàn vào tài khoản trong hồ sơ của bạn.</p>
                 </div>
               </div>

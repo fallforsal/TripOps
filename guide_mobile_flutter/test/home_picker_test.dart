@@ -57,4 +57,53 @@ void main() {
     expect(result.kind, HomeTripKind.none);
     expect(result.tour, isNull);
   });
+
+  test('selectNextHomeTrips returns up to 3 active assigned trips in date order', () {
+    final nextTrips = selectNextHomeTrips([
+      b(1, '2026-11-20', 'Confirmed'),
+      b(2, '2026-11-08', 'Paid'),
+      b(3, '2026-11-07', 'Completed'),
+      b(4, '2026-11-12', 'Confirmed'),
+      b(5, '2026-11-10', 'Paid'),
+      b(6, '2026-11-06', 'Cancelled'),
+    ], today);
+    expect(nextTrips.map((t) => t.id).toList(), [2, 5, 4]);
+  });
+
+  test('bookingsForCalendarDay highlights all assigned stage days and skips cancelled', () {
+    final multiDay = BookingSummary(
+      id: 10,
+      code: 'B10',
+      name: 'Tour Khánh Hòa',
+      startDate: DateTime(2026, 11, 20),
+      endDate: DateTime(2026, 11, 21),
+      status: 'Paid',
+      guestCount: 23,
+    );
+    final completed = b(11, '2026-11-18', 'Completed');
+    final cancelled = b(12, '2026-11-20', 'Cancelled');
+
+    expect(
+      bookingsForCalendarDay([multiDay, completed, cancelled], DateTime(2026, 11, 20))
+          .map((t) => t.id)
+          .toList(),
+      [10],
+    );
+    expect(
+      bookingsForCalendarDay([multiDay, completed, cancelled], DateTime(2026, 11, 21))
+          .map((t) => t.id)
+          .toList(),
+      [10],
+    );
+    expect(
+      bookingsForCalendarDay([multiDay, completed, cancelled], DateTime(2026, 11, 18))
+          .map((t) => t.id)
+          .toList(),
+      [11],
+    );
+    expect(
+      bookingsForCalendarDay([multiDay, completed, cancelled], DateTime(2026, 11, 22)),
+      isEmpty,
+    );
+  });
 }

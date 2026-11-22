@@ -323,7 +323,7 @@ export function fromApiBooking(
         dayNumber: dto.snapshotDays?.find((d) => d.locations.some((l) => l.id === c.locationId))?.dayNumber || 1,
         bookingTimelineAttractionId: String(c.locationId),
         agencyId: c.agencyId,
-        agencyName: dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
+        agencyName: dto.agencyDirectory?.find((a) => a.agencyId === c.agencyId)?.agencyName || dto.bookingAgencies?.find((a) => a.agencyId === c.agencyId)?.agencyName,
         guideId: c.guideId,
         guideName: c.guideName,
         guideAvatar: c.guideAvatar || dto.assignedGuides?.find((g) => g.guideId === c.guideId)?.guideAvatar,
@@ -376,6 +376,7 @@ export function fromApiBooking(
     paymentTransactions,
     cancellation: dto.cancellation ?? undefined,
     travelContract: dto.contract ?? undefined,
+    canStartTour: dto.canStartTour,
     incidents: (dto.incidents || []).map((i) => ({
       id: String(i.id),
       bookingId: String(dto.id),
@@ -383,18 +384,13 @@ export function fromApiBooking(
       agencyName: dto.agencyName || undefined,
       reportedById: i.reportedById || "",
       reportedByName: i.reportedByName || "Hướng dẫn viên",
-      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SCHEDULE", "OTHER"].find(
+      reportedByAvatar: dto.assignedGuides?.find((g) => g.guideId === i.reportedById)?.guideAvatar || undefined,
+      incidentType: (["HEALTH", "VEHICLE", "WEATHER", "CUSTOMER", "SECURITY", "SERVICE_PROVIDER", "SCHEDULE", "OTHER"].find(
         (c) => (i.incidentType || "").toUpperCase() === c || i.title.toUpperCase().startsWith(`[${c}]`),
       ) || "OTHER") as import("../types/index.ts").IncidentCategory,
       title: i.title,
       description: i.description,
       evidenceUrls: i.evidenceUrls || [],
-      status:
-        i.status === "Resolved"
-          ? "RESOLVED"
-          : i.status === "Acknowledged"
-            ? "IN_PROGRESS"
-            : "REPORTED",
       reportedAt: i.createdAt,
     })),
     guideIncidents: (dto.incidents || []).map((i) => ({
@@ -417,12 +413,6 @@ export function fromApiBooking(
         "service_provider",
       ].find((c) => i.title.startsWith(`[${c}]`)) ||
         "other") as IncidentReport["category"],
-      status:
-        i.status === "Resolved"
-          ? "resolved"
-          : i.status === "Acknowledged"
-            ? "acknowledged"
-            : "reported",
       reportedAt: i.createdAt,
     })),
     passengers: (dto.participants || []).map((p, index) => ({

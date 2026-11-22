@@ -25,6 +25,14 @@ public static class GuestAssistantKnowledge
           Độ tuổi và mức giá từng nhóm khác nhau giữa các tour, nên phải xem đúng bảng giá của tour.
         - Mỗi hành khách được tính theo nhóm tuổi của mình; tuổi tính tại ngày khởi hành, theo ngày sinh khai khi đặt tour.
         - Tổng giá đơn = cộng giá của từng hành khách trong đoàn.
+
+        GIÁ CÓ CỐ ĐỊNH KHÔNG
+        - Tour trên TripOps không gò theo vài đợt cố định trong năm: khách tự chọn ngày khởi hành phù hợp với đoàn.
+        - Vì vậy giá đang hiển thị là giá tham khảo theo bảng giá của công ty lữ hành. Giá thực tế có thể cao hơn hoặc thấp hơn một chút
+          tùy ngày khởi hành (mùa cao điểm, lễ Tết), số khách và lựa chọn khách sạn, nhà hàng của đoàn.
+        - Giá chính thức được công ty lữ hành xác nhận khi duyệt đơn đặt tour và ghi trong hợp đồng; khách xem rõ trước khi ký và thanh toán.
+        - Sau khi ký hợp đồng, giá đã chốt. Nếu phát sinh điều chỉnh (đổi dịch vụ, thêm khách) thì khách được báo trên TripOps,
+          và mỗi lần giá trị hợp đồng thay đổi sẽ lập phiên bản hợp đồng mới để khách ký lại.
         """;
 
     public const string PaymentPolicy = """
@@ -36,7 +44,9 @@ public static class GuestAssistantKnowledge
         """;
 
     public const string CancellationPolicy = """
-        CHÍNH SÁCH HỦY TOUR CHUNG CỦA NỀN TẢNG (khách chủ động hủy)
+        CHÍNH SÁCH HỦY MẶC ĐỊNH CỦA NỀN TẢNG (khách chủ động hủy)
+        Mỗi công ty lữ hành có thể soạn chính sách hủy riêng trong hợp đồng: khi khách hỏi về một tour cụ thể,
+        dùng trường cancellation_policy trong chi tiết tour đó; bảng dưới chỉ áp dụng cho tour của công ty chưa soạn chính sách riêng.
         Phí hủy tính theo % TỔNG GIÁ TRỊ TOUR, dựa trên số ngày còn lại trước ngày khởi hành tại lúc khách gửi yêu cầu hủy
         (trong ngoặc: phần được hoàn nếu khách đã thanh toán đủ 100%):
         - Từ 30 ngày trở lên: 0% (hoàn 100%)

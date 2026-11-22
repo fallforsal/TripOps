@@ -174,6 +174,9 @@ public sealed partial class BookingService
         session.OtpHash = null;
         session.SignerIp = ip is null ? null : Truncate(ip, 45);
         session.SignerUserAgent = userAgent is null ? null : Truncate(userAgent, 300);
+        Repo.Notify(booking.Tour!.AgencyId,
+            $"Khách đã ký hợp đồng trực tuyến cho booking {booking.BookingCode}.",
+            booking.Id, booking.CustomerId);
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return SessionDto(booking, contract, session, null);

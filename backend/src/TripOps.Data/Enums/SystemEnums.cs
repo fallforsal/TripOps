@@ -104,13 +104,6 @@ public enum AttractionCheckinStatus
     CheckedOut
 }
 
-public enum IncidentStatus
-{
-    Reported,
-    InProgress,
-    Resolved
-}
-
 public enum PaymentRequestStatus
 {
     Pending,

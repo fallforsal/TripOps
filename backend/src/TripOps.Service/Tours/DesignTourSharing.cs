@@ -53,13 +53,10 @@ public sealed partial class TourService
             tour = new Tour { AgencyId = actor, Code = $"TC-{Guid.NewGuid():N}", IsRequest = true, DesignRequestId = requestId, Version = 1 };
             repository.Add(tour);
         }
-        // Child content and age-price tables belong to the Agency that created them.
+        // Child content, age-price tables, and invited partners belong to the copied design;
+        // the lead can explicitly remove any partner from the new version afterwards if needed.
         var original=previousConfiguration??input.Configuration with {Timelines=[],PricingTiers=[],AgencyPricing=[]};
         configuration=await CollaborationConfiguration(request,MergeDesign(original,input.Configuration,actor,actor),ct,sourceVersion);
-        // A copied design keeps contributed content, but grants no new version access.
-        // The lead must explicitly invite partners into this version.
-        if(input.CreateNewVersion && sourceVersion.HasValue)
-            configuration=configuration with {CoHosts=configuration.CoHosts?.Select(h=>h.Role=="lead"?h:h with {Status="uninvited",InvitedAt=null,RespondedAt=null}).ToArray()};
         await Validate(configuration,input.Complete,ct,actor,requestId);
         Apply(tour, configuration);
         tour.Status = input.Complete ? TourStatus.Completed : TourStatus.Draft;

@@ -8,6 +8,7 @@ import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../../location_checkin/domain/checkin_photo.dart';
+import '../domain/incident_categories.dart';
 
 class IncidentScreen extends StatefulWidget {
   const IncidentScreen({super.key, required this.detail, required this.guides});
@@ -25,6 +26,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
   final List<CheckinPhoto> _selectedPhotos = [];
   final Map<String, Future<Uint8List>> _photoDownloads = {};
   bool _picking = false;
+  String? incidentType;
   String? _photoError;
   bool busy = false;
   String? error;
@@ -88,6 +90,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     try {
       await widget.guides.incident(
         widget.detail.id,
+        type: incidentType!,
         title: title.text.trim(),
         description: description.text.trim(),
         photos: List<CheckinPhoto>.unmodifiable(_selectedPhotos),
@@ -164,8 +167,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GuideStatusPill(incident.status),
                       ],
                     ),
                     if (incident.evidenceUrls.isNotEmpty) ...[
@@ -200,6 +201,27 @@ class _IncidentScreenState extends State<IncidentScreen> {
             space(15),
           ],
           const GuideSectionTitle('Tạo báo cáo mới'),
+          space(12),
+          const Text('Loại sự cố', style: TextStyle(
+            fontWeight: FontWeight.w700, color: ink, fontSize: 12,
+          )),
+          space(7),
+          DropdownButtonFormField<String>(
+            key: const ValueKey('incident-type-dropdown'),
+            initialValue: incidentType,
+            isExpanded: true,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            decoration: const InputDecoration(
+              hintText: 'Chọn loại sự cố',
+              prefixIcon: Icon(Icons.category_outlined),
+            ),
+            items: incidentCategories.map((category) =>
+              DropdownMenuItem(value: category.code, child: Text(category.label))
+            ).toList(),
+            onChanged: busy ? null : (value) => setState(() => incidentType = value),
+            validator: (value) => value == null || value.isEmpty
+                ? 'Vui lòng chọn loại sự cố' : null,
+          ),
           space(12),
           const Text('Tiêu đề', style: TextStyle(
             fontWeight: FontWeight.w700, color: ink, fontSize: 12,
@@ -313,6 +335,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
             space(10),
           ],
           FilledButton.icon(
+            key: const ValueKey('incident-submit'),
             onPressed: busy ? null : submit,
             icon: busy ? const SizedBox(
               width: 15, height: 15,

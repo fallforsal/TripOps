@@ -47,7 +47,7 @@ public sealed partial class TourFlowTests
     }
 
     [Fact]
-    public async Task Copying_version_keeps_contributions_but_does_not_copy_partner_editing_permission()
+    public async Task Copying_version_preserves_invited_partner_access_contributions_and_pricing()
     {
         await using var app=new App();await app.Initialize();
         using var customer=await app.Login("customer");using var lead=await app.Login("agency");using var partner=await app.Login("other");
@@ -60,17 +60,15 @@ public sealed partial class TourFlowTests
         var days=work.Configuration.Timelines!.Select((d,i)=>i==0?d with {Activities=[..d.Activities!,new("Copied partner stop",AgencyId:"other",Id:"copied-stop")]}:d).ToArray();
         var saved=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Revision,days,prices,Version:1)));
         var copy=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(saved.Revision,saved.Configuration,true,CreateNewVersion:true,Version:1)));
-        Assert.Equal("uninvited",copy.Configuration.CoHosts!.Single(h=>h.CompanyId=="other").Status);
+        Assert.Equal("accepted",copy.Configuration.CoHosts!.Single(h=>h.CompanyId=="other").Status);
         Assert.Contains(copy.Configuration.Timelines!.SelectMany(d=>d.Activities??[]),a=>a.Name=="Copied partner stop");
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.GetAsync(root+"/working-tour?version=2")).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await lead.PostAsJsonAsync(root+"/share",new ShareDesignVersionInput(copy.Revision,2))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await partner.GetAsync(root+"/working-tour?version=2")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await lead.PostAsJsonAsync(root+"/share",new ShareDesignVersionInput(copy.Revision,2))).StatusCode);
         var before=Assert.Single(await Read<DesignRequestDto[]>(await partner.GetAsync("/api/v1/agency/tour-design-requests")));
-        Assert.Equal(new[]{1},before.CollaborationVersions);Assert.Single(before.CollaborationInvitations!);
-        await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other",Version:2)));
-        Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept",Version:2))).StatusCode);
+        Assert.Equal(new[]{2,1},before.CollaborationVersions);Assert.Equal(2,before.CollaborationInvitations!.Length);
         var accepted=await Read<TourDto>(await partner.GetAsync(root+"/working-tour?version=2"));
         Assert.Contains(accepted.Configuration.Timelines!.SelectMany(d=>d.Activities??[]),a=>a.Name=="Copied partner stop");
-        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+"/co-hosts/other?version=1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+"/co-hosts/other?version=1&reason=Thay%20doi")).StatusCode);
         var after=Assert.Single(await Read<DesignRequestDto[]>(await partner.GetAsync("/api/v1/agency/tour-design-requests")));
         Assert.Equal(2,after.CurrentVersion);Assert.Equal(new[]{2,1},after.CollaborationVersions);
         Assert.Equal("removed",after.CollaborationInvitations!.Single(i=>i.Version==1).Status);

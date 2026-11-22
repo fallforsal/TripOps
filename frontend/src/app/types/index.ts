@@ -566,6 +566,8 @@ export interface Tour {
   inclusions?: string[];
   exclusions?: string[];
   regulations?: string[];
+  /** Chính sách hủy trong mẫu hợp đồng của công ty lữ hành (trang tour công khai). */
+  contractCancellationPolicy?: { rows: { range: string; fee: string }[]; note?: string | null; isDefault: boolean } | null;
   companyNote?: string;
   // Reviews
   reviews?: TourReview[];
@@ -740,6 +742,7 @@ export interface Booking {
   // Provider Confirmation & Approval status
   providerApprovalStatus?: "all_approved" | "pending_provider" | "has_rejection" | "not_required";
   providerConfirmations?: BookingProviderConfirmation[];
+  canStartTour?: boolean;
 }
 
 export interface IncidentReport {
@@ -755,7 +758,6 @@ export interface IncidentReport {
   images?: string[];
   reportedAt: string;
   location?: string;
-  status: "reported" | "acknowledged" | "resolved";
   resolvedNote?: string;
 }
 
@@ -810,7 +812,6 @@ export interface BookingAttractionCheckin {
 }
 
 export type IncidentCategory = "HEALTH" | "VEHICLE" | "WEATHER" | "CUSTOMER" | "SECURITY" | "SERVICE_PROVIDER" | "SCHEDULE" | "OTHER";
-export type IncidentStatus = "REPORTED" | "IN_PROGRESS" | "RESOLVED";
 
 export interface BookingIncident {
   id: string;
@@ -819,11 +820,11 @@ export interface BookingIncident {
   agencyName?: string;
   reportedById: string;
   reportedByName: string;
+  reportedByAvatar?: string;
   incidentType: IncidentCategory;
   title: string;
   description?: string;
   evidenceUrls?: string[];
-  status: IncidentStatus;
   reportedAt: string;
   resolvedAt?: string;
   resolutionNote?: string;

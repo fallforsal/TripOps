@@ -310,3 +310,29 @@ Trên iOS phải thêm `NSCameraUsageDescription` và
 - Một incident chỉ được lưu sau khi upload ảnh thành công. Nếu storage
   upload thành công một phần rồi DB lỗi, cần quy trình dọn file mồ côi
   khi triển khai production.
+
+## Firebase push notifications (opt-in configuration)
+
+The notification inbox works without Firebase. To activate background push on Android:
+1. Create a Firebase project and register the Android app package `com.tripops.tripops_guide`.
+2. Enable the Firebase Cloud Messaging API and set up Android push permissions.
+3. Pass the Firebase app configuration (public client identifiers) to Flutter using:
+   `--dart-define=FIREBASE_PROJECT_ID=...`
+   `--dart-define=FIREBASE_SENDER_ID=...`
+   `--dart-define=FIREBASE_API_KEY=...`
+   `--dart-define=FIREBASE_APP_ID=...`
+   alongside the existing `--dart-define=API_BASE_URL=...`.
+4. Configure backend `Firebase__ProjectId` and Application Default Credentials
+   through `GOOGLE_APPLICATION_CREDENTIALS` pointing to a **local** service
+   account file. Never add the service account to Git.
+
+The app registers a Firebase Installation ID (FID) through `POST /api/v1/notifications/devices`
+after guide login and unregisters it on logout. Tapping a push with a booking
+ID opens the assigned Tour Detail. A foreground push refreshes the inbox
+badge; polling remains the fallback. Android 13+ requires notification
+permission; when it is denied, the in-app inbox still works.
+
+After pulling backend changes, apply the EF migration
+`20261120120000_AddNotificationDeliveryAndDevices` before starting
+the notification dispatcher. Existing stored notifications are marked
+as already dispatched during migration to prevent historical push floods.

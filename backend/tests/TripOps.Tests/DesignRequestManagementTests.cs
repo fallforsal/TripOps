@@ -51,13 +51,11 @@ public sealed partial class TourFlowTests
         var changed=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(working.Revision,days,partnerPrices)));
         var oldVersion=changed.Version;
         var second=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(changed.Revision,changed.Configuration,true,CreateNewVersion:true)));
-        Assert.Equal("uninvited",second.Configuration.CoHosts!.Single(h=>h.CompanyId=="other").Status);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.GetAsync(root+$"/working-tour?version={second.Version}")).StatusCode);
-        await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other",Version:second.Version)));
-        Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept",Version:second.Version))).StatusCode);
+        Assert.Equal("accepted",second.Configuration.CoHosts!.Single(h=>h.CompanyId=="other").Status);
+        Assert.Equal(HttpStatusCode.OK,(await partner.GetAsync(root+$"/working-tour?version={second.Version}")).StatusCode);
         var ready=await Read<TourDto>(await lead.GetAsync(root+$"/working-tour?version={second.Version}"));
         await Share(lead,request.Id,ready);
-        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+"/co-hosts/other?removeContent=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await lead.DeleteAsync(root+$"/co-hosts/other?version={second.Version}&removeContent=true&reason=Thay%20doi")).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity,(await partner.GetAsync(root+"/working-tour")).StatusCode);
         Assert.Equal(oldVersion,(await Read<TourDto>(await partner.GetAsync(root+$"/working-tour?version={oldVersion}"))).Version);
         var clean=await Read<TourDto>(await lead.GetAsync(root+"/working-tour"));

@@ -40,6 +40,7 @@ public static class DependencyInjection
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { ConnectCallback = Payments.PayOsPayoutGateway.ConnectIPv4 });
         services.AddSingleton(sp => Notifications.SmtpOptions.From(sp.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton<Notifications.EmailSender>();
+        services.AddScoped<Contracts.ContractTemplateService>();
         services.AddScoped<Bookings.BookingService>();
         // Quyết toán cho Agency. Tác vụ chạy ngầm chỉ chuyển tiền khi Settlement:AutoPayoutEnabled = true.
         services.AddSingleton(sp => Settlements.SettlementOptions.From(sp.GetRequiredService<IConfiguration>()));
@@ -64,6 +65,8 @@ public static class DependencyInjection
         // Thời gian chờ từng lần gọi do OpenAI:TimeoutSeconds quyết định (OpenAiChatClient), nên không đặt giới hạn cứng ở đây.
         services.AddHttpClient<Ai.OpenAiChatClient>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddScoped<Ai.PublicTourFinder>();
+        services.AddScoped<Ai.CustomerBookingDigest>();
+        services.AddScoped<Ai.CustomerProfileReply>();
         services.AddScoped<Ai.GuestAssistantService>();
         services.AddScoped<Ai.AgencyAssistantService>();
         return services;
