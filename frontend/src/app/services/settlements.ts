@@ -43,6 +43,10 @@ export interface SettlementDto {
   payoutBlockers: string[];
   /** Lý do chưa chuyển TỰ ĐỘNG (rỗng = lượt quét kế tiếp sẽ chuyển). */
   autoBlockers: string[];
+  /** true = khoản từ phí hủy của đơn đã hủy (grossAmount là phần phí hủy của Agency này). */
+  fromCancellation?: boolean;
+  /** Tổng phí hủy thực giữ lại của cả đơn (đã thu − đã hoàn cho khách). */
+  cancellationFeeRetained?: number;
 }
 
 export interface SettlementRunResult {
@@ -74,6 +78,8 @@ export function settlementSharePercent(s: Pick<SettlementDto, "grossAmount" | "c
   if (!(s.customerPaid > 0) || Math.round(s.grossAmount) >= Math.round(s.customerPaid)) return null;
   return Math.round((s.grossAmount * 100) / s.customerPaid);
 }
+
+export { settlementAmountNote } from "@/app/lib/settlementNote";
 
 export const listSettlements = (status?: SettlementStatus) =>
   http<SettlementDto[]>(`/admin/settlements${status ? `?status=${status}` : ""}`);

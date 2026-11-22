@@ -115,6 +115,7 @@ public sealed partial class BookingService
         booking.RefundRequests.Add(refund);
         CancelNow(booking, refund, $"Khách hủy: {request.ReasonDetail.Trim()}", now);
         await RememberRefundAccount(customerId, account, ct);
+        await CancellationSettlements.MarkCancellationSettled(booking, ct); // phí hủy = toàn bộ số đã trả thì quyết toán ngay
         Repo.NotifyAgencies(booking, $"Khách đã hủy booking {booking.BookingCode}. Lý do: {request.ReasonDetail.Trim()}", customerId);
         foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
             Repo.Notify(guide, $"Booking {booking.BookingCode} đã bị hủy.", id, customerId);
@@ -186,6 +187,8 @@ public sealed partial class BookingService
             CancelNow(booking, refund, $"Agency hủy: {reason}", now);
             // Tài khoản nhận hoàn lấy theo hồ sơ khách (nếu khách đã lưu).
             await UseProfileAccount(booking, refund, ct);
+            // Khách quá hạn thanh toán: không hoàn, Agency được quyết toán số khách đã trả (trừ phí sàn).
+            await CancellationSettlements.MarkCancellationSettled(booking, ct);
         }
         Repo.Notify(booking.CustomerId!, $"Agency đã hủy booking {booking.BookingCode}. Lý do: {reason}.", id, agencyId);
         foreach (var guide in booking.AssignedGuides.Select(g => g.GuideId).Distinct())
@@ -247,6 +250,8 @@ public sealed partial class BookingService
             });
         }
         CompleteCancellation(booking, refund, amount, now);
+        // Hoàn tiền xong: phí hủy giữ lại thành khoản quyết toán cho Agency.
+        await CancellationSettlements.MarkCancellationSettled(booking, ct);
         Repo.Notify(booking.CustomerId!, $"Khoản hoàn tiền booking {booking.BookingCode} đã được xử lý: {amount:N0}đ.", booking.Id, adminId);
         Repo.NotifyAgencies(booking, $"Admin đã xử lý hoàn tiền booking {booking.BookingCode}.", adminId);
         await Repo.SaveChangesAsync(ct);
@@ -393,6 +398,7 @@ public sealed partial class BookingService
             payment.GatewayTransactionNo = info.BankReference ?? info.Id;
             payment.PaidAt = info.TransactionTime ?? now;
             CompleteCancellation(booking, refund, payment.Amount, now);
+            await CancellationSettlements.MarkCancellationSettled(booking, ct);
         }
         else if (info is null || info.Failed)
         {

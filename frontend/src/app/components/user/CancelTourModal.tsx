@@ -168,6 +168,14 @@ export function CancelTourModal({
   }, [bookingId, hasPaidMoney]);
 
   const daysRemaining = quote?.daysBeforeDeparture ?? 0;
+  const activePolicyRowIndex = quote?.policy && !quote.coolingOff
+    ? daysRemaining <= 0
+      ? quote.policy.rows.length - 1
+      : quote.policy.rows.findIndex((row) => {
+          const minimumDays = row.range.match(/\d+/)?.[0];
+          return minimumDays !== undefined && daysRemaining >= Number(minimumDays);
+        })
+    : -1;
   const actualPaidAmount = quote?.paidAmount ?? booking?.paidAmount ?? 0;
   const refundFee = quote?.fee ?? 0;
   const approvedRefundAmount = quote?.refundAmount ?? 0;
@@ -468,7 +476,12 @@ export function CancelTourModal({
                   {quote?.policy ? (
                     <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
                       <li className={quote.coolingOff ? "text-amber-800 font-bold" : ""}>Trong 72 giờ sau khi thanh toán và còn ít nhất 15 ngày: phí 0%</li>
-                      {quote.policy.rows.map((row) => <li key={row.range}>{row.range}: phí {row.fee}</li>)}
+                      {quote.policy.rows.map((row, index) => (
+                        <li key={row.range} className={index === activePolicyRowIndex ? "font-bold text-amber-900" : ""}
+                          aria-current={index === activePolicyRowIndex ? "true" : undefined}>
+                          {row.range}: phí {row.fee}
+                        </li>
+                      ))}
                       {quote.policy.note && <li className="list-none italic">Ghi chú: {quote.policy.note}</li>}
                     </ul>
                   ) : (

@@ -55,3 +55,12 @@ test("tour code is suggested from destination and duration", async () => {
   assert.equal(suggestTourCode("TP. Hồ Chí Minh", 2), "HCM2N1D");
   assert.equal(suggestTourCode("", 1), "TOUR1N");
 });
+
+test("settlement note explains cancellation fee shares", async () => {
+  const { settlementAmountNote } = await import("../src/app/lib/settlementNote.ts");
+  const f = (n: number) => `${n}đ`;
+  const base = { grossAmount: 250000, customerPaid: 1500000, fromCancellation: true, cancellationFeeRetained: 750000 } as any;
+  assert.equal(settlementAmountNote(base, f), "Phần chia 33% · phí hủy giữ lại 750000đ");
+  assert.equal(settlementAmountNote({ ...base, grossAmount: 750000 }, f), "Phí hủy giữ lại 750000đ");
+  assert.equal(settlementAmountNote({ grossAmount: 10, customerPaid: 10 } as any, f), "Khách đã trả 10đ");
+});

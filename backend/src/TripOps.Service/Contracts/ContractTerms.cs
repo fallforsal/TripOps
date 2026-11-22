@@ -182,17 +182,29 @@ public sealed record ContractTerms(IReadOnlyList<CancellationTier> Tiers, string
         Dictionary<string, string>? Clauses = null);
 }
 
-/// <summary>Mẫu hợp đồng Agency đang dùng. IsDefault = Agency chưa soạn, đang hiển thị chính sách mặc định của TripOps.</summary>
+/// <summary>
+/// Nội dung một mẫu hợp đồng. IsDefault = mẫu mặc định của TripOps (Agency chưa chọn mẫu nào áp dụng); khi đó Id/Name null.
+/// IsActive = mẫu đã lưu này đang được áp dụng cho các đơn đặt mới.
+/// </summary>
 public sealed record ContractTemplateDto(IReadOnlyList<CancellationTier> Tiers, string? CancellationNote, string? AdditionalTerms,
-    bool IsDefault, DateTime? UpdatedAt, IReadOnlyList<ContractPolicyRow> Preview, IReadOnlyList<ContractClauseDto> Clauses);
+    bool IsDefault, DateTime? UpdatedAt, IReadOnlyList<ContractPolicyRow> Preview, IReadOnlyList<ContractClauseDto> Clauses,
+    int? Id = null, string? Name = null, bool IsActive = false);
+
+/// <summary>Một mẫu đã lưu trong danh sách mẫu của Agency.</summary>
+/// <param name="CancellationSummary">Tóm tắt bảng phí hủy, VD "từ 30 ngày 0% · từ 15 ngày 25%".</param>
+/// <param name="CustomClauses">Số điều Agency đã sửa khác mẫu TripOps.</param>
+public sealed record ContractTemplateSummaryDto(int Id, string Name, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt,
+    string CancellationSummary, int CustomClauses, bool HasAdditionalTerms);
 
 /// <summary>Một điều trong mẫu: nội dung đang dùng, bản mặc định để khôi phục, phần hệ thống tự điền.</summary>
 public sealed record ContractClauseDto(string Key, string Title, string? AutoContent, string Text, string DefaultText, bool IsCustom);
 
 public sealed record ContractPolicyRow(string Range, string Fee);
 
+/// <param name="Name">Tên mẫu (bỏ trống khi tạo thì hệ thống tự đặt; bỏ trống khi sửa thì giữ tên cũ).</param>
+/// <param name="Activate">true = áp dụng mẫu này cho các đơn đặt từ bây giờ.</param>
 public sealed record ContractTemplateRequest(IReadOnlyList<CancellationTier>? Tiers, string? CancellationNote, string? AdditionalTerms,
-    IReadOnlyDictionary<string, string?>? Clauses = null);
+    IReadOnlyDictionary<string, string?>? Clauses = null, string? Name = null, bool Activate = false);
 
 /// <summary>Chính sách hủy hiển thị cho khách (trang tour, báo giá hủy).</summary>
 public sealed record CancellationPolicyDto(IReadOnlyList<ContractPolicyRow> Rows, string? Note, bool IsDefault)

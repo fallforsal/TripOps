@@ -12,8 +12,11 @@ namespace TripOps.Service.Bookings;
 public sealed partial class BookingService(BookingRepository repository, AccountService accounts,
     PayOsGateway payOs, PaymentClock clock, PayOsPayoutGateway payouts, IHostEnvironment environment,
     TripOps.Service.Notifications.EmailSender email, BookingQuotationService quotations, TripOps.Service.Tours.TourService tourService,
-    CloudinaryStorage photoStorage, TripOps.Service.Contracts.ContractTemplateService contractTemplates)
+    CloudinaryStorage photoStorage, TripOps.Service.Contracts.ContractTemplateService contractTemplates,
+    TripOps.Service.Settlements.AgencySettlementService settlementService)
 {
+    // Dùng trong BookingCancellations.cs: đơn hủy xong thì phí hủy giữ lại thành khoản quyết toán cho Agency.
+    private TripOps.Service.Settlements.AgencySettlementService CancellationSettlements => settlementService;
     // Dùng trong phần partial BookingPayments.cs (tham số primary constructor chỉ có phạm vi trong file này).
     private BookingQuotationService quotationsForPayment => quotations;
     private BookingRepository Repo => repository;

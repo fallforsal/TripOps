@@ -42,7 +42,9 @@ Table users {
 // Mẫu hợp đồng riêng của Travel Agency: hiện đủ các điều theo mẫu TripOps, Agency giữ nguyên hoặc sửa từng điều, tự soạn bảng phí hủy (Điều 4) và thêm điều khoản bổ sung.
 Table agency_contract_templates {
   id int [pk, increment]
-  agency_id varchar(36) [unique, not null, note: 'FK tới users.id (role travel_agency); mỗi Agency một mẫu']
+  agency_id varchar(36) [not null, note: 'FK tới users.id (role travel_agency); một Agency lưu được nhiều mẫu']
+  name varchar(120) [not null, note: 'Tên mẫu do Agency đặt, VD "Mùa thường", "Lễ Tết"']
+  is_active boolean [not null, default: false, note: 'Mẫu đang áp dụng cho các đơn đặt mới; mỗi Agency tối đa một mẫu true, không có thì dùng mẫu mặc định TripOps']
   cancellation_tiers text [not null, note: 'JSON các mốc [{minDays, feePercent}]: còn từ minDays ngày trở lên thì phí feePercent% tổng giá trị tour']
   cancellation_note varchar(2000) [note: 'Ghi chú thêm về chính sách hủy của Agency']
   additional_terms text [note: 'Điều khoản bổ sung của Agency, in thành một điều riêng trong hợp đồng']
@@ -50,6 +52,9 @@ Table agency_contract_templates {
   created_at timestamp [not null]
   updated_at timestamp [not null]
   Note: 'Ngày khởi hành trở đi phí 100% và miễn phí trong 72 giờ sau lần thanh toán đầu (còn ≥ 15 ngày) là luật chung của nền tảng.'
+  indexes {
+    agency_id
+  }
 }
 
 Ref: agency_contract_templates.agency_id > users.id

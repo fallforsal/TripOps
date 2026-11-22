@@ -49,13 +49,15 @@ internal static class DatabaseDesignConfiguration
             entity.ToTable("agency_contract_templates");
             entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
             entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasColumnType("nvarchar(120)").HasMaxLength(120).IsRequired();
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasColumnType("bit").IsRequired();
             entity.Property(e => e.CancellationTiers).HasColumnName("cancellation_tiers").HasColumnType("nvarchar(max)").IsRequired();
             entity.Property(e => e.CancellationNote).HasColumnName("cancellation_note").HasColumnType("nvarchar(2000)").HasMaxLength(2000);
             entity.Property(e => e.AdditionalTerms).HasColumnName("additional_terms").HasColumnType("nvarchar(max)");
             entity.Property(e => e.Clauses).HasColumnName("clauses").HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2").IsRequired();
-            entity.HasIndex(e => e.AgencyId).IsUnique();
+            entity.HasIndex(e => e.AgencyId);
             entity.HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<PasswordResetCode>(entity =>
