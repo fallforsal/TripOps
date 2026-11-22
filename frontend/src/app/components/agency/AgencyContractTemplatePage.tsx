@@ -190,8 +190,23 @@ export function AgencyContractTemplatePage() {
   };
 
   const q = query.trim().toLowerCase();
-  const shown = q ? templates.filter((t) => t.name.toLowerCase().includes(q)) : templates;
+  const shown = [...(q ? templates.filter((t) => t.name.toLowerCase().includes(q)) : templates)]
+    .sort((a, b) => Number(b.isActive) - Number(a.isActive));
   const editingSaved = editing !== null;
+  const defaultItem = (
+    <li key="tripops-default" className="flex items-center justify-between gap-2 bg-slate-50/60 px-4 py-2.5">
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          Mẫu mặc định TripOps
+          {!activeTemplate && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Đang áp dụng" />}
+        </span>
+        <span className="block text-[11px] text-slate-500">Nội dung chuẩn, không sửa được</span>
+      </span>
+      {activeTemplate && (
+        <Button type="button" size="sm" variant="outline" onClick={applyTripOpsDefault} disabled={busy} className="h-7 px-2 text-xs">Áp dụng</Button>
+      )}
+    </li>
+  );
 
   return (
     <div className="mx-auto max-w-7xl p-4 sm:p-6">
@@ -228,6 +243,7 @@ export function AgencyContractTemplatePage() {
               )}
             </div>
             <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto lg:max-h-[calc(100vh-17rem)]">
+              {!activeTemplate && defaultItem}
               {shown.map((t) => {
                 const selected = t.id === editingId;
                 return (
@@ -245,18 +261,7 @@ export function AgencyContractTemplatePage() {
                 );
               })}
               {q && shown.length === 0 && <li className="px-4 py-3 text-xs text-slate-500">Không có mẫu nào tên "{query.trim()}".</li>}
-              <li className="flex items-center justify-between gap-2 bg-slate-50/60 px-4 py-2.5">
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                    Mẫu mặc định TripOps
-                    {!activeTemplate && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Đang áp dụng" />}
-                  </span>
-                  <span className="block text-[11px] text-slate-500">Nội dung chuẩn, không sửa được</span>
-                </span>
-                {activeTemplate && (
-                  <Button type="button" size="sm" variant="outline" onClick={applyTripOpsDefault} disabled={busy} className="h-7 px-2 text-xs">Áp dụng</Button>
-                )}
-              </li>
+              {activeTemplate && defaultItem}
             </ul>
           </section>
         </aside>
