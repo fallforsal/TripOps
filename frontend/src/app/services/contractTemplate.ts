@@ -5,8 +5,13 @@ export interface ContractTemplateDto {
   tiers: CancellationTier[];
   cancellationNote?: string | null;
   additionalTerms?: string | null;
-  /** true = Agency chưa soạn mẫu, đang dùng chính sách mặc định của TripOps. */
+  /** true = mẫu mặc định của TripOps (Agency chưa chọn mẫu nào áp dụng); khi đó id/name rỗng. */
   isDefault: boolean;
+  /** Mẫu đã lưu của Agency. */
+  id?: number | null;
+  name?: string | null;
+  /** Mẫu này đang áp dụng cho các đơn đặt mới. */
+  isActive?: boolean;
   updatedAt?: string | null;
   preview: PolicyRow[];
   /** Đủ các điều của hợp đồng theo thứ tự in (trừ điều khoản bổ sung). */
@@ -33,6 +38,32 @@ export interface CancellationPolicyDto {
 
 export const getContractTemplate = () => http<ContractTemplateDto>("/agency/contract-template");
 
+/** Một mẫu trong danh sách mẫu đã lưu của Agency. */
+export interface ContractTemplateSummaryDto {
+  id: number;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** VD "từ 30 ngày 0% · từ 15 ngày 25%". */
+  cancellationSummary: string;
+  customClauses: number;
+  hasAdditionalTerms: boolean;
+}
+
+const templates = "/agency/contract-templates";
+export const listContractTemplates = () => http<ContractTemplateSummaryDto[]>(templates);
+export const getSavedContractTemplate = (id: number) => http<ContractTemplateDto>(`${templates}/${id}`);
+export const createContractTemplate = (input: ContractTemplateInput, name: string, activate = false) =>
+  http<ContractTemplateDto>(templates, { method: "POST", body: body(input, name, activate) });
+export const updateContractTemplate = (id: number, input: ContractTemplateInput, name: string, activate = false) =>
+  http<ContractTemplateDto>(`${templates}/${id}`, { method: "PUT", body: body(input, name, activate) });
+export const activateContractTemplate = (id: number) => http<ContractTemplateDto>(`${templates}/${id}/activate`, { method: "POST" });
+/** Thôi áp dụng mọi mẫu đã lưu: đơn đặt mới dùng mẫu mặc định của TripOps. */
+export const applyDefaultContractTemplate = () => http<ContractTemplateDto>(`${templates}/use-default`, { method: "POST" });
+export const duplicateContractTemplate = (id: number) => http<ContractTemplateDto>(`${templates}/${id}/duplicate`, { method: "POST" });
+export const deleteContractTemplate = (id: number) => http<void>(`${templates}/${id}`, { method: "DELETE" });
+
 export interface ContractTemplateInput {
   tiers: CancellationTier[];
   cancellationNote: string;
@@ -41,11 +72,13 @@ export interface ContractTemplateInput {
   clauses: Record<string, string | null>;
 }
 
-const body = (input: ContractTemplateInput) => JSON.stringify({
+const body = (input: ContractTemplateInput, name?: string, activate = false) => JSON.stringify({
   tiers: input.tiers,
   cancellationNote: input.cancellationNote.trim() || null,
   additionalTerms: input.additionalTerms.trim() || null,
   clauses: input.clauses,
+  ...(name !== undefined ? { name: name.trim() || null } : {}),
+  activate,
 });
 
 export const saveContractTemplate = (input: ContractTemplateInput) =>

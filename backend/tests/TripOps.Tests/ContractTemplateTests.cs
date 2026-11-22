@@ -214,4 +214,54 @@ public sealed partial class BookingFlowTests
         Assert.Equal("application/pdf", sample.Content.Headers.ContentType?.MediaType);
         Assert.Equal(HttpStatusCode.NotFound, (await app.CreateClient().GetAsync("/api/v1/files/tours/999999/contract-sample")).StatusCode);
     }
+
+    [Fact]
+    public async Task Agency_keeps_several_named_templates_and_switches_back_to_an_old_one()
+    {
+        using var app = new App(); await app.Initialize();
+        var agency = await app.Client("agency1@example.test");
+        var guest = app.CreateClient();
+        async Task<string> PublicFee() =>
+            (await guest.GetFromJsonAsync<PublicTourDto>("/api/v1/tours/1"))!.CancellationPolicy!.Rows.First().Fee;
+
+        var normal = await Read<ContractTemplateDto>(await agency.PostAsJsonAsync("/api/v1/agency/contract-templates",
+            new ContractTemplateRequest([new CancellationTier(30, 0m), new CancellationTier(7, 50m)], null, null, Name: "Mùa thường", Activate: true)));
+        var tet = await Read<ContractTemplateDto>(await agency.PostAsJsonAsync("/api/v1/agency/contract-templates",
+            new ContractTemplateRequest([new CancellationTier(45, 30m), new CancellationTier(10, 80m)], "Áp dụng dịp Tết", null, Name: "Lễ Tết")));
+        Assert.True(normal.IsActive);
+        Assert.False(tet.IsActive);
+        Assert.Equal("0%", await PublicFee()); // mẫu đang áp dụng: Mùa thường
+
+        var list = (await agency.GetFromJsonAsync<List<ContractTemplateSummaryDto>>("/api/v1/agency/contract-templates"))!;
+        Assert.Equal(["Mùa thường", "Lễ Tết"], list.Select(t => t.Name)); // mẫu đang áp dụng đứng đầu
+        Assert.Equal("từ 45 ngày 30% · từ 10 ngày 80%", list[1].CancellationSummary);
+
+        // Tết tới: chọn "Lễ Tết"; hết Tết: dùng lại "Mùa thường" mà không phải nhập lại.
+        Assert.True((await Read<ContractTemplateDto>(await agency.PostAsync($"/api/v1/agency/contract-templates/{tet.Id}/activate", null))).IsActive);
+        Assert.Equal("30%", await PublicFee());
+        Assert.Equal("Lễ Tết", (await agency.GetFromJsonAsync<ContractTemplateDto>("/api/v1/agency/contract-template"))!.Name);
+        await Read<ContractTemplateDto>(await agency.PostAsync($"/api/v1/agency/contract-templates/{normal.Id}/activate", null));
+        Assert.Equal("0%", await PublicFee());
+        Assert.False((await agency.GetFromJsonAsync<ContractTemplateDto>($"/api/v1/agency/contract-templates/{tet.Id}"))!.IsActive);
+
+        // Nhân bản, trùng tên, xóa.
+        var copy = await Read<ContractTemplateDto>(await agency.PostAsync($"/api/v1/agency/contract-templates/{tet.Id}/duplicate", null));
+        Assert.Equal(("Lễ Tết (bản sao)", false, "Áp dụng dịp Tết"), (copy.Name, copy.IsActive, copy.CancellationNote));
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.PostAsJsonAsync("/api/v1/agency/contract-templates",
+            new ContractTemplateRequest([new CancellationTier(1, 0m)], null, null, Name: "lễ tết"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await agency.DeleteAsync($"/api/v1/agency/contract-templates/{normal.Id}")).StatusCode); // đang áp dụng
+        Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"/api/v1/agency/contract-templates/{copy.Id}")).StatusCode);
+
+        // Agency khác không thấy, không sửa được mẫu của công ty này.
+        var other = await app.Client("agency2@example.test");
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/agency/contract-templates/{tet.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/api/v1/agency/contract-templates/{tet.Id}/activate", null)).StatusCode);
+        Assert.Empty((await other.GetFromJsonAsync<List<ContractTemplateSummaryDto>>("/api/v1/agency/contract-templates"))!);
+
+        // Quay về mẫu mặc định TripOps: các mẫu đã lưu vẫn còn để dùng lại.
+        Assert.True((await Read<ContractTemplateDto>(await agency.PostAsync("/api/v1/agency/contract-templates/use-default", null))).IsDefault);
+        Assert.True((await guest.GetFromJsonAsync<PublicTourDto>("/api/v1/tours/1"))!.CancellationPolicy!.IsDefault);
+        Assert.Equal(2, (await agency.GetFromJsonAsync<List<ContractTemplateSummaryDto>>("/api/v1/agency/contract-templates"))!.Count);
+        Assert.All((await agency.GetFromJsonAsync<List<ContractTemplateSummaryDto>>("/api/v1/agency/contract-templates"))!, t => Assert.False(t.IsActive));
+    }
 }

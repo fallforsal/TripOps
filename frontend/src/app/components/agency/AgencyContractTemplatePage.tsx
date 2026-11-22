@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Download, Eye, FileSignature, Info, Loader2, Lock, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { CheckCircle2, Copy, Download, Eye, FilePlus2, FileSignature, Loader2, Lock, PencilLine, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { toast } from "@/app/lib/notifications";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -9,7 +13,11 @@ import {
   DEFAULT_TIERS, MAX_CLAUSE_LENGTH, MAX_TIERS, clausePayload, normalizeClause, previewRows, sortTiers, validateTiers,
   type CancellationTier, type PolicyPreviewRow,
 } from "@/app/lib/contractTemplate";
-import { getContractTemplate, previewContractTemplate, saveContractTemplate, type ContractClauseDto, type ContractTemplateInput } from "@/app/services/contractTemplate";
+import {
+  activateContractTemplate, applyDefaultContractTemplate, createContractTemplate, deleteContractTemplate, duplicateContractTemplate,
+  getContractTemplate, getSavedContractTemplate, listContractTemplates, previewContractTemplate, updateContractTemplate,
+  type ContractClauseDto, type ContractTemplateDto, type ContractTemplateInput, type ContractTemplateSummaryDto,
+} from "@/app/services/contractTemplate";
 
 type Row = { minDays: string; feePercent: string };
 const toRows = (tiers: CancellationTier[]): Row[] => sortTiers(tiers).map((t) => ({ minDays: String(t.minDays), feePercent: String(t.feePercent) }));
@@ -18,13 +26,25 @@ const toTiers = (rows: Row[]): CancellationTier[] => rows.map((r) => ({ minDays:
 /** Thứ tự in trong hợp đồng: Điều 1–6 cố định, điều khoản bổ sung (nếu có) là Điều 7, điều cuối là 7 hoặc 8. */
 const NUMBERS: Record<string, number> = { program: 1, price: 2, payment: 3, cancellation: 4, changes: 5, duties: 6 };
 
+const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "");
+
 export function AgencyContractTemplatePage() {
+  /** Các mẫu đã lưu của công ty; mẫu đang áp dụng đứng đầu. */
+  const [templates, setTemplates] = useState<ContractTemplateSummaryDto[]>([]);
+  /** Mẫu đang mở để sửa; null = mẫu mới chưa lưu. */
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [toDelete, setToDelete] = useState<ContractTemplateSummaryDto | null>(null);
+  /** Thao tác chờ xác nhận bỏ thay đổi chưa lưu (mở mẫu khác, tạo mẫu mới). */
+  const [pendingSwitch, setPendingSwitch] = useState<null | (() => void)>(null);
+  const [loadVersion, setLoadVersion] = useState(0);
+  const [baseline, setBaseline] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>(toRows(DEFAULT_TIERS));
   const [note, setNote] = useState("");
   const [extra, setExtra] = useState("");
   const [clauses, setClauses] = useState<ContractClauseDto[]>([]);
   const [texts, setTexts] = useState<Record<string, string>>({});
-  const [isDefault, setIsDefault] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -35,18 +55,68 @@ export function AgencyContractTemplatePage() {
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  const apply = (t: Awaited<ReturnType<typeof getContractTemplate>>) => {
-    setRows(toRows(t.isDefault ? DEFAULT_TIERS : t.tiers)); setNote(t.cancellationNote ?? ""); setExtra(t.additionalTerms ?? "");
-    setClauses(t.clauses); setTexts(Object.fromEntries(t.clauses.map((c) => [c.key, c.text])));
-    setIsDefault(t.isDefault); setUpdatedAt(t.updatedAt ?? null);
+  /** Đưa một mẫu (đã lưu, hoặc mẫu mặc định TripOps khi tạo mẫu mới) vào khung soạn. */
+  const apply = (t: ContractTemplateDto, newName?: string) => {
+    setRows(toRows(t.isDefault ? DEFAULT_TIERS : t.tiers)); setNote(t.isDefault ? "" : t.cancellationNote ?? ""); setExtra(t.isDefault ? "" : t.additionalTerms ?? "");
+    setClauses(t.clauses);
+    setTexts(Object.fromEntries(t.clauses.map((c) => [c.key, t.isDefault ? c.defaultText : c.text])));
+    setUpdatedAt(t.updatedAt ?? null);
+    setEditingId(t.isDefault ? null : t.id ?? null);
+    setName(t.isDefault ? newName ?? "" : t.name ?? "");
+    setLoadVersion((v) => v + 1);
   };
 
+  const refreshList = async () => setTemplates(await listContractTemplates());
+
   useEffect(() => {
-    getContractTemplate()
-      .then(apply)
+    Promise.all([listContractTemplates(), getContractTemplate()])
+      .then(([list, current]) => { setTemplates(list); apply(current, list.length === 0 ? "Mẫu hợp đồng" : ""); })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Không tải được mẫu hợp đồng."))
       .finally(() => setLoading(false));
   }, []);
+
+  // Ảnh chụp nội dung vừa nạp, để biết người dùng đã sửa mà chưa lưu.
+  const snapshot = JSON.stringify({ rows, note, extra, texts, name });
+  useEffect(() => { if (loadVersion > 0) setBaseline(snapshot); }, [loadVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dirty = baseline !== null && snapshot !== baseline;
+  const editing = templates.find((t) => t.id === editingId) ?? null;
+  const editingActive = editing?.isActive ?? false;
+  const activeTemplate = templates.find((t) => t.isActive) ?? null;
+
+  /** Hỏi lại trước khi bỏ thay đổi chưa lưu. */
+  const guard = (action: () => void) => (dirty ? setPendingSwitch(() => action) : action());
+
+  const run = async (work: () => Promise<void>, failure: string) => {
+    setBusy(true);
+    try { await work(); } catch (e) { toast.error(e instanceof Error ? e.message : failure); } finally { setBusy(false); }
+  };
+
+  const openTemplate = (id: number) => guard(() => run(async () => apply(await getSavedContractTemplate(id)), "Không mở được mẫu."));
+
+  /** Mẫu mới bắt đầu từ nội dung mặc định của TripOps. */
+  const newTemplate = () => guard(() => apply({ clauses, tiers: DEFAULT_TIERS, isDefault: true, preview: [] } as ContractTemplateDto, ""));
+
+  const activate = (id: number) => run(async () => {
+    await activateContractTemplate(id); await refreshList();
+    toast.success("Đã áp dụng mẫu. Các đơn đặt từ bây giờ dùng mẫu này; đơn đã đặt giữ hợp đồng cũ.");
+  }, "Không áp dụng được mẫu.");
+
+  const applyTripOpsDefault = () => run(async () => {
+    await applyDefaultContractTemplate(); await refreshList();
+    toast.success("Đơn đặt mới sẽ dùng mẫu mặc định của TripOps. Các mẫu đã lưu vẫn giữ để dùng lại.");
+  }, "Không đổi được mẫu áp dụng.");
+
+  const duplicate = (id: number) => run(async () => {
+    const copy = await duplicateContractTemplate(id); await refreshList();
+    guard(() => apply(copy));
+    toast.success(`Đã tạo "${copy.name}".`);
+  }, "Không nhân bản được mẫu.");
+
+  const remove = (target: ContractTemplateSummaryDto) => run(async () => {
+    await deleteContractTemplate(target.id); await refreshList();
+    if (target.id === editingId) apply({ clauses, tiers: DEFAULT_TIERS, isDefault: true, preview: [] } as ContractTemplateDto, "");
+    toast.success(`Đã xóa "${target.name}".`);
+  }, "Không xóa được mẫu.");
 
   const tiers = useMemo(() => toTiers(rows), [rows]);
   const tierError = rows.some((r) => r.minDays.trim() === "" || r.feePercent.trim() === "") ? "Điền đủ số ngày và % phí cho mọi mốc." : validateTiers(tiers);
@@ -77,13 +147,19 @@ export function AgencyContractTemplatePage() {
     }
   };
 
-  const save = async () => {
+  /** Lưu vào mẫu đang mở (hoặc tạo mẫu mới); asNew = lưu thành một mẫu khác, giữ nguyên mẫu đang mở. */
+  const save = async ({ activate = false, asNew = false }: { activate?: boolean; asNew?: boolean } = {}) => {
     if (error) return;
     setSaving(true);
     try {
-      const saved = await saveContractTemplate(input());
+      const saved = editingId !== null && !asNew
+        ? await updateContractTemplate(editingId, input(), name, activate)
+        : await createContractTemplate(input(), asNew ? "" : name, activate);
       apply(saved);
-      toast.success("Đã lưu mẫu hợp đồng. Áp dụng cho các đơn đặt từ bây giờ.");
+      await refreshList();
+      toast.success(saved.isActive
+        ? `Đã lưu "${saved.name}". Mẫu này áp dụng cho các đơn đặt từ bây giờ.`
+        : `Đã lưu "${saved.name}". Bấm "Áp dụng" khi muốn dùng mẫu này.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không lưu được mẫu hợp đồng.");
     } finally {
@@ -117,20 +193,98 @@ export function AgencyContractTemplatePage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900"><FileSignature className="h-5 w-5 text-[#075985]" />Mẫu hợp đồng</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Đây là đủ các điều của hợp đồng theo mẫu TripOps. Công ty giữ nguyên hoặc sửa từng điều theo nội dung của mình, tự đặt bảng phí hủy
-            và thêm điều khoản bổ sung. Thay đổi áp dụng cho các đơn đặt sau khi lưu; đơn đã đặt giữ hợp đồng lúc đặt.
-          </p>
+
         </div>
-        <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={openPreview} disabled={!!error || previewing}>
           {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}Xem trước hợp đồng
         </Button>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${isDefault ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-          {isDefault ? "Đang dùng mẫu mặc định của TripOps" : `Đã lưu${updatedAt ? " lúc " + new Date(updatedAt).toLocaleString("vi-VN") : ""}`}
-        </span>
-        </div>
       </div>
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-slate-900">Mẫu đã lưu</h2>
+            <p className="text-xs text-slate-500">
+              Đang áp dụng: <strong className="text-slate-800">{activeTemplate ? activeTemplate.name : "Mẫu mặc định TripOps"}</strong>
+            </p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={newTemplate} disabled={busy}
+            className="border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] hover:text-[#075985]">
+            <FilePlus2 className="mr-1.5 h-4 w-4" />Tạo mẫu mới
+          </Button>
+        </div>
+        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+          {templates.map((t) => (
+            <li key={t.id} className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${t.id === editingId ? "bg-[#F0F9FF]" : ""}`}>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+                  {t.name}
+                  {t.isActive && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      <CheckCircle2 className="h-3 w-3" />Đang áp dụng
+                    </span>
+                  )}
+                  {t.id === editingId && <span className="text-[11px] font-normal text-[#075985]">đang mở bên dưới</span>}
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  Phí hủy: {t.cancellationSummary}
+                  {t.customClauses > 0 && ` · sửa ${t.customClauses} điều`}
+                  {t.hasAdditionalTerms && " · có điều khoản bổ sung"}
+                </p>
+                <p className="text-[11px] text-slate-400">Cập nhật {formatDate(t.updatedAt)}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {!t.isActive && (
+                  <Button type="button" size="sm" onClick={() => activate(t.id)} disabled={busy} className="bg-[#075985] hover:bg-[#0c4a6e]">
+                    Áp dụng
+                  </Button>
+                )}
+                <Button type="button" size="sm" variant="outline" onClick={() => openTemplate(t.id)} disabled={busy || t.id === editingId}>
+                  <PencilLine className="mr-1 h-3.5 w-3.5" />Mở để sửa
+                </Button>
+                <Button type="button" size="icon" variant="outline" aria-label={`Nhân bản ${t.name}`} title="Nhân bản" onClick={() => duplicate(t.id)} disabled={busy}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="outline" aria-label={`Xóa ${t.name}`}
+                  title={t.isActive ? "Đang áp dụng: chọn mẫu khác trước khi xóa" : "Xóa"}
+                  onClick={() => setToDelete(t)} disabled={busy || t.isActive} className="text-rose-600 hover:text-rose-700">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+                Mẫu mặc định TripOps
+                {!activeTemplate && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3 w-3" />Đang áp dụng
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-slate-500">Nội dung chuẩn của TripOps, không sửa được. Dùng làm điểm bắt đầu khi tạo mẫu mới.</p>
+            </div>
+            {activeTemplate && (
+              <Button type="button" size="sm" variant="outline" onClick={applyTripOpsDefault} disabled={busy}>Áp dụng</Button>
+            )}
+          </li>
+        </ul>
+      </section>
+
+      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#075985]/20 bg-[#F0F9FF] p-4">
+        <label className="block min-w-[240px] flex-1 space-y-1">
+          <span className="text-sm font-medium text-slate-800">
+            {editingId === null ? "Tên mẫu mới" : "Tên mẫu đang sửa"}
+            {editingActive && <span className="ml-2 text-xs font-normal text-emerald-700">(đang áp dụng, lưu là có hiệu lực ngay)</span>}
+          </span>
+          <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="VD: Mùa thường, Lễ Tết" className="bg-white" />
+        </label>
+        <p className="text-xs text-slate-500">
+          {editingId === null ? "Chưa lưu. Nội dung bên dưới bắt đầu từ mẫu TripOps." : `Cập nhật ${formatDate(updatedAt)}`}
+          {dirty && <span className="ml-1 font-medium text-amber-700">· Có thay đổi chưa lưu</span>}
+        </p>
+      </section>
 
 
 
@@ -195,10 +349,51 @@ export function AgencyContractTemplatePage() {
         <Button type="button" variant="outline" onClick={openPreview} disabled={!!error || previewing}>
           {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}Xem trước
         </Button>
-        <Button type="button" onClick={save} disabled={!!error || saving} className="bg-[#075985] hover:bg-[#0c4a6e]">
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Lưu mẫu hợp đồng
+        {editingId !== null && (
+          <Button type="button" variant="outline" onClick={() => save({ asNew: true })} disabled={!!error || saving}>
+            <Copy className="mr-2 h-4 w-4" />Lưu thành mẫu mới
+          </Button>
+        )}
+        {!editingActive && (
+          <Button type="button" variant="outline" onClick={() => save({ activate: true })} disabled={!!error || saving}
+            className="border-[#075985]/40 text-[#075985] hover:bg-[#F0F9FF] hover:text-[#075985]">
+            <CheckCircle2 className="mr-2 h-4 w-4" />Lưu &amp; áp dụng
+          </Button>
+        )}
+        <Button type="button" onClick={() => save()} disabled={!!error || saving} className="bg-[#075985] hover:bg-[#0c4a6e]">
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{editingId === null ? "Lưu mẫu" : "Lưu thay đổi"}
         </Button>
       </div>
+
+      <AlertDialog open={toDelete !== null} onOpenChange={(open) => { if (!open) setToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa mẫu "{toDelete?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mẫu sẽ bị xóa khỏi danh sách và không dùng lại được. Các đơn đã đặt theo mẫu này vẫn giữ nguyên hợp đồng của mình.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Giữ lại</AlertDialogCancel>
+            <AlertDialogAction className="bg-rose-600 hover:bg-rose-700" onClick={() => { if (toDelete) remove(toDelete); setToDelete(null); }}>
+              Xóa mẫu
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingSwitch !== null} onOpenChange={(open) => { if (!open) setPendingSwitch(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bỏ thay đổi chưa lưu?</AlertDialogTitle>
+            <AlertDialogDescription>Mẫu đang mở có thay đổi chưa lưu. Nếu tiếp tục, các thay đổi này sẽ mất.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Ở lại sửa tiếp</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const next = pendingSwitch; setPendingSwitch(null); next?.(); }}>Bỏ thay đổi</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="flex h-[90vh] max-w-5xl flex-col gap-3 sm:max-w-5xl">
