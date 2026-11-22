@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckCircle2, Copy, Download, Eye, FilePlus2, FileSignature, Loader2, Lock, PencilLine, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { CheckCircle2, Copy, Download, Eye, FilePlus2, FileSignature, Loader2, Lock, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -38,6 +38,7 @@ export function AgencyContractTemplatePage() {
   const [toDelete, setToDelete] = useState<ContractTemplateSummaryDto | null>(null);
   /** Thao tác chờ xác nhận bỏ thay đổi chưa lưu (mở mẫu khác, tạo mẫu mới). */
   const [pendingSwitch, setPendingSwitch] = useState<null | (() => void)>(null);
+  const [query, setQuery] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
   const [baseline, setBaseline] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>(toRows(DEFAULT_TIERS));
@@ -188,107 +189,121 @@ export function AgencyContractTemplatePage() {
     );
   };
 
+  const q = query.trim().toLowerCase();
+  const shown = q ? templates.filter((t) => t.name.toLowerCase().includes(q)) : templates;
+  const editingSaved = editing !== null;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-7xl p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900"><FileSignature className="h-5 w-5 text-[#075985]" />Mẫu hợp đồng</h1>
-
+          <p className="mt-1 text-sm text-slate-600">
+            Lưu nhiều mẫu (VD "Mùa thường", "Lễ Tết") và chọn mẫu áp dụng cho các đơn đặt mới; cần thì chọn lại mẫu cũ, không phải soạn lại.
+            Đơn đã đặt luôn giữ hợp đồng lúc đặt.
+          </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={openPreview} disabled={!!error || previewing}>
           {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}Xem trước hợp đồng
         </Button>
       </div>
 
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="font-semibold text-slate-900">Mẫu đã lưu</h2>
-            <p className="text-xs text-slate-500">
-              Đang áp dụng: <strong className="text-slate-800">{activeTemplate ? activeTemplate.name : "Mẫu mặc định TripOps"}</strong>
-            </p>
-          </div>
-          <Button type="button" size="sm" variant="outline" onClick={newTemplate} disabled={busy}
-            className="border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] hover:text-[#075985]">
-            <FilePlus2 className="mr-1.5 h-4 w-4" />Tạo mẫu mới
-          </Button>
-        </div>
-        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-          {templates.map((t) => (
-            <li key={t.id} className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${t.id === editingId ? "bg-[#F0F9FF]" : ""}`}>
-              <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
-                  {t.name}
-                  {t.isActive && (
+      <div className="mt-6 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+        {/* Danh sách mẫu: cột riêng, cuộn bên trong, không đẩy trang dài ra khi có nhiều mẫu. */}
+        <aside className="lg:sticky lg:top-4">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="space-y-3 border-b border-slate-100 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-semibold text-slate-900">Mẫu đã lưu <span className="font-normal text-slate-400">({templates.length})</span></h2>
+                <Button type="button" size="sm" variant="outline" onClick={newTemplate} disabled={busy}
+                  className="h-8 border-[#075985]/30 bg-[#F0F9FF] px-2.5 text-[#075985] hover:bg-[#E0F2FE] hover:text-[#075985]">
+                  <FilePlus2 className="mr-1 h-4 w-4" />Tạo mới
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500">
+                Đang áp dụng: <strong className="text-emerald-700">{activeTemplate ? activeTemplate.name : "Mẫu mặc định TripOps"}</strong>
+              </p>
+              {templates.length > 5 && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên mẫu" aria-label="Tìm mẫu hợp đồng" className="h-9 pl-8" />
+                </div>
+              )}
+            </div>
+            <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto lg:max-h-[calc(100vh-17rem)]">
+              {shown.map((t) => {
+                const selected = t.id === editingId;
+                return (
+                  <li key={t.id}>
+                    <button type="button" onClick={() => !selected && openTemplate(t.id)} disabled={busy} aria-current={selected ? "true" : undefined}
+                      className={`block w-full border-l-[3px] px-4 py-2.5 text-left transition-colors ${selected ? "border-[#075985] bg-[#F0F9FF]" : "border-transparent hover:bg-slate-50"}`}>
+                      <span className="flex items-center gap-1.5">
+                        <span className={`truncate text-sm ${selected ? "font-semibold text-[#075985]" : "font-medium text-slate-800"}`}>{t.name}</span>
+                        {t.isActive && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Đang áp dụng" />}
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-500">{t.cancellationSummary}</span>
+                      <span className="block text-[11px] text-slate-400">Cập nhật {formatDate(t.updatedAt)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+              {q && shown.length === 0 && <li className="px-4 py-3 text-xs text-slate-500">Không có mẫu nào tên "{query.trim()}".</li>}
+              <li className="flex items-center justify-between gap-2 bg-slate-50/60 px-4 py-2.5">
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                    Mẫu mặc định TripOps
+                    {!activeTemplate && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Đang áp dụng" />}
+                  </span>
+                  <span className="block text-[11px] text-slate-500">Nội dung chuẩn, không sửa được</span>
+                </span>
+                {activeTemplate && (
+                  <Button type="button" size="sm" variant="outline" onClick={applyTripOpsDefault} disabled={busy} className="h-7 px-2 text-xs">Áp dụng</Button>
+                )}
+              </li>
+            </ul>
+          </section>
+        </aside>
+
+        <main className="min-w-0 space-y-6">
+          <section className="space-y-3 rounded-2xl border border-[#075985]/20 bg-[#F0F9FF] p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block min-w-[220px] flex-1 space-y-1">
+                <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
+                  {editingSaved ? "Tên mẫu đang sửa" : "Tên mẫu mới"}
+                  {editingActive && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                      <CheckCircle2 className="h-3 w-3" />Đang áp dụng
+                      <CheckCircle2 className="h-3 w-3" />Đang áp dụng · lưu là có hiệu lực ngay
                     </span>
                   )}
-                  {t.id === editingId && <span className="text-[11px] font-normal text-[#075985]">đang mở bên dưới</span>}
-                </p>
-                <p className="truncate text-xs text-slate-500">
-                  Phí hủy: {t.cancellationSummary}
-                  {t.customClauses > 0 && ` · sửa ${t.customClauses} điều`}
-                  {t.hasAdditionalTerms && " · có điều khoản bổ sung"}
-                </p>
-                <p className="text-[11px] text-slate-400">Cập nhật {formatDate(t.updatedAt)}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {!t.isActive && (
-                  <Button type="button" size="sm" onClick={() => activate(t.id)} disabled={busy} className="bg-[#075985] hover:bg-[#0c4a6e]">
-                    Áp dụng
+                </span>
+                <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="VD: Mùa thường, Lễ Tết" className="bg-white" />
+              </label>
+              {editing && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {!editing.isActive && (
+                    <Button type="button" size="sm" onClick={() => activate(editing.id)} disabled={busy || dirty}
+                      title={dirty ? "Lưu thay đổi trước khi áp dụng" : undefined} className="bg-[#075985] hover:bg-[#0c4a6e]">
+                      <CheckCircle2 className="mr-1 h-4 w-4" />Áp dụng mẫu này
+                    </Button>
+                  )}
+                  <Button type="button" size="sm" variant="outline" onClick={() => duplicate(editing.id)} disabled={busy}>
+                    <Copy className="mr-1 h-4 w-4" />Nhân bản
                   </Button>
-                )}
-                <Button type="button" size="sm" variant="outline" onClick={() => openTemplate(t.id)} disabled={busy || t.id === editingId}>
-                  <PencilLine className="mr-1 h-3.5 w-3.5" />Mở để sửa
-                </Button>
-                <Button type="button" size="icon" variant="outline" aria-label={`Nhân bản ${t.name}`} title="Nhân bản" onClick={() => duplicate(t.id)} disabled={busy}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button type="button" size="icon" variant="outline" aria-label={`Xóa ${t.name}`}
-                  title={t.isActive ? "Đang áp dụng: chọn mẫu khác trước khi xóa" : "Xóa"}
-                  onClick={() => setToDelete(t)} disabled={busy || t.isActive} className="text-rose-600 hover:text-rose-700">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
-          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
-                Mẫu mặc định TripOps
-                {!activeTemplate && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3 w-3" />Đang áp dụng
-                  </span>
-                )}
-              </p>
-              <p className="text-xs text-slate-500">Nội dung chuẩn của TripOps, không sửa được. Dùng làm điểm bắt đầu khi tạo mẫu mới.</p>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setToDelete(editing)} disabled={busy || editing.isActive}
+                    title={editing.isActive ? "Đang áp dụng: chọn mẫu khác trước khi xóa" : undefined}
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                    <Trash2 className="mr-1 h-4 w-4" />Xóa
+                  </Button>
+                </div>
+              )}
             </div>
-            {activeTemplate && (
-              <Button type="button" size="sm" variant="outline" onClick={applyTripOpsDefault} disabled={busy}>Áp dụng</Button>
-            )}
-          </li>
-        </ul>
-      </section>
+            <p className="text-xs text-slate-500">
+              {editingSaved ? `Cập nhật ${formatDate(updatedAt)}` : "Chưa lưu. Nội dung bên dưới bắt đầu từ mẫu TripOps."}
+              {dirty && <span className="ml-1 font-medium text-amber-700">· Có thay đổi chưa lưu</span>}
+            </p>
+          </section>
 
-      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#075985]/20 bg-[#F0F9FF] p-4">
-        <label className="block min-w-[240px] flex-1 space-y-1">
-          <span className="text-sm font-medium text-slate-800">
-            {editingId === null ? "Tên mẫu mới" : "Tên mẫu đang sửa"}
-            {editingActive && <span className="ml-2 text-xs font-normal text-emerald-700">(đang áp dụng, lưu là có hiệu lực ngay)</span>}
-          </span>
-          <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="VD: Mùa thường, Lễ Tết" className="bg-white" />
-        </label>
-        <p className="text-xs text-slate-500">
-          {editingId === null ? "Chưa lưu. Nội dung bên dưới bắt đầu từ mẫu TripOps." : `Cập nhật ${formatDate(updatedAt)}`}
-          {dirty && <span className="ml-1 font-medium text-amber-700">· Có thay đổi chưa lưu</span>}
-        </p>
-      </section>
-
-
-
-      {clause("program")}
+        {clause("program")}
       {clause("price")}
       {clause("payment")}
       {clause("cancellation", (
@@ -344,7 +359,8 @@ export function AgencyContractTemplatePage() {
 
       {clause("closing")}
 
-      <div className="flex flex-wrap items-center justify-end gap-3 pb-16">
+      {/* Thanh lưu luôn nằm ở đáy màn hình khi cuộn qua các điều khoản. */}
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 rounded-t-xl border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
         {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
         <Button type="button" variant="outline" onClick={openPreview} disabled={!!error || previewing}>
           {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}Xem trước
@@ -363,6 +379,9 @@ export function AgencyContractTemplatePage() {
         <Button type="button" onClick={() => save()} disabled={!!error || saving} className="bg-[#075985] hover:bg-[#0c4a6e]">
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{editingId === null ? "Lưu mẫu" : "Lưu thay đổi"}
         </Button>
+      </div>
+
+        </main>
       </div>
 
       <AlertDialog open={toDelete !== null} onOpenChange={(open) => { if (!open) setToDelete(null); }}>
