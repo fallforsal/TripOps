@@ -1649,14 +1649,11 @@ export function AgencyBookingDetailPage({
                   </div>
                   <div>
                     <h2 className="text-base font-extrabold text-amber-950 flex items-center gap-2 flex-wrap">
-                      {isCurrentCompanyLead ? `Tour Liên Minh (${agenciesList.length} công ty)` : "Chặng phụ trách của bạn"}
-                      <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
-                        Phân bổ theo chặng
-                      </span>
+                      {isCurrentCompanyLead ? "Tour Liên Minh" : "Chặng phụ trách của bạn"}
                     </h2>
-                    <p className="text-xs text-amber-800 mt-0.5">
-                      {isCurrentCompanyLead ? "Các công ty phối hợp vận hành đoàn theo chặng. Doanh thu được phân bổ độc lập cho từng công ty." : "Bạn chỉ xem được thông tin khách, dịch vụ và doanh thu thuộc chặng của mình."}
-                    </p>
+                    {!isCurrentCompanyLead && (
+                      <p className="text-xs text-amber-800 mt-0.5">Bạn chỉ xem được thông tin khách, dịch vụ và doanh thu thuộc chặng của mình.</p>
+                    )}
                   </div>
                 </div>
 
@@ -1711,28 +1708,18 @@ export function AgencyBookingDetailPage({
                         {isLead ? (
                           <span className="text-xs font-black px-3 py-1 rounded-full bg-[#075985] text-white shadow-xs border border-blue-700 flex items-center gap-1.5 shrink-0">
                             <Building2 className="w-3.5 h-3.5" />
-                            ĐƠN VỊ CHỦ TRÌ (LEAD)
+                            ĐƠN VỊ CHỦ TRÌ
                           </span>
                         ) : (
                           <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-[#F97316]/15 text-purple-900 border border-purple-300 shadow-xs flex items-center gap-1.5 shrink-0">
                             <Handshake className="w-3.5 h-3.5 text-[#EA580C]" />
-                            ĐỐI TÁC ĐỒNG DẪN (PARTNER)
+                            ĐỐI TÁC ĐỒNG DẪN
                           </span>
                         )}
                       </div>
 
                       {/* Role and segment clarification */}
                       <div className="text-xs text-gray-600 space-y-2 pt-1 border-t border-gray-100">
-                        {isLead ? (
-                          <p className="text-[11px] text-blue-900 bg-[#E0F2FE]/60 p-2.5 rounded-xl border border-[#CBD5E1]/80 leading-relaxed">
-                            <strong>Vai trò Đơn vị chủ trì:</strong> Chịu trách nhiệm pháp lý hợp đồng, xe đưa đón, duyệt đơn booking và phát hành các đợt thanh toán cho khách hàng.
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-purple-900 bg-[#F97316]/15/60 p-2.5 rounded-xl border border-[#F97316]/30/80 leading-relaxed">
-                            <strong>Vai trò Đối tác địa phương:</strong> Phụ trách dịch vụ, lộ trình và hướng dẫn viên của chặng mình. Danh sách khách do Agency chủ trì cập nhật.
-                          </p>
-                        )}
-
                         <p className="text-[11px]">
                           <strong className="text-gray-700">Chặng phụ trách:</strong>{" "}
                           <span className="font-semibold text-gray-900">
