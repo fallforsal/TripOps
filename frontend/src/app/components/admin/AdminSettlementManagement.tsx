@@ -294,42 +294,43 @@ export function AdminSettlementManagement() {
               <tbody className="divide-y divide-gray-100">
                 {visible.map((s) => (
                   <tr key={s.id} className="align-top">
-                    <td className="py-3 px-3 space-y-0.5">
-                      <p className="font-bold text-gray-900">{s.bookingCode}</p>
-                      <p className="text-gray-600 max-w-[220px] truncate">{s.tourName || "—"}</p>
-                      {s.fromCancellation ? (
-                        <p className="text-[11px] text-gray-400">
-                          <span className="mr-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-px font-semibold text-amber-800">Đơn hủy</span>
-                          Hoàn khách xong: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-gray-400">
-                          Hoàn thành: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
-                        </p>
-                      )}
+                    <td className="py-3 px-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-bold text-gray-900">{s.bookingCode}</p>
+                        {s.fromCancellation && (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-[10px] font-semibold leading-4 text-amber-800">
+                            Đơn hủy
+                          </span>
+                        )}
+                      </div>
+                      <p className="max-w-[220px] truncate text-gray-600" title={s.tourName ?? undefined}>{s.tourName || "—"}</p>
+                      <p className="mt-0.5 whitespace-nowrap text-[11px] text-gray-400">
+                        {s.fromCancellation ? "Hoàn khách xong" : "Hoàn thành"}: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
+                      </p>
                     </td>
-                    <td className="py-3 px-3 space-y-0.5">
+                    <td className="py-3 px-3">
                       <p className="font-semibold text-gray-900">
                         {s.agencyName}
-                        {!s.isHost && <span className="ml-1 text-[10px] text-gray-500">(đối tác)</span>}
+                        {!s.isHost && <span className="ml-1 text-[10px] font-normal text-gray-500">(đối tác)</span>}
                       </p>
                       {s.accountNumber ? (
-                        <p className="text-[11px] text-gray-500">
-                          {s.bankName} · {s.accountNumber} · {s.accountHolder}
-                        </p>
+                        <div className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+                          <p className="whitespace-nowrap">{s.bankName} · {s.accountNumber}</p>
+                          <p className="max-w-[200px] truncate" title={s.accountHolder ?? undefined}>{s.accountHolder}</p>
+                        </div>
                       ) : (
-                        <p className="text-[11px] text-rose-600">Chưa nhập tài khoản nhận tiền</p>
+                        <p className="mt-0.5 text-[11px] text-rose-600">Chưa nhập tài khoản nhận tiền</p>
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <p className="font-semibold">{formatVND(s.grossAmount)}</p>
-                      <p className="text-[11px] text-gray-400">{settlementAmountNote(s, formatVND)}</p>
+                      <p className="whitespace-nowrap font-semibold text-gray-900">{formatVND(s.grossAmount)}</p>
+                      <p className="ml-auto max-w-[180px] text-[11px] text-gray-400">{settlementAmountNote(s, formatVND)}</p>
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <p>{formatVND(s.platformFee)}</p>
+                      <p className="whitespace-nowrap">{formatVND(s.platformFee)}</p>
                       <p className="text-[11px] text-gray-400">{s.feePercent}%</p>
                     </td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-700">{formatVND(s.netPayout)}</td>
+                    <td className="whitespace-nowrap py-3 px-3 text-right font-bold text-emerald-700">{formatVND(s.netPayout)}</td>
                     <td className="py-3 px-3 space-y-1 max-w-[260px]">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${SETTLEMENT_STATUS_STYLE[s.status]}`}>
                         {SETTLEMENT_STATUS_LABEL[s.status]}
@@ -341,8 +342,8 @@ export function AdminSettlementManagement() {
                           {s.bankReferenceCode && <> · Mã GD {s.bankReferenceCode}</>}
                         </p>
                       ) : s.autoBlockers.length === 0 ? (
-                        <p className="text-[11px] text-emerald-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Đủ điều kiện: lượt quét kế tiếp sẽ tự chuyển
+                        <p className="flex items-start gap-1 text-[11px] text-emerald-700">
+                          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" /> Sẵn sàng, tự chuyển ở lượt quét kế tiếp
                         </p>
                       ) : (
                         <ul className="text-[11px] text-gray-500 space-y-0.5">

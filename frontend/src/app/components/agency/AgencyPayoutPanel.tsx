@@ -152,13 +152,16 @@ export function AgencyPayoutPanel() {
                 {filteredItems.map((s) => (
                   <tr key={s.id} className="align-top">
                     <td className="py-2.5 px-3">
-                      <p className="font-semibold text-slate-900">{s.bookingCode}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-semibold text-slate-900">{s.bookingCode}</p>
+                        {s.fromCancellation && (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-[10px] font-semibold leading-4 text-amber-800"
+                            title="Khách hủy đơn: khoản này là phần phí hủy của công ty">
+                            Đơn hủy
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-500 max-w-[220px] truncate">{s.tourName}</p>
-                      {s.fromCancellation && (
-                        <span className="mt-0.5 inline-flex rounded-full border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800">
-                          Khách hủy · quyết toán phí hủy
-                        </span>
-                      )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       <p>{formatVND(s.grossAmount)}</p>
