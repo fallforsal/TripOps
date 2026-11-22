@@ -198,10 +198,7 @@ export function AgencyContractTemplatePage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900"><FileSignature className="h-5 w-5 text-[#075985]" />Mẫu hợp đồng</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Lưu nhiều mẫu (VD "Mùa thường", "Lễ Tết") và chọn mẫu áp dụng cho các đơn đặt mới; cần thì chọn lại mẫu cũ, không phải soạn lại.
-            Đơn đã đặt luôn giữ hợp đồng lúc đặt.
-          </p>
+
         </div>
         <Button type="button" variant="outline" size="sm" onClick={openPreview} disabled={!!error || previewing}>
           {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}Xem trước hợp đồng
@@ -272,7 +269,7 @@ export function AgencyContractTemplatePage() {
                   {editingSaved ? "Tên mẫu đang sửa" : "Tên mẫu mới"}
                   {editingActive && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                      <CheckCircle2 className="h-3 w-3" />Đang áp dụng · lưu là có hiệu lực ngay
+                      <CheckCircle2 className="h-3 w-3" />Đang áp dụng
                     </span>
                   )}
                 </span>
@@ -282,7 +279,7 @@ export function AgencyContractTemplatePage() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   {!editing.isActive && (
                     <Button type="button" size="sm" onClick={() => activate(editing.id)} disabled={busy || dirty}
-                      title={dirty ? "Lưu thay đổi trước khi áp dụng" : undefined} className="bg-[#075985] hover:bg-[#0c4a6e]">
+                      title={dirty ? "Lưu thay đổi trước khi áp dụng" : undefined} className="bg-[#075985] text-white hover:bg-[#0c4a6e] hover:text-white">
                       <CheckCircle2 className="mr-1 h-4 w-4" />Áp dụng mẫu này
                     </Button>
                   )}
@@ -303,83 +300,83 @@ export function AgencyContractTemplatePage() {
             </p>
           </section>
 
-        {clause("program")}
-      {clause("price")}
-      {clause("payment")}
-      {clause("cancellation", (
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-slate-800">Bảng phí hủy của công ty</p>
-            <p className="text-xs text-slate-500">Phí tính trên tổng giá trị tour, theo số ngày còn lại trước khởi hành lúc khách gửi yêu cầu hủy. Các ô được điền sẵn theo mẫu TripOps khi Agency chưa lưu bảng riêng.</p>
-          </div>
-          <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs font-medium text-slate-600">
-              <span>Còn từ … ngày trở lên</span><span>Phí hủy (%)</span><span className="w-9" />
-            </div>
-            {rows.map((r, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                <Input inputMode="numeric" aria-label={`Số ngày mốc ${i + 1}`} value={r.minDays} onChange={(e) => update(i, "minDays", e.target.value)} />
-                <Input inputMode="decimal" aria-label={`Phí hủy mốc ${i + 1}`} value={r.feePercent} onChange={(e) => update(i, "feePercent", e.target.value)} />
-                <Button type="button" variant="outline" size="icon" aria-label="Xóa mốc" disabled={rows.length <= 1}
-                  onClick={() => setRows((list) => list.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
+          {clause("program")}
+          {clause("price")}
+          {clause("payment")}
+          {clause("cancellation", (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-800">Bảng phí hủy của công ty</p>
+                <p className="text-xs text-slate-500">Phí tính trên tổng giá trị tour, theo số ngày còn lại trước khởi hành lúc khách gửi yêu cầu hủy. Các ô được điền sẵn theo mẫu TripOps khi Agency chưa lưu bảng riêng.</p>
               </div>
-            ))}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button type="button" variant="outline" size="sm" disabled={rows.length >= MAX_TIERS}
-                onClick={() => setRows((list) => [...list, { minDays: "", feePercent: "" }])}><Plus className="mr-1 h-4 w-4" />Thêm mốc</Button>
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs font-medium text-slate-600">
+                  <span>Còn từ … ngày trở lên</span><span>Phí hủy (%)</span><span className="w-9" />
+                </div>
+                {rows.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <Input inputMode="numeric" aria-label={`Số ngày mốc ${i + 1}`} value={r.minDays} onChange={(e) => update(i, "minDays", e.target.value)} />
+                    <Input inputMode="decimal" aria-label={`Phí hủy mốc ${i + 1}`} value={r.feePercent} onChange={(e) => update(i, "feePercent", e.target.value)} />
+                    <Button type="button" variant="outline" size="icon" aria-label="Xóa mốc" disabled={rows.length <= 1}
+                      onClick={() => setRows((list) => list.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button type="button" variant="outline" size="sm" disabled={rows.length >= MAX_TIERS}
+                    onClick={() => setRows((list) => [...list, { minDays: "", feePercent: "" }])}><Plus className="mr-1 h-4 w-4" />Thêm mốc</Button>
+                </div>
+                {tierError && <p role="alert" className="text-xs text-rose-700">{tierError}</p>}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-semibold text-slate-700">Xem trước bảng phí Agency đang nhập</p>
+                {preview.length > 0 ? (
+                  <PolicyPreviewTable rows={preview} />
+                ) : <p className="text-xs text-slate-500">Sửa lỗi ở trên để xem trước.</p>}
+                <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-500"><Lock className="mt-0.5 h-3 w-3 shrink-0" />
+                  Luật chung của TripOps, không đổi được: ngày khởi hành trở đi phí 100%; khách hủy trong 72 giờ sau lần thanh toán đầu tiên và còn từ 15 ngày trở lên được miễn phí.</p>
+              </div>
+
+              <label className="block space-y-1">
+                <span className="text-sm font-medium text-slate-800">Ghi chú chính sách hủy (không bắt buộc)</span>
+                <Textarea rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)}
+                  placeholder="Ví dụ: Tour dịp Lễ, Tết áp dụng như ngày thường." />
+              </label>
             </div>
-            {tierError && <p role="alert" className="text-xs text-rose-700">{tierError}</p>}
+          ))}
+          {clause("changes")}
+          {clause("duties")}
+
+          <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="font-semibold text-slate-900">Điều 7. Điều khoản bổ sung của Bên A <span className="font-normal text-slate-500">(không bắt buộc)</span></h2>
+            <p className="text-xs text-slate-500">Để trống thì hợp đồng không có điều này và điều cuối thành Điều 7. Mỗi dòng là một ý.</p>
+            <Textarea rows={4} maxLength={8000} value={extra} onChange={(e) => setExtra(e.target.value)}
+              placeholder={"Ví dụ:\nKhách mang theo CCCD hoặc hộ chiếu bản gốc.\nTrẻ em dưới 14 tuổi đi cùng bố mẹ hoặc người giám hộ."} />
+          </section>
+
+          {clause("closing")}
+
+          {/* Thanh lưu luôn nằm ở đáy màn hình khi cuộn qua các điều khoản. */}
+          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 rounded-t-xl border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
+            {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
+            <Button type="button" variant="outline" onClick={openPreview} disabled={!!error || previewing}>
+              {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}Xem trước
+            </Button>
+            {editingId !== null && (
+              <Button type="button" variant="outline" onClick={() => save({ asNew: true })} disabled={!!error || saving}>
+                <Copy className="mr-2 h-4 w-4" />Lưu thành mẫu mới
+              </Button>
+            )}
+            {!editingActive && (
+              <Button type="button" variant="outline" onClick={() => save({ activate: true })} disabled={!!error || saving}
+                className="border-[#075985]/40 text-[#075985] hover:bg-[#F0F9FF] hover:text-[#075985]">
+                <CheckCircle2 className="mr-2 h-4 w-4" />Lưu &amp; áp dụng
+              </Button>
+            )}
+            <Button type="button" onClick={() => save()} disabled={!!error || saving} className="bg-[#075985] text-white hover:bg-[#0c4a6e] hover:text-white">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{editingId === null ? "Lưu mẫu" : "Lưu thay đổi"}
+            </Button>
           </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-xs font-semibold text-slate-700">Xem trước bảng phí Agency đang nhập</p>
-            {preview.length > 0 ? (
-              <PolicyPreviewTable rows={preview} />
-            ) : <p className="text-xs text-slate-500">Sửa lỗi ở trên để xem trước.</p>}
-            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-500"><Lock className="mt-0.5 h-3 w-3 shrink-0" />
-              Luật chung của TripOps, không đổi được: ngày khởi hành trở đi phí 100%; khách hủy trong 72 giờ sau lần thanh toán đầu tiên và còn từ 15 ngày trở lên được miễn phí.</p>
-          </div>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-800">Ghi chú chính sách hủy (không bắt buộc)</span>
-            <Textarea rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="Ví dụ: Tour dịp Lễ, Tết áp dụng như ngày thường." />
-          </label>
-        </div>
-      ))}
-      {clause("changes")}
-      {clause("duties")}
-
-      <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-slate-900">Điều 7. Điều khoản bổ sung của Bên A <span className="font-normal text-slate-500">(không bắt buộc)</span></h2>
-        <p className="text-xs text-slate-500">Để trống thì hợp đồng không có điều này và điều cuối thành Điều 7. Mỗi dòng là một ý.</p>
-        <Textarea rows={4} maxLength={8000} value={extra} onChange={(e) => setExtra(e.target.value)}
-          placeholder={"Ví dụ:\nKhách mang theo CCCD hoặc hộ chiếu bản gốc.\nTrẻ em dưới 14 tuổi đi cùng bố mẹ hoặc người giám hộ."} />
-      </section>
-
-      {clause("closing")}
-
-      {/* Thanh lưu luôn nằm ở đáy màn hình khi cuộn qua các điều khoản. */}
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 rounded-t-xl border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
-        {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
-        <Button type="button" variant="outline" onClick={openPreview} disabled={!!error || previewing}>
-          {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}Xem trước
-        </Button>
-        {editingId !== null && (
-          <Button type="button" variant="outline" onClick={() => save({ asNew: true })} disabled={!!error || saving}>
-            <Copy className="mr-2 h-4 w-4" />Lưu thành mẫu mới
-          </Button>
-        )}
-        {!editingActive && (
-          <Button type="button" variant="outline" onClick={() => save({ activate: true })} disabled={!!error || saving}
-            className="border-[#075985]/40 text-[#075985] hover:bg-[#F0F9FF] hover:text-[#075985]">
-            <CheckCircle2 className="mr-2 h-4 w-4" />Lưu &amp; áp dụng
-          </Button>
-        )}
-        <Button type="button" onClick={() => save()} disabled={!!error || saving} className="bg-[#075985] hover:bg-[#0c4a6e]">
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{editingId === null ? "Lưu mẫu" : "Lưu thay đổi"}
-        </Button>
-      </div>
 
         </main>
       </div>
@@ -418,9 +415,7 @@ export function AgencyContractTemplatePage() {
         <DialogContent className="flex h-[90vh] max-w-5xl flex-col gap-3 sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Xem trước hợp đồng</DialogTitle>
-            <DialogDescription>
-              Đúng bản PDF khách sẽ nhận, theo nội dung đang soạn trên màn hình (kể cả phần chưa lưu). Thông tin khách, giá và lịch thanh toán là dữ liệu mẫu.
-            </DialogDescription>
+
           </DialogHeader>
           {previewUrl && <iframe title="Xem trước hợp đồng" src={previewUrl} className="min-h-0 w-full flex-1 rounded-lg border border-slate-200" />}
           {previewUrl && (
