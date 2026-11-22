@@ -450,103 +450,64 @@ export function UserBookingDetailPage({
 
             {/* CO-HOSTING ALLIANCE BREAKDOWN CARD FOR CUSTOMER */}
             {!isClosedBooking && isCoHosted && coHosts.length > 0 && (
-              <div className="bg-gradient-to-br from-amber-50/80 via-purple-50/50 to-blue-50/50 rounded-2xl border-2 border-amber-300 p-5 sm:p-6 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 flex-shrink-0 shadow-2xs">
-                      <Handshake className="w-5 h-5 text-amber-700" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-extrabold text-amber-950 flex items-center gap-2 flex-wrap">
-                        Tour Liên Minh – 2 Công Ty Lữ Hành Cùng Phục Vụ
-                      </h3>
-                      <p className="text-xs text-amber-800 mt-0.5">
-                        Chuyến đi của quý khách được đồng phối hợp thực hiện bởi 2 công ty du lịch uy tín nhằm đảm bảo chất lượng phục vụ chuyên sâu và trải nghiệm địa phương xuất sắc nhất.
-                      </p>
-                    </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
+                <div className="flex items-start gap-2.5 border-b border-gray-100 pb-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#E0F2FE] flex items-center justify-center flex-shrink-0">
+                    <Handshake className="w-4.5 h-4.5 text-[#075985]" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900">Tour Liên Minh – 2 Công Ty Lữ Hành Cùng Phục Vụ</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Chuyến đi của quý khách được đồng phối hợp thực hiện bởi 2 công ty du lịch uy tín nhằm đảm bảo chất lượng phục vụ chuyên sâu và trải nghiệm địa phương xuất sắc nhất.
+                    </p>
                   </div>
                 </div>
 
-                {/* 2 Companies Participation Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {coHosts.map((ch) => {
                     const isLead = ch.role === "lead";
                     return (
-                      <div
-                        key={ch.id}
-                        className={`rounded-xl p-4 border transition-all ${isLead
-                            ? "bg-white border-[#CBD5E1] shadow-xs"
-                            : "bg-white border-[#F97316]/30 shadow-xs"
-                          }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span
-                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md uppercase tracking-wider ${isLead
-                                ? "bg-[#E0F2FE] text-blue-800 border border-[#CBD5E1]"
-                                : "bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30"
-                              }`}
-                          >
+                      <div key={ch.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {ch.companyLogo ? (
+                              <img src={ch.companyLogo} alt={ch.companyName} className="w-9 h-9 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 font-bold text-xs flex-shrink-0">
+                                {ch.companyName.charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-gray-900 text-sm truncate" title={ch.companyName}>{ch.companyName}</h4>
+                              <p className="text-[11px] text-gray-500 line-clamp-1">
+                                {isLead ? "Chịu trách nhiệm hợp đồng, bảo hiểm & xe đưa đón" : "Chịu trách nhiệm HDV bản địa & dịch vụ tại chỗ"}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${isLead ? "bg-[#075985] text-white" : "border border-gray-300 text-gray-700"}`}>
                             {isLead ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                           </span>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            ✓ Đã xác nhận đồng hành
+                        </div>
+
+                        <div className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs">
+                          <span className="text-gray-500">Phụ trách: </span>
+                          <span className="font-medium text-gray-900">
+                            {ch.assignedSegments || (isLead ? "Chặng khởi hành & Quản lý chung" : "Chặng trải nghiệm địa phương")}
                           </span>
+                          {ch.notes && <p className="mt-1.5 text-[11px] italic text-gray-500">"{ch.notes}"</p>}
                         </div>
 
-                        <div className="flex items-center gap-3 mb-2.5">
-                          {ch.companyLogo ? (
-                            <img
-                              src={ch.companyLogo}
-                              alt={ch.companyName}
-                              className="w-10 h-10 rounded-xl object-cover border border-gray-200 flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-sm">
-                              {ch.companyName.charAt(0)}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-gray-900 text-sm truncate">{ch.companyName}</h4>
-                            <p className="text-xs text-gray-500 line-clamp-1">
-                              {isLead
-                                ? "Chịu trách nhiệm hợp đồng, bảo hiểm & xe đưa đón"
-                                : "Chịu trách nhiệm HDV bản địa & dịch vụ tại chỗ"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5 text-xs bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                          <div>
-                            <span className="text-gray-400 block text-[10px] font-semibold uppercase">
-                              Phần chặng / Dịch vụ phụ trách:
-                            </span>
-                            <span className="font-bold text-gray-800">
-                              {ch.assignedSegments || (isLead ? "Chặng khởi hành & Quản lý chung" : "Chặng trải nghiệm địa phương")}
-                            </span>
-                          </div>
-
-                          {ch.notes && (
-                            <p className="text-gray-600 italic text-[11px] pt-1 border-t border-gray-200">
-                              "{ch.notes}"
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Direct Contact info for customer */}
-                        <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600 flex-wrap gap-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] text-gray-500">
                           {ch.companyPhone ? (
-                            <a
-                              href={`tel:${ch.companyPhone.replace(/\s+/g, "")}`}
-                              className="flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-800"
-                            >
-                              <Phone className="w-3 h-3 text-teal-600" />
-                              Hotline: {ch.companyPhone}
+                            <a href={`tel:${ch.companyPhone.replace(/\s+/g, "")}`} className="flex items-center gap-1 font-medium text-[#075985] hover:underline">
+                              <Phone className="w-3 h-3" />
+                              {ch.companyPhone}
                             </a>
                           ) : (
-                            <span className="text-[11px] text-gray-400">Hotline: Cập nhật sau</span>
+                            <span className="text-gray-400">Hotline: cập nhật sau</span>
                           )}
                           {ch.companyEmail && (
-                            <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                            <span className="flex items-center gap-1 truncate">
                               <Mail className="w-3 h-3 text-gray-400" />
                               {ch.companyEmail}
                             </span>
@@ -556,7 +517,6 @@ export function UserBookingDetailPage({
                     );
                   })}
                 </div>
-
               </div>
             )}
 
@@ -1547,7 +1507,7 @@ export function UserBookingDetailPage({
                               <Button
                                 size="sm"
                                 onClick={() => setSelectedPaymentRequest(pr)}
-                                className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs h-8 gap-1.5 shadow-xs"
+                                className="w-full mt-2 bg-[#075985] hover:bg-[#0369a1] text-white font-semibold text-xs h-8 gap-1.5"
                               >
                                 <CreditCard className="w-3.5 h-3.5" />
                                 {pr.stage === "surcharge" ? "Thanh toán phụ thu" : pr.stage === "balance" ? "Thanh toán đợt 2" : pr.stage === "full" ? "Thanh toán toàn bộ" : "Thanh toán cọc"} ({formatVND(pr.amount)})
