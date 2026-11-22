@@ -220,16 +220,12 @@ export function UserCustomRequests({
                           <div className="flex items-center gap-2">
                             <span className="bg-[#F97316]/90 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1">
                               <Handshake className="w-3.5 h-3.5 text-amber-300" />
-                              Tour Liên Minh Đối Tác
+                              Tour Liên Minh
                             </span>
                             <span className="text-xs text-purple-200">
                               Phối hợp thực hiện bởi {matchingTour.coHosts.length} thương hiệu lữ hành uy tín
                             </span>
                           </div>
-                          <span className="text-[11px] text-emerald-300 font-semibold flex items-center gap-1">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            Ký quỹ bảo chứng Escrow
-                          </span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                           {matchingTour.coHosts.map((ch) => (
@@ -243,7 +239,7 @@ export function UserCustomRequests({
                                       : "bg-purple-500/40 text-purple-200 border border-purple-400/40"
                                   }`}
                                 >
-                                  {ch.role === "lead" ? "Đơn vị Chủ trì" : "Đối tác Bản địa"}
+                                  {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                                 </span>
                               </div>
                               <p className="text-[11px] text-purple-300 mt-1">{ch.assignedSegments}</p>
@@ -255,7 +251,7 @@ export function UserCustomRequests({
                       <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/15 flex items-center justify-between text-xs flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <span className="bg-[#075985]/90 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase">
-                            🏢 Đơn vị tổ chức độc lập
+                            Đơn vị tổ chức độc lập
                           </span>
                           <span className="font-bold text-white text-sm">
                             {matchingTour.companyName || req.targetCompanyName}
@@ -413,7 +409,7 @@ export function UserCustomRequests({
                     <div className="flex items-center gap-2">
                       <span className="bg-purple-700 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
                         <Handshake className="w-3.5 h-3.5 text-amber-300" />
-                        Tour Liên Minh Hợp Tác Chuyên Nghiệp
+                        Tour Liên Minh
                       </span>
                       <span className="text-xs text-purple-900 font-semibold">
                         2 công ty lữ hành cùng phối hợp dẫn tour
@@ -448,7 +444,7 @@ export function UserCustomRequests({
                                   : "bg-[#F97316]/15 text-purple-800"
                               }`}
                             >
-                              {ch.role === "lead" ? "Đơn vị Chủ trì" : "Đối tác Bản địa"}
+                              {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                             </span>
                           </div>
                           <p className="text-[11px] text-gray-600">
@@ -456,13 +452,6 @@ export function UserCustomRequests({
                           </p>
                         </div>
                       ))}
-                    </div>
-
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-center gap-2 text-emerald-900 text-[11px]">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span>
-                        <strong>Bảo chứng thanh toán Ký quỹ (Escrow):</strong> Tiền tour được giữ an toàn tại Tài khoản trung gian của Sàn Du Lịch cho đến khi quý khách hoàn thành chuyến đi.
-                      </span>
                     </div>
                   </div>
                 )}

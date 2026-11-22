@@ -83,14 +83,14 @@ export function BookingModal({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
                   <Handshake className="w-3 h-3" />
-                  Tour Liên Minh 2 Công Ty
+                  Tour Liên Minh
                 </span>
                 <span className="font-bold text-amber-950">
                   {tour.coHosts?.map((c) => c.companyName).join(" & ") || "2 Bên phối hợp thực hiện"}
                 </span>
               </div>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Tour được dẫn và điều phối bởi 2 đơn vị lữ hành. Toàn bộ tiền thanh toán được bảo chứng an toàn qua Tài khoản Ký quỹ (Escrow) của Sàn Du Lịch.
+                Tour được dẫn và điều phối bởi 2 đơn vị lữ hành.
               </p>
             </div>
           )}

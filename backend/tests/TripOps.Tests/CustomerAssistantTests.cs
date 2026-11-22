@@ -30,6 +30,18 @@ public sealed partial class BookingFlowTests
         var other = await app.Client("customer2@example.test");
         var otherBooking = (await (await other.PostAsJsonAsync("/api/v1/bookings", Sample())).Content.ReadFromJsonAsync<BookingDto>())!;
 
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOps.Data.TripOpsDbContext>();
+            var customerUser = db.Users.Single(u => u.Email == "customer1@example.test");
+            customerUser.Role = TripOps.Data.Enums.UserRole.Customer;
+            var customerId = customerUser.Id;
+            var agencyId = db.Users.Single(u => u.Email == "agency1@example.test").Id;
+            db.TourDesignRequests.Add(new TripOps.Data.Entities.TourDesignRequest { CustomerId = customerId, AgencyId = agencyId, Destination = "Đà Lạt - Nha Trang",
+                ContactName = "Khách", StartDate = DateTime.UtcNow.Date.AddDays(30), NumberOfGuests = 30, BudgetPerPerson = 5_000_000,
+                Status = TripOps.Data.Enums.CustomRequestStatus.InProgress });
+            await db.SaveChangesAsync();
+        }
         var request = new AiChatRequest([new AiChatMessage("user", "Đơn của tôi còn phải trả bao nhiêu?")]);
         var answer = await Read<AiChatResponse>(await customer.PostAsJsonAsync("/api/v1/ai/customer-chat", request));
         Assert.True(answer.AiConfigured);
@@ -43,6 +55,10 @@ public sealed partial class BookingFlowTests
         Assert.Contains("khách đã ký, chờ công ty xác nhận", note); // nhãn tiếng Việt thay cho mã trạng thái
         Assert.Contains("hạn hết ngày", note);
         Assert.Contains("Nếu hủy ngay bây giờ", note);
+        Assert.Contains("YÊU CẦU THIẾT KẾ TOUR RIÊNG", note); // "tour thiết kế của tôi" phải thấy cả yêu cầu thiết kế
+        Assert.Contains("Đà Lạt - Nha Trang", note);
+        Assert.Contains("đang thiết kế phương án", note);
+        Assert.Contains("(tour đặt sẵn)", note);
         Assert.DoesNotContain("0901234567", note); // không gửi số điện thoại cho nhà cung cấp AI
 
         // Không cache: hỏi lại y hệt vẫn gọi model (số liệu đơn có thể vừa thay đổi).

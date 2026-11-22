@@ -138,10 +138,14 @@ const normalizeLegacyService = <T extends {
   address?: string; description?: string;
 }>(item: T, referencePrice?: number, area?: string): T =>
   item.serviceId && !/^\d+$/.test(item.serviceId)
-    ? { ...item, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
-        supplier: item.supplier || { address: item.address || area, area,
-          referencePrice: referencePrice || 0, conditions: item.description },
-        providerName: "Nhà cung cấp của agency", isCustom: true }
+    ? {
+      ...item, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
+      supplier: item.supplier || {
+        address: item.address || area, area,
+        referencePrice: referencePrice || 0, conditions: item.description
+      },
+      providerName: "Nhà cung cấp của agency", isCustom: true
+    }
     : item;
 
 export interface AgencyTourManagementProps {
@@ -480,8 +484,8 @@ export function AgencyTourManagement({
                 onClick={() => setViewMode("grid")}
                 title="Chế độ Lưới (Grid View)"
                 className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === "grid"
-                    ? "bg-white text-[#075985] shadow-xs"
-                    : "text-gray-500 hover:text-gray-800"
+                  ? "bg-white text-[#075985] shadow-xs"
+                  : "text-gray-500 hover:text-gray-800"
                   }`}
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -492,8 +496,8 @@ export function AgencyTourManagement({
                 onClick={() => setViewMode("table")}
                 title="Chế độ Bảng (Table View)"
                 className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === "table"
-                    ? "bg-white text-[#075985] shadow-xs"
-                    : "text-gray-500 hover:text-gray-800"
+                  ? "bg-white text-[#075985] shadow-xs"
+                  : "text-gray-500 hover:text-gray-800"
                   }`}
               >
                 <List className="w-4 h-4" />
@@ -509,8 +513,8 @@ export function AgencyTourManagement({
             <button
               onClick={() => setStatusFilter("all")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === "all"
-                  ? "bg-[#075985] text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-[#075985] text-white shadow-xs"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
               Tất cả ({publicTours.length})
@@ -518,8 +522,8 @@ export function AgencyTourManagement({
             <button
               onClick={() => setStatusFilter("published")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === "published"
-                  ? "bg-[#075985] text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-[#075985] text-white shadow-xs"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
               Đang đăng ({publishedCount})
@@ -527,8 +531,8 @@ export function AgencyTourManagement({
             <button
               onClick={() => setStatusFilter("hidden")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === "hidden"
-                  ? "bg-slate-700 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-slate-700 text-white shadow-xs"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
               Chưa đăng ({hiddenCount})
@@ -603,8 +607,8 @@ export function AgencyTourManagement({
               <div
                 key={tour.id}
                 className={`bg-white rounded-2xl border overflow-hidden hover:shadow-md transition-shadow flex flex-col justify-between group ${isSelected
-                    ? "border-[#075985] ring-2 ring-[#075985]/20"
-                    : "border-[#CBD5E1]"
+                  ? "border-[#075985] ring-2 ring-[#075985]/20"
+                  : "border-[#CBD5E1]"
                   }`}
               >
                 <div>
@@ -749,8 +753,8 @@ export function AgencyTourManagement({
                           setPendingAction({ type: actionType, tour });
                         }}
                         className={`p-1.5 rounded-lg transition-colors ${!isTourPublished(tour)
-                            ? "text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
-                            : "text-emerald-600 hover:text-slate-600 hover:bg-slate-100"
+                          ? "text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+                          : "text-emerald-600 hover:text-slate-600 hover:bg-slate-100"
                           }`}
                       >
                         {!isTourPublished(tour) ? (
@@ -1020,11 +1024,10 @@ export function AgencyTourManagement({
                 key={page}
                 type="button"
                 onClick={() => setCurrentPage(page)}
-                className={`w-8 h-8 rounded-lg font-semibold border transition-colors ${
-                  page === safePage
+                className={`w-8 h-8 rounded-lg font-semibold border transition-colors ${page === safePage
                     ? "bg-[#075985] text-white border-[#075985]"
                     : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 {page}
               </button>
@@ -1169,12 +1172,12 @@ export function AgencyTourManagement({
             <AlertDialogAction
               onClick={handleExecuteConfirmedAction}
               className={`text-xs font-bold text-white px-4 h-9 transition-colors ${pendingAction?.type === "delete"
-                  ? "bg-rose-600 hover:bg-rose-700"
-                  : pendingAction?.type === "hide"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : pendingAction?.type === "publish"
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-[#075985] hover:bg-[#F97316]"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : pendingAction?.type === "hide"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : pendingAction?.type === "publish"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-[#075985] hover:bg-[#F97316]"
                 }`}
             >
               {pendingAction?.type === "delete" && "Xóa vĩnh viễn"}
@@ -1245,13 +1248,15 @@ export function TourFormPage(props: TourFormPageProps) {
     createdAt: "",
   };
   if (ownershipCollaboration && tour?.agencyPricing) {
-    const own= tour.agencyPricing.find(p=>p.agencyId===company.id)?.tiers || [];
-    const leadId=tour.coHosts?.find(h=>h.role==="lead")?.companyId || tour.companyId;
-    const frames=tour.agencyPricing.find(p=>p.agencyId===leadId)?.tiers || [];
-    const rows=frames.map((t,i)=>({tierKey:t.key || `tier-${i}`,ageGroup:(t.maxAge??150)>=100?"adult":(t.maxAge??150)<=4?"child_under_2":`tier-${i}`,
-      ageGroupLabel:t.name,minAge:t.minAge??undefined,maxAge:t.maxAge??undefined,
-      price:own.find(p=>(p.key && p.key===t.key) || (!p.key && p.minAge===t.minAge && p.maxAge===t.maxAge))?.pricePerGuest || 0}));
-    tour={...tour,priceTable:rows,price:rows.find(t=>t.ageGroup==="adult")?.price || 0};
+    const own = tour.agencyPricing.find(p => p.agencyId === company.id)?.tiers || [];
+    const leadId = tour.coHosts?.find(h => h.role === "lead")?.companyId || tour.companyId;
+    const frames = tour.agencyPricing.find(p => p.agencyId === leadId)?.tiers || [];
+    const rows = frames.map((t, i) => ({
+      tierKey: t.key || `tier-${i}`, ageGroup: (t.maxAge ?? 150) >= 100 ? "adult" : (t.maxAge ?? 150) <= 4 ? "child_under_2" : `tier-${i}`,
+      ageGroupLabel: t.name, minAge: t.minAge ?? undefined, maxAge: t.maxAge ?? undefined,
+      price: own.find(p => (p.key && p.key === t.key) || (!p.key && p.minAge === t.minAge && p.maxAge === t.maxAge))?.pricePerGuest || 0
+    }));
+    tour = { ...tour, priceTable: rows, price: rows.find(t => t.ageGroup === "adult")?.price || 0 };
   }
   const onBack = props.onBack ?? props.onCancel ?? (() => { });
   const onSubmit = props.onSubmit ?? props.onSave ?? (() => { });
@@ -1356,10 +1361,10 @@ export function TourFormPage(props: TourFormPageProps) {
     }
     return map;
   });
-  const [stagedImages] = useState(()=>new DeferredImageUploads());
-  useEffect(()=>()=>stagedImages.dispose(),[stagedImages]);
-  useEffect(()=>{stagedImages.retain(images);},[images,stagedImages]);
-  const [timelineOrders,setTimelineOrders]=useState<Record<string,string[]>>({});
+  const [stagedImages] = useState(() => new DeferredImageUploads());
+  useEffect(() => () => stagedImages.dispose(), [stagedImages]);
+  useEffect(() => { stagedImages.retain(images); }, [images, stagedImages]);
+  const [timelineOrders, setTimelineOrders] = useState<Record<string, string[]>>({});
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(0);
 
   // Operation period & Departure location
@@ -1731,15 +1736,19 @@ export function TourFormPage(props: TourFormPageProps) {
     if (tour?.hotels && tour.hotels.length > 0) {
       return JSON.parse(JSON.stringify(tour.hotels));
     }
-    if (!tour) return [{ id: "hotel-1", name: "", destination: destination || "",
+    if (!tour) return [{
+      id: "hotel-1", name: "", destination: destination || "",
       nights: Math.max(1, numberOfNights), stars: 4, pricePerNight: 0,
       address: "", description: "", alternativeHotels: [],
-      createdByCompanyId: company.id, createdByCompanyName: company.name }];
+      createdByCompanyId: company.id, createdByCompanyName: company.name
+    }];
     const found = tour?.itinerary?.find((d) => d.hotel)?.hotel;
-    return found ? [{ ...found, id: "hotel-1", destination: tour.destination || "",
+    return found ? [{
+      ...found, id: "hotel-1", destination: tour.destination || "",
       nights: tour.numberOfNights || 1, stars: found.stars || 0,
       pricePerNight: found.pricePerNight || 0, description: found.description || "",
-      address: found.address || "", alternativeHotels: [] }] : [];
+      address: found.address || "", alternativeHotels: []
+    }] : [];
   });
   const [expandedHotelId, setExpandedHotelId] = useState<string | null>(
     tour?.hotels?.[0]?.id || "hotel-1",
@@ -1901,14 +1910,14 @@ export function TourFormPage(props: TourFormPageProps) {
       image: isCustom
         ? ""
         : image ||
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
       images: isCustom
         ? []
         : [
-            image ||
-              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-            "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
-          ],
+          image ||
+          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+          "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
+        ],
       thumbnailIndex: 0,
       rating: 4.8,
       status: "approved",
@@ -1931,8 +1940,8 @@ export function TourFormPage(props: TourFormPageProps) {
       const standardValid =
         targetHotel.supplierSource === "AGENCY_SUPPLIER" || targetHotel.isCustom
           ? !targetHotel.serviceId &&
-            !!(targetHotel.supplier?.address || targetHotel.supplier?.area) &&
-            Number(targetHotel.supplier?.referencePrice) > 0
+          !!(targetHotel.supplier?.address || targetHotel.supplier?.area) &&
+          Number(targetHotel.supplier?.referencePrice) > 0
           : !!targetHotel.serviceId && /^\d+$/.test(targetHotel.serviceId);
       const isStandardMatching =
         (targetHotel.serviceId && targetHotel.serviceId === serv.id) ||
@@ -1961,8 +1970,8 @@ export function TourFormPage(props: TourFormPageProps) {
           const standardValid =
             h.supplierSource === "AGENCY_SUPPLIER" || h.isCustom
               ? !h.serviceId &&
-                !!(h.supplier?.address || h.supplier?.area) &&
-                Number(h.supplier?.referencePrice) > 0
+              !!(h.supplier?.address || h.supplier?.area) &&
+              Number(h.supplier?.referencePrice) > 0
               : !!h.serviceId && /^\d+$/.test(h.serviceId);
 
           const isCustomServ = isDirectoryOrCustomItem(serv);
@@ -1988,10 +1997,10 @@ export function TourFormPage(props: TourFormPageProps) {
                 (serv as any).supplier ||
                 (isCustomServ
                   ? {
-                      address: serv.location,
-                      referencePrice: serv.price,
-                      conditions: serv.description,
-                    }
+                    address: serv.location,
+                    referencePrice: serv.price,
+                    conditions: serv.description,
+                  }
                   : undefined),
               destination: h.destination || serv.province || destination,
               isCustom: isCustomServ,
@@ -2018,10 +2027,10 @@ export function TourFormPage(props: TourFormPageProps) {
               (serv as any).supplier ||
               (isCustomServ
                 ? {
-                    address: serv.location,
-                    referencePrice: serv.price,
-                    conditions: serv.description,
-                  }
+                  address: serv.location,
+                  referencePrice: serv.price,
+                  conditions: serv.description,
+                }
                 : undefined),
             providerName: serv.providerName,
             isCustom: isCustomServ,
@@ -2301,13 +2310,13 @@ export function TourFormPage(props: TourFormPageProps) {
       image: isCustom
         ? ""
         : image ||
-          "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
+        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
       images: isCustom
         ? []
         : [
-            image ||
-              "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
-          ],
+          image ||
+          "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800",
+        ],
       rating: 4.8,
       status: "approved",
     };
@@ -2329,7 +2338,7 @@ export function TourFormPage(props: TourFormPageProps) {
       meal.serviceName === "Nhà hàng theo tour" ||
       (meal.supplierSource === "AGENCY_SUPPLIER" || meal.isCustom
         ? !!meal.serviceId || !meal.supplier ||
-          !(meal.supplier.address || meal.supplier.area) || Number(meal.supplier.referencePrice) <= 0
+        !(meal.supplier.address || meal.supplier.area) || Number(meal.supplier.referencePrice) <= 0
         : !meal.serviceId || !/^\d+$/.test(meal.serviceId));
 
     const refPrice = isCustomServ
@@ -2817,14 +2826,19 @@ export function TourFormPage(props: TourFormPageProps) {
   useEffect(() => {
     setHotels((rows) => rows.map((h) => {
       const normalized = normalizeLegacyService(h, h.pricePerNight, h.destination || destination);
-      return { ...normalized, alternativeHotels: normalized.alternativeHotels?.map((a) =>
-        normalizeLegacyService(a, a.price ?? a.pricePerNight, h.destination || destination)) };
+      return {
+        ...normalized, alternativeHotels: normalized.alternativeHotels?.map((a) =>
+          normalizeLegacyService(a, a.price ?? a.pricePerNight, h.destination || destination))
+      };
     }));
-    setItinerary((days) => days.map((day) => ({ ...day,
+    setItinerary((days) => days.map((day) => ({
+      ...day,
       meals: day.meals?.map((m) => {
         const normalized = normalizeLegacyService(m, m.pricePerPerson, day.destinationCity || destination);
-        return { ...normalized, alternativeMeals: normalized.alternativeMeals?.map((a) =>
-          normalizeLegacyService(a, a.price, day.destinationCity || destination)) };
+        return {
+          ...normalized, alternativeMeals: normalized.alternativeMeals?.map((a) =>
+            normalizeLegacyService(a, a.price, day.destinationCity || destination))
+        };
       })
     })));
   }, []);
@@ -3027,19 +3041,19 @@ export function TourFormPage(props: TourFormPageProps) {
     const files = Array.from(e.target.files || []);
     setSaveError("");
     try {
-      const urls=stagedImages.stage(files);
+      const urls = stagedImages.stage(files);
       setImageOwners((prev) => ({
         ...prev,
         ...Object.fromEntries(urls.map((u, i) => [u, { id: `img-${Date.now()}-${i}`, agencyId: company.id }])),
       }));
-      setImages(prev=>[...prev,...urls]);
-    } catch(error) { setSaveError(error instanceof Error ? error.message : "Không thể chọn ảnh"); }
-    finally { e.target.value=""; }
+      setImages(prev => [...prev, ...urls]);
+    } catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể chọn ảnh"); }
+    finally { e.target.value = ""; }
   };
 
   const removeImage = (idx: number) => {
-    setImages(previous=>previous.filter((_,i)=>i!==idx));
-    setThumbnailIndex(current=>current===idx ? 0 : current>idx ? current-1 : current);
+    setImages(previous => previous.filter((_, i) => i !== idx));
+    setThumbnailIndex(current => current === idx ? 0 : current > idx ? current - 1 : current);
   };
 
   // Drag and drop state & swap for attraction points
@@ -3069,9 +3083,11 @@ export function TourFormPage(props: TourFormPageProps) {
 
   const preserveDayOrder = (day: DailyItinerary, addedKey?: string) => {
     const entries = dayTimelineEntries(day);
-    setTimelineOrders(previous => ({ ...previous, [day.id]: addedKey
-      ? appendTimeline(entries, previous[day.id], addedKey)
-      : orderTimeline(entries, previous[day.id]).map(entry => entry.key) }));
+    setTimelineOrders(previous => ({
+      ...previous, [day.id]: addedKey
+        ? appendTimeline(entries, previous[day.id], addedKey)
+        : orderTimeline(entries, previous[day.id]).map(entry => entry.key)
+    }));
   };
 
   const updateLocationTime = (
@@ -3097,24 +3113,24 @@ export function TourFormPage(props: TourFormPageProps) {
   };
 
   const handleSortDayByTime = (dayIdx: number) => {
-    const id=itinerary[dayIdx]?.id;
-    if(id)setTimelineOrders(previous=>{const next={...previous};delete next[id];return next;});
+    const id = itinerary[dayIdx]?.id;
+    if (id) setTimelineOrders(previous => { const next = { ...previous }; delete next[id]; return next; });
   };
 
-  const moveTimelineItem = (dayIdx:number,from:number,to:number,items:Array<{key:string;minutes:number}>) => {
-    const id=itinerary[dayIdx]?.id;
-    if(id)setTimelineOrders(previous=>({...previous,[id]:moveTimeline(items,from,to)}));
+  const moveTimelineItem = (dayIdx: number, from: number, to: number, items: Array<{ key: string; minutes: number }>) => {
+    const id = itinerary[dayIdx]?.id;
+    if (id) setTimelineOrders(previous => ({ ...previous, [id]: moveTimeline(items, from, to) }));
   };
 
-  const moveLocation = (dayIdx:number,fromIdx:number,toIdx:number) => {
-    const day=itinerary[dayIdx];if(!day)return;
-    const entries=orderTimeline([
-      ...day.locations.map((loc,index)=>({key:`location:${loc.id || index}`,minutes:parseTimeToMinutes(loc.time)})),
-      ...(day.meals || []).map((meal,index)=>({key:`meal:${meal.id || index}`,minutes:parseTimeToMinutes(meal.time)}))
-    ],timelineOrders[day.id]);
-    const from=entries.findIndex(entry=>entry.key===`location:${day.locations[fromIdx]?.id || fromIdx}`);
-    const to=entries.findIndex(entry=>entry.key===`location:${day.locations[toIdx]?.id || toIdx}`);
-    moveTimelineItem(dayIdx,from,to,entries);
+  const moveLocation = (dayIdx: number, fromIdx: number, toIdx: number) => {
+    const day = itinerary[dayIdx]; if (!day) return;
+    const entries = orderTimeline([
+      ...day.locations.map((loc, index) => ({ key: `location:${loc.id || index}`, minutes: parseTimeToMinutes(loc.time) })),
+      ...(day.meals || []).map((meal, index) => ({ key: `meal:${meal.id || index}`, minutes: parseTimeToMinutes(meal.time) }))
+    ], timelineOrders[day.id]);
+    const from = entries.findIndex(entry => entry.key === `location:${day.locations[fromIdx]?.id || fromIdx}`);
+    const to = entries.findIndex(entry => entry.key === `location:${day.locations[toIdx]?.id || toIdx}`);
+    moveTimelineItem(dayIdx, from, to, entries);
   };
 
   // Helpers for Days
@@ -3210,25 +3226,33 @@ export function TourFormPage(props: TourFormPageProps) {
       const saved = (type === "HOTEL" ? savedHotels : savedRestaurants)
         .find((supplier) => supplier.id === normalized.agencySupplierId);
       if (!saved) return normalized;
-      return { ...normalized, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
+      return {
+        ...normalized, serviceId: undefined, supplierSource: "AGENCY_SUPPLIER",
         isCustom: true, providerName: "Nhà cung cấp của agency",
-        supplier: { address: normalized.supplier?.address || saved.address || undefined,
+        supplier: {
+          address: normalized.supplier?.address || saved.address || undefined,
           area: normalized.supplier?.area || saved.area || area,
           contactName: normalized.supplier?.contactName || saved.contactName || undefined,
           contactPhone: normalized.supplier?.contactPhone || saved.contactPhone || undefined,
           referencePrice: normalized.supplier?.referencePrice || saved.referencePrice || referencePrice,
-          conditions: normalized.supplier?.conditions || saved.conditions || undefined } } as T;
+          conditions: normalized.supplier?.conditions || saved.conditions || undefined
+        }
+      } as T;
     };
     const preparedHotels = hotels.filter(h => !isDraft || h.name.trim() || h.serviceId || h.agencySupplierId).map((h) => ({
       ...prepareSupplier(h, "HOTEL", h.pricePerNight, h.destination || destination),
       alternativeHotels: h.alternativeHotels?.map((a) => prepareSupplier(a, "HOTEL", a.price || a.pricePerNight || 0, h.destination || destination)),
     }));
-    const preparedItinerary = itinerary.map((day) => ({ ...day, meals: day.meals?.filter(m => !isDraft || m.serviceName?.trim() || m.serviceId || m.agencySupplierId).map((m) => ({
-      ...prepareSupplier(m, "RESTAURANT", m.pricePerPerson || 0, day.destinationCity || destination),
-      alternativeMeals: m.alternativeMeals?.map((a) => prepareSupplier(a, "RESTAURANT", a.price || 0, day.destinationCity || destination)),
-    })) }));
-    const validSource = (item: { serviceId?: string; isCustom?: boolean; supplierSource?: string;
-      agencySupplierId?: number; supplier?: TourHotel["supplier"] }) => {
+    const preparedItinerary = itinerary.map((day) => ({
+      ...day, meals: day.meals?.filter(m => !isDraft || m.serviceName?.trim() || m.serviceId || m.agencySupplierId).map((m) => ({
+        ...prepareSupplier(m, "RESTAURANT", m.pricePerPerson || 0, day.destinationCity || destination),
+        alternativeMeals: m.alternativeMeals?.map((a) => prepareSupplier(a, "RESTAURANT", a.price || 0, day.destinationCity || destination)),
+      }))
+    }));
+    const validSource = (item: {
+      serviceId?: string; isCustom?: boolean; supplierSource?: string;
+      agencySupplierId?: number; supplier?: TourHotel["supplier"]
+    }) => {
       if (item.supplierSource === "AGENCY_SUPPLIER" || item.isCustom || item.agencySupplierId)
         return !item.serviceId && !!item.supplier &&
           !!(item.supplier.address?.trim() || item.supplier.area?.trim()) &&
@@ -3402,10 +3426,14 @@ export function TourFormPage(props: TourFormPageProps) {
     };
 
     const issues = validateTourForm(tourData, !isDraft);
-    if (!isDraft && invalidHotel) issues.push({ tab: "itinerary", message:
-      `Khách sạn “${invalidHotel.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn khách sạn trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.` });
-    if (!isDraft && invalidMeal) issues.push({ tab: "itinerary", message:
-      `Ngày ${invalidMeal.day}, nhà hàng “${invalidMeal.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn nhà hàng trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.` });
+    if (!isDraft && invalidHotel) issues.push({
+      tab: "itinerary", message:
+        `Khách sạn “${invalidHotel.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn khách sạn trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.`
+    });
+    if (!isDraft && invalidMeal) issues.push({
+      tab: "itinerary", message:
+        `Ngày ${invalidMeal.day}, nhà hàng “${invalidMeal.name || "chưa có tên"}” chưa có dịch vụ hợp lệ. Chọn nhà hàng trên sàn hoặc bổ sung địa chỉ/khu vực và giá tham khảo của nhà cung cấp riêng.`
+    });
     setProvinceFieldError(!isDraft && !provinceCodes.length ? "Vui lòng chọn ít nhất một tỉnh/thành tour đi qua." : "");
     setSaveIssues(issues);
     if (issues.length) {
@@ -3486,138 +3514,138 @@ export function TourFormPage(props: TourFormPageProps) {
         <h2 className="font-bold text-[#075985]">Tùy chỉnh chỗ ở, chỗ ăn và lịch trình</h2>
         <p className="text-sm text-slate-600">Thay đổi trên bản sao của bạn. Agency sẽ xem yêu cầu, thiết kế lại và báo giá.</p>
       </div> : <>
-      {/* Sticky Top Header Bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-        <div className="flex min-w-0 flex-1 basis-96 items-center gap-4">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Quay lại danh sách</span>
-          </button>
-          <div className="h-5 w-px bg-gray-200" />
-          <div>
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight flex items-center gap-2">
-              <Package
-                className={`w-5 h-5 ${isCustom ? "text-[#F97316]" : "text-[#075985]"}`}
-              />
-              {isCustom
-                ? tour
-                  ? `Chỉnh sửa Tour Theo Yêu Cầu: ${tour.name} (v${tour.version || 1})`
-                  : "Thiết Kế Tour Riêng Theo Yêu Cầu Của Khách"
-                : tour
-                  ? `Chỉnh sửa Tour: ${tour.name}`
-                  : "Thiết kế & Tạo Tour Du lịch Mới"}
-            </h1>
-            <p className="text-xs text-gray-500">
-              {isCustom
-                ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
-                : tour
-                  ? `Mã tour: ${tourCode || suggestTourCode(destination, numberOfDays)} · Cập nhật thông tin chi tiết`
-                  : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {isCustom && (
-            <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-700">
-              Phiên bản đang thiết kế
-              <select aria-label="Phiên bản đang thiết kế" value={tour?.version || 1}
-                disabled={saving || switchingVersion || !props.onDesignVersionChange}
-                className="h-9 min-w-28 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:opacity-70"
-                onChange={async e => {
-                  const version = Number(e.target.value);
-                  if (!props.onDesignVersionChange || version === (tour?.version || 1)) return;
-                  setSwitchingVersion(true);
-                  try {
-                    if (await confirmAction("Các thay đổi chưa lưu sẽ không được giữ lại. Bạn muốn mở phiên bản đã chọn?", {title: "Chuyển phiên bản thiết kế", confirmLabel: "Chuyển phiên bản"}))
-                      await props.onDesignVersionChange(version);
-                  } finally { setSwitchingVersion(false); }
-                }}>
-                {[...new Set([...(props.designVersions || []), tour?.version || 1])].sort((a, b) => b - a).map(version => <option key={version} value={version}>Phiên bản v{version}</option>)}
-              </select>
-            </label>
-          )}
-          {switchingVersion && <span role="status" className="text-xs text-sky-700">Đang mở phiên bản…</span>}
-          {isCustom && customRequest && (
-            <Button
+        {/* Sticky Top Header Bar */}
+        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#CBD5E1] px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex min-w-0 flex-1 basis-96 items-center gap-4">
+            <button
               type="button"
-              variant="outline"
-              onClick={() => setShowCustomerRequestModal(true)}
-              className="border-sky-200 text-sky-800 hover:bg-sky-50 gap-1.5"
+              onClick={onBack}
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <Eye className="w-4 h-4" />
-              Xem yêu cầu khách hàng
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onBack}
-            className="text-gray-600"
-          >
-            Hủy bỏ
-          </Button>
-          <Button type="button" disabled={saving || switchingVersion} onClick={() => handleSubmit(isCustom ? "draft" : "save")}
-            className="bg-[#075985] hover:bg-sky-800 text-white font-semibold">
-            {saving ? "Đang lưu…" : "Lưu"}
-          </Button>
-          {isCustom && isLeadCompany && tour && tour.id !== "0" && (
-            <Button type="button" variant="outline" disabled={saving || switchingVersion || !name.trim() || !destination.trim()}
-              onClick={() => handleSubmit("draft", true)}>
-              <Plus className="w-4 h-4 mr-1.5" />Lưu với phiên bản mới
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Co-Hosting Collaboration Header & Multi-Company Alliance Bar */}
-      {isCoHostedTour && (
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-950 text-white px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs border-b border-purple-600 shadow-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-400 text-purple-950 flex items-center justify-center font-bold shadow-xs flex-shrink-0">
-              <Handshake className="w-4 h-4" />
-            </div>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Quay lại danh sách</span>
+            </button>
+            <div className="h-5 w-px bg-gray-200" />
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-extrabold uppercase tracking-wider text-amber-300">
-                  LIÊN MINH ĐA CÔNG TY ({coHostsList.length} ĐƠN VỊ PHỐI HỢP)
-                </span>
-                <span className="text-[10px] bg-purple-800 text-purple-200 px-2 py-0.5 rounded font-medium border border-purple-600">
-                  {isLeadCompany
-                    ? "Bạn là Đơn vị Chủ trì (Lead)"
-                    : "Bạn là Đối tác Liên minh (Partner)"}
-                </span>
-              </div>
-              <p className="text-purple-200 text-[11px] mt-0.5">
-                Mỗi công ty tự thiết lập chặng mình phụ trách và{" "}
-                <strong>bị vô hiệu hóa</strong> không được chỉnh sửa phần của
-                đối tác khác.
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight flex items-center gap-2">
+                <Package
+                  className={`w-5 h-5 ${isCustom ? "text-[#F97316]" : "text-[#075985]"}`}
+                />
+                {isCustom
+                  ? tour
+                    ? `Chỉnh sửa Tour Theo Yêu Cầu: ${tour.name} (v${tour.version || 1})`
+                    : "Thiết Kế Tour Riêng Theo Yêu Cầu Của Khách"
+                  : tour
+                    ? `Chỉnh sửa Tour: ${tour.name}`
+                    : "Thiết kế & Tạo Tour Du lịch Mới"}
+              </h1>
+              <p className="text-xs text-gray-500">
+                {isCustom
+                  ? `Mã tour: ${tour?.tourCode || "TC-NEW"} · Khách hàng: ${customRequest?.customerName || customRequest?.contactName || tour?.targetCustomerName || "Khách đặt riêng"}`
+                  : tour
+                    ? `Mã tour: ${tourCode || suggestTourCode(destination, numberOfDays)} · Cập nhật thông tin chi tiết`
+                    : "Cấu hình đầy đủ thông tin, hình ảnh, chỗ ở, chỗ ăn, lộ trình chi tiết và bảng giá"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {coHostsList.map((ch) => (
-              <span
-                key={ch.id || ch.companyId}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-2xs ${ch.companyId === company.id
-                    ? "bg-emerald-500 text-white border border-emerald-400"
-                    : "bg-white/15 text-purple-100 border border-white/20"
-                  }`}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isCustom && (
+              <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-700">
+                Phiên bản đang thiết kế
+                <select aria-label="Phiên bản đang thiết kế" value={tour?.version || 1}
+                  disabled={saving || switchingVersion || !props.onDesignVersionChange}
+                  className="h-9 min-w-28 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:opacity-70"
+                  onChange={async e => {
+                    const version = Number(e.target.value);
+                    if (!props.onDesignVersionChange || version === (tour?.version || 1)) return;
+                    setSwitchingVersion(true);
+                    try {
+                      if (await confirmAction("Các thay đổi chưa lưu sẽ không được giữ lại. Bạn muốn mở phiên bản đã chọn?", { title: "Chuyển phiên bản thiết kế", confirmLabel: "Chuyển phiên bản" }))
+                        await props.onDesignVersionChange(version);
+                    } finally { setSwitchingVersion(false); }
+                  }}>
+                  {[...new Set([...(props.designVersions || []), tour?.version || 1])].sort((a, b) => b - a).map(version => <option key={version} value={version}>Phiên bản v{version}</option>)}
+                </select>
+              </label>
+            )}
+            {switchingVersion && <span role="status" className="text-xs text-sky-700">Đang mở phiên bản…</span>}
+            {isCustom && customRequest && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCustomerRequestModal(true)}
+                className="border-sky-200 text-sky-800 hover:bg-sky-50 gap-1.5"
               >
-                <span>{ch.companyName}</span>
-                <span className="text-[10px] opacity-80">
-                  ({ch.role === "lead" ? "Chủ trì" : "Đối tác"})
-                </span>
-              </span>
-            ))}
+                <Eye className="w-4 h-4" />
+                Xem yêu cầu khách hàng
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onBack}
+              className="text-gray-600"
+            >
+              Hủy bỏ
+            </Button>
+            <Button type="button" disabled={saving || switchingVersion} onClick={() => handleSubmit(isCustom ? "draft" : "save")}
+              className="bg-[#075985] hover:bg-sky-800 text-white font-semibold">
+              {saving ? "Đang lưu…" : "Lưu"}
+            </Button>
+            {isCustom && isLeadCompany && tour && tour.id !== "0" && (
+              <Button type="button" variant="outline" disabled={saving || switchingVersion || !name.trim() || !destination.trim()}
+                onClick={() => handleSubmit("draft", true)}>
+                <Plus className="w-4 h-4 mr-1.5" />Lưu với phiên bản mới
+              </Button>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Co-Hosting Collaboration Header & Multi-Company Alliance Bar */}
+        {isCoHostedTour && (
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-950 text-white px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs border-b border-purple-600 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-400 text-purple-950 flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+                <Handshake className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold uppercase tracking-wider text-amber-300">
+                    LIÊN MINH ĐA CÔNG TY ({coHostsList.length} ĐƠN VỊ PHỐI HỢP)
+                  </span>
+                  <span className="text-[10px] bg-purple-800 text-purple-200 px-2 py-0.5 rounded font-medium border border-purple-600">
+                    {isLeadCompany
+                      ? "Bạn là Đơn vị Chủ trì (Lead)"
+                      : "Bạn là Đối tác Liên minh (Partner)"}
+                  </span>
+                </div>
+                <p className="text-purple-200 text-[11px] mt-0.5">
+                  Mỗi công ty tự thiết lập chặng mình phụ trách và{" "}
+                  <strong>bị vô hiệu hóa</strong> không được chỉnh sửa phần của
+                  đối tác khác.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {coHostsList.map((ch) => (
+                <span
+                  key={ch.id || ch.companyId}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-2xs ${ch.companyId === company.id
+                    ? "bg-emerald-500 text-white border border-emerald-400"
+                    : "bg-white/15 text-purple-100 border border-white/20"
+                    }`}
+                >
+                  <span>{ch.companyName}</span>
+                  <span className="text-[10px] opacity-80">
+                    ({ch.role === "lead" ? "Chủ trì" : "Đối tác"})
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
       </>}
       {/* Sticky Tabs Bar */}
@@ -3638,8 +3666,8 @@ export function TourFormPage(props: TourFormPageProps) {
               type="button"
               onClick={() => setActiveTab(tab.id as TabType)}
               className={`py-3.5 px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${activeTab === tab.id
-                  ? "border-[#075985] text-[#075985] bg-[#F0F9FF]/50"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-[#F0F9FF]"
+                ? "border-[#075985] text-[#075985] bg-[#F0F9FF]/50"
+                : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-[#F0F9FF]"
                 }`}
             >
               {tab.id === "preview" && (
@@ -3724,8 +3752,8 @@ export function TourFormPage(props: TourFormPageProps) {
                       key={idx}
                       onClick={() => !isGeneralLocked && setThumbnailIndex(idx)}
                       className={`relative rounded-2xl overflow-hidden border-2 ${isGeneralLocked ? "cursor-default" : "cursor-pointer"} transition-all aspect-video group shadow-xs ${isThumb
-                          ? "border-[#075985] ring-2 ring-blue-500/50"
-                          : isGeneralLocked ? "border-[#CBD5E1]" : "border-[#CBD5E1] hover:border-blue-400"
+                        ? "border-[#075985] ring-2 ring-blue-500/50"
+                        : isGeneralLocked ? "border-[#CBD5E1]" : "border-[#CBD5E1] hover:border-blue-400"
                         }`}
                     >
                       <img
@@ -3821,8 +3849,8 @@ export function TourFormPage(props: TourFormPageProps) {
                   {/* Các tỉnh/thành đã chọn hiển thị dạng tag */}
                   <div
                     className={`min-h-[38px] p-1.5 rounded-xl border ${isGeneralLocked ? "bg-slate-50" : "bg-white"} flex flex-wrap items-center gap-1.5 ${provinceFieldError
-                        ? "border-red-500 ring-1 ring-red-500/30"
-                        : "border-[#CBD5E1] focus-within:border-[#075985]"
+                      ? "border-red-500 ring-1 ring-red-500/30"
+                      : "border-[#CBD5E1] focus-within:border-[#075985]"
                       }`}
                   >
                     {provinceCodes.map((code) => (
@@ -3907,8 +3935,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                   setProvinceSearchQuery("");
                                 }}
                                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors ${selected
-                                    ? "bg-[#E0F2FE] text-[#075985] font-bold"
-                                    : "hover:bg-slate-50 text-slate-700"
+                                  ? "bg-[#E0F2FE] text-[#075985] font-bold"
+                                  : "hover:bg-slate-50 text-slate-700"
                                   }`}
                               >
                                 <div className="flex items-center gap-2">
@@ -4053,7 +4081,7 @@ export function TourFormPage(props: TourFormPageProps) {
                 <VietnameseMoneyInput
                   value={String(priceTable.length > 0 ? Math.max(...priceTable.map((row) => row.price || 0)) : price)}
                   disabled={true}
-                  onValueChange={() => {}}
+                  onValueChange={() => { }}
                   className="mt-1 h-9 w-full rounded-md border border-[#CBD5E1] bg-slate-50 px-3 font-bold text-[#075985] cursor-not-allowed"
                 />
                 <p className="mt-1 text-xs text-slate-500">
@@ -4229,8 +4257,8 @@ export function TourFormPage(props: TourFormPageProps) {
                           )
                         }
                         className={`w-full flex items-center justify-between px-4 py-3 transition-colors text-left ${isHotelLocked
-                            ? "bg-amber-50/70 hover:bg-amber-100/60"
-                            : "bg-[#F0F9FF]/80 hover:bg-[#E0F2FE]/70"
+                          ? "bg-amber-50/70 hover:bg-amber-100/60"
+                          : "bg-[#F0F9FF]/80 hover:bg-[#E0F2FE]/70"
                           }`}
                       >
                         <div className="flex items-center gap-3">
@@ -4383,7 +4411,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                 placeholder="-- Click chọn khách sạn đối tác để thêm vào danh sách thẻ bên dưới --"
                                 selectClass="border-sky-300 focus:ring-[#075985]"
                                 formatLabel={(serv) =>
-                                  `${serv.name} — ${serv.stars || 4} sao (${serv.location || serv.province || "Khác"}) — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
+                                  `${serv.name} — ${serv.stars || 4} sao — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
                                 }
                                 onSelect={(foundServ) =>
                                   handleAddHotelFromService(hotel.id || "", foundServ)
@@ -4685,17 +4713,15 @@ export function TourFormPage(props: TourFormPageProps) {
 
                                         return (
                                           <div
-                                            className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
-                                              isJustAdded
+                                            className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isJustAdded
                                                 ? "tripops-card-flash-anim "
                                                 : ""
-                                            }${
-                                              isCardSelected
+                                              }${isCardSelected
                                                 ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                 : isCustomHotel
                                                   ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
                                                   : "border-[#075985]/40 bg-white hover:border-[#075985] shadow-2xs"
-                                            }`}
+                                              }`}
                                           >
                                             {/* Header thẻ: Checkbox & Badge tiêu chuẩn */}
                                             <div className="flex items-center justify-between gap-2">
@@ -4709,14 +4735,14 @@ export function TourFormPage(props: TourFormPageProps) {
                                                       (prev) =>
                                                         isCardSelected
                                                           ? prev.filter(
-                                                              (k) =>
-                                                                k !==
-                                                                "standard",
-                                                            )
-                                                          : [
-                                                              ...prev,
+                                                            (k) =>
+                                                              k !==
                                                               "standard",
-                                                            ],
+                                                          )
+                                                          : [
+                                                            ...prev,
+                                                            "standard",
+                                                          ],
                                                     );
                                                   }}
                                                   className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
@@ -4765,17 +4791,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                               </div>
                                               <div className="flex-1 min-w-0">
                                                 <span
-                                                  className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
-                                                    isCustomHotel
+                                                  className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomHotel
                                                       ? "text-sky-700 bg-sky-100"
                                                       : "text-sky-700 bg-sky-100"
-                                                  }`}
+                                                    }`}
                                                 >
                                                   {isCustomHotel
                                                     ? supplierLabel(hotel)
                                                     : hotel.providerName ||
-                                                      servObj.providerName ||
-                                                      "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                    servObj.providerName ||
+                                                    "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                 </span>
                                                 <h5
                                                   className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -4800,7 +4825,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     getHotelRefPricePerPerson(
                                                       servObj,
                                                       customRefPrice ||
-                                                        hotel.pricePerNight,
+                                                      hotel.pricePerNight,
                                                     ),
                                                   )}
                                                   <span className="text-[10px] font-normal text-gray-400">
@@ -4877,17 +4902,15 @@ export function TourFormPage(props: TourFormPageProps) {
                                       return (
                                         <div
                                           key={alt.id || aIdx}
-                                          className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
-                                            isJustAdded
+                                          className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isJustAdded
                                               ? "tripops-card-flash-anim "
                                               : ""
-                                          }${
-                                            isCardSelected
+                                            }${isCardSelected
                                               ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                               : isCustomHotel
                                                 ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
                                                 : "border-slate-200 bg-white hover:border-[#075985]/50 shadow-2xs"
-                                          }`}
+                                            }`}
                                         >
                                           {/* Header thẻ: Checkbox, Badge Option & Nút Đặt làm mặc định */}
                                           <div className="flex items-center justify-between gap-2">
@@ -4901,19 +4924,18 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     (prev) =>
                                                       isCardSelected
                                                         ? prev.filter(
-                                                            (k) => k !== alt.id,
-                                                          )
+                                                          (k) => k !== alt.id,
+                                                        )
                                                         : [...prev, alt.id],
                                                   );
                                                 }}
                                                 className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                               />
                                               <span
-                                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
-                                                  isCustomHotel
+                                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${isCustomHotel
                                                     ? "bg-sky-100 text-sky-900 border-sky-300"
                                                     : "bg-slate-100 text-slate-700 border-slate-300"
-                                                }`}
+                                                  }`}
                                               >
                                                 Phương án thay thế (Option{" "}
                                                 {aIdx + 2})
@@ -4964,17 +4986,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <span
-                                                className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
-                                                  isCustomHotel
+                                                className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomHotel
                                                     ? "text-sky-700 bg-sky-100"
                                                     : "text-sky-700 bg-sky-100"
-                                                }`}
+                                                  }`}
                                               >
                                                 {isCustomHotel
                                                   ? supplierLabel(alt)
                                                   : alt.providerName ||
-                                                    servObj.providerName ||
-                                                    "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                  servObj.providerName ||
+                                                  "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                               </span>
                                               <h5
                                                 className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -4999,8 +5020,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   getHotelRefPricePerPerson(
                                                     servObj,
                                                     customAltPrice ||
-                                                      alt.pricePerNight ||
-                                                      (alt as any).price,
+                                                    alt.pricePerNight ||
+                                                    (alt as any).price,
                                                   ),
                                                 )}
                                                 <span className="text-[10px] font-normal text-gray-400">
@@ -5039,12 +5060,12 @@ export function TourFormPage(props: TourFormPageProps) {
                                                   </span>
                                                   <span
                                                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${(alt.priceDifference ||
-                                                        0) > 0
-                                                        ? "text-slate-700 bg-slate-100 border border-slate-300"
-                                                        : (alt.priceDifference ||
-                                                          0) < 0
-                                                          ? "text-emerald-800 bg-emerald-100 border border-emerald-300"
-                                                          : "text-gray-600 bg-gray-100"
+                                                      0) > 0
+                                                      ? "text-slate-700 bg-slate-100 border border-slate-300"
+                                                      : (alt.priceDifference ||
+                                                        0) < 0
+                                                        ? "text-emerald-800 bg-emerald-100 border border-emerald-300"
+                                                        : "text-gray-600 bg-gray-100"
                                                       }`}
                                                   >
                                                     {(alt.priceDifference ||
@@ -5265,8 +5286,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                         addLocationToDay(dIdx, attr)
                                       }
                                       className={`px-2.5 py-1 text-xs rounded-full border transition-all flex items-center gap-1 ${isAdded
-                                          ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-medium cursor-default opacity-80"
-                                          : "bg-white border-amber-300 text-amber-900 hover:bg-amber-100 hover:border-amber-400 cursor-pointer shadow-2xs font-medium"
+                                        ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-medium cursor-default opacity-80"
+                                        : "bg-white border-amber-300 text-amber-900 hover:bg-amber-100 hover:border-amber-400 cursor-pointer shadow-2xs font-medium"
                                         }`}
                                       title={
                                         isAdded
@@ -5342,8 +5363,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                       addMealToDay(dIdx, "breakfast")
                                     }
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasBreakfast
-                                        ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
+                                      ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                                      : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasBreakfast
@@ -5367,8 +5388,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                     disabled={hasLunch}
                                     onClick={() => addMealToDay(dIdx, "lunch")}
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasLunch
-                                        ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
+                                      ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                                      : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasLunch
@@ -5390,8 +5411,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                     disabled={hasDinner}
                                     onClick={() => addMealToDay(dIdx, "dinner")}
                                     className={`px-2 py-1 text-xs rounded-lg border font-medium transition-colors flex items-center gap-1 shadow-2xs ${hasDinner
-                                        ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                                        : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
+                                      ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                                      : "border-[#075985]/30 bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] cursor-pointer"
                                       }`}
                                     title={
                                       hasDinner
@@ -5454,8 +5475,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                   })),
                                 ];
 
-                                const ordered=orderTimeline(items,timelineOrders[day.id]);
-                                items.splice(0,items.length,...ordered);
+                                const ordered = orderTimeline(items, timelineOrders[day.id]);
+                                items.splice(0, items.length, ...ordered);
 
                                 if (items.length === 0) {
                                   return (
@@ -5565,12 +5586,12 @@ export function TourFormPage(props: TourFormPageProps) {
                                         {/* Location Card with Drag Handle & Swap Controls */}
                                         <div
                                           className={`flex-1 flex items-center justify-between p-2.5 rounded-2xl border bg-white transition-all ${isBeingDragged
-                                              ? "border-dashed border-sky-400 bg-[#F0F9FF]/50 opacity-60"
-                                              : isDropTarget
-                                                ? "border-sky-500 bg-[#F0F9FF] ring-2 ring-sky-300"
-                                                : isLocLocked
-                                                  ? "border-[#CBD5E1] bg-[#F0F9FF]/60 shadow-2xs"
-                                                  : "border-[#CBD5E1] hover:border-gray-300 shadow-2xs"
+                                            ? "border-dashed border-sky-400 bg-[#F0F9FF]/50 opacity-60"
+                                            : isDropTarget
+                                              ? "border-sky-500 bg-[#F0F9FF] ring-2 ring-sky-300"
+                                              : isLocLocked
+                                                ? "border-[#CBD5E1] bg-[#F0F9FF]/60 shadow-2xs"
+                                                : "border-[#CBD5E1] hover:border-gray-300 shadow-2xs"
                                             }`}
                                         >
                                           {/* Drag Handle */}
@@ -5616,17 +5637,17 @@ export function TourFormPage(props: TourFormPageProps) {
                                             {(loc.createdByCompanyName ||
                                               (isCoHostedTour &&
                                                 locOwnerName)) && (
-                                              <p
-                                                title={isLocLocked ? locOwnerName : `${loc.createdByCompanyName || company.name} (Bạn)`}
-                                                className="flex items-center gap-1.5 text-xs text-slate-500"
-                                              >
-                                                <span>Phụ trách dẫn chặng:</span>
-                                                {isLocLocked && (
-                                                  <Lock className="w-3 h-3 text-amber-600" />
-                                                )}
-                                                {renderOwnerLogo(loc.createdByCompanyId, isLocLocked ? locOwnerName : loc.createdByCompanyName)}
-                                              </p>
-                                            )}
+                                                <p
+                                                  title={isLocLocked ? locOwnerName : `${loc.createdByCompanyName || company.name} (Bạn)`}
+                                                  className="flex items-center gap-1.5 text-xs text-slate-500"
+                                                >
+                                                  <span>Phụ trách dẫn chặng:</span>
+                                                  {isLocLocked && (
+                                                    <Lock className="w-3 h-3 text-amber-600" />
+                                                  )}
+                                                  {renderOwnerLogo(loc.createdByCompanyId, isLocLocked ? locOwnerName : loc.createdByCompanyName)}
+                                                </p>
+                                              )}
                                           </div>
 
                                           {/* Actions: Move Up, Move Down, Delete */}
@@ -5748,10 +5769,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                         {/* Dot icon */}
                                         <div
                                           className={`relative z-10 w-7 h-7 mt-2 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${mealType === "breakfast"
-                                              ? "border-amber-400 text-amber-600"
-                                              : mealType === "lunch"
-                                                ? "border-emerald-500 text-emerald-600"
-                                                : "border-[#F97316] text-[#EA580C]"
+                                            ? "border-amber-400 text-amber-600"
+                                            : mealType === "lunch"
+                                              ? "border-emerald-500 text-emerald-600"
+                                              : "border-[#F97316] text-[#EA580C]"
                                             }`}
                                         >
                                           {mealType === "breakfast" ? (
@@ -5788,12 +5809,12 @@ export function TourFormPage(props: TourFormPageProps) {
                                               )
                                             }
                                             className={`w-full flex items-center justify-between px-3.5 py-2.5 transition-colors text-left ${isMealLocked
-                                                ? "bg-amber-50/60 hover:bg-amber-100/50"
-                                                : mealType === "breakfast"
-                                                  ? "bg-amber-50/50 hover:bg-amber-100/50"
-                                                  : mealType === "lunch"
-                                                    ? "bg-emerald-50/50 hover:bg-emerald-100/50"
-                                                    : "bg-[#F0F9FF]/50 hover:bg-[#F97316]/15/50"
+                                              ? "bg-amber-50/60 hover:bg-amber-100/50"
+                                              : mealType === "breakfast"
+                                                ? "bg-amber-50/50 hover:bg-amber-100/50"
+                                                : mealType === "lunch"
+                                                  ? "bg-emerald-50/50 hover:bg-emerald-100/50"
+                                                  : "bg-[#F0F9FF]/50 hover:bg-[#F97316]/15/50"
                                               }`}
                                           >
                                             <div className="flex items-center gap-2.5 min-w-0">
@@ -5801,10 +5822,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                   <span
                                                     className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide border ${mealType === "breakfast"
-                                                        ? "bg-amber-100 text-amber-800 border-amber-300"
-                                                        : mealType === "lunch"
-                                                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                          : "bg-[#F97316]/15 text-[#EA580C] border-sky-300"
+                                                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                                                      : mealType === "lunch"
+                                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                        : "bg-[#F97316]/15 text-[#EA580C] border-sky-300"
                                                       }`}
                                                   >
                                                     {mealLabel}
@@ -5821,17 +5842,17 @@ export function TourFormPage(props: TourFormPageProps) {
                                                 {(meal.createdByCompanyName ||
                                                   (isCoHostedTour &&
                                                     mealOwnerName)) && (
-                                                  <p
-                                                    title={isMealLocked ? mealOwnerName : `${meal.createdByCompanyName || company.name} (Bạn)`}
-                                                    className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"
-                                                  >
-                                                    <span>Phụ trách dẫn chặng:</span>
-                                                    {isMealLocked && (
-                                                      <Lock className="w-3 h-3 text-amber-700" />
-                                                    )}
-                                                    {renderOwnerLogo(meal.createdByCompanyId, isMealLocked ? mealOwnerName : meal.createdByCompanyName)}
-                                                  </p>
-                                                )}
+                                                    <p
+                                                      title={isMealLocked ? mealOwnerName : `${meal.createdByCompanyName || company.name} (Bạn)`}
+                                                      className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"
+                                                    >
+                                                      <span>Phụ trách dẫn chặng:</span>
+                                                      {isMealLocked && (
+                                                        <Lock className="w-3 h-3 text-amber-700" />
+                                                      )}
+                                                      {renderOwnerLogo(meal.createdByCompanyId, isMealLocked ? mealOwnerName : meal.createdByCompanyName)}
+                                                    </p>
+                                                  )}
                                               </div>
                                             </div>
 
@@ -5975,10 +5996,9 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     placeholder="-- Click chọn quán ăn / nhà hàng để thêm vào danh sách thẻ bên dưới --"
                                                     selectClass="border-emerald-300 focus:ring-[#075985]"
                                                     formatLabel={(serv) =>
-                                                      `${serv.name} (${serv.location || serv.province || "Khác"}) — ${
-                                                        serv.priceFrom && serv.priceTo
-                                                          ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
-                                                          : `${formatVND(serv.pricePerPerson || serv.price)}/người`
+                                                      `${serv.name} — ${serv.priceFrom && serv.priceTo
+                                                        ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
+                                                        : `${formatVND(serv.pricePerPerson || serv.price)}/người`
                                                       }`
                                                     }
                                                     onSelect={(foundServ) =>
@@ -6088,7 +6108,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               className="text-xs h-8 bg-white border-sky-300"
                                                             />
                                                           </div>
-{!props.customerMode &&                                                           <div className="sm:col-span-3">
+                                                          {!props.customerMode && <div className="sm:col-span-3">
                                                             <VietnameseMoneyInput
                                                               placeholder="Giá/người (VNĐ)"
                                                               value={String(
@@ -6178,33 +6198,33 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 catch (error) { setSaveError(error instanceof Error ? error.message : "Không thể lưu nhà cung cấp"); return; }
                                                               }
                                                               const fakeServ =
-                                                              {
-                                                                rating: 0,
-                                                                id: saved || selectedMealSupplierIds[mealKey] ? `agency-supplier-${saved?.id || selectedMealSupplierIds[mealKey]}` : `custom-fnb-${Date.now()}`,
-                                                                providerId:
-                                                                  "external-provider",
-                                                                providerName:
-                                                                  "Nhà cung cấp của agency",
-                                                                name: input.restaurantName.trim(),
-                                                                category: "fnb",
-                                                                price:
-                                                                  input.price,
-                                                                pricePerPerson:
-                                                                  input.price,
-                                                                location:
-                                                                  day.destinationCity ||
-                                                                  destination ||
-                                                                  "Trung tâm",
-                                                                status:
-                                                                  "approved",
-                                                                image: "",
-                                                                isCustom: true,
-                                                                description:
-                                                                  input.description.trim() ||
-                                                                  "Thực đơn món ngon tự chọn",
-                                                                agencySupplierId: saved?.id || selectedMealSupplierIds[mealKey] || undefined,
-                                                                supplier: { address: input.address, area: day.destinationCity || destination, referencePrice: input.price, conditions: input.description.trim(), contactPhone: input.contactPhone },
-                                                              } as Service;
+                                                                {
+                                                                  rating: 0,
+                                                                  id: saved || selectedMealSupplierIds[mealKey] ? `agency-supplier-${saved?.id || selectedMealSupplierIds[mealKey]}` : `custom-fnb-${Date.now()}`,
+                                                                  providerId:
+                                                                    "external-provider",
+                                                                  providerName:
+                                                                    "Nhà cung cấp của agency",
+                                                                  name: input.restaurantName.trim(),
+                                                                  category: "fnb",
+                                                                  price:
+                                                                    input.price,
+                                                                  pricePerPerson:
+                                                                    input.price,
+                                                                  location:
+                                                                    day.destinationCity ||
+                                                                    destination ||
+                                                                    "Trung tâm",
+                                                                  status:
+                                                                    "approved",
+                                                                  image: "",
+                                                                  isCustom: true,
+                                                                  description:
+                                                                    input.description.trim() ||
+                                                                    "Thực đơn món ngon tự chọn",
+                                                                  agencySupplierId: saved?.id || selectedMealSupplierIds[mealKey] || undefined,
+                                                                  supplier: { address: input.address, area: day.destinationCity || destination, referencePrice: input.price, conditions: input.description.trim(), contactPhone: input.contactPhone },
+                                                                } as Service;
                                                               handleAddMealFromService(
                                                                 dIdx,
                                                                 mIdx,
@@ -6419,22 +6439,20 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               isCustomMeal
                                                                 ? ""
                                                                 : servObj.image ||
-                                                                  meal.image ||
-                                                                  "";
+                                                                meal.image ||
+                                                                "";
 
                                                             return (
                                                               <div
-                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
-                                                                  isJustAdded
+                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isJustAdded
                                                                     ? "tripops-card-flash-anim "
                                                                     : ""
-                                                                }${
-                                                                  isCardSelected
+                                                                  }${isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
                                                                       ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
                                                                       : "border-[#075985]/40 bg-white hover:border-[#075985] shadow-2xs"
-                                                                }`}
+                                                                  }`}
                                                               >
                                                                 {/* Header thẻ */}
                                                                 <div className="flex items-center justify-between gap-2">
@@ -6454,7 +6472,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           ) => {
                                                                             const cur =
                                                                               prev[
-                                                                                mealKey
+                                                                              mealKey
                                                                               ] ||
                                                                               [];
                                                                             return {
@@ -6462,16 +6480,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               [mealKey]:
                                                                                 isCardSelected
                                                                                   ? cur.filter(
-                                                                                      (
-                                                                                        k,
-                                                                                      ) =>
-                                                                                        k !==
-                                                                                        "standard",
-                                                                                    )
-                                                                                  : [
-                                                                                      ...cur,
+                                                                                    (
+                                                                                      k,
+                                                                                    ) =>
+                                                                                      k !==
                                                                                       "standard",
-                                                                                    ],
+                                                                                  )
+                                                                                  : [
+                                                                                    ...cur,
+                                                                                    "standard",
+                                                                                  ],
                                                                             };
                                                                           },
                                                                         );
@@ -6503,7 +6521,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 <div className="flex gap-3">
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                                                     {isCustomMeal ||
-                                                                    !thumbUrl ? (
+                                                                      !thumbUrl ? (
                                                                       <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
                                                                         <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                                           <Utensils className="w-5 h-5" />
@@ -6526,17 +6544,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   </div>
                                                                   <div className="flex-1 min-w-0">
                                                                     <span
-                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
-                                                                        isCustomMeal
+                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomMeal
                                                                           ? "text-sky-700 bg-sky-100"
                                                                           : "text-[#075985] bg-[#F0F9FF]"
-                                                                      }`}
+                                                                        }`}
                                                                     >
                                                                       {isCustomMeal
                                                                         ? supplierLabel(meal)
                                                                         : meal.providerName ||
-                                                                          servObj.providerName ||
-                                                                          "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                                        servObj.providerName ||
+                                                                        "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                                     </span>
                                                                     <h5
                                                                       className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -6553,7 +6570,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
                                                                           customMealPrice ||
-                                                                            meal.pricePerPerson,
+                                                                          meal.pricePerPerson,
                                                                         ),
                                                                       )}
                                                                       <span className="text-[10px] font-normal text-gray-400">
@@ -6638,25 +6655,23 @@ export function TourFormPage(props: TourFormPageProps) {
                                                               isCustomMeal
                                                                 ? ""
                                                                 : servObj.image ||
-                                                                  alt.image ||
-                                                                  "";
+                                                                alt.image ||
+                                                                "";
 
                                                             return (
                                                               <div
                                                                 key={
                                                                   alt.id || aIdx
                                                                 }
-                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${
-                                                                  isJustAdded
+                                                                className={`rounded-xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 relative ${isJustAdded
                                                                     ? "tripops-card-flash-anim "
                                                                     : ""
-                                                                }${
-                                                                  isCardSelected
+                                                                  }${isCardSelected
                                                                     ? "border-[#075985] bg-sky-50/50 ring-2 ring-[#075985]/30 shadow-md"
                                                                     : isCustomMeal
                                                                       ? "border-2 border-sky-400 bg-gradient-to-br from-sky-50/70 via-white to-sky-50/30 hover:border-sky-500 shadow-sm ring-1 ring-sky-200"
                                                                       : "border-slate-200 bg-white hover:border-[#075985]/50 shadow-2xs"
-                                                                }`}
+                                                                  }`}
                                                               >
                                                                 {/* Header thẻ */}
                                                                 <div className="flex items-center justify-between gap-2">
@@ -6676,7 +6691,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           ) => {
                                                                             const cur =
                                                                               prev[
-                                                                                mealKey
+                                                                              mealKey
                                                                               ] ||
                                                                               [];
                                                                             return {
@@ -6684,16 +6699,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                               [mealKey]:
                                                                                 isCardSelected
                                                                                   ? cur.filter(
-                                                                                      (
-                                                                                        k,
-                                                                                      ) =>
-                                                                                        k !==
-                                                                                        alt.id,
-                                                                                    )
-                                                                                  : [
-                                                                                      ...cur,
+                                                                                    (
+                                                                                      k,
+                                                                                    ) =>
+                                                                                      k !==
                                                                                       alt.id,
-                                                                                    ],
+                                                                                  )
+                                                                                  : [
+                                                                                    ...cur,
+                                                                                    alt.id,
+                                                                                  ],
                                                                             };
                                                                           },
                                                                         );
@@ -6701,11 +6716,10 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                       className="w-4 h-4 rounded text-[#075985] border-gray-300 cursor-pointer"
                                                                     />
                                                                     <span
-                                                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${
-                                                                        isCustomMeal
+                                                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-2xs ${isCustomMeal
                                                                           ? "bg-sky-100 text-sky-900 border-sky-300"
                                                                           : "bg-slate-100 text-slate-700 border-slate-300"
-                                                                      }`}
+                                                                        }`}
                                                                     >
                                                                       Lựa
                                                                       chọn đổi
@@ -6739,7 +6753,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                 <div className="flex gap-3">
                                                                   <div className="relative w-24 h-22 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
                                                                     {isCustomMeal ||
-                                                                    !thumbUrl ? (
+                                                                      !thumbUrl ? (
                                                                       <div className="w-full h-full bg-gradient-to-br from-sky-100 via-sky-50 to-sky-200/80 flex flex-col items-center justify-center p-1.5 text-center select-none">
                                                                         <div className="w-9 h-9 rounded-xl bg-white/90 border border-sky-200/80 shadow-2xs flex items-center justify-center text-sky-700 mb-1">
                                                                           <Utensils className="w-5 h-5" />
@@ -6762,17 +6776,16 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                   </div>
                                                                   <div className="flex-1 min-w-0">
                                                                     <span
-                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${
-                                                                        isCustomMeal
+                                                                      className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 truncate max-w-full ${isCustomMeal
                                                                           ? "text-sky-700 bg-sky-100"
                                                                           : "text-[#075985] bg-[#F0F9FF]"
-                                                                      }`}
+                                                                        }`}
                                                                     >
                                                                       {isCustomMeal
                                                                         ? supplierLabel(alt)
                                                                         : alt.providerName ||
-                                                                          servObj.providerName ||
-                                                                          "Tổ hợp Dịch vụ Du lịch Đối tác"}
+                                                                        servObj.providerName ||
+                                                                        "Tổ hợp Dịch vụ Du lịch Đối tác"}
                                                                     </span>
                                                                     <h5
                                                                       className="font-bold text-gray-900 text-xs sm:text-sm line-clamp-1 leading-tight"
@@ -6789,7 +6802,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         getMealRefPricePerPerson(
                                                                           servObj,
                                                                           customAltMealPrice ||
-                                                                            meal.pricePerPerson,
+                                                                          meal.pricePerPerson,
                                                                         ),
                                                                       )}
                                                                       <span className="text-[10px] font-normal text-gray-400">
@@ -6811,7 +6824,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                           signed
                                                                           value={String(
                                                                             alt.priceDifference ??
-                                                                              0,
+                                                                            0,
                                                                           )}
                                                                           disabled={
                                                                             isMealLocked
@@ -6843,14 +6856,14 @@ export function TourFormPage(props: TourFormPageProps) {
                                                                         </span>
                                                                         <span
                                                                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${(alt.priceDifference ||
-                                                                              0) >
+                                                                            0) >
+                                                                            0
+                                                                            ? "text-slate-700 bg-slate-100 border border-slate-300"
+                                                                            : (alt.priceDifference ||
+                                                                              0) <
                                                                               0
-                                                                              ? "text-slate-700 bg-slate-100 border border-slate-300"
-                                                                              : (alt.priceDifference ||
-                                                                                0) <
-                                                                                0
-                                                                                ? "text-emerald-800 bg-emerald-100 border border-emerald-300"
-                                                                                : "text-gray-600 bg-gray-100"
+                                                                              ? "text-emerald-800 bg-emerald-100 border border-emerald-300"
+                                                                              : "text-gray-600 bg-gray-100"
                                                                             }`}
                                                                         >
                                                                           {(alt.priceDifference ||
@@ -6950,7 +6963,7 @@ export function TourFormPage(props: TourFormPageProps) {
             {ownershipCollaboration ? (
               <DesignTourPricingTable rows={priceTable} onRowsChange={setPriceTable}
                 company={company} agencies={coHostsList} agencyPricing={tour?.agencyPricing}
-                isLead={isLeadCompany} onAdd={handleAddPriceRow} onRemove={handleRemovePriceRow}/>
+                isLead={isLeadCompany} onAdd={handleAddPriceRow} onRemove={handleRemovePriceRow} />
             ) : isCoHostedTour ? (
               <div className="bg-gradient-to-r from-purple-50 via-indigo-50/40 to-blue-50 border-2 border-[#F97316]/30 rounded-2xl p-5 space-y-4 shadow-sm">
                 {/* Thanh Tiêu đề & Quyền hạn */}
@@ -6974,7 +6987,7 @@ export function TourFormPage(props: TourFormPageProps) {
                           </span>
                         ) : (
                           <span className="text-indigo-900 font-medium">
-                            🤝{" "}
+                            {" "}
                             <strong>Bạn là Đối tác Liên minh (Partner):</strong>{" "}
                             Chỉ Đơn vị chủ trì (
                             {leadHost?.companyName || "Chủ trì"}) mới có quyền
@@ -7049,15 +7062,15 @@ export function TourFormPage(props: TourFormPageProps) {
                               <th
                                 key={ch.id || idx}
                                 className={`p-3 font-bold border-b border-[#CBD5E1] min-w-[220px] transition-colors ${isMe
-                                    ? "bg-[#F97316]/15/90 text-purple-950 border-x-2 border-t-2 border-purple-400 shadow-xs"
-                                    : "bg-gray-100 text-gray-700"
+                                  ? "bg-[#F97316]/15/90 text-purple-950 border-x-2 border-t-2 border-purple-400 shadow-xs"
+                                  : "bg-gray-100 text-gray-700"
                                   }`}
                               >
                                 <div className="flex items-center justify-between gap-1 mb-1">
                                   <span
                                     className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${isMe
-                                        ? "bg-[#F97316] text-white shadow-2xs"
-                                        : "bg-gray-200 text-gray-600 border border-gray-300 flex items-center gap-1"
+                                      ? "bg-[#F97316] text-white shadow-2xs"
+                                      : "bg-gray-200 text-gray-600 border border-gray-300 flex items-center gap-1"
                                       }`}
                                   >
                                     {isMe ? (
@@ -7182,8 +7195,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                   <td
                                     key={ch.id || cIdx}
                                     className={`p-3 align-top ${isMe
-                                        ? "bg-[#F0F9FF]/50 border-x-2 border-purple-300"
-                                        : "bg-[#F0F9FF]/30 text-gray-700 cursor-not-allowed select-none"
+                                      ? "bg-[#F0F9FF]/50 border-x-2 border-purple-300"
+                                      : "bg-[#F0F9FF]/30 text-gray-700 cursor-not-allowed select-none"
                                       }`}
                                   >
                                     {isMe ? (
@@ -7284,8 +7297,8 @@ export function TourFormPage(props: TourFormPageProps) {
                               <td
                                 key={ch.id || idx}
                                 className={`p-3 align-top ${isMe
-                                    ? "bg-[#F0F9FF]/50 border-x-2 border-purple-300"
-                                    : "bg-[#F0F9FF]/30 text-gray-700"
+                                  ? "bg-[#F0F9FF]/50 border-x-2 border-purple-300"
+                                  : "bg-[#F0F9FF]/30 text-gray-700"
                                   }`}
                               >
                                 {isMe ? (
@@ -7328,8 +7341,8 @@ export function TourFormPage(props: TourFormPageProps) {
                               <td
                                 key={ch.id || idx}
                                 className={`p-3 align-middle ${isMe
-                                    ? "bg-[#F0F9FF]/50 border-x-2 border-b-2 border-purple-400"
-                                    : "bg-[#F0F9FF]/30 text-center"
+                                  ? "bg-[#F0F9FF]/50 border-x-2 border-b-2 border-purple-400"
+                                  : "bg-[#F0F9FF]/30 text-center"
                                   }`}
                               >
                                 {isMe ? (
@@ -7344,8 +7357,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                       setMyQuoteStatus(newStatus);
                                     }}
                                     className={`w-full text-xs font-bold py-1.5 h-8 shadow-xs cursor-pointer ${myQuoteStatus === "submitted"
-                                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                        : "bg-[#F97316] hover:bg-[#EA580C] text-white"
+                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      : "bg-[#F97316] hover:bg-[#EA580C] text-white"
                                       }`}
                                   >
                                     {myQuoteStatus === "submitted"
@@ -7355,8 +7368,8 @@ export function TourFormPage(props: TourFormPageProps) {
                                 ) : (
                                   <span
                                     className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${ch.quoteStatus === "submitted"
-                                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                        : "bg-amber-50 text-amber-700 border border-amber-200"
+                                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                      : "bg-amber-50 text-amber-700 border border-amber-200"
                                       }`}
                                   >
                                     {ch.quoteStatus === "submitted"
@@ -7379,8 +7392,8 @@ export function TourFormPage(props: TourFormPageProps) {
                               return (
                                 <span
                                   className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full ${allSubmitted
-                                      ? "bg-emerald-200 text-emerald-900 border border-emerald-300"
-                                      : "bg-amber-100 text-amber-800 border border-amber-300"
+                                    ? "bg-emerald-200 text-emerald-900 border border-emerald-300"
+                                    : "bg-amber-100 text-amber-800 border border-amber-300"
                                     }`}
                                 >
                                   {allSubmitted
@@ -7842,7 +7855,7 @@ export function TourFormPage(props: TourFormPageProps) {
               <Button type="button" size="sm" variant="outline" onClick={() => setActiveTab("general")}>Quay lại thiết kế</Button>
             </div>
             <TourDetailPage tour={previewTour} services={mockServices} currentUser={company} previewOnly
-              onBack={() => setActiveTab("general")}/>
+              onBack={() => setActiveTab("general")} />
           </section>
         )}
       </div>
