@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using TripOps.Service.Bookings;
 using TripOps.Service.Payments;
+using TripOps.Service.Tours;
 
 namespace TripOps.Service.Ai;
 
@@ -10,21 +11,27 @@ namespace TripOps.Service.Ai;
 /// hạn thanh toán, hợp đồng, phí hủy nếu hủy hôm nay). Chỉ đọc; model không tự truy vấn nên không thấy được đơn của người khác.
 /// Không gửi số điện thoại, email, danh sách hành khách hay tài khoản ngân hàng cho nhà cung cấp AI.
 /// </summary>
-public sealed class CustomerBookingDigest(BookingService bookings)
+public sealed class CustomerBookingDigest(BookingService bookings, DesignRequestService designRequests)
 {
     private const int MaxBookings = 8;
+    private const int MaxDesignRequests = 8;
     private static readonly CultureInfo Vi = new("vi-VN");
 
     /// <summary>Ghi chú hệ thống gửi model (khách chưa có đơn thì ghi rõ là chưa có).</summary>
     public async Task<string> Note(string customerId, CancellationToken ct)
     {
         var page = await bookings.ListForCustomer(customerId, null, 1, MaxBookings, ct);
+        IReadOnlyList<DesignRequestDto> requests;
+        try { requests = await designRequests.List(customerId, false, ct); }
+        catch (TourException) { requests = []; } // tài khoản không phải khách hàng thì không có yêu cầu thiết kế
+        var requestByBooking = requests.Where(r => r.BookingId.HasValue).GroupBy(r => r.BookingId!.Value).ToDictionary(g => g.Key, g => g.First().Id);
         var now = DateTime.UtcNow;
         var text = new StringBuilder();
+        AppendDesignRequests(text, requests, page.Items.ToDictionary(b => b.Id, b => b.BookingCode));
         text.AppendLine($"ĐƠN CỦA KHÁCH (dữ liệu hệ thống lúc {Vietnam(now):HH:mm dd/MM/yyyy}, chỉ gồm đơn của chính khách đang đăng nhập; mới nhất trước):");
         if (page.Items.Count == 0)
         {
-            text.AppendLine("Khách chưa có đơn đặt tour nào.");
+            text.AppendLine("Khách chưa có đơn đặt tour nào (chưa đặt tour nào, kể cả tour thiết kế riêng).");
             return text.ToString();
         }
         for (var i = 0; i < page.Items.Count; i++)
@@ -36,6 +43,7 @@ public sealed class CustomerBookingDigest(BookingService bookings)
 
             text.Append(i + 1).Append(". Mã đơn ").Append(item.BookingCode)
                 .Append(" – tour \"").Append(item.TourName ?? "(không tên)").Append('"')
+                .Append(requestByBooking.TryGetValue(item.Id, out var requestId) ? $" (tour thiết kế riêng theo yêu cầu #{requestId})" : " (tour đặt sẵn)")
                 .Append(", khởi hành ").Append(Vietnam(item.StartDate).ToString("dd/MM/yyyy", Vi))
                 .Append(", ").Append(item.TotalGuests).Append(" khách")
                 .Append(". Trạng thái: ").Append(StatusText(item.Status))
@@ -75,6 +83,54 @@ public sealed class CustomerBookingDigest(BookingService bookings)
             text.AppendLine($"(Khách còn {page.Total - page.Items.Count} đơn cũ hơn, xem trong mục \"Đơn của tôi\".)");
         return text.ToString();
     }
+
+    /// <summary>Yêu cầu thiết kế tour riêng khách đã gửi (kể cả yêu cầu đã đặt tour, đã đóng hoặc bị từ chối).</summary>
+    private static void AppendDesignRequests(StringBuilder text, IReadOnlyList<DesignRequestDto> requests, IReadOnlyDictionary<int, string> bookingCodes)
+    {
+        text.AppendLine("YÊU CẦU THIẾT KẾ TOUR RIÊNG KHÁCH ĐÃ GỬI (mục \"Thiết kế tour theo yêu cầu\" / \"Yêu cầu thiết kế tour của tôi\"; mới nhất trước):");
+        if (requests.Count == 0)
+        {
+            text.AppendLine("Khách chưa gửi yêu cầu thiết kế tour nào.");
+            return;
+        }
+        var shown = requests.OrderByDescending(r => r.CreatedAt).Take(MaxDesignRequests).ToList();
+        for (var i = 0; i < shown.Count; i++)
+        {
+            var r = shown[i];
+            text.Append(i + 1).Append(". Yêu cầu #").Append(r.Id);
+            if (!string.IsNullOrWhiteSpace(r.SharedTourName)) text.Append(" – phương án \"").Append(r.SharedTourName).Append('"');
+            text.Append(", điểm đến ").Append(r.Destination)
+                .Append(", ").Append(Vietnam(r.DepartureDate).ToString("dd/MM/yyyy", Vi))
+                .Append(r.ReturnDate is { } back ? " – " + Vietnam(back).ToString("dd/MM/yyyy", Vi) : "")
+                .Append(", ").Append(r.NumberOfPeople).Append(" khách")
+                .Append(r.BudgetPerPerson is { } budget ? $", ngân sách {Money(budget)}/khách" : "")
+                .Append(", gửi cho ").Append(r.AgencyName)
+                .Append(" ngày ").Append(Vietnam(r.CreatedAt).ToString("dd/MM/yyyy", Vi))
+                .Append(". Trạng thái: ").Append(DesignStatusText(r.Status));
+            if (r.QuotedPricePerPerson is { } quote && r.Status is "designed" or "booked") text.Append(", giá phương án ").Append(Money(quote)).Append("/khách");
+            if (r.BookingId is { } bookingId)
+                text.Append(", đã đặt thành đơn ").Append(bookingCodes.TryGetValue(bookingId, out var code) ? code : $"#{bookingId}");
+            var partners = r.CoHosts?.Where(h => h.Role != "lead" && h.Status == "accepted").Select(h => h.CompanyName).Distinct().ToArray() ?? [];
+            if (partners.Length > 0) text.Append(", đối tác cùng tổ chức: ").Append(string.Join(", ", partners));
+            if (!string.IsNullOrWhiteSpace(r.RejectionReason) && r.RejectionReason.Trim('.', ' ').Length > 0) text.Append(", lý do từ chối: ").Append(r.RejectionReason.Trim());
+            else if (!string.IsNullOrWhiteSpace(r.CloseReason) && r.CloseReason.Trim('.', ' ').Length > 0) text.Append(", lý do đóng: ").Append(r.CloseReason.Trim());
+            text.AppendLine(".");
+        }
+        if (requests.Count > shown.Count)
+            text.AppendLine($"(Khách còn {requests.Count - shown.Count} yêu cầu cũ hơn, xem trong mục \"Yêu cầu thiết kế tour của tôi\".)");
+    }
+
+    private static string DesignStatusText(string status) => status switch
+    {
+        "pending" => "chờ công ty lữ hành tiếp nhận",
+        "reviewing" => "công ty lữ hành đang thiết kế phương án",
+        "designed" => "đã có phương án, khách có thể xem và đặt tour",
+        "booked" => "đã đặt tour",
+        "closed" => "đã đóng yêu cầu",
+        "cancelled" => "khách đã hủy yêu cầu",
+        "rejected" => "công ty lữ hành không nhận",
+        _ => status,
+    };
 
     private static DateTime Vietnam(DateTime utc) => utc.Kind == DateTimeKind.Unspecified && utc.TimeOfDay == TimeSpan.Zero
         ? utc
