@@ -4411,7 +4411,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                 placeholder="-- Click chọn khách sạn đối tác để thêm vào danh sách thẻ bên dưới --"
                                 selectClass="border-sky-300 focus:ring-[#075985]"
                                 formatLabel={(serv) =>
-                                  `${serv.name} — ${serv.stars || 4} sao (${serv.location || serv.province || "Khác"}) — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
+                                  `${serv.name} — ${serv.stars || 4} sao — ${formatVND(serv.pricePerPerson || serv.price)}/đêm`
                                 }
                                 onSelect={(foundServ) =>
                                   handleAddHotelFromService(hotel.id || "", foundServ)
@@ -5996,7 +5996,7 @@ export function TourFormPage(props: TourFormPageProps) {
                                                     placeholder="-- Click chọn quán ăn / nhà hàng để thêm vào danh sách thẻ bên dưới --"
                                                     selectClass="border-emerald-300 focus:ring-[#075985]"
                                                     formatLabel={(serv) =>
-                                                      `${serv.name} (${serv.location || serv.province || "Khác"}) — ${serv.priceFrom && serv.priceTo
+                                                      `${serv.name} — ${serv.priceFrom && serv.priceTo
                                                         ? `${formatVND(serv.priceFrom)} - ${formatVND(serv.priceTo)}/suất (${formatVND(getMealRefPricePerPerson(serv))}/người)`
                                                         : `${formatVND(serv.pricePerPerson || serv.price)}/người`
                                                       }`
