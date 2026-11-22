@@ -149,8 +149,24 @@ export function WorkflowNotifications({ role = "user", onNavigate }: Props) {
 
   openNoticeRef.current = choose;
 
+  // Nhấn ra ngoài khung thông báo hoặc bấm Esc thì tự đóng.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div className="relative shrink-0">
+    <div ref={rootRef} className="relative shrink-0">
       <button type="button"
         aria-label={unread > 0 ? "Thông báo: " + unread + " chưa đọc" : "Thông báo"}
         aria-expanded={open}
