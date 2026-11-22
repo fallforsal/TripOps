@@ -288,24 +288,18 @@ export function AdminSettlementManagement() {
                   <th className="py-3 px-3 text-right">Phí sàn</th>
                   <th className="py-3 px-3 text-right">Agency nhận</th>
                   <th className="py-3 px-3">Trạng thái</th>
-                  <th className="py-3 px-3 text-right">Thao tác</th>
+                  <th className="whitespace-nowrap py-3 px-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {visible.map((s) => (
                   <tr key={s.id} className="align-top">
                     <td className="py-3 px-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="font-bold text-gray-900">{s.bookingCode}</p>
-                        {s.fromCancellation && (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-[10px] font-semibold leading-4 text-amber-800">
-                            Đơn hủy
-                          </span>
-                        )}
-                      </div>
+                      <p className="font-bold text-gray-900">{s.bookingCode}</p>
                       <p className="max-w-[220px] truncate text-gray-600" title={s.tourName ?? undefined}>{s.tourName || "—"}</p>
                       <p className="mt-0.5 whitespace-nowrap text-[11px] text-gray-400">
-                        {s.fromCancellation ? "Hoàn khách xong" : "Hoàn thành"}: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
+                        <span className="font-bold text-gray-600">{s.fromCancellation ? "Hoàn khách xong" : "Hoàn thành"}:</span>{" "}
+                        {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
                       </p>
                     </td>
                     <td className="py-3 px-3">
