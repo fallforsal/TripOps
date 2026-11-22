@@ -9,6 +9,7 @@ public string? PasswordHash { get; set; }
 public UserRole Role { get; set; } = UserRole.User;
 public string? Avatar { get; set; }
 public bool IsVerified { get; set; } = true;
+public bool AgencyAiSubscribed { get; set; }
 public string? AgencyId { get; set; }
 public UserStatus Status { get; set; } = UserStatus.Active;
 public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

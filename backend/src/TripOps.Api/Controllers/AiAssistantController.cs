@@ -34,7 +34,7 @@ public sealed class AiAssistantController(GuestAssistantService assistant) : Con
 /// AI vừa soạn, thay vì trả lời như đang tư vấn khách mua tour.
 /// </summary>
 [ApiController, Authorize(Roles = "agency"), Route("api/v1/agency/ai/chat"), Tags("AI Assistant")]
-public sealed class AgencyAssistantController(AgencyAssistantService assistant) : ControllerBase
+public sealed class AgencyAssistantController(AgencyAssistantService assistant, TripOps.Service.Accounts.AccountService accounts) : ControllerBase
 {
     [HttpPost]
     [EnableRateLimiting("ai-chat")]
@@ -45,6 +45,7 @@ public sealed class AgencyAssistantController(AgencyAssistantService assistant) 
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Chat(AgencyChatRequest request, CancellationToken ct)
     {
+        await accounts.RequireAgencyAi(User.FindFirstValue(ClaimTypes.NameIdentifier)!, ct);
         try
         {
             return Ok(await assistant.Reply(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request, ct));

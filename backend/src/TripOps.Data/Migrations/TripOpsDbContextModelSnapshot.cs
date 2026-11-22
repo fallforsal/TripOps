@@ -687,10 +687,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("checked_at");
 
-                    b.Property<DateTime?>("CheckoutTime")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("checked_out_at");
-
                     b.Property<string>("CheckoutNote")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("checkout_notes");
@@ -698,6 +694,10 @@ namespace TripOps.Data.Migrations
                     b.Property<string>("CheckoutPhotoUrl")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("checkout_photo_proof_url");
+
+                    b.Property<DateTime?>("CheckoutTime")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("checked_out_at");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3946,6 +3946,9 @@ namespace TripOps.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("address_line");
+
+                    b.Property<bool>("AgencyAiSubscribed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("AgencyId")
                         .HasMaxLength(36)

@@ -17,6 +17,7 @@ import {
 } from "@/app/types";
 import { mockTourCompanies } from "@/app/data/mockData";
 import { AgencyLayout } from "./AgencyLayout";
+import { AgencySubscription } from "./AgencySubscription";
 import { AgencyOverview } from "./AgencyOverview";
 import { AgencyTourManagement } from "./AgencyTourManagement";
 import { AgencyBookingManagement } from "./AgencyBookingManagement";
@@ -178,6 +179,7 @@ export function AgencyDashboard({
 
   const renderContent = () => {
     switch (activeSection) {
+      case "subscription": return <AgencySubscription />;
       case "overview":
         return (
           <AgencyOverview

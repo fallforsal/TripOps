@@ -423,6 +423,7 @@ public sealed partial class TourFlowTests
     public async Task Ai_is_optional_and_unconfigured_boundary_writes_nothing()
     {
         await using var app = new App(); await app.Initialize(); using var agency = await app.Login("agency");
+        (await agency.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await agency.PostAsJsonAsync("/api/v1/agency/ai/itinerary-drafts", new AiDraftRequest("Da Lat", 2))).StatusCode);
         await app.Inspect(async db => Assert.Equal(0, await db.Tours.CountAsync()));
         Assert.False((await Create(agency)).IsAiGenerated);
@@ -468,6 +469,7 @@ public sealed partial class TourFlowTests
             services.AddSingleton<IItineraryDraftGenerator>(new DraftGenerator(Complete()))));
         using var agency = configured.CreateClient();
         (await agency.PostAsJsonAsync("/api/v1/auth/login", new { email = "agency@example.test", password = "TourTest123!" })).EnsureSuccessStatusCode();
+        (await agency.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).EnsureSuccessStatusCode();
         var tour = await Read<TourDto>(await agency.PostAsJsonAsync("/api/v1/agency/ai/itinerary-drafts", new AiDraftRequest("Da Lat", 2)), HttpStatusCode.Created);
         Assert.True(tour.IsAiGenerated); Assert.Equal("draft", tour.Status); Assert.Equal("hidden", tour.Visibility);
         await using var invalid = app.WithWebHostBuilder(builder => builder.ConfigureServices(services =>

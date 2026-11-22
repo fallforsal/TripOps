@@ -47,6 +47,7 @@ export function AgencyLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const menuItems = [
+    { id: "subscription", label: "Gói AI", icon: Star },
     { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
     { id: "tours", label: "Quản lý Tour", icon: Package },
     { id: "bookings", label: "Đặt tour & Khách", icon: Calendar },

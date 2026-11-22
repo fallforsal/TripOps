@@ -7,6 +7,21 @@ namespace TripOps.Service.Accounts;
 public sealed class AccountService(TripOpsDbContext db, CloudinaryStorage storage)
 {
     private readonly PasswordHasher<User> hasher = new();
+    public async Task<bool> SetAgencySubscription(string actor, bool active, CancellationToken ct)
+    {
+        var user = await Current(actor, ct);
+        if (user.Role != UserRole.TravelAgency) throw new AccountException(403, "Gói AI chỉ dành cho Agency.");
+        user.AgencyAiSubscribed = active;
+        await db.SaveChangesAsync(ct);
+        return active;
+    }
+
+    public async Task RequireAgencyAi(string actor, CancellationToken ct)
+    {
+        var user = await Current(actor, ct);
+        if (user.Role != UserRole.TravelAgency || !user.AgencyAiSubscribed)
+            throw new AccountException(403, "Vui lòng đăng ký gói AI tại mục Gói AI để sử dụng tính năng này.");
+    }
     public static string RoleName(UserRole role) => role switch {
         UserRole.Admin => "admin", UserRole.TravelAgency => "agency", UserRole.Provider => "provider",
         UserRole.TourGuide => "guide", _ => "user" };

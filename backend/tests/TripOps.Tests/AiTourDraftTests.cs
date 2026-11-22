@@ -20,6 +20,29 @@ public sealed partial class TourFlowTests
     private const string Preview = "/api/v1/agency/ai/itinerary-drafts/preview";
     private const string SaveAi = "/api/v1/agency/ai/itinerary-drafts/save";
 
+    [Fact]
+    public async Task Agency_subscription_controls_ai_and_is_private_to_each_agency()
+    {
+        await using var app = new App(); await app.Initialize();
+        using var agency = await app.Login("agency");
+        var initial = await agency.GetFromJsonAsync<JsonElement>("/api/v1/agency/subscription");
+        Assert.False(initial.GetProperty("active").GetBoolean());
+        var ask = new AgencyChatRequest([new AiChatMessage("user", "Gợi ý tour")]);
+        Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync("/api/v1/agency/ai/chat", ask)).StatusCode);
+        var draft = new AiDraftRequest("Đà Lạt", 3);
+        Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync(Preview, draft)).StatusCode);
+        (await agency.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).EnsureSuccessStatusCode();
+        Assert.True((await agency.GetFromJsonAsync<JsonElement>("/api/v1/agency/subscription")).GetProperty("active").GetBoolean());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await agency.PostAsJsonAsync("/api/v1/agency/ai/chat", ask)).StatusCode);
+        (await agency.PutAsJsonAsync("/api/v1/agency/subscription", new { active = false })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await agency.PostAsJsonAsync(Preview, draft)).StatusCode);
+        using var customer = await app.Login("customer");
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync("/api/v1/agency/subscription")).StatusCode);
+        using var guest = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.GetAsync("/api/v1/agency/subscription")).StatusCode);
+    }
+
     /// <summary>Trả lần lượt từng nội dung (lần 1: khung tour, lần 2: chọn chỗ ăn ở); hết thì lặp lại nội dung cuối.</summary>
     private sealed class FakeTourAi(params string[] contents) : HttpMessageHandler
     {
@@ -76,6 +99,7 @@ public sealed partial class TourFlowTests
     {
         var client = factory.CreateClient();
         (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "agency@example.test", password = "TourTest123!" })).EnsureSuccessStatusCode();
+        (await client.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).EnsureSuccessStatusCode();
         return client;
     }
 
@@ -186,6 +210,7 @@ public sealed partial class TourFlowTests
     {
         await using var app = new App(); await app.Initialize();
         using var agency = await app.Login("agency");
+        (await agency.PutAsJsonAsync("/api/v1/agency/subscription", new { active = true })).EnsureSuccessStatusCode();
         var ask = new AgencyChatRequest([new AiChatMessage("user", "Gợi ý ăn uống")]);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await agency.PostAsJsonAsync("/api/v1/agency/ai/chat", ask)).StatusCode);
         using var customer = await app.Login("customer");

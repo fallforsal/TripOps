@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { MapPin, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ApiError } from "@/app/lib/http";
+import { getAgencySubscription } from "@/app/services/agencySubscription";
 import { askAgencyAssistant, askGuestAssistant, type AiTourCard } from "@/app/services/aiAssistant";
 import type { TourConfiguration } from "@/app/services/wf02Tours";
 import { openAiDraftEditor, previewAiTour, saveAiTour, type AiTourDraftRequest } from "@/app/services/aiTourDraft";
@@ -105,6 +106,18 @@ function TourCard({ tour, onOpen }: { tour: AiTourCard; onOpen: () => void }) {
 export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
   const isAgency = user?.role === "agency" || user?.role === "company_admin";
+  const [subscription, setSubscription] = useState<boolean | null>(null);
+  const [subscriptionError, setSubscriptionError] = useState("");
+  useEffect(() => {
+    let disposed = false;
+    const load = () => {
+      setSubscription(null); setSubscriptionError("");
+      if (open && isAgency) void getAgencySubscription().then(s => { if (!disposed) setSubscription(s.active); })
+        .catch(e => { if (!disposed) setSubscriptionError(e.message); });
+    };
+    load(); window.addEventListener("agency-subscription-changed", load);
+    return () => { disposed = true; window.removeEventListener("agency-subscription-changed", load); };
+  }, [open, isAgency, user?.id]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -293,6 +306,13 @@ export function GuestAssistantWindow({ open, onClose }: { open: boolean; onClose
     openTour(id);
     if (window.matchMedia("(max-width: 640px)").matches) onClose();
   };
+
+  if (isAgency && subscription !== true) return <section hidden={!open} className="ai-floating-window" role="dialog" aria-label="Đăng ký AI Agency">
+    <header className="ai-floating-header"><strong>Trợ lý AI Agency</strong><button onClick={onClose} aria-label="Đóng"><X size={18} /></button></header>
+    <div className="p-5 space-y-4"><p>{subscriptionError || (subscription === null ? "Đang kiểm tra gói AI..." : "Đăng ký gói AI để chat với trợ lý và tạo khung tour.")}</p>
+      <button className="rounded-lg bg-[#075985] px-4 py-2 text-white" onClick={() => { window.location.hash = "#/agency/subscription"; onClose(); }}>Xem gói AI</button>
+    </div>
+  </section>;
 
   return (
     <section hidden={!open} className="ai-floating-window" role="dialog" aria-modal="false" aria-label="Trợ lý AI TripOps">
