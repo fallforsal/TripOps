@@ -197,21 +197,21 @@ public sealed partial class BookingFlowTests
         using var app = new App(); await app.Initialize();
         var agency = await app.Client("agency1@example.test");
         var draft = CustomTemplate() with { Clauses = new Dictionary<string, string?> { ["duties"] = "• Bên A: đón khách tại khách sạn." } };
-        var preview = await agency.PostAsJsonAsync("/api/v1/agency/contract-template/preview", draft);
+        var preview = await agency.PostAsJsonAsync("/api/v1/files/contract-template/preview", draft);
         Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
         Assert.Equal("application/pdf", preview.Content.Headers.ContentType?.MediaType);
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString((await preview.Content.ReadAsByteArrayAsync())[..4]));
         // Xem trước không lưu mẫu.
         Assert.True((await agency.GetFromJsonAsync<ContractTemplateDto>("/api/v1/agency/contract-template"))!.IsDefault);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync("/api/v1/agency/contract-template/preview",
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync("/api/v1/files/contract-template/preview",
             new ContractTemplateRequest([], null, null))).StatusCode);
         var customer = await app.Client("customer1@example.test");
-        Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync("/api/v1/agency/contract-template/preview", draft)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.PostAsJsonAsync("/api/v1/files/contract-template/preview", draft)).StatusCode);
 
         // Khách (chưa đăng nhập) xem hợp đồng mẫu của tour công khai.
-        var sample = await app.CreateClient().GetAsync("/api/v1/tours/1/contract-sample");
+        var sample = await app.CreateClient().GetAsync("/api/v1/files/tours/1/contract-sample");
         Assert.Equal(HttpStatusCode.OK, sample.StatusCode);
         Assert.Equal("application/pdf", sample.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(HttpStatusCode.NotFound, (await app.CreateClient().GetAsync("/api/v1/tours/999999/contract-sample")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await app.CreateClient().GetAsync("/api/v1/files/tours/999999/contract-sample")).StatusCode);
     }
 }

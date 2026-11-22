@@ -63,6 +63,8 @@ public sealed record AgencyPayoutAccountDto(string? BankName, string? BankBin, s
 /// <param name="NetPayout">Tiền Agency nhận = GrossAmount − PlatformFee (hoặc số Admin đã chuyển thực tế khi đã trả).</param>
 /// <param name="AutoBlockers">Lý do chưa được chuyển TỰ ĐỘNG (rỗng = tác vụ chạy ngầm sẽ chuyển ở lần quét kế tiếp).</param>
 /// <param name="PayoutBlockers">Lý do chưa được chuyển kể cả thủ công (VD khách chưa trả đủ, đang có yêu cầu hoàn tiền).</param>
+/// <param name="FromCancellation">true = khoản từ phí hủy của đơn đã hủy (GrossAmount là phần phí hủy của Agency này).</param>
+/// <param name="CancellationFeeRetained">Tổng phí hủy thực giữ lại của cả đơn (đã thu − đã hoàn cho khách).</param>
 public sealed record SettlementDto(
     int Id, int BookingId, string BookingCode, string? TourName, DateTime StartDate,
     string AgencyId, string AgencyName, bool IsHost,
@@ -73,7 +75,8 @@ public sealed record SettlementDto(
     string? PayoutNote, string? SettledBy,
     string? BankName, string? BankBin, string? AccountNumber, string? AccountHolder,
     int OpenComplaints, bool HasOpenRefund,
-    IReadOnlyList<string> PayoutBlockers, IReadOnlyList<string> AutoBlockers);
+    IReadOnlyList<string> PayoutBlockers, IReadOnlyList<string> AutoBlockers,
+    bool FromCancellation = false, decimal CancellationFeeRetained = 0);
 
 /// <param name="Amount">Bỏ trống = chuyển đúng số Agency được nhận. Nhập số nhỏ hơn (VD trừ bồi thường khiếu nại) thì bắt buộc ghi chú.</param>
 /// <param name="Note">Bắt buộc khi đổi số tiền.</param>

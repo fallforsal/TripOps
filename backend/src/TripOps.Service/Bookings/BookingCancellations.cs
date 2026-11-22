@@ -115,6 +115,7 @@ public sealed partial class BookingService
         booking.RefundRequests.Add(refund);
         CancelNow(booking, refund, $"Khách hủy: {request.ReasonDetail.Trim()}", now);
         await RememberRefundAccount(customerId, account, ct);
+        await CancellationSettlements.MarkCancellationSettled(booking, ct); // phí hủy = toàn bộ số đã trả thì quyết toán ngay
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await Get(customerId,id,ct);
@@ -181,6 +182,8 @@ public sealed partial class BookingService
             CancelNow(booking, refund, $"Agency hủy: {reason}", now);
             // Tài khoản nhận hoàn lấy theo hồ sơ khách (nếu khách đã lưu).
             await UseProfileAccount(booking, refund, ct);
+            // Khách quá hạn thanh toán: không hoàn, Agency được quyết toán số khách đã trả (trừ phí sàn).
+            await CancellationSettlements.MarkCancellationSettled(booking, ct);
         }
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -237,6 +240,8 @@ public sealed partial class BookingService
             });
         }
         CompleteCancellation(booking, refund, amount, now);
+        // Hoàn tiền xong: phí hủy giữ lại thành khoản quyết toán cho Agency.
+        await CancellationSettlements.MarkCancellationSettled(booking, ct);
 
         await Repo.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -382,6 +387,7 @@ public sealed partial class BookingService
             payment.GatewayTransactionNo = info.BankReference ?? info.Id;
             payment.PaidAt = info.TransactionTime ?? now;
             CompleteCancellation(booking, refund, payment.Amount, now);
+            await CancellationSettlements.MarkCancellationSettled(booking, ct);
         }
         else if (info is null || info.Failed)
         {

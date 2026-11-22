@@ -55,7 +55,7 @@ const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 /** PDF hợp đồng mẫu theo nội dung đang soạn (chưa lưu), cùng cách trình bày với hợp đồng khách nhận. */
 export async function previewContractTemplate(input: ContractTemplateInput): Promise<Blob> {
-  const response = await fetch(`${apiBase}/api/v1/agency/contract-template/preview`, {
+  const response = await fetch(`${apiBase}/api/v1/files/contract-template/preview`, {
     method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: body(input),
   });
   if (!response.ok) {
@@ -67,4 +67,4 @@ export async function previewContractTemplate(input: ContractTemplateInput): Pro
 }
 
 /** Hợp đồng mẫu của tour công khai theo mẫu Agency đã lưu (khách xem trước khi đặt). */
-export const contractSampleUrl = (tourId: number | string) => `${apiBase}/api/v1/tours/${tourId}/contract-sample`;
+export const contractSampleUrl = (tourId: number | string) => `${apiBase}/api/v1/files/tours/${tourId}/contract-sample`;

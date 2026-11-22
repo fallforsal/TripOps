@@ -19,6 +19,10 @@ namespace TripOps.Service.Settlements;
 //  - Chống chi hai lần: mọi thao tác khóa dòng booking trong transaction; đang Processing thì không tạo lệnh khác;
 //    mã lệnh SETTLE-{id}-{lần} là khóa idempotency gửi payOS nên gửi lại không tạo lệnh thứ hai.
 // Ví dụ: tour 10.000.000đ, khách trả đủ, phí sàn 10% = 1.000.000đ → Agency nhận 9.000.000đ.
+//  - Đơn bị hủy: khi khoản hoàn cho khách đã xử lý xong, phí hủy thực giữ lại (đã thu − đã hoàn) là khoản quyết toán,
+//    trừ phí sàn cùng tỷ lệ như đơn hoàn thành. Tour co-host chia phí hủy theo tỷ lệ phân bổ của từng Agency trong đơn.
+//    VD: tour 6.000.000đ, khách hủy chịu phí 25% → hoàn khách 4.500.000đ, giữ 1.500.000đ → sàn 150.000đ, Agency 1.350.000đ.
+//    Agency tự hủy tour thì hoàn khách 100% nên không có khoản nào.
 public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGateway payouts, PaymentClock clock,
     SettlementOptions options, ILogger<AgencySettlementService> logger)
 {
@@ -67,6 +71,60 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
                 Message = $"Tour của booking {booking.BookingCode} đã hoàn thành. Nếu có sự cố, bạn có thể gửi khiếu nại đến " +
                           $"{VietnamText(now.Add(Reviews.ReviewRules.ComplaintWindow))}; đánh giá chuyến đi đến {VietnamText(now.Add(Reviews.ReviewRules.FeedbackWindow))}."
             });
+    }
+
+    /// <summary>
+    /// Gọi khi đơn đã hủy và không còn yêu cầu hoàn tiền nào đang mở (người gọi tự SaveChanges).
+    /// Phí hủy thực giữ lại thành khoản quyết toán cho Agency, chốt phí sàn và hẹn ngày chuyển tự động như đơn hoàn thành.
+    /// </summary>
+    public async Task MarkCancellationSettled(Booking booking, CancellationToken ct)
+    {
+        if (booking.Status != BookingStatus.Cancelled || booking.BookingAgencies.Count == 0) return;
+        if (booking.RefundRequests.Any(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved)) return;
+        var retained = CancellationRetained(booking);
+        if (retained <= 0) return;
+        var now = UtcNow;
+        var percent = await FeePercentAt(now, ct);
+        foreach (var row in booking.BookingAgencies.Where(r => r.SettlementStatus is null or SettlementStatus.Unpaid))
+        {
+            var share = CancellationShare(booking, row, retained);
+            if (share <= 0) continue;
+            row.SettlementStatus = SettlementStatus.Ready;
+            row.TourCompletedAt = now; // mốc bắt đầu quyết toán (với đơn hủy: lúc xử lý xong hoàn tiền)
+            row.FeePercent = percent;
+            var autoAt = now.AddDays(options.AutoPayoutDelayDays);
+            row.AutoPayoutAt = autoAt;
+            row.UpdatedAt = now;
+            var net = Math.Max(0, share - Money(share * percent / 100m));
+            db.WorkflowNotifications.Add(new WorkflowNotification
+            {
+                UserId = row.AgencyId,
+                BookingId = booking.Id,
+                Message = $"Booking {booking.BookingCode} đã hủy. Phần phí hủy của bạn {Vnd(share)}, trừ phí sàn {percent.ToString("0.##", Vietnamese)}% " +
+                          $"còn {Vnd(net)}, sẽ được chuyển từ {VietnamText(autoAt)}."
+            });
+        }
+    }
+
+    /// <summary>Phí hủy thực giữ lại của đơn đã hủy = tiền khách đã trả (sau các khoản giảm giá) − tiền đã hoàn cho yêu cầu hủy.</summary>
+    public static decimal CancellationRetained(Booking booking) => Math.Max(0, BookingBilling.NetPaidAmount(booking)
+        - booking.RefundRequests.Where(r => r.Reason != BookingBilling.PriceReductionReason && r.Status == RefundStatus.Completed)
+            .Sum(r => r.ApprovedRefundAmount ?? 0));
+
+    /// <summary>
+    /// Phần phí hủy của một Agency: tour một Agency nhận toàn bộ; tour co-host chia theo tỷ lệ số tiền được phân bổ trong đơn
+    /// (FinalAmount), phần lẻ do làm tròn tính cho Agency chủ trì.
+    /// </summary>
+    public static decimal CancellationShare(Booking booking, BookingAgency row, decimal retained)
+    {
+        static bool Same(BookingAgency a, BookingAgency b) => ReferenceEquals(a, b) || (a.Id != 0 && a.Id == b.Id);
+        var rows = booking.BookingAgencies.OrderBy(a => a.Id).ToList();
+        var host = rows.FirstOrDefault(a => a.IsHost == true) ?? rows.FirstOrDefault();
+        if (host is null) return 0;
+        var basis = rows.Sum(a => Math.Max(0, a.FinalAmount));
+        if (rows.Count <= 1 || basis <= 0) return Same(host, row) ? retained : 0;
+        decimal Share(BookingAgency a) => Money(retained * Math.Max(0, a.FinalAmount) / basis);
+        return Same(host, row) ? retained - rows.Where(a => !Same(a, host)).Sum(Share) : Share(row);
     }
 
     /// <summary>Tỷ lệ phí sàn đang áp dụng: dòng system_commission_configs mới nhất còn hiệu lực, nếu không có thì cấu hình mặc định.</summary>
@@ -489,7 +547,8 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
 
     private sealed record Evaluation(decimal CustomerPaid, decimal Gross, decimal FeePercent, decimal Fee, decimal Net,
         string? BankName, string? BankBin, string? AccountNumber, string? AccountHolder,
-        int OpenComplaints, bool OpenRefund, List<string> PayoutBlockers, List<string> AutoBlockers);
+        int OpenComplaints, bool OpenRefund, List<string> PayoutBlockers, List<string> AutoBlockers,
+        bool FromCancellation = false, decimal CancellationFeeRetained = 0);
 
     private Evaluation Evaluate(BookingAgency row, int openComplaints)
     {
@@ -500,7 +559,12 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
         // FinalAmount đã bao gồm phụ thu/giảm giá được duyệt cho đúng Agency.
         // Không dồn phần tiền dư (hoặc tiền chưa hoàn) sang Agency chủ trì.
         var alliance = booking.BookingAgencies.Count > 1;
-        var gross = Math.Min(alliance ? Math.Max(0, row.FinalAmount) : booking.TotalAmount, paid);
+        // Đơn đã hủy: quyết toán phần phí hủy giữ lại, chia theo tỷ lệ phân bổ giữa các Agency.
+        var cancelled = booking.Status == BookingStatus.Cancelled;
+        var retained = cancelled ? CancellationRetained(booking) : 0;
+        var gross = cancelled
+            ? CancellationShare(booking, row, retained)
+            : Math.Min(alliance ? Math.Max(0, row.FinalAmount) : booking.TotalAmount, paid);
 
         var percent = row.FeePercent ?? options.DefaultFeePercent;
         var fee = Money(gross * percent / 100m);
@@ -516,11 +580,19 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
         var openRefund = booking.RefundRequests.Any(r => r.Status is RefundStatus.Pending or RefundStatus.Reviewing or RefundStatus.Approved);
 
         var payoutBlockers = new List<string>();
-        if (booking.Status != BookingStatus.Completed) payoutBlockers.Add("Tour chưa được Agency chủ trì bấm hoàn thành.");
-        if (paid < booking.TotalAmount)
-            payoutBlockers.Add($"Khách chưa thanh toán đủ (đã trả {Vnd(paid)} / {Vnd(booking.TotalAmount)}).");
+        if (cancelled)
+        {
+            if (row.SettlementStatus is null or SettlementStatus.Unpaid)
+                payoutBlockers.Add("Đơn đã hủy nhưng khoản hoàn cho khách chưa xử lý xong.");
+        }
+        else
+        {
+            if (booking.Status != BookingStatus.Completed) payoutBlockers.Add("Tour chưa được Agency chủ trì bấm hoàn thành.");
+            if (paid < booking.TotalAmount)
+                payoutBlockers.Add($"Khách chưa thanh toán đủ (đã trả {Vnd(paid)} / {Vnd(booking.TotalAmount)}).");
+        }
         if (openRefund) payoutBlockers.Add("Booking đang có yêu cầu hủy/hoàn tiền chưa xử lý xong.");
-        if (alliance && booking.BookingAgencies.Sum(a => a.FinalAmount) != booking.TotalAmount)
+        if (!cancelled && alliance && booking.BookingAgencies.Sum(a => a.FinalAmount) != booking.TotalAmount)
             payoutBlockers.Add("Tổng phân bổ cho các Agency chưa khớp tổng giá booking. Cần đối soát trước khi quyết toán.");
         if (net <= 0) payoutBlockers.Add("Số tiền Agency nhận bằng 0.");
 
@@ -547,7 +619,7 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
             if (!payouts.Options.IsConfigured) autoBlockers.Add("Chưa cấu hình kênh chuyển tiền payOS.");
         }
         return new Evaluation(paid, gross, percent, fee, net, bankName, bin, account, holder, openComplaints, openRefund,
-            payoutBlockers, autoBlockers.Distinct().ToList());
+            payoutBlockers, autoBlockers.Distinct().ToList(), cancelled, retained);
     }
 
     /// <summary>Dòng cũ (tour hoàn thành trước khi có tính năng) vẫn Unpaid: coi như Ready, chỉ chuyển thủ công.</summary>
@@ -601,7 +673,8 @@ public sealed class AgencySettlementService(TripOpsDbContext db, PayOsPayoutGate
                 row.PayoutNote, row.SettledBy,
                 eval.BankName, eval.BankBin, eval.AccountNumber, eval.AccountHolder,
                 eval.OpenComplaints, eval.OpenRefund,
-                status == SettlementStatus.Paid ? Array.Empty<string>() : eval.PayoutBlockers.ToArray(), eval.AutoBlockers);
+                status == SettlementStatus.Paid ? Array.Empty<string>() : eval.PayoutBlockers.ToArray(), eval.AutoBlockers,
+                eval.FromCancellation, eval.CancellationFeeRetained);
         }).ToList();
     }
 

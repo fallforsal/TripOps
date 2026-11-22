@@ -39,7 +39,7 @@ import {
   syncSettlement,
   type SettlementDto,
   type SettlementStatus,
-  settlementSharePercent,
+  settlementAmountNote,
 } from "@/app/services/settlements";
 import { toast } from "sonner";
 
@@ -297,9 +297,16 @@ export function AdminSettlementManagement() {
                     <td className="py-3 px-3 space-y-0.5">
                       <p className="font-bold text-gray-900">{s.bookingCode}</p>
                       <p className="text-gray-600 max-w-[220px] truncate">{s.tourName || "—"}</p>
-                      <p className="text-[11px] text-gray-400">
-                        Hoàn thành: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
-                      </p>
+                      {s.fromCancellation ? (
+                        <p className="text-[11px] text-gray-400">
+                          <span className="mr-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-px font-semibold text-amber-800">Đơn hủy</span>
+                          Hoàn khách xong: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-gray-400">
+                          Hoàn thành: {s.tourCompletedAt ? formatVietnamDateTime(s.tourCompletedAt) : "—"}
+                        </p>
+                      )}
                     </td>
                     <td className="py-3 px-3 space-y-0.5">
                       <p className="font-semibold text-gray-900">
@@ -316,11 +323,7 @@ export function AdminSettlementManagement() {
                     </td>
                     <td className="py-3 px-3 text-right">
                       <p className="font-semibold">{formatVND(s.grossAmount)}</p>
-                      <p className="text-[11px] text-gray-400">
-                        {settlementSharePercent(s) !== null
-                          ? `Phần chia ${settlementSharePercent(s)}% · khách trả ${formatVND(s.customerPaid)}`
-                          : `Khách đã trả ${formatVND(s.customerPaid)}`}
-                      </p>
+                      <p className="text-[11px] text-gray-400">{settlementAmountNote(s, formatVND)}</p>
                     </td>
                     <td className="py-3 px-3 text-right">
                       <p>{formatVND(s.platformFee)}</p>
@@ -439,11 +442,7 @@ export function AdminSettlementManagement() {
               <div className="space-y-3 text-sm">
                 {action.mode !== "hold" && (
                   <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-1 text-xs">
-                    {settlementSharePercent(action.item) !== null && (
-                      <p className="text-gray-500">
-                        Phần chia {settlementSharePercent(action.item)}% của {formatVND(action.item.customerPaid)} khách trả
-                      </p>
-                    )}
+                    <p className="text-gray-500">{settlementAmountNote(action.item, formatVND)}</p>
                     <p>
                       Doanh thu: <strong>{formatVND(action.item.grossAmount)}</strong>
                     </p>

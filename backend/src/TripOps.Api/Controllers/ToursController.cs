@@ -176,7 +176,8 @@ public sealed class ToursController(TourService tours) : ControllerBase
     [EndpointSummary("Get a public published tour")]
     [ProducesResponseType<PublicTourDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => Ok(await tours.PublicGet(id, ct));
-    [HttpGet("{id:int}/contract-sample")]
+    [HttpGet("~/api/v1/files/tours/{id:int}/contract-sample")]
+    [Produces("application/pdf")]
     [EndpointSummary("Sample contract PDF of a public tour, using the agency's saved contract template")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ContractSample(int id, CancellationToken ct) =>

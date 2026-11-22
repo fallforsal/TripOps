@@ -27,7 +27,9 @@ public sealed class AgencyContractTemplateController(ContractTemplateService tem
     public async Task<IActionResult> Save(ContractTemplateRequest request, CancellationToken ct) =>
         Ok(await templates.Save(Agency, request, ct));
 
-    [HttpPost("preview")]
+    // File PDF nằm dưới /api/v1/files/ như các file hợp đồng khác.
+    [HttpPost("~/api/v1/files/contract-template/preview")]
+    [Produces("application/pdf")]
     [EndpointSummary("Render a sample contract PDF from the template being edited (not saved)")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
