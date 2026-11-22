@@ -22,11 +22,13 @@ import {
 } from "lucide-react";
 import { TourCompany, User } from "@/app/types";
 import { SidebarLogoutButton } from "@/app/components/common/SidebarLogoutButton";
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
+import type { NotificationDestination } from "@/app/lib/notificationNavigation";
 
 interface AgencyLayoutProps {
   children: React.ReactNode;
   activeSection: string;
-  onNavigate: (section: string) => void;
+  onNavigate: (section: string, destination?: NotificationDestination) => void;
   company: TourCompany;
   currentUser: User;
   customRequestsBadgeCount?: number;
@@ -210,6 +212,10 @@ export function AgencyLayout({
               {company.name}
             </span>
           </div>
+        </div>
+
+        <div className="sticky top-0 z-20 flex justify-end border-b border-slate-200 bg-white px-6 py-2">
+          <WorkflowNotifications role="agency" onNavigate={onNavigate} />
         </div>
 
         {/* Dynamic Page Content */}

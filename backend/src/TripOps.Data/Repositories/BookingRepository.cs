@@ -11,6 +11,19 @@ public sealed record GuideBookingSummary(
 
 public sealed class BookingRepository(TripOpsDbContext db)
 {
+    public void Notify(string recipient, string message, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.Queue(db, recipient, message, bookingId: bookingId, actorId: actor);
+
+    public Task NotifyAdmins(string message, CancellationToken ct, int? bookingId = null, string? actor = null) =>
+        WorkflowNotice.QueueAdminsAsync(db, message, ct, bookingId, actor);
+
+    public void NotifyAgencies(Booking booking, string message, string? actor = null)
+    {
+        foreach (var agency in booking.BookingAgencies.Select(a => a.AgencyId)
+                     .Append(booking.Tour!.AgencyId).Distinct())
+            Notify(agency, message, booking.Id, actor);
+    }
+
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginGuideAssignment(CancellationToken ct) => db.Database.BeginTransactionAsync(ct);
     public Task<int> LockGuide(string guideId, CancellationToken ct) => db.Users.Where(u => u.Id == guideId)
         .ExecuteUpdateAsync(s => s.SetProperty(u => u.UpdatedAt, u => u.UpdatedAt), ct);
@@ -141,6 +154,23 @@ public sealed class BookingRepository(TripOpsDbContext db)
             .ToListAsync(ct);
 
         return (rows, total);
+    }
+
+    public async Task<Dictionary<int, Booking>> GuideSchedules(IEnumerable<int> ids, CancellationToken ct)
+    {
+        var list = ids.ToArray();
+        if (list.Length == 0) return [];
+        return (await db.Bookings.AsNoTracking()
+            .Include(b => b.Tour)
+            .Include(b => b.BookingAgencies)
+            .Include(b => b.AssignedGuides)
+            .Include(b => b.Timelines).ThenInclude(t => t.Attractions).ThenInclude(a => a.Checkins)
+            .Include(b => b.Timelines).ThenInclude(t => t.Meals)
+            .Include(b => b.Accommodations)
+            .AsSplitQuery()
+            .Where(b => list.Contains(b.Id))
+            .ToListAsync(ct))
+            .ToDictionary(b => b.Id);
     }
 
     public Task<Tour?> FindBookableTour(int tourId, string customerId, CancellationToken ct) =>

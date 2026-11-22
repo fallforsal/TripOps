@@ -55,7 +55,10 @@ class TourCard extends StatelessWidget {
                   Row(children: [
                     const Icon(Icons.calendar_today_outlined, size: 13, color: muted),
                     const SizedBox(width: 5),
-                    Flexible(child: Text(vnDate(tour.startDate),
+                    Flexible(child: Text(
+                      tour.endDate != null && vnDate(tour.endDate!) != vnDate(tour.startDate)
+                          ? '${vnDate(tour.startDate)} – ${vnDate(tour.endDate!)}'
+                          : vnDate(tour.startDate),
                       style: const TextStyle(color: muted, fontSize: 12))),
                     const SizedBox(width: 12),
                     const Icon(Icons.groups_outlined, size: 14, color: muted),

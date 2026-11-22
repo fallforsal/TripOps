@@ -100,7 +100,9 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                         GuideHero(
                           title: d.name,
                           label: bookingStatusLabel(d.status),
-                          subtitle: '${d.code}  •  ${vnDate(d.startDate)} – ${vnDate(d.endDate)}',
+                          subtitle: vnDate(d.startDate) == vnDate(d.endDate)
+                              ? '${d.code}  •  ${vnDate(d.startDate)}'
+                              : '${d.code}  •  ${vnDate(d.startDate)} – ${vnDate(d.endDate)}',
                         ),
                         space(14),
                         Row(children: [
@@ -131,9 +133,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                           const LinearProgressIndicator(),
                           space(10),
                         ],
-                        if ((d.status == 'Confirmed' || d.status == 'Paid') &&
-                            !d.startDate.isAfter(DateTime(
-                              DateTime.now().year, DateTime.now().month, DateTime.now().day)))
+                        if (d.canStartTour)
                           FilledButton.icon(
                             onPressed: acting ? null :
                                 () => mutate(() => widget.guides.start(d.id)),
@@ -209,52 +209,6 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                                   fontWeight: FontWeight.w700)),
                             ),
                           ]),
-                        )),
-                        space(21),
-                        GuideSectionTitle('Lịch trình (${d.days.length} ngày)'),
-                        space(10),
-                        if (d.days.isEmpty)
-                          const GuideEmptyState(
-                            title: 'Chưa có lịch trình',
-                            message: 'Lịch trình sẽ xuất hiện khi backend cung cấp dữ liệu.',
-                            icon: Icons.event_note_outlined,
-                          ),
-                        ...d.days.map((day) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Card(child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Row(crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 43, height: 43,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: paleTeal,
-                                    borderRadius: BorderRadius.circular(11),
-                                  ),
-                                  child: Text('${day.dayNumber}',
-                                    style: const TextStyle(
-                                      fontSize: 19, fontWeight: FontWeight.w900,
-                                      color: deepTeal)),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(day.title, style: const TextStyle(
-                                      color: ink, fontWeight: FontWeight.w800,
-                                      fontSize: 14)),
-                                    const SizedBox(height: 5),
-                                    Text(day.stops.isEmpty
-                                        ? 'Chưa có điểm tham quan'
-                                        : day.stops.map((s) => s.name).join(' • '),
-                                      style: const TextStyle(
-                                        fontSize: 11, color: muted, height: 1.5)),
-                                  ],
-                                )),
-                              ],
-                            ),
-                          )),
                         )),
                       ],
                     ),

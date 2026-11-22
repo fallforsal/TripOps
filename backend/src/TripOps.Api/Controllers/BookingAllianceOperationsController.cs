@@ -41,12 +41,24 @@ public sealed class BookingAllianceOperationsController(TripOpsDbContext db,Book
                 foreach(var p in b.Participants.Where(p=>p.AgencyId==Actor && p.Status!="INACTIVE" && p.AssignedGuideId==null))p.AssignedGuideId=guideId;
             }
         }
+        var changedLocationIds = input.Locations.Select(l => l.LocationId).ToArray();
+        var prior = await db.BookingAttractionCheckins.AsNoTracking()
+            .Where(c => c.AgencyId == Actor && changedLocationIds.Contains(c.BookingTimelineAttractionId))
+            .Select(c => new { c.BookingTimelineAttractionId, c.GuideId }).ToListAsync(ct);
         foreach(var item in input.Locations) {
             var location=own.Single(a=>a.Id==item.LocationId);
             var checks=await db.BookingAttractionCheckins.Where(c=>c.BookingTimelineAttractionId==location.Id && c.AgencyId==Actor).ToListAsync(ct);
             if(checks.Any(c=>c.AttendanceStatus!=AttractionCheckinStatus.Pending && !item.GuideIds.Contains(c.GuideId)))throw new BookingException(409,"Không gỡ phân công đã check-in.");
             db.BookingAttractionCheckins.RemoveRange(checks.Where(c=>!item.GuideIds.Contains(c.GuideId)));
             foreach(var guide in item.GuideIds.Where(g=>checks.All(c=>c.GuideId!=g)))db.BookingAttractionCheckins.Add(new BookingAttractionCheckin {BookingTimelineAttractionId=location.Id,GuideId=guide,AgencyId=Actor});
+            foreach (var guide in item.GuideIds.Where(g => prior.All(p => p.BookingTimelineAttractionId != location.Id || p.GuideId != g)))
+                WorkflowNotice.Queue(db, guide,
+                    $"Agency đã phân công điểm {location.CurrentLocationName} trong booking {b.BookingCode}.",
+                    id, actorId: Actor);
+            foreach (var old in prior.Where(p => p.BookingTimelineAttractionId == location.Id && !item.GuideIds.Contains(p.GuideId)))
+                WorkflowNotice.Queue(db, old.GuideId,
+                    $"Agency đã gỡ phân công điểm {location.CurrentLocationName} trong booking {b.BookingCode}.",
+                    id, actorId: Actor);
         }
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await bookings.Get(Actor,id,ct);
     }
@@ -57,7 +69,16 @@ public sealed class BookingAllianceOperationsController(TripOpsDbContext db,Book
         if(!BookingAlliance.IsMember(b,Actor))throw new BookingException(403,"Agency không thuộc booking.");
         if(b.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Completed)throw new BookingException(409,"Booking đã đóng.");
         var day=b.Timelines.SingleOrDefault(d=>d.Id==dayId)??throw new BookingException(404,"Không tìm thấy ngày.");
-        day.Title=input.Title.Trim();day.Description=input.Description?.Trim();await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await bookings.Get(Actor,id,ct);
+        var newTitle = input.Title.Trim();
+        var newDescription = input.Description?.Trim();
+        var changed = day.Title != newTitle || day.Description != newDescription;
+        day.Title = newTitle; day.Description = newDescription;
+        if (changed)
+            foreach (var guide in b.AssignedGuides.Where(g => g.AgencyId == Actor).Select(g => g.GuideId).Distinct())
+                WorkflowNotice.Queue(db, guide,
+                    $"Agency đã cập nhật lịch trình ngày {day.DayNumber} của booking {b.BookingCode}.",
+                    id, actorId: Actor);
+        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await bookings.Get(Actor,id,ct);
     }
 }
 

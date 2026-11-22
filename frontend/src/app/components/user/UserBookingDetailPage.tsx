@@ -270,6 +270,38 @@ export function UserBookingDetailPage({
   const coHosts = booking.coHosts ?? booking.tour?.coHosts ?? [];
   const leadCoHost = coHosts.find((c) => c.role === "lead");
   const partnerCoHosts = coHosts.filter((c) => c.role !== "lead");
+  const isMultiAgencyItinerary = isCoHosted || coHosts.length > 1 || (booking.bookingAgencies?.length ?? 0) > 1;
+  const itineraryAgencyName = (id?: string) =>
+    booking.agencyDirectory?.find((a) => a.agencyId === id)?.agencyName
+    || booking.bookingAgencies?.find((a) => a.agencyId === id)?.agencyName
+    || coHosts.find((c) => c.companyId === id)?.companyName
+    || (id === booking.companyId || !id ? booking.companyName || booking.tour?.companyName : undefined)
+    || "Công ty du lịch";
+  const itineraryAgencyLogo = (id?: string) =>
+    coHosts.find((c) => c.companyId === id)?.companyLogo
+    || (id === booking.companyId || !id ? booking.tour?.companyLogo : undefined);
+  const renderItineraryOwner = (rawAgencyId?: string) => {
+    const ownerId = rawAgencyId || booking.companyId || booking.tour?.companyId || leadCoHost?.companyId;
+    const ownerName = itineraryAgencyName(ownerId);
+    const ownerLogo = itineraryAgencyLogo(ownerId);
+    const isLeadOwner = !leadCoHost || ownerId === leadCoHost.companyId || ownerId === (booking.companyId || booking.tour?.companyId);
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+          isLeadOwner
+            ? "bg-sky-50 text-sky-800 border-sky-200"
+            : "bg-amber-50 text-amber-900 border-amber-200"
+        }`}
+      >
+        {ownerLogo ? (
+          <img src={ownerLogo} alt={ownerName} className="w-4 h-4 rounded-full object-cover border border-slate-200 shrink-0" />
+        ) : (
+          <Building2 className="w-3 h-3 shrink-0" />
+        )}
+        <span>Quản lý: {ownerName}</span>
+      </span>
+    );
+  };
 
   // Sắp xếp nhật ký điều chỉnh giá theo thứ tự mới nhất từ trên xuống dưới (Newest-first)
   const sortedPriceAdjustments = useMemo(() => {
@@ -345,15 +377,6 @@ export function UserBookingDetailPage({
                   Gửi khiếu nại
                 </Button>
               )}
-
-              {!isClosedBooking && (<Button
-                variant="outline"
-                onClick={() => setContractModalOpen(true)}
-                className="w-full sm:w-auto min-w-[170px] h-9 gap-1.5 justify-center border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 font-semibold rounded-[6px] text-xs transition-colors"
-              >
-                <FileText className="w-4 h-4 text-[#075985]" />
-                Xem hợp đồng dịch vụ
-              </Button>)}
 
               {canCancel && (
                 <Button
@@ -1171,6 +1194,11 @@ export function UserBookingDetailPage({
                                                 ) : (
                                                   <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
                                                 )}
+                                                {isMultiAgencyItinerary && (
+                                                  <div className="mt-1.5">
+                                                    {renderItineraryOwner(loc.createdByCompanyId || day.createdByCompanyId)}
+                                                  </div>
+                                                )}
                                               </div>
 
                                               <div className="flex items-center gap-2 flex-shrink-0">
@@ -1294,6 +1322,11 @@ export function UserBookingDetailPage({
                                                   <p className="text-[11px] text-gray-500">
                                                     Lúc đặt: {defaultMeal.originalName || defaultMeal.serviceName || "Nhà hàng địa phương"}
                                                   </p>
+                                                  {isMultiAgencyItinerary && (
+                                                    <div className="mt-1.5">
+                                                      {renderItineraryOwner(defaultMeal.createdByCompanyId || day.createdByCompanyId)}
+                                                    </div>
+                                                  )}
                                                 </div>
                                               </div>
 

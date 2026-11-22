@@ -1,4 +1,5 @@
 import { ChatButton } from "../chat/ChatPanel";
+import { WorkflowNotifications } from "@/app/components/common/WorkflowNotifications";
 import { useState } from "react";
 import {
   CalendarDays,
@@ -151,6 +152,7 @@ export function CustomerHeader({
           </nav>
         )}
         <div className="trip-header-actions">
+          {currentUser && <WorkflowNotifications role="user" onNavigate={onNavigate} />}
 
 
           {currentUser ? (

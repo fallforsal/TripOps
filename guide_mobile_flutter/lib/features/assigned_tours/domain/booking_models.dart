@@ -4,12 +4,14 @@ class BookingSummary {
   const BookingSummary({
     required this.id, required this.code, required this.name,
     required this.startDate, required this.status, required this.guestCount,
+    this.endDate,
     this.customerName, this.contactPhone, this.thumbnailUrl,
   });
   final int id;
   final String code;
   final String name;
   final DateTime startDate;
+  final DateTime? endDate;
   final String status;
   final int guestCount;
   final String? customerName;
@@ -24,6 +26,7 @@ class BookingSummary {
     code: (j['bookingCode'] ?? '').toString(),
     name: (j['tourName'] ?? 'Tour chưa có tên').toString(),
     startDate: parseCalendarDate(j['startDate']),
+    endDate: j['endDate'] == null ? null : parseCalendarDate(j['endDate']),
     status: (j['status'] ?? '').toString(),
     guestCount: (j['totalGuests'] as num?)?.toInt() ?? 0,
     customerName: j['customerName']?.toString(),
@@ -105,17 +108,19 @@ class TourIncident {
   const TourIncident({
     required this.title,
     required this.description,
-    required this.status,
     this.evidenceUrls = const [],
+    this.incidentType = '',
   });
+  final String incidentType;
   final String title;
   final String description;
-  final String status;
   final List<String> evidenceUrls;
+  // Compatibility with older consumers of the incident evidence DTO.
+  List<String> get photoUrls => evidenceUrls;
   factory TourIncident.fromJson(Map<String, dynamic> j) => TourIncident(
+    incidentType: (j['incidentType'] ?? '').toString(),
     title: (j['title'] ?? '').toString(),
     description: (j['description'] ?? '').toString(),
-    status: (j['status'] ?? '').toString(),
     evidenceUrls: (j['evidenceUrls'] as List? ?? const [])
         .map((e) => e.toString())
         .where((e) => e.isNotEmpty)
@@ -133,6 +138,7 @@ class BookingDetail {
     this.attendanceDate,
     this.canCheckInLocations = false,
     this.nextLocationCheckInId,
+    this.canStartTour = false,
   });
   final int id;
   final String code;
@@ -153,6 +159,8 @@ class BookingDetail {
   /// Backend-enforced departure date and itinerary state.
   final bool canCheckInLocations;
   final int? nextLocationCheckInId;
+  /// Only guides assigned to Day 1 may mark the tour as InProgress.
+  final bool canStartTour;
 
   factory BookingDetail.fromJson(Map<String, dynamic> j) => BookingDetail(
     id: (j['id'] as num).toInt(),
@@ -169,6 +177,7 @@ class BookingDetail {
     attendanceDate: j['attendanceDate'] == null ? null : parseCalendarDate(j['attendanceDate']),
     canCheckInLocations: j['canCheckInLocations'] == true,
     nextLocationCheckInId: (j['nextLocationCheckInId'] as num?)?.toInt(),
+    canStartTour: j['canStartTour'] == true,
     passengers: (j['participants'] as List<dynamic>? ?? [])
         .map((e) => Passenger.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     days: (j['snapshotDays'] as List<dynamic>? ?? [])

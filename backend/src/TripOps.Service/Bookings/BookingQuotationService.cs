@@ -532,6 +532,10 @@ public sealed partial class BookingQuotationService(TripOpsDbContext db, TripOps
         history.Add(JsonSerializer.SerializeToElement(new { actor, accept, at = DateTime.UtcNow }, Json));
         r.ResponseHistoryJson = JsonSerializer.Serialize(history, Json);
         await Revise(bookingId, "Agency xử lý counter offer", r, ct);
+        TripOps.Data.WorkflowNotice.Queue(db, r.ProviderId,
+            $"Agency đã {(accept ? "chấp nhận" : "từ chối")} báo giá cho dịch vụ {r.ServiceName} trong booking {b.BookingCode}.",
+            bookingId, actorId: actor);
+        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
     public async Task<object> ResponseHistory(string actor, int bookingId, int requestId, CancellationToken ct)

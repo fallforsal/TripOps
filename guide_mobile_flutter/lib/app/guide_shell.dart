@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
+import '../core/notifications/guide_push_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
@@ -11,6 +13,7 @@ import '../features/assigned_tours/presentation/tour_list_screen.dart';
 import '../features/auth/domain/guide_account.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/notifications/presentation/guide_notifications_screen.dart';
 import '../features/tour_history/presentation/history_screen.dart';
 
 class GuideShell extends StatefulWidget {
@@ -36,11 +39,71 @@ class _GuideShellState extends State<GuideShell> {
   String? error;
   List<BookingSummary> bookings = [];
   Map<int, DateTime> endDates = {};
+  int unreadNotices = 0;
+  Timer? _notificationsPoll;
+  StreamSubscription<int?>? _openedPush;
+  late final VoidCallback _inboxPushListener;
 
   @override
   void initState() {
     super.initState();
     refresh();
+    refreshNotices();
+    _notificationsPoll = Timer.periodic(
+      const Duration(seconds: 15), (_) => refreshNotices());
+    _inboxPushListener = () { if (mounted) unawaited(refreshNotices()); };
+    GuidePushService.inboxRevision.addListener(_inboxPushListener);
+    _openedPush = GuidePushService.openedBooking.listen((id) {
+      if (mounted) unawaited(openPushBooking(id));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pending = GuidePushService.takePendingBooking();
+      if (pending != null) unawaited(openPushBooking(pending));
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationsPoll?.cancel();
+    _openedPush?.cancel();
+    GuidePushService.inboxRevision.removeListener(_inboxPushListener);
+    super.dispose();
+  }
+
+  Future<void> refreshNotices() async {
+    try {
+      final raw = await widget.guides.api.getList('notifications');
+      final count = raw.where((n) => n is Map && n['readAt'] == null).length;
+      if (mounted) setState(() => unreadNotices = count);
+    } catch (_) {
+      // Bookings remain usable even when notification fetching fails.
+    }
+  }
+
+  Future<void> openPushBooking(int? bookingId) async {
+    if (!mounted) return;
+    if (bookingId == null) {
+      await openNotices();
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => TourDetailScreen(
+        id: bookingId,
+        guides: widget.guides,
+        onSessionExpired: widget.onSessionExpired,
+      ),
+    ));
+    if (mounted) await refreshNotices();
+  }
+
+  Future<void> openNotices() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GuideNotificationsScreen(
+        guides: widget.guides, onSessionExpired: widget.onSessionExpired,
+      ),
+    ));
+    if (mounted) await refreshNotices();
   }
 
   Future<void> refresh() async {
@@ -80,26 +143,65 @@ class _GuideShellState extends State<GuideShell> {
     const names = ['Trang chủ', 'Tour của tôi', 'Lịch sử', 'Cá nhân'];
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 67,
-        leadingWidth: 57,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 17, top: 9, bottom: 9),
-          child: Container(
-            decoration: BoxDecoration(
-              color: paleTeal, borderRadius: BorderRadius.circular(12),
+        toolbarHeight: 64,
+        automaticallyImplyLeading: false,
+        titleSpacing: 17,
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/TripOps_logo_transparent.png',
+              height: 25,
+              fit: BoxFit.contain,
+              semanticLabel: 'TripOps Logo',
             ),
-            child: const Icon(Icons.explore_outlined, color: teal, size: 23),
-          ),
+            const SizedBox(width: 10),
+            Container(width: 1, height: 22, color: line),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    names[tab],
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15, color: ink, fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const Text(
+                    'Tour Guide',
+                    style: TextStyle(
+                      fontSize: 10, color: muted, fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(names[tab], style: const TextStyle(
-            fontSize: 17, color: ink, fontWeight: FontWeight.w900,
-          )),
-          const Text('TripOps Guide', style: TextStyle(
-            fontSize: 10, color: muted, fontWeight: FontWeight.w600,
-          )),
-        ]),
         actions: [
+          Stack(
+            children: [
+              IconButton(
+                tooltip: 'Thông báo',
+                onPressed: openNotices,
+                icon: const Icon(Icons.notifications_none_rounded, color: ink, size: 23),
+              ),
+              if (unreadNotices > 0)
+                Positioned(
+                  right: 2, top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent, borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(unreadNotices > 99 ? '99+' : '$unreadNotices',
+                      style: const TextStyle(fontSize: 9, color: Colors.white)),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: 'Làm mới',
             onPressed: loading ? null : refresh,
@@ -143,7 +245,6 @@ class _GuideShellState extends State<GuideShell> {
                 inProgressEndDates: endDates,
                 onOpenTour: openTour,
                 onTourTab: () => setState(() => tab = 1),
-                onHistoryTab: () => setState(() => tab = 2),
               ),
               1 => TourListScreen(
                 bookings: bookings,

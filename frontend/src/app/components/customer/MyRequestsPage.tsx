@@ -291,16 +291,9 @@ export function MyRequestsPage({
                               : "border-slate-200 bg-white hover:border-slate-300"
                           }`}
                         >
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-xs font-bold ${active ? "text-[#075985]" : "text-slate-800"}`}>
-                              Phiên bản v{p.version}
-                            </span>
-                            {p.version === selected.sharedVersion && (
-                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                Đề xuất
-                              </span>
-                            )}
-                          </div>
+                          <span className={`text-xs font-bold ${active ? "text-[#075985]" : "text-slate-800"}`}>
+                            Phiên bản v{p.version}
+                          </span>
                           <span className="mt-0.5 text-xs font-semibold tabular-nums text-slate-600">
                             {money(p.price)} / khách
                           </span>

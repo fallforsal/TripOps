@@ -49,7 +49,7 @@ void main() {
 
     expect(tester.widget<FilledButton>(
       find.byKey(const ValueKey('confirm-checkin'))).onPressed, isNull);
-    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsNothing);
+    expect(find.byKey(const ValueKey('pick-checkin-gallery')), findsOneWidget);
     await tester.tap(find.text('Hủy'));
     await tester.pumpAndSettle();
     expect(find.text('Chưa gửi'), findsOneWidget);

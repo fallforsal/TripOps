@@ -177,6 +177,7 @@ export interface BookingDto {
   cancellation?: CancellationRequestDto | null;
   /** Hợp đồng lữ hành hiện hành (lập khi Agency duyệt). */
   contract?: ContractDto | null;
+  canStartTour?: boolean;
 }
 
 /** Hợp đồng hiện hành. requiredBeforePayment: phải ký (tải bản đã ký) thì mới thanh toán được. */
@@ -450,7 +451,6 @@ export interface IncidentDto {
   bookingId: number;
   title: string;
   description: string;
-  status: string;
   createdAt: string;
   reportedById?: string;
 }

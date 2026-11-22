@@ -620,7 +620,7 @@ export function AgencyCustomRequests({
                         </Button>
                       )}
 
-                      {(active(request) || request.status === "pending") && (
+                      {active(request) && (
                         <Button
                           size="sm"
                           variant="outline"

@@ -3310,6 +3310,28 @@ export function TourFormPage(props: TourFormPageProps) {
       ? calculatedFinalPrice
       : highestTierPrice;
 
+    const withPendingOwnedText = (
+      items: OwnedTextItem[],
+      pending: string,
+      prefix: string,
+    ): OwnedTextItem[] => {
+      const cleaned = items.filter((item) => item.text.trim().length > 0);
+      const draft = pending.trim();
+      if (!draft) return cleaned;
+      return [
+        ...cleaned,
+        {
+          id: `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          text: draft,
+          agencyId: company.id,
+        },
+      ];
+    };
+    const resolvedHighlights = withPendingOwnedText(highlightItems, newHighlight, "hl");
+    const resolvedInclusions = withPendingOwnedText(inclusionItems, newInclusion, "inc");
+    const resolvedExclusions = withPendingOwnedText(exclusionItems, newExclusion, "exc");
+    const resolvedRegulations = withPendingOwnedText(regulationItems, newRegulation, "pol");
+
     const tourData: Partial<Tour> = {
       planGuestCount: isCustom ? planGuestCount : undefined,
       tourCode: finalTourCode,
@@ -3336,17 +3358,17 @@ export function TourFormPage(props: TourFormPageProps) {
       minGuests,
       maxGuests,
       description,
-      highlights: highlights.filter((h) => h.trim().length > 0),
-      ownedHighlights: highlightItems.filter((h) => h.text.trim().length > 0),
+      highlights: resolvedHighlights.map((h) => h.text.trim()).filter(Boolean),
+      ownedHighlights: resolvedHighlights,
       hotels: preparedHotels,
       itinerary: preparedItinerary,
       priceTable: priceTable,
-      inclusions: inclusions.filter((i) => i.trim().length > 0),
-      exclusions: exclusions.filter((e) => e.trim().length > 0),
-      regulations: regulations.filter((r) => r.trim().length > 0),
-      ownedInclusions: inclusionItems.filter((i) => i.text.trim().length > 0),
-      ownedExclusions: exclusionItems.filter((e) => e.text.trim().length > 0),
-      ownedRegulations: regulationItems.filter((r) => r.text.trim().length > 0),
+      inclusions: resolvedInclusions.map((i) => i.text.trim()).filter(Boolean),
+      exclusions: resolvedExclusions.map((e) => e.text.trim()).filter(Boolean),
+      regulations: resolvedRegulations.map((r) => r.text.trim()).filter(Boolean),
+      ownedInclusions: resolvedInclusions,
+      ownedExclusions: resolvedExclusions,
+      ownedRegulations: resolvedRegulations,
       companyNote,
       rating: tour?.rating ?? 4.8,
       companyId: tour?.companyId || company.id,
@@ -7633,6 +7655,15 @@ export function TourFormPage(props: TourFormPageProps) {
                   onChange={(e) => setNewInclusion(e.target.value)}
                   placeholder="Thêm mục bao gồm..."
                   className="text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newInclusion.trim()) {
+                        setInclusionItems([...inclusionItems, { id: `inc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newInclusion.trim(), agencyId: company.id }]);
+                        setNewInclusion("");
+                      }
+                    }
+                  }}
                 />
                 <Button
                   type="button"
@@ -7693,6 +7724,15 @@ export function TourFormPage(props: TourFormPageProps) {
                   onChange={(e) => setNewExclusion(e.target.value)}
                   placeholder="Thêm mục không bao gồm..."
                   className="text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newExclusion.trim()) {
+                        setExclusionItems([...exclusionItems, { id: `exc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newExclusion.trim(), agencyId: company.id }]);
+                        setNewExclusion("");
+                      }
+                    }
+                  }}
                 />
                 <Button
                   type="button"
@@ -7753,6 +7793,15 @@ export function TourFormPage(props: TourFormPageProps) {
                   onChange={(e) => setNewRegulation(e.target.value)}
                   placeholder="Thêm điều kiện / lưu ý mới..."
                   className="text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newRegulation.trim()) {
+                        setRegulationItems([...regulationItems, { id: `pol-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text: newRegulation.trim(), agencyId: company.id }]);
+                        setNewRegulation("");
+                      }
+                    }
+                  }}
                 />
                 <Button
                   type="button"

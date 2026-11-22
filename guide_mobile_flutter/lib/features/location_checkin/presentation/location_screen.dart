@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
@@ -45,7 +46,8 @@ class _LocationScreenState extends State<LocationScreen> {
         !current.canCheckInLocations ||
         current.nextLocationCheckInId != stop.id ||
         stop.status == 'CheckedIn' ||
-        stop.status == 'CheckedOut') {
+        stop.status == 'CheckedOut' ||
+        stop.status == 'Skipped') {
       return;
     }
 
@@ -85,9 +87,58 @@ class _LocationScreenState extends State<LocationScreen> {
     }
   }
 
+  Future<void> skip(TourStop stop) async {
+    if (busy != null ||
+        !current.canCheckInLocations ||
+        current.nextLocationCheckInId != stop.id ||
+        stop.status == 'CheckedIn' ||
+        stop.status == 'CheckedOut' ||
+        stop.status == 'Skipped') {
+      return;
+    }
+
+    final submission = await showDialog<CheckinSubmission>(
+      context: context,
+      builder: (_) => CheckinPhotoDialog(stopName: stop.name, isSkip: true),
+    );
+    if (submission == null || !mounted) return;
+
+    setState(() {
+      busy = stop.id;
+      error = null;
+    });
+    try {
+      final note = submission.note.isEmpty ? null : submission.note;
+      final updated = await widget.guides.checkInWithImages(
+        current.id,
+        stop.id,
+        note,
+        submission.images,
+        status: 'Skipped',
+      );
+      if (!mounted) return;
+      setState(() => current = updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã ghi nhận bỏ qua điểm dừng.')),
+      );
+    } catch (e) {
+      if (e is ApiFailure && e.statusCode == 409) {
+        try {
+          final updated = await widget.guides.detail(current.id);
+          if (mounted) setState(() => current = updated);
+        } catch (_) {
+          // Preserve the original validation error.
+        }
+      }
+      if (mounted) setState(() => error = readableError(e));
+    } finally {
+      if (mounted) setState(() => busy = null);
+    }
+  }
+
   Future<void> checkout(TourStop stop) async {
     if (busy != null || !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') return;
+        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') { return; }
     final submission = await showDialog<CheckinSubmission>(
       context: context,
       builder: (_) => CheckinPhotoDialog(stopName: stop.name, isCheckout: true),
@@ -126,10 +177,94 @@ class _LocationScreenState extends State<LocationScreen> {
     if (mounted) await refresh();
   }
 
+  Widget _buildProofSection({
+    required String title,
+    required List<String> urls,
+    required String? note,
+    required String notePrefix,
+  }) {
+    final trimmedNote = note?.trim() ?? '';
+    final hasNote = trimmedNote.isNotEmpty;
+    if (urls.isEmpty && !hasNote) return const SizedBox.shrink();
+
+    Widget noteBox() => Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        '$notePrefix: $trimmedNote',
+        style: const TextStyle(fontSize: 12, color: ink),
+      ),
+    );
+
+    Widget photoThumb(String url) => ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: FutureBuilder<Uint8List>(
+        future: photoDownloads.putIfAbsent(url, () => widget.guides.imageBytes(url)),
+        builder: (context, snapshot) => snapshot.hasData
+            ? Image.memory(snapshot.data!, width: 64, height: 64, fit: BoxFit.cover)
+            : Container(
+                width: 64,
+                height: 64,
+                color: paleTeal,
+                child: Icon(
+                  snapshot.hasError
+                      ? Icons.broken_image_outlined
+                      : Icons.hourglass_bottom_outlined,
+                  color: muted,
+                ),
+              ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        space(8),
+        if (urls.isNotEmpty) ...[
+          Text(title, style: const TextStyle(
+            fontSize: 11, color: ink, fontWeight: FontWeight.w700,
+          )),
+          space(6),
+        ],
+        if (urls.isNotEmpty && hasNote)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 140),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [for (final url in urls) photoThumb(url)],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: noteBox()),
+            ],
+          )
+        else if (urls.isNotEmpty)
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [for (final url in urls) photoThumb(url)],
+          )
+        else
+          noteBox(),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stops = current.days.expand((d) => d.stops).toList();
-    final checked = stops.where((s) => s.status == 'CheckedOut').length;
+    final checked = stops
+        .where((s) => s.status == 'CheckedOut' || s.status == 'Skipped')
+        .length;
     final nextId = current.nextLocationCheckInId;
     final enabledByDate = current.canCheckInLocations;
 
@@ -159,7 +294,7 @@ class _LocationScreenState extends State<LocationScreen> {
             const SizedBox(width: 9),
             Expanded(child: GuideMetric(
               icon: Icons.check_circle_outline, value: '$checked',
-              label: 'Đã check-out',
+              label: 'Đã hoàn thành',
             )),
             const SizedBox(width: 9),
             Expanded(child: GuideMetric(
@@ -170,15 +305,15 @@ class _LocationScreenState extends State<LocationScreen> {
               tint: const Color(0xFFFFF3DF),
             )),
           ]),
-          space(15),
-          GuideInfoBanner(
-            icon: enabledByDate ? Icons.route_outlined : Icons.lock_clock_outlined,
-            warning: !enabledByDate,
-            message: enabledByDate
-                ? 'Chụp ảnh trực tiếp khi check-in và check-out. Chỉ sau '
-                  'check-out điểm hiện tại mới mở điểm tiếp theo; không cần GPS.'
-                : 'Chưa đến ngày khởi hành hoặc tour không còn cho phép check-in.',
-          ),
+          if (!enabledByDate) ...[
+            space(15),
+            GuideInfoBanner(
+              icon: Icons.lock_clock_outlined,
+              warning: true,
+              message:
+                  'Chưa đến ngày khởi hành chặng được giao (${vnDate(current.startDate)}) hoặc tour không còn cho phép check-in.',
+            ),
+          ],
           if (error != null) ...[
             space(10),
             GuideInfoBanner(
@@ -220,21 +355,23 @@ class _LocationScreenState extends State<LocationScreen> {
                   final skipped = stop.status == 'Skipped';
                   final checkedIn = stop.status == 'CheckedIn';
                   final checkedOut = stop.status == 'CheckedOut';
-                  final isNext = nextId == stop.id && !checkedOut;
+                  final isNext = nextId == stop.id && !checkedOut && !skipped;
                   final canCheck = enabledByDate && isNext &&
+                      !checkedIn && busy == null;
+                  final canSkip = enabledByDate && isNext &&
                       !checkedIn && busy == null;
                   final canCheckout = enabledByDate && isNext && checkedIn && busy == null;
                   final blockedReason = checkedOut
                       ? 'Đã hoàn thành check-out'
-                      : checkedIn
-                          ? 'Đang ở điểm này · cần check-out'
-                          : skipped
-                              ? 'Điểm bỏ qua trước đây cần check-in lại'
+                      : skipped
+                          ? 'Đã bỏ qua điểm này'
+                          : checkedIn
+                              ? 'Đang ở điểm này · cần check-out'
                               : !enabledByDate
-                                  ? 'Chưa đến ngày khởi hành'
+                                  ? 'Chưa đến ngày khởi hành chặng (${vnDate(current.startDate)})'
                                   : !isNext
                                       ? 'Cần check-out điểm trước đó'
-                                      : 'Sẵn sàng check-in';
+                                      : 'Sẵn sàng check-in hoặc bỏ qua';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(child: Padding(
@@ -246,7 +383,7 @@ class _LocationScreenState extends State<LocationScreen> {
                             Container(
                               height: 39, width: 39,
                               decoration: BoxDecoration(
-                                color: checkedIn
+                                color: checkedIn || checkedOut
                                     ? paleTeal
                                     : skipped
                                         ? const Color(0xFFFFECEC)
@@ -254,13 +391,13 @@ class _LocationScreenState extends State<LocationScreen> {
                                 borderRadius: BorderRadius.circular(11),
                               ),
                               child: Icon(
-                                checkedIn
+                                checkedIn || checkedOut
                                     ? Icons.check_circle_outline
                                     : skipped
                                         ? Icons.block_outlined
                                         : Icons.location_on_outlined,
                                 size: 21,
-                                color: checkedIn
+                                color: checkedIn || checkedOut
                                     ? teal
                                     : skipped
                                         ? const Color(0xFFC05F5F)
@@ -294,112 +431,95 @@ class _LocationScreenState extends State<LocationScreen> {
                                       ? const Color(0xFFC05F5F)
                                       : muted,
                             ),
+                            if (checkedOut || skipped) ...[
+                              const SizedBox(width: 4),
+                              IconButton(
+                                key: ValueKey('incident-${stop.id}'),
+                                tooltip: 'Báo cáo sự cố',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                                onPressed: reportIncident,
+                                icon: const Icon(
+                                  Icons.report_problem_outlined,
+                                  size: 20,
+                                  color: Color(0xFFB78330),
+                                ),
+                              ),
+                            ],
                           ]),
-                          space(10),
+                          space(8),
                           Text(blockedReason, style: const TextStyle(
                             fontSize: 11, color: muted,
                           )),
-                          if (stop.checkinNote != null && stop.checkinNote!.trim().isNotEmpty) ...[
-                            space(8),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Text(
-                                'Ghi chú HDV: ${stop.checkinNote!.trim()}',
-                                style: const TextStyle(fontSize: 12, color: ink),
-                              ),
-                            ),
-                          ],
-                          if (stop.photoUrls.isNotEmpty) ...[
-                            space(8),
-                            const Text('Ảnh check-in đã gửi',
-                              style: TextStyle(fontSize: 11,
-                                color: ink, fontWeight: FontWeight.w700)),
-                            space(6),
-                            Wrap(spacing: 7, runSpacing: 7, children: [
-                              for (final url in stop.photoUrls)
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: FutureBuilder<Uint8List>(
-                                    future: photoDownloads.putIfAbsent(url,
-                                        () => widget.guides.imageBytes(url)),
-                                    builder: (context, snapshot) =>
-                                        snapshot.hasData
-                                            ? Image.memory(snapshot.data!,
-                                                width: 69, height: 69,
-                                                fit: BoxFit.cover)
-                                            : Container(
-                                                width: 69, height: 69,
-                                                color: paleTeal,
-                                                child: Icon(
-                                                  snapshot.hasError
-                                                      ? Icons.broken_image_outlined
-                                                      : Icons.hourglass_bottom_outlined,
-                                                  color: muted),
-                                              ),
-                                  ),
-                                ),
-                            ]),
-                          ],
-                          if (stop.checkoutPhotoUrls.isNotEmpty) ...[
-                            space(8),
-                            const Text('Ảnh check-out đã gửi', style: TextStyle(
-                              fontSize: 11, color: ink, fontWeight: FontWeight.w700)),
-                            Wrap(spacing: 7, runSpacing: 7, children: [
-                              for (final url in stop.checkoutPhotoUrls)
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: FutureBuilder<Uint8List>(
-                                    future: photoDownloads.putIfAbsent(url,
-                                        () => widget.guides.imageBytes(url)),
-                                    builder: (context, snapshot) => snapshot.hasData
-                                        ? Image.memory(snapshot.data!, width: 69, height: 69, fit: BoxFit.cover)
-                                        : Container(width: 69, height: 69, color: paleTeal,
-                                            child: Icon(snapshot.hasError
-                                                ? Icons.broken_image_outlined
-                                                : Icons.hourglass_bottom_outlined, color: muted)),
-                                  ),
-                                ),
-                            ]),
-                          ],
-                          if (stop.checkoutNote?.trim().isNotEmpty == true) ...[
-                            space(8),
-                            Text('Ghi chú check-out: ${stop.checkoutNote!}'),
-                          ],
+                          _buildProofSection(
+                            title: skipped ? 'Ảnh bỏ qua đã gửi' : 'Ảnh check-in đã gửi',
+                            urls: stop.photoUrls,
+                            note: stop.checkinNote,
+                            notePrefix: skipped ? 'Lý do bỏ qua' : 'Ghi chú check-in',
+                          ),
+                          _buildProofSection(
+                            title: 'Ảnh check-out đã gửi',
+                            urls: stop.checkoutPhotoUrls,
+                            note: stop.checkoutNote,
+                            notePrefix: 'Ghi chú check-out',
+                          ),
                           if (busy == stop.id) ...[
                             space(9),
                             const LinearProgressIndicator(),
                           ],
-                          space(10),
-                          Row(children: [
-                            Expanded(
-                              child: FilledButton.icon(
-                                key: ValueKey('checkin-${stop.id}'),
-                                onPressed: canCheck ? () => check(stop) : null,
-                                icon: const Icon(Icons.check_circle_outline, size: 17),
-                                label: const Text('Check-in điểm đến'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              key: ValueKey('checkout-${stop.id}'),
-                              onPressed: canCheckout ? () => checkout(stop) : null,
-                              icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                              label: const Text('Check-out'),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              key: ValueKey('incident-${stop.id}'),
-                              tooltip: 'Báo cáo sự cố',
-                              onPressed: reportIncident,
-                              icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFB78330)),
-                            ),
-                          ]),
+                          if (!checkedOut && !skipped) ...[
+                            space(10),
+                            if (!checkedIn)
+                              Row(children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    key: ValueKey('checkin-${stop.id}'),
+                                    onPressed: canCheck ? () => check(stop) : null,
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    ),
+                                    icon: const Icon(Icons.check_circle_outline, size: 17),
+                                    label: const Text('Check-in điểm đến'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  key: ValueKey('skip-${stop.id}'),
+                                  onPressed: canSkip ? () => skip(stop) : null,
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  ),
+                                  icon: const Icon(Icons.skip_next_rounded, size: 18),
+                                  label: const Text('Bỏ qua'),
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  key: ValueKey('incident-${stop.id}'),
+                                  tooltip: 'Báo cáo sự cố',
+                                  onPressed: reportIncident,
+                                  icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFB78330)),
+                                ),
+                              ])
+                            else
+                              Row(children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    key: ValueKey('checkout-${stop.id}'),
+                                    onPressed: canCheckout ? () => checkout(stop) : null,
+                                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                                    label: const Text('Check-out'),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  key: ValueKey('incident-${stop.id}'),
+                                  tooltip: 'Báo cáo sự cố',
+                                  onPressed: reportIncident,
+                                  icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFB78330)),
+                                ),
+                              ]),
+                          ],
                         ],
                       ),
                     )),

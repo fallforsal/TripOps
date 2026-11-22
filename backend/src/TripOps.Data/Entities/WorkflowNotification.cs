@@ -8,4 +8,10 @@ public class WorkflowNotification : BaseEntity<int>
     public int? BookingId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReadAt { get; set; }
+
+    // Durable post-commit SignalR/FCM delivery. Existing rows are backfilled
+    // by migration, preventing old notifications from becoming surprise pushes.
+    public DateTime? DispatchedAt { get; set; }
+    public DateTime? DispatchClaimedUntil { get; set; }
+    public int DispatchAttempts { get; set; }
 }

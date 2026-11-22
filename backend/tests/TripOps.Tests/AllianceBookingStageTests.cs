@@ -154,4 +154,128 @@ public sealed partial class TourFlowTests
         Assert.Equal(allocated,current.BookingAgencies!.Select(a=>(a.AgencyId,a.FinalAmount)).ToArray());
         Assert.Equal(payments,current.PaymentSchedule!.Select(p=>(p.Id,p.Amount,p.BeneficiaryAgencyId)).ToArray());
     }
+
+    [Fact]
+    public async Task Alliance_agencies_can_view_all_itinerary_guides_and_checkin_photos_readonly()
+    {
+        await using var app=new App();await app.Initialize();
+        using var customer=await app.Login("customer");using var lead=await app.Login("agency");using var partner=await app.Login("other");
+        var request=await DesignRequest(customer);await Receive(lead,request.Id);var root=$"/api/v1/agency/tour-design-requests/{request.Id}";
+        var configuration=Complete();
+        configuration.Timelines![0]=configuration.Timelines[0] with {
+            Accommodations=configuration.Timelines[0].Accommodations!.Select(h=>h.IsDefault?h with {ServiceId=102}:h).ToArray(),
+            Meals=configuration.Timelines[0].Meals!.Select(m=>m.IsDefault?m with {ServiceId=103}:m).ToArray()
+        };
+        await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(null,configuration with {DurationDays=3,DurationNights=2,Timelines=[..configuration.Timelines!,new(3,"Final")]},true)));
+        await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other","Second stage")));
+        Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept"))).StatusCode);
+        var work=await Read<TourDto>(await partner.GetAsync(root+"/working-tour"));
+        var days=work.Configuration.Timelines!;
+        var pricing=work.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers.Select(t=>t with {PricePerGuest=t.MinAge==12?600000:300000}).ToArray();
+        days[1]=days[1] with {Activities=[new("Partner visit",Id:"partner-visit",AgencyId:"other")],Accommodations=[new("Partner hotel","Second destination",ServiceId:102,Id:"partner-hotel",AgencyId:"other")],Meals=[new("dinner","Partner meal",ServiceId:103,Id:"partner-meal",AgencyId:"other")]};
+        var modified=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Revision,days,pricing)));
+        var final=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(modified.Revision,modified.Configuration with {PricingTiers=modified.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers},true)));
+        var shared=await Share(lead,request.Id,final);
+        var input=DesignBooking(shared) with {StartDate=DateTime.UtcNow.Date,Participants=[new("Adult",null,new DateTime(1990,1,1),null,null,null),new("Child",null,new DateTime(2018,1,1),null,null,null)]};
+        var created=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",input),HttpStatusCode.Created);
+        var approved=await Read<BookingDto>(await lead.PostAsJsonAsync($"/api/v1/agency/bookings/{created.Id}/decision",new BookingDecisionRequest("approve",null)));
+        var baseUrl=$"/api/v1/agency/bookings/{created.Id}";
+        await app.Inspect(async db=>{
+            var hasher=new PasswordHasher<User>();
+            var ga=new User {Id="guidea",Name="Guide A",Email="guidea@example.test",AgencyId="agency",Role=UserRole.TourGuide,Status=UserStatus.Active};ga.PasswordHash=hasher.HashPassword(ga,"TourTest123!");
+            var gb=new User {Id="guideb",Name="Guide B",Email="guideb@example.test",AgencyId="other",Role=UserRole.TourGuide,Status=UserStatus.Active};gb.PasswordHash=hasher.HashPassword(gb,"TourTest123!");
+            db.Users.AddRange(ga,gb);await db.SaveChangesAsync();
+        });
+        var leadStop=approved.SnapshotDays!.SelectMany(d=>d.Locations).First(l=>l.AgencyId=="agency");
+        var partnerStop=approved.SnapshotDays!.SelectMany(d=>d.Locations).First(l=>l.AgencyId=="other" && l.Name=="Partner visit");
+        Assert.Equal(HttpStatusCode.OK,(await lead.PutAsJsonAsync(baseUrl+"/guide-routing",new {locations=new[]{new {locationId=leadStop.Id,guideIds=new[]{"guidea"}}}})).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await partner.PutAsJsonAsync(baseUrl+"/guide-routing",new {locations=new[]{new {locationId=partnerStop.Id,guideIds=new[]{"guideb"}}}})).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await partner.PutAsJsonAsync(baseUrl+"/guide-routing",new {locations=new[]{new {locationId=leadStop.Id,guideIds=new[]{"guideb"}}}})).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await partner.DeleteAsync($"/api/v1/bookings/{created.Id}/guide-assignments/guidea")).StatusCode);
+        var partnerView=await Read<BookingDto>(await partner.GetAsync(baseUrl));
+        Assert.True(partnerView.IsPartnerView);
+        Assert.Contains(partnerView.AssignedGuides,g=>g.GuideId=="guidea" && g.AgencyId=="agency");
+        Assert.Contains(partnerView.AssignedGuides,g=>g.GuideId=="guideb" && g.AgencyId=="other");
+        Assert.Contains(partnerView.AttractionCheckins!,c=>c.LocationId==leadStop.Id && c.GuideId=="guidea");
+        Assert.Contains(partnerView.AttractionCheckins!,c=>c.LocationId==partnerStop.Id && c.GuideId=="guideb");
+        var hostView=await Read<BookingDto>(await lead.GetAsync(baseUrl));
+        Assert.Contains(hostView.AssignedGuides,g=>g.GuideId=="guidea" && g.AgencyId=="agency");
+        Assert.Contains(hostView.AssignedGuides,g=>g.GuideId=="guideb" && g.AgencyId=="other");
+        Assert.Contains(hostView.AttractionCheckins!,c=>c.LocationId==leadStop.Id && c.GuideId=="guidea");
+        Assert.Contains(hostView.AttractionCheckins!,c=>c.LocationId==partnerStop.Id && c.GuideId=="guideb");
+    }
+
+    [Fact]
+    public async Task Partner_guide_sees_stage_dates_cannot_start_tour_and_can_attend_and_checkin_on_stage_day()
+    {
+        await using var app=new App();await app.Initialize();
+        using var customer=await app.Login("customer");using var lead=await app.Login("agency");using var partner=await app.Login("other");
+        var request=await DesignRequest(customer);await Receive(lead,request.Id);var root=$"/api/v1/agency/tour-design-requests/{request.Id}";
+        var configuration=Complete();
+        configuration.Timelines![0]=configuration.Timelines[0] with {
+            Accommodations=configuration.Timelines[0].Accommodations!.Select(h=>h.IsDefault?h with {ServiceId=102}:h).ToArray(),
+            Meals=configuration.Timelines[0].Meals!.Select(m=>m.IsDefault?m with {ServiceId=103}:m).ToArray()
+        };
+        await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(null,configuration with {DurationDays=3,DurationNights=2,Timelines=[..configuration.Timelines!,new(3,"Final")]},true)));
+        await Read<DesignCoHostDto[]>(await lead.PostAsJsonAsync(root+"/co-hosts",new InviteDesignCoHost("other","Second stage")));
+        Assert.Equal(HttpStatusCode.NoContent,(await partner.PostAsJsonAsync(root+"/co-hosts/decision",new DesignCoHostDecision("accept"))).StatusCode);
+        var work=await Read<TourDto>(await partner.GetAsync(root+"/working-tour"));
+        var days=work.Configuration.Timelines!;
+        var pricing=work.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers.Select(t=>t with {PricePerGuest=t.MinAge==12?600000:300000}).ToArray();
+        days[2]=days[2] with {Activities=[new("Partner day 3 visit",Id:"partner-d3",AgencyId:"other")],Accommodations=[new("Partner hotel","Second destination",ServiceId:102,Id:"partner-hotel",AgencyId:"other")],Meals=[]};
+        var modified=await Read<TourDto>(await partner.PutAsJsonAsync(root+"/segment",new DesignSegmentInput(work.Revision,days,pricing)));
+        var final=await Read<TourDto>(await lead.PutAsJsonAsync(root+"/tour",new SaveDesignTourInput(modified.Revision,modified.Configuration with {PricingTiers=modified.Configuration.AgencyPricing!.Single(a=>a.AgencyId=="agency").Tiers},true)));
+        var shared=await Share(lead,request.Id,final);
+        var today=TripOps.Service.Payments.PaymentRules.VietnamDate(DateTime.UtcNow);
+        var input=DesignBooking(shared) with {StartDate=today,Participants=[new("Adult",null,new DateTime(1990,1,1),null,null,null),new("Child",null,new DateTime(2018,1,1),null,null,null)]};
+        var created=await Read<BookingDto>(await customer.PostAsJsonAsync("/api/v1/bookings",input),HttpStatusCode.Created);
+        var approved=await Read<BookingDto>(await lead.PostAsJsonAsync($"/api/v1/agency/bookings/{created.Id}/decision",new BookingDecisionRequest("approve",null)));
+        var baseUrl=$"/api/v1/agency/bookings/{created.Id}";
+        await app.Inspect(async db=>{
+            var hasher=new PasswordHasher<User>();
+            var ga=new User {Id="guidea",Name="Guide A",Email="guidea@example.test",AgencyId="agency",Role=UserRole.TourGuide,Status=UserStatus.Active};ga.PasswordHash=hasher.HashPassword(ga,"TourTest123!");
+            var gb=new User {Id="guideb",Name="Guide B",Email="guideb@example.test",AgencyId="other",Role=UserRole.TourGuide,Status=UserStatus.Active};gb.PasswordHash=hasher.HashPassword(gb,"TourTest123!");
+            db.Users.AddRange(ga,gb);await db.SaveChangesAsync();
+        });
+        var leadStop=approved.SnapshotDays!.SelectMany(d=>d.Locations).First(l=>l.AgencyId=="agency");
+        var partnerStop=approved.SnapshotDays!.SelectMany(d=>d.Locations).Single(l=>l.AgencyId=="other" && l.Name=="Partner day 3 visit");
+        Assert.Equal(HttpStatusCode.OK,(await lead.PutAsJsonAsync(baseUrl+"/guide-routing",new {locations=new[]{new {locationId=leadStop.Id,guideIds=new[]{"guidea"}}}})).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await partner.PutAsJsonAsync(baseUrl+"/guide-routing",new {locations=new[]{new {locationId=partnerStop.Id,guideIds=new[]{"guideb"}}}})).StatusCode);
+
+        using var guideLead=await app.Login("guidea");
+        using var guidePartner=await app.Login("guideb");
+        var leadList=(await Read<BookingPage<BookingListItem>>(await guideLead.GetAsync("/api/v1/guide/bookings"))).Items.Single(b=>b.Id==created.Id);
+        Assert.Equal(today,leadList.StartDate.Date);
+        var partnerList=(await Read<BookingPage<BookingListItem>>(await guidePartner.GetAsync("/api/v1/guide/bookings"))).Items.Single(b=>b.Id==created.Id);
+        Assert.Equal(today.AddDays(2),partnerList.StartDate.Date);
+        Assert.Equal(today.AddDays(2),partnerList.EndDate!.Value.Date);
+
+        var partnerDetailDay1=await Read<BookingDto>(await guidePartner.GetAsync($"/api/v1/guide/bookings/{created.Id}"));
+        Assert.False(partnerDetailDay1.CanStartTour);
+        Assert.False(partnerDetailDay1.CanCheckInLocations);
+        Assert.False(partnerDetailDay1.CanRecordAttendance);
+        Assert.Equal(today.AddDays(2),partnerDetailDay1.StartDate.Date);
+        Assert.Equal(today.AddDays(2),partnerDetailDay1.EndDate.Date);
+        Assert.Equal("other",Assert.Single(partnerDetailDay1.SnapshotDays!).Locations.Single().AgencyId);
+        Assert.Equal(HttpStatusCode.Forbidden,(await guidePartner.PostAsync($"/api/v1/guide/bookings/{created.Id}/start",null)).StatusCode);
+
+        var leadDetailDay1=await Read<BookingDto>(await guideLead.GetAsync($"/api/v1/guide/bookings/{created.Id}"));
+        Assert.True(leadDetailDay1.CanStartTour);
+        Assert.Equal(HttpStatusCode.OK,(await guideLead.PostAsync($"/api/v1/guide/bookings/{created.Id}/start",null)).StatusCode);
+
+        // Advance to Partner's stage day (Day 3) with status still Confirmed (without Partner starting tour).
+        await app.Inspect(async db=>{
+            var b=await db.Bookings.SingleAsync(x=>x.Id==created.Id);
+            b.StartDate=today.AddDays(-2);
+            b.Status=BookingStatus.Confirmed;
+            await db.SaveChangesAsync();
+        });
+        var partnerDetailDay3=await Read<BookingDto>(await guidePartner.GetAsync($"/api/v1/guide/bookings/{created.Id}"));
+        Assert.False(partnerDetailDay3.CanStartTour);
+        Assert.True(partnerDetailDay3.CanRecordAttendance);
+        Assert.True(partnerDetailDay3.CanCheckInLocations);
+        Assert.Equal(partnerStop.Id,partnerDetailDay3.NextLocationCheckInId);
+        var ownPassenger=partnerDetailDay3.Participants.First();
+        Assert.Equal(HttpStatusCode.OK,(await guidePartner.PostAsJsonAsync($"/api/v1/guide/bookings/{created.Id}/attendance",new AttendanceCheckinRequest(ownPassenger.Id,"CheckedIn"))).StatusCode);
+    }
 }
