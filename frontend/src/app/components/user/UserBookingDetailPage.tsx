@@ -416,7 +416,7 @@ export function UserBookingDetailPage({
                     {isCoHosted ? (
                       <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
                         <Handshake className="w-3.5 h-3.5 text-amber-700" />
-                        Tour Liên Minh Đồng Dẫn ({coHosts.map((c) => c.companyName).join(" & ") || "2 Công Ty Phối Hợp"})
+                        Tour Liên Minh
                       </span>
                     ) : booking.tour.companyName ? (
                       <span className="text-xs font-medium text-gray-600 flex items-center gap-1">
@@ -458,10 +458,7 @@ export function UserBookingDetailPage({
                     </div>
                     <div>
                       <h3 className="text-base font-extrabold text-amber-950 flex items-center gap-2 flex-wrap">
-                        Tour Liên Minh Đồng Dẫn – 2 Công Ty Lữ Hành Cùng Phục Vụ
-                        <span className="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300">
-                          Đã thống nhất phân công
-                        </span>
+                        Tour Liên Minh – 2 Công Ty Lữ Hành Cùng Phục Vụ
                       </h3>
                       <p className="text-xs text-amber-800 mt-0.5">
                         Chuyến đi của quý khách được đồng phối hợp thực hiện bởi 2 công ty du lịch uy tín nhằm đảm bảo chất lượng phục vụ chuyên sâu và trải nghiệm địa phương xuất sắc nhất.
@@ -489,7 +486,7 @@ export function UserBookingDetailPage({
                                 : "bg-[#F97316]/15 text-purple-800 border border-[#F97316]/30"
                               }`}
                           >
-                            {isLead ? "🏢 Đơn vị Chủ trì (Điều hành chính)" : " Đối tác Địa phương (Chuyên tuyến)"}
+                            {isLead ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                           </span>
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             ✓ Đã xác nhận đồng hành
@@ -560,18 +557,6 @@ export function UserBookingDetailPage({
                   })}
                 </div>
 
-                {/* Escrow Guarantee Box */}
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-emerald-900">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-emerald-950">
-                      Bảo chứng an toàn thanh toán Ký quỹ (Escrow Protection):
-                    </span>
-                    <p className="text-emerald-800 mt-0.5 leading-relaxed text-[11px]">
-                      Quý khách thanh toán 100% vào tài khoản trung gian của Sàn Du Lịch. Cả 2 công ty liên minh đều chịu sự giám sát chất lượng từ Sàn. Sàn chỉ quyết toán tiền cho các công ty sau khi tour hoàn thành tốt đẹp theo đúng cam kết lịch trình.
-                    </p>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -1411,12 +1396,12 @@ export function UserBookingDetailPage({
               <BookingFinancialChangesPanel customer bookingId={booking.id} expectedTotal={booking.totalPrice} refreshKey={booking.totalPrice} />
               {/* FINANCE & PAYMENT STATUS CARD */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-teal-600" />
-                    Tài chính &amp; Thanh toán
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 whitespace-nowrap text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <CreditCard className="h-4 w-4 shrink-0 text-teal-600" />
+                    Thanh toán
                   </h3>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${pst.color}`}>
+                  <span className={`whitespace-nowrap text-[11px] px-2 py-0.5 rounded-full font-bold border ${pst.color}`}>
                     {pst.label}
                   </span>
                 </div>
@@ -1480,31 +1465,6 @@ export function UserBookingDetailPage({
                       </div>
                     )}
 
-                    {/* Stage-by-Stage Cost Breakdown for Alliance Tours */}
-                    {booking.bookingAgencies && booking.bookingAgencies.length > 0 && (
-                      <div className="bg-amber-50/70 p-2.5 rounded-lg border border-amber-200 text-[11px] space-y-1.5 mt-2">
-                        <div className="flex justify-between items-center font-bold text-amber-950">
-                          <span className="flex items-center gap-1">
-                            <Handshake className="w-3.5 h-3.5 text-amber-700" />
-                            Phân bổ chi phí theo chặng công ty:
-                          </span>
-                        </div>
-                        <div className="space-y-1 divide-y divide-amber-200/50">
-                          {booking.bookingAgencies.map((agency) => (
-                            <div key={agency.id} className="pt-1 first:pt-0 flex justify-between items-center">
-                              <div>
-                                <span className="font-semibold text-gray-800 block">{agency.agencyName}</span>
-                                <span className="text-[10px] text-gray-500">
-                                  {agency.isHost ? "Đơn vị chủ trì" : "Đối tác địa phương"}
-                                  {agency.quoteConfirmed ? " • ✓ Đã chốt chi phí" : " • ⏳ Đang rà soát"}
-                                </span>
-                              </div>
-                              <span className="font-bold text-[#075985]">{formatVND(agency.finalAmount)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Progress breakdown */}
@@ -1859,7 +1819,7 @@ export function UserBookingDetailPage({
                   : booking.companyName || booking.tour.companyName || "CÔNG TY DU LỊCH"}
               </p>
               <p className="text-xs text-gray-500">
-                {isCoHosted ? "Liên minh Doanh nghiệp Lữ hành & Đối tác Chuyên tuyến" : "Giấy phép kinh doanh lữ hành"}
+                {isCoHosted ? "Liên minh doanh nghiệp lữ hành" : "Giấy phép kinh doanh lữ hành"}
               </p>
               <p className="text-base font-bold mt-2 text-blue-800">HỢP ĐỒNG DỊCH VỤ LỮ HÀNH</p>
               <p className="text-[11px] text-gray-400">Số: {contractNo} – Ngày lập: {today}</p>

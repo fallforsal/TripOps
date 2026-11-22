@@ -2527,7 +2527,7 @@ export function TourDetailPage({
                               : "bg-[#F97316]/15 text-purple-800"
                           }`}
                         >
-                          {ch.role === "lead" ? "Đơn vị Chủ trì" : "Đối tác Bản địa"}
+                          {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-600">
@@ -2537,12 +2537,6 @@ export function TourDetailPage({
                   ))}
                 </div>
 
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2 text-emerald-900 text-xs">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span>
-                    <strong>Bảo chứng thanh toán Ký quỹ (Escrow):</strong> 100% tiền tour được bảo lưu an toàn tại Tài khoản ký quỹ của Sàn cho tới khi quý khách hoàn thành hành trình.
-                  </span>
-                </div>
               </div>
             )}
 

@@ -1649,7 +1649,7 @@ export function AgencyBookingDetailPage({
                   </div>
                   <div>
                     <h2 className="text-base font-extrabold text-amber-950 flex items-center gap-2 flex-wrap">
-                      {isCurrentCompanyLead ? `Tour Liên Minh Hợp Tác (${agenciesList.length} Công Ty)` : "Chặng phụ trách của bạn"}
+                      {isCurrentCompanyLead ? `Tour Liên Minh (${agenciesList.length} công ty)` : "Chặng phụ trách của bạn"}
                       <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
                         Phân bổ theo chặng
                       </span>
@@ -1725,11 +1725,11 @@ export function AgencyBookingDetailPage({
                       <div className="text-xs text-gray-600 space-y-2 pt-1 border-t border-gray-100">
                         {isLead ? (
                           <p className="text-[11px] text-blue-900 bg-[#E0F2FE]/60 p-2.5 rounded-xl border border-[#CBD5E1]/80 leading-relaxed">
-                            🏢 <strong>Vai trò Đơn vị Chủ trì:</strong> Chịu trách nhiệm pháp lý hợp đồng, xe đưa đón, duyệt đơn booking và phát hành các đợt thanh toán cho khách hàng.
+                            <strong>Vai trò Đơn vị chủ trì:</strong> Chịu trách nhiệm pháp lý hợp đồng, xe đưa đón, duyệt đơn booking và phát hành các đợt thanh toán cho khách hàng.
                           </p>
                         ) : (
                           <p className="text-[11px] text-purple-900 bg-[#F97316]/15/60 p-2.5 rounded-xl border border-[#F97316]/30/80 leading-relaxed">
-                            <strong>Vai trò Đối tác Chuyên tuyến:</strong> Phụ trách dịch vụ, lộ trình và hướng dẫn viên của chặng mình. Danh sách khách do Agency chủ trì cập nhật.
+                            <strong>Vai trò Đối tác địa phương:</strong> Phụ trách dịch vụ, lộ trình và hướng dẫn viên của chặng mình. Danh sách khách do Agency chủ trì cập nhật.
                           </p>
                         )}
 
@@ -1787,7 +1787,7 @@ export function AgencyBookingDetailPage({
                 <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="font-bold text-emerald-950">
-                    Bảo chứng thanh toán Ký quỹ (Escrow) &amp; Quyết toán độc lập:
+                    Quyết toán cho từng Agency:
                   </p>
                   <p className="text-emerald-800 leading-relaxed text-[11px]">
                     {isCurrentCompanyLead ? `Khách thanh toán theo lịch của booking. Sàn đối soát và quyết toán cho từng Agency sau khi tour kết thúc.` : "Sàn đối soát phần doanh thu và phụ thu thuộc công ty bạn trước khi quyết toán."}
