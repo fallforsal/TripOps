@@ -347,7 +347,7 @@ export function AdminSettlementManagement() {
                             </li>
                           )}
                           {s.autoBlockers
-                            .filter((b) => !b.startsWith("Chưa tới ngày"))
+                            .filter((b) => !b.startsWith("Chưa tới ngày") && !b.startsWith("Tour hoàn thành trước khi có quyết toán tự động"))
                             .map((b) => (
                               <li key={b} className="flex gap-1">
                                 <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" /> {b}
