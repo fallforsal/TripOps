@@ -44,22 +44,25 @@ public sealed class FcmPushGateway(
     {
         if (!Enabled) return true;
         var uri = $"https://fcm.googleapis.com/v1/projects/{Uri.EscapeDataString(_projectId)}/messages:send";
+        var content = NotificationPushContent.Build(notification);
         var payload = new
         {
             message = new
             {
                 // Flutter Messaging 17 registers a Firebase Installation ID (FID).
                 fid = device.Token,
-                // Avoid showing potentially sensitive incident/customer details
-                // on the lock screen; authenticated inbox displays full content.
-                notification = new { title = "TripOps", body = "Bạn có thông báo mới. Mở ứng dụng để xem chi tiết." },
+                notification = new { title = content.Title, body = content.Body },
                 data = new Dictionary<string, string>
                 {
                     ["notificationId"] = notification.Id.ToString(),
                     ["bookingId"] = notification.BookingId?.ToString() ?? "",
                     ["requestId"] = notification.RequestId?.ToString() ?? ""
                 },
-                android = new { priority = "high" }
+                android = new
+                {
+                    priority = "high",
+                    notification = new { icon = "ic_stat_tripops", color = "#096B69" }
+                }
             }
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, uri)
