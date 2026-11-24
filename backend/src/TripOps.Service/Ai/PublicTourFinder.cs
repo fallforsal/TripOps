@@ -10,6 +10,15 @@ namespace TripOps.Service.Ai;
 public sealed record TourSearchCriteria(string? Text, decimal? MaxPrice, int? Guests, int? MaxDays, int Limit = 5);
 
 /// <summary>
+/// Kết quả tìm tour. <see cref="Places"/>: địa danh khách hỏi (rỗng nếu không nhắc địa danh cụ thể).
+/// <see cref="Nearby"/> = true: không có tour đúng địa danh, các tour trả về thuộc tỉnh giáp ranh (<see cref="NearbyPlaces"/>).
+/// </summary>
+public sealed record TourSearchResult(IReadOnlyList<Tour> Tours, IReadOnlyList<string> Places, bool Nearby, IReadOnlyList<string> NearbyPlaces)
+{
+    public static TourSearchResult Plain(IReadOnlyList<Tour> tours) => new(tours, [], false, []);
+}
+
+/// <summary>
 /// Tìm tour CÔNG KHAI cho chatbot khách vãng lai. Chỉ đọc tour đang mở bán của Agency đã được duyệt
 /// (cùng điều kiện với trang "Khám phá tour"), không đụng tới booking hay dữ liệu cá nhân.
 /// So khớp không dấu nên "da lat", "Đà Lạt", "dalat" đều tìm được.
@@ -28,7 +37,13 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         "duoc", "khong", "kg", "ko", "dang", "con", "cho", "doan", "gia", "dinh", "nhom", "ban", "be", "vui", "dep", "hot", "tot"
     };
 
-    public async Task<IReadOnlyList<Tour>> Search(TourSearchCriteria criteria, CancellationToken ct)
+    public async Task<IReadOnlyList<Tour>> Search(TourSearchCriteria criteria, CancellationToken ct) => (await Find(criteria, ct)).Tours;
+
+    /// <summary>
+    /// Tìm tour. Khách nhắc địa danh cụ thể (vd "Hà Giang") thì chỉ trả tour đi đúng địa danh đó; không có thì trả tour ở
+    /// tỉnh giáp ranh (Nearby = true); vẫn không có thì trả rỗng, không lấy tour ở nơi xa cho đủ số lượng.
+    /// </summary>
+    public async Task<TourSearchResult> Find(TourSearchCriteria criteria, CancellationToken ct)
     {
         var catalogue = await tours.PublicCatalogue(CatalogueSize, ct);
         IEnumerable<Tour> rows = catalogue;
@@ -38,7 +53,7 @@ public sealed partial class PublicTourFinder(TourRepository tours)
         var limit = Math.Clamp(criteria.Limit, 1, 8);
 
         var query = GuestAssistantKnowledge.Fold(criteria.Text);
-        if (query.Length == 0) return rows.Take(limit).ToList();
+        if (query.Length == 0) return TourSearchResult.Plain(rows.Take(limit).ToList());
 
         // "tour miền Tây", "Tây Bắc 4 ngày": lọc theo tỉnh/địa danh thuộc vùng, phần còn lại của câu dùng để xếp hạng.
         if (VietnamRegions.Detect(query) is { } region)
@@ -46,18 +61,35 @@ public sealed partial class PublicTourFinder(TourRepository tours)
             var inRegion = rows.Where(t => VietnamRegions.Matches(t.Provinces.Select(p => p.ProvinceCode),
                 $"{GuestAssistantKnowledge.Fold(t.Name)} {GuestAssistantKnowledge.Fold(t.Destination)}", region.Codes)).ToList();
             var (restWords, restBigrams) = Terms(region.Remainder);
-            return inRegion.Select(t => (Tour: t, Score: Score(t, restWords, restBigrams)))
+            return TourSearchResult.Plain(inRegion.Select(t => (Tour: t, Score: Score(t, restWords, restBigrams)))
+                .OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList());
+        }
+
+        // "tour Hà Giang", "Sapa 3 ngày": lọc theo tỉnh của địa danh, không so khớp từng chữ ("giang" không được khớp An Giang).
+        if (VietnamRegions.DetectPlaces(query) is { } places)
+        {
+            var (restWords, restBigrams) = Terms(places.Remainder);
+            List<Tour> Ranked(IEnumerable<Tour> list) => list.Select(t => (Tour: t, Score: Score(t, restWords, restBigrams)))
                 .OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList();
+            var exact = rows.Where(t => t.Provinces.Any(p => places.Codes.Contains(p.ProvinceCode.Trim().ToUpperInvariant()) && VietnamRegions.IsSpecific(p.ProvinceCode))
+                || VietnamRegions.Matches(t.Provinces.Select(p => p.ProvinceCode), TourText(t), places.Codes)).ToList();
+            if (exact.Count > 0) return new TourSearchResult(Ranked(exact), places.Names, false, []);
+            var nearbyCodes = VietnamRegions.NearbyOf(places.Codes);
+            var nearby = rows.Where(t => VietnamRegions.Touches(t.Provinces.Select(p => p.ProvinceCode), TourText(t), nearbyCodes, places.Codes)).ToList();
+            var nearbyNames = nearbyCodes.Select(VietnamRegions.Name).OrderBy(n => n, StringComparer.Create(new CultureInfo("vi-VN"), false)).ToList();
+            return new TourSearchResult(Ranked(nearby), places.Names, nearby.Count > 0, nearbyNames);
         }
 
         var (words, bigrams) = Terms(query);
-        if (words.Length == 0 && bigrams.Length == 0) return rows.Take(limit).ToList();
+        if (words.Length == 0 && bigrams.Length == 0) return TourSearchResult.Plain(rows.Take(limit).ToList());
 
         var scored = rows.Select(t => (Tour: t, Score: Score(t, words, bigrams))).Where(x => x.Score > 0).ToList();
-        if (scored.Count == 0) return [];
+        if (scored.Count == 0) return TourSearchResult.Plain([]);
         var best = scored.Max(x => x.Score);
-        return scored.Where(x => x.Score * 2 >= best).OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList();
+        return TourSearchResult.Plain(scored.Where(x => x.Score * 2 >= best).OrderByDescending(x => x.Score).Take(limit).Select(x => x.Tour).ToList());
     }
+
+    private static string TourText(Tour t) => $"{GuestAssistantKnowledge.Fold(t.Name)} {GuestAssistantKnowledge.Fold(t.Destination)}";
 
     private static (string[] Words, string[] Bigrams) Terms(string query)
     {

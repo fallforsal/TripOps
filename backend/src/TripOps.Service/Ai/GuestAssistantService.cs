@@ -49,11 +49,13 @@ public sealed partial class GuestAssistantService(
           Không thêm công thức tính tiền hoàn, trường hợp chỉ đặt cọc hay trường hợp Agency hủy, trừ khi khách hỏi đúng các ý đó.
         - Chỉ dùng tiếng Việt chuẩn, rõ nghĩa; không chèn từ lạ, ký tự hay chữ không liên quan.
         - Trả lời xong là dừng: KHÔNG thêm đoạn "Lưu ý", câu tóm tắt cách tính tổng giá, hay câu mời bấm vào tên/thẻ tour để xem thêm, đặt tour.
-        - Không có tour đúng điểm đến/yêu cầu khách hỏi (search_tours trả count = 0, hoặc các tour trả về ở điểm đến khác):
-          nói ngắn gọn, nhẹ nhàng rằng hiện TripOps chưa có tour đó (vd "Hiện TripOps chưa có tour Nha Trang 3 ngày 2 đêm đang mở bán."),
-          rồi gợi ý dùng "Thiết kế tour theo yêu cầu" để công ty lữ hành lên lịch trình riêng. Nếu có tour ở điểm đến khác thì chỉ mời
-          "Bạn có thể tham khảo thêm một số tour đang mở bán bên dưới" và nêu tên vài tour. KHÔNG kể lại kết quả tìm kiếm trả về những vùng/tỉnh nào,
-          KHÔNG nói "kết quả tìm kiếm chỉ trả về…", không nhắc tới công cụ hay cách tìm.
+        - Không có tour đúng điểm đến/yêu cầu khách hỏi (search_tours trả count = 0, hoặc match = "nearby"):
+          nói ngắn gọn, nhẹ nhàng rằng hiện TripOps chưa có tour đó (vd "Hiện TripOps chưa có tour Hà Giang đang mở bán."),
+          rồi gợi ý dùng "Thiết kế tour theo yêu cầu" để công ty lữ hành lên lịch trình riêng.
+          Nếu match = "nearby" thì giới thiệu các tour đó là tour ở vùng lân cận (nêu đúng tỉnh lân cận trong nearby_places),
+          nói rõ các tour này KHÔNG đi tới điểm đến khách hỏi. Nếu count = 0 thì KHÔNG tìm thêm tour ở nơi khác để gợi ý cho đủ,
+          KHÔNG gọi search_tours với điểm đến khác hay để trống; chỉ báo chưa có và gợi ý "Thiết kế tour theo yêu cầu".
+          KHÔNG nhắc tới công cụ hay cách tìm.
         - Chỉ trả lời về du lịch và TripOps. Từ chối lịch sự các yêu cầu ngoài phạm vi (làm bài tập, viết code, chính trị...).
         - Không giới thiệu nền tảng hay công ty du lịch bên ngoài TripOps.
         - Đơn đặt tour của khách: bạn CHỈ biết qua phần "ĐƠN CỦA KHÁCH" (chỉ có khi khách đã đăng nhập tài khoản khách hàng).
@@ -237,6 +239,7 @@ public sealed partial class GuestAssistantService(
         var cards = new List<AiTourCard>();
         var detailed = new List<int>();
         List<int>? searched = null;
+        var askedPlaces = new HashSet<string>(StringComparer.Ordinal);
         AiChatResponse Done(string reply)
         {
             IReadOnlyList<AiTourCard> shown = cards;
@@ -262,7 +265,7 @@ public sealed partial class GuestAssistantService(
             foreach (var call in turn.ToolCalls)
             {
                 logger.LogInformation("Chatbot khách gọi công cụ {Tool}", call.Name);
-                var (result, found, isSearch) = await RunTool(call, allowed, ct);
+                var (result, found, isSearch) = await RunTool(call, allowed, askedPlaces, ct);
                 if (isSearch) searched = found.Select(c => c.Id).ToList();
                 else detailed.AddRange(found.Select(c => c.Id));
                 if (found.Count > 0) { cards.Clear(); cards.AddRange(found); }
@@ -300,7 +303,7 @@ public sealed partial class GuestAssistantService(
 
     /// <summary>Thực thi công cụ CHỈ ĐỌC. Model chỉ "xin" gọi; backend quyết định chạy gì và trả dữ liệu gì.</summary>
     /// <param name="allowed">Khi hỏi tiếp về danh sách cũ: chỉ cho xem chi tiết các tour này, không cho tìm mới.</param>
-    private async Task<(string Result, List<AiTourCard> Cards, bool IsSearch)> RunTool(OpenAiToolCall call, IReadOnlySet<int>? allowed, CancellationToken ct)
+    private async Task<(string Result, List<AiTourCard> Cards, bool IsSearch)> RunTool(OpenAiToolCall call, IReadOnlySet<int>? allowed, HashSet<string> askedPlaces, CancellationToken ct)
     {
         JsonObject args;
         try { args = JsonNode.Parse(call.Arguments) as JsonObject ?? new JsonObject(); }
@@ -317,8 +320,26 @@ public sealed partial class GuestAssistantService(
                     Number(args, "max_price_vnd") is { } price and > 0 ? price : null,
                     Number(args, "guests") is { } guests and > 0 and < 1000 ? (int)guests : null,
                     Number(args, "max_days") is { } days and > 0 and < 60 ? (int)days : null);
-                var found = await finder.Search(criteria, ct);
-                var payload = new { count = found.Count, tours = found.Select(PublicTourFinder.Summary) };
+                // Đã hỏi một địa danh trong lượt này: không cho tìm tour ở nơi xa (hoặc tìm trống) để gợi ý bù.
+                var folded = GuestAssistantKnowledge.Fold(criteria.Text);
+                var places = folded.Length > 0 ? VietnamRegions.DetectPlaces(folded) : null;
+                if (askedPlaces.Count > 0 && VietnamRegions.Detect(folded) is null
+                    && (places is null || !places.Value.Codes.All(c => askedPlaces.Contains(c) || VietnamRegions.NearbyOf(askedPlaces).Contains(c))))
+                    return ("""{"error":"Khách hỏi về một điểm đến cụ thể. Không tìm hay gợi ý tour ở nơi khác; trả lời theo kết quả tìm kiếm trước đó."}""", new List<AiTourCard>(), false);
+                if (places is { } asked) askedPlaces.UnionWith(asked.Codes);
+                var result = await finder.Find(criteria, ct);
+                var found = result.Tours;
+                var payload = new
+                {
+                    count = found.Count,
+                    match = result.Places.Count == 0 ? "keyword" : result.Nearby ? "nearby" : found.Count > 0 ? "exact" : "none",
+                    asked_places = result.Places,
+                    nearby_places = result.Nearby ? result.NearbyPlaces : [],
+                    note = result.Nearby
+                        ? $"Chưa có tour đi {string.Join(", ", result.Places)}. Các tour dưới đây ở vùng lân cận, KHÔNG đi {string.Join(", ", result.Places)}."
+                        : result.Places.Count > 0 && found.Count == 0 ? $"Chưa có tour đi {string.Join(", ", result.Places)} hay vùng lân cận." : null,
+                    tours = found.Select(PublicTourFinder.Summary),
+                };
                 return (JsonSerializer.Serialize(payload, Json), found.Select(PublicTourFinder.Card).ToList(), true);
             }
             case "get_tour_details":
@@ -361,13 +382,17 @@ public sealed partial class GuestAssistantService(
         if (!PublicTourFinder.HasKeywords(question) && !Has(folded, "tour", "goi y", "du lich")) policyOnly = true;
         // Đã có danh sách cũ mà câu này không phải tìm mới (cảm ơn, hỏi chính sách...) thì không tự tìm danh sách khác.
         if (intent == GuestIntent.Other) policyOnly = true;
-        IReadOnlyList<TripOps.Data.Entities.Tour> tours = policyOnly ? Array.Empty<TripOps.Data.Entities.Tour>() : await finder.Search(new TourSearchCriteria(question, MaxPrice(folded), Guests(folded), MaxDays(folded)), ct);
-        var cards = tours.Select(PublicTourFinder.Card).ToList();
+        var result = policyOnly ? TourSearchResult.Plain([]) : await finder.Find(new TourSearchCriteria(question, MaxPrice(folded), Guests(folded), MaxDays(folded)), ct);
+        var cards = result.Tours.Select(PublicTourFinder.Card).ToList();
 
         var text = new StringBuilder();
+        if (result.Places.Count > 0 && cards.Count == 0)
+            text.AppendLine($"Hiện TripOps chưa có tour {string.Join(", ", result.Places)} đang mở bán. Bạn có thể dùng \"Thiết kế tour theo yêu cầu\" để công ty lữ hành lên lịch trình riêng nhé.");
         if (cards.Count > 0)
         {
-            text.AppendLine($"Mình tìm được {cards.Count} tour phù hợp trên TripOps:");
+            text.AppendLine(result.Nearby
+                ? $"Hiện TripOps chưa có tour {string.Join(", ", result.Places)}. Bạn có thể tham khảo {cards.Count} tour ở vùng lân cận ({string.Join(", ", result.NearbyPlaces)}), các tour này không đi {string.Join(", ", result.Places)}:"
+                : $"Mình tìm được {cards.Count} tour phù hợp trên TripOps:");
             foreach (var c in cards)
                 text.AppendLine($"- {c.Name}{(c.DurationDays is { } d ? $" ({d} ngày)" : string.Empty)}{(c.Price is { } p ? $", từ {Money(p)}/khách" : string.Empty)}");
         }

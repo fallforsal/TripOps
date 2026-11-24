@@ -174,6 +174,159 @@ public static class VietnamRegions
             .Any(place => text.Contains($" {place} ", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Tỉnh (địa giới cũ) giáp ranh, dùng để gợi ý "tour gần" khi chưa có tour đúng điểm đến.
+    /// Chỉ ghi tỉnh có chung đường biên; bảng được làm đối xứng khi nạp.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> Borders = new(StringComparer.Ordinal)
+    {
+        ["HA_GIANG"] = ["LAO_CAI", "YEN_BAI", "TUYEN_QUANG", "CAO_BANG"],
+        ["LAO_CAI"] = ["HA_GIANG", "YEN_BAI", "LAI_CHAU"],
+        ["YEN_BAI"] = ["LAO_CAI", "HA_GIANG", "TUYEN_QUANG", "PHU_THO", "SON_LA", "LAI_CHAU"],
+        ["LAI_CHAU"] = ["LAO_CAI", "YEN_BAI", "SON_LA", "DIEN_BIEN"],
+        ["DIEN_BIEN"] = ["LAI_CHAU", "SON_LA"],
+        ["SON_LA"] = ["DIEN_BIEN", "LAI_CHAU", "YEN_BAI", "PHU_THO", "HOA_BINH", "THANH_HOA"],
+        ["HOA_BINH"] = ["SON_LA", "PHU_THO", "HA_NOI", "HA_NAM", "NINH_BINH", "THANH_HOA"],
+        ["CAO_BANG"] = ["HA_GIANG", "BAC_KAN", "LANG_SON", "TUYEN_QUANG"],
+        ["BAC_KAN"] = ["CAO_BANG", "LANG_SON", "THAI_NGUYEN", "TUYEN_QUANG"],
+        ["TUYEN_QUANG"] = ["HA_GIANG", "CAO_BANG", "BAC_KAN", "THAI_NGUYEN", "VINH_PHUC", "PHU_THO", "YEN_BAI"],
+        ["LANG_SON"] = ["CAO_BANG", "BAC_KAN", "THAI_NGUYEN", "BAC_GIANG", "QUANG_NINH"],
+        ["THAI_NGUYEN"] = ["BAC_KAN", "TUYEN_QUANG", "LANG_SON", "BAC_GIANG", "VINH_PHUC", "HA_NOI"],
+        ["PHU_THO"] = ["YEN_BAI", "TUYEN_QUANG", "VINH_PHUC", "HA_NOI", "HOA_BINH", "SON_LA"],
+        ["VINH_PHUC"] = ["TUYEN_QUANG", "THAI_NGUYEN", "PHU_THO", "HA_NOI"],
+        ["BAC_GIANG"] = ["LANG_SON", "THAI_NGUYEN", "QUANG_NINH", "HAI_DUONG", "BAC_NINH", "HA_NOI"],
+        ["BAC_NINH"] = ["BAC_GIANG", "HA_NOI", "HUNG_YEN", "HAI_DUONG"],
+        ["QUANG_NINH"] = ["LANG_SON", "BAC_GIANG", "HAI_DUONG", "HAI_PHONG"],
+        ["HA_NOI"] = ["VINH_PHUC", "THAI_NGUYEN", "BAC_GIANG", "BAC_NINH", "HUNG_YEN", "HA_NAM", "HOA_BINH", "PHU_THO"],
+        ["HAI_PHONG"] = ["QUANG_NINH", "HAI_DUONG", "THAI_BINH"],
+        ["HAI_DUONG"] = ["BAC_GIANG", "QUANG_NINH", "HAI_PHONG", "THAI_BINH", "HUNG_YEN", "BAC_NINH"],
+        ["HUNG_YEN"] = ["HA_NOI", "BAC_NINH", "HAI_DUONG", "THAI_BINH", "HA_NAM"],
+        ["THAI_BINH"] = ["HAI_PHONG", "HAI_DUONG", "HUNG_YEN", "HA_NAM", "NAM_DINH"],
+        ["HA_NAM"] = ["HA_NOI", "HUNG_YEN", "THAI_BINH", "NAM_DINH", "NINH_BINH", "HOA_BINH"],
+        ["NAM_DINH"] = ["THAI_BINH", "HA_NAM", "NINH_BINH"],
+        ["NINH_BINH"] = ["HA_NAM", "NAM_DINH", "HOA_BINH", "THANH_HOA"],
+        ["THANH_HOA"] = ["NINH_BINH", "HOA_BINH", "SON_LA", "NGHE_AN"],
+        ["NGHE_AN"] = ["THANH_HOA", "HA_TINH"],
+        ["HA_TINH"] = ["NGHE_AN", "QUANG_BINH"],
+        ["QUANG_BINH"] = ["HA_TINH", "QUANG_TRI"],
+        ["QUANG_TRI"] = ["QUANG_BINH", "THUA_THIEN_HUE"],
+        ["THUA_THIEN_HUE"] = ["QUANG_TRI", "DA_NANG", "QUANG_NAM"],
+        ["DA_NANG"] = ["THUA_THIEN_HUE", "QUANG_NAM"],
+        ["QUANG_NAM"] = ["DA_NANG", "THUA_THIEN_HUE", "QUANG_NGAI", "KON_TUM"],
+        ["QUANG_NGAI"] = ["QUANG_NAM", "KON_TUM", "BINH_DINH"],
+        ["BINH_DINH"] = ["QUANG_NGAI", "GIA_LAI", "PHU_YEN"],
+        ["PHU_YEN"] = ["BINH_DINH", "GIA_LAI", "DAK_LAK", "KHANH_HOA"],
+        ["KHANH_HOA"] = ["PHU_YEN", "DAK_LAK", "LAM_DONG", "NINH_THUAN"],
+        ["NINH_THUAN"] = ["KHANH_HOA", "LAM_DONG", "BINH_THUAN"],
+        ["BINH_THUAN"] = ["NINH_THUAN", "LAM_DONG", "DONG_NAI", "BA_RIA_VUNG_TAU"],
+        ["KON_TUM"] = ["QUANG_NAM", "QUANG_NGAI", "GIA_LAI"],
+        ["GIA_LAI"] = ["KON_TUM", "QUANG_NGAI", "BINH_DINH", "PHU_YEN", "DAK_LAK"],
+        ["DAK_LAK"] = ["GIA_LAI", "PHU_YEN", "KHANH_HOA", "LAM_DONG", "DAK_NONG"],
+        ["DAK_NONG"] = ["DAK_LAK", "LAM_DONG", "BINH_PHUOC"],
+        ["LAM_DONG"] = ["DAK_LAK", "DAK_NONG", "KHANH_HOA", "NINH_THUAN", "BINH_THUAN", "DONG_NAI"],
+        ["TP_HCM"] = ["BINH_DUONG", "DONG_NAI", "BA_RIA_VUNG_TAU", "LONG_AN", "TAY_NINH", "TIEN_GIANG"],
+        ["BA_RIA_VUNG_TAU"] = ["TP_HCM", "DONG_NAI", "BINH_THUAN"],
+        ["DONG_NAI"] = ["TP_HCM", "BINH_DUONG", "BINH_PHUOC", "LAM_DONG", "BINH_THUAN", "BA_RIA_VUNG_TAU"],
+        ["BINH_DUONG"] = ["TP_HCM", "DONG_NAI", "BINH_PHUOC", "TAY_NINH"],
+        ["BINH_PHUOC"] = ["BINH_DUONG", "DONG_NAI", "DAK_NONG", "TAY_NINH"],
+        ["TAY_NINH"] = ["TP_HCM", "BINH_DUONG", "BINH_PHUOC", "LONG_AN"],
+        ["LONG_AN"] = ["TP_HCM", "TAY_NINH", "TIEN_GIANG", "DONG_THAP"],
+        ["TIEN_GIANG"] = ["LONG_AN", "TP_HCM", "BEN_TRE", "VINH_LONG", "DONG_THAP"],
+        ["BEN_TRE"] = ["TIEN_GIANG", "VINH_LONG", "TRA_VINH"],
+        ["VINH_LONG"] = ["TIEN_GIANG", "BEN_TRE", "TRA_VINH", "CAN_THO", "DONG_THAP", "SOC_TRANG"],
+        ["TRA_VINH"] = ["BEN_TRE", "VINH_LONG", "SOC_TRANG"],
+        ["DONG_THAP"] = ["LONG_AN", "TIEN_GIANG", "VINH_LONG", "CAN_THO", "AN_GIANG"],
+        ["AN_GIANG"] = ["DONG_THAP", "CAN_THO", "KIEN_GIANG"],
+        ["KIEN_GIANG"] = ["AN_GIANG", "CAN_THO", "HAU_GIANG", "CA_MAU", "BAC_LIEU"],
+        ["CAN_THO"] = ["AN_GIANG", "DONG_THAP", "VINH_LONG", "HAU_GIANG", "KIEN_GIANG"],
+        ["HAU_GIANG"] = ["CAN_THO", "SOC_TRANG", "BAC_LIEU", "KIEN_GIANG", "VINH_LONG"],
+        ["SOC_TRANG"] = ["HAU_GIANG", "BAC_LIEU", "TRA_VINH", "VINH_LONG", "CAN_THO"],
+        ["BAC_LIEU"] = ["SOC_TRANG", "HAU_GIANG", "KIEN_GIANG", "CA_MAU"],
+        ["CA_MAU"] = ["BAC_LIEU", "KIEN_GIANG"],
+    };
+
+    private static readonly Dictionary<string, HashSet<string>> Neighbours = BuildNeighbours();
+
+    private static Dictionary<string, HashSet<string>> BuildNeighbours()
+    {
+        var map = Provinces.ToDictionary(p => p.Code, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        foreach (var (code, list) in Borders)
+            foreach (var other in list)
+            {
+                if (!map.ContainsKey(code) || !map.ContainsKey(other) || code == other) continue;
+                map[code].Add(other); map[other].Add(code);
+            }
+        return map;
+    }
+
+    // Tên địa danh quá chung, dễ khớp nhầm trong câu ("vinh" trong "vịnh"), không dùng để nhận tỉnh.
+    private static readonly HashSet<string> AmbiguousPlaces = new(StringComparer.Ordinal) { "vinh" };
+
+    /// <summary>Địa danh/tỉnh khách nhắc trong câu hỏi (cụm dài được xét trước, mỗi cụm chỉ tính một lần).</summary>
+    /// <param name="folded">Câu hỏi đã bỏ dấu, chữ thường.</param>
+    /// <returns>Mã tỉnh (địa giới cũ), tên địa danh như khách nhắc và phần câu còn lại; null nếu không nhắc địa danh nào.</returns>
+    public static (HashSet<string> Codes, IReadOnlyList<string> Names, string Remainder)? DetectPlaces(string folded)
+    {
+        var text = $" {folded} ";
+        var codes = new HashSet<string>(StringComparer.Ordinal);
+        var names = new List<string>();
+        foreach (var (code, place, original) in PlaceIndex)
+        {
+            if (!text.Contains($" {place} ", StringComparison.Ordinal)) continue;
+            text = text.Replace($" {place} ", " ", StringComparison.Ordinal);
+            codes.Add(code);
+            if (!names.Contains(original)) names.Add(original);
+        }
+        return codes.Count == 0 ? null : (codes, names, string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
+    }
+
+    /// <summary>Tỉnh giáp ranh của các tỉnh khách hỏi (không gồm chính các tỉnh đó).</summary>
+    public static HashSet<string> NearbyOf(IEnumerable<string> codes)
+    {
+        var asked = codes.ToHashSet(StringComparer.Ordinal);
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var code in asked)
+            if (Neighbours.TryGetValue(code, out var list)) result.UnionWith(list);
+        result.ExceptWith(asked);
+        return result;
+    }
+
+    /// <summary>Mã tỉnh chỉ một vùng địa lý: mã cũ trước sáp nhập, hoặc mã mới không gộp tỉnh nào ("LAM_DONG" mới gồm cả Bình Thuận nên không tính).</summary>
+    public static bool IsSpecific(string code)
+    {
+        var key = code.Trim().ToUpperInvariant();
+        return Aliases.ContainsKey(key) || Provinces.Count(p => Current(p.Code) == key) <= 1;
+    }
+
+    /// <summary>Tên hiển thị của tỉnh (địa giới cũ), ví dụ "LAO_CAI" → "Lào Cai".</summary>
+    public static string Name(string code) => Provinces.FirstOrDefault(p => p.Code == code)?.Places[0] ?? code;
+
+    /// <summary>
+    /// Tour ở vùng lân cận: mã tỉnh trên tour là mã cũ thuộc <paramref name="codes"/>, hoặc mã mới mà mọi tỉnh cũ gộp vào
+    /// đều nằm trong vùng lân cận hay chính nơi khách hỏi (<paramref name="asked"/>) — mã mới gộp cả tỉnh xa thì không đoán theo mã;
+    /// hoặc tên/điểm đến của tour nhắc tới tỉnh, địa danh lân cận.
+    /// </summary>
+    public static bool Touches(IEnumerable<string> tourProvinceCodes, string foldedTourText, HashSet<string> codes, HashSet<string> asked)
+    {
+        foreach (var raw in tourProvinceCodes)
+        {
+            var key = raw.Trim().ToUpperInvariant();
+            if (Aliases.ContainsKey(key)) { if (codes.Contains(key)) return true; continue; }
+            var members = Provinces.Where(p => Current(p.Code) == key).Select(p => p.Code).ToList();
+            if (members.Count > 0 && members.Any(codes.Contains) && members.All(m => codes.Contains(m) || asked.Contains(m))) return true;
+        }
+        var text = $" {foldedTourText} ";
+        return codes.Where(FoldedPlaces.ContainsKey).SelectMany(c => FoldedPlaces[c])
+            .Any(place => text.Contains($" {place} ", StringComparison.Ordinal));
+    }
+
+    private static readonly (string Code, string Place, string Original)[] PlaceIndex = Provinces
+        .SelectMany(p => p.Places.Select(original => (p.Code, Place: GuestAssistantKnowledge.Fold(original), Original: original)))
+        .Where(x => x.Place.Length >= 3 && !AmbiguousPlaces.Contains(x.Place))
+        .DistinctBy(x => x.Place)
+        .OrderByDescending(x => x.Place.Length)
+        .ToArray();
+
     private static readonly Dictionary<string, string[]> FoldedPlaces = Provinces.ToDictionary(p => p.Code,
         p => p.Places.Select(GuestAssistantKnowledge.Fold).Where(f => f.Length >= 3).Distinct().ToArray());
 
