@@ -1,12 +1,11 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { User } from "@/app/types";
 import { login } from "@/app/services/authService";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { TRIPOPS_LOGO } from "@/app/constants/logo";
 import { Button } from "@/app/components/ui/button";
 import { ForgotPasswordFlow } from "@/app/components/auth/ForgotPasswordFlow";
-import { QuickLoginAccounts } from "@/app/components/auth/QuickLoginAccounts";
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -25,7 +24,6 @@ export function LoginScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const loginButtonRef = useRef<HTMLButtonElement>(null);
 
   // Forgot password view state
   const [isForgotPw, setIsForgotPw] = useState(false);
@@ -143,7 +141,6 @@ export function LoginScreen({
               </div>
 
               <Button
-                ref={loginButtonRef}
                 type="submit"
                 disabled={isLoading}
                 className="w-full h-10 bg-[#075985] hover:bg-[#0C4A6E] text-white text-xs font-semibold rounded-[6px]"
@@ -165,15 +162,6 @@ export function LoginScreen({
               )}
             </form>
           )}
-
-          <QuickLoginAccounts email={email} disabled={isLoading} onSelect={account => {
-            setEmail(account.email);
-            setPassword(account.password);
-            setShowPassword(false);
-            setError("");
-            setIsForgotPw(false);
-            requestAnimationFrame(() => loginButtonRef.current?.focus());
-          }} />
         </div>
 
         {/* Back to Home Button */}
