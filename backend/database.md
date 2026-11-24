@@ -343,7 +343,6 @@ Table tour_design_requests {
   // 3. THÔNG TIN THIẾT KẾ TOUR
   destination varchar(255) [not null] // Điểm đến mong muốn (*)
   departure_province_code varchar(30) // Mã tỉnh/thành khách khởi hành (theo danh mục 34 tỉnh/thành)
-  departure_point varchar(255) // Điểm đón cụ thể (không bắt buộc, vd: sân bay Tân Sơn Nhất)
   departure_date date [not null] // Ngày khởi hành dự kiến
   return_date date // Ngày về
   number_of_participants int // Số người tham gia

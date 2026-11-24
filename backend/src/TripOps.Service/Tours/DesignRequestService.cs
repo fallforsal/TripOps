@@ -45,7 +45,6 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             ContactEmail = input.ContactEmail.Trim(), ContactPhone = input.ContactPhone.Trim(),
             Destination = input.Destination.Trim(), StartDate = input.DepartureDate.Date,
             DepartureProvinceCode = departureProvince?.Code,
-            DeparturePoint = string.IsNullOrWhiteSpace(input.DeparturePoint) ? null : input.DeparturePoint.Trim(),
             EndDate = input.ReturnDate.Date, NumberOfGuests = input.NumberOfPeople,
             BudgetPerPerson = input.BudgetPerPerson, HotelRatingRequirement = input.HotelStars,
             SpecialRequirements = input.AdditionalInfo, BusinessName = input.BusinessName,
@@ -186,7 +185,6 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, status, r.CreatedAt ?? DateTime.UnixEpoch,
             tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion, ShareAllVersions: shareAll,
             DepartureProvinceCode: r.DepartureProvinceCode,
-            DepartureProvinceName: VietnamProvinceCatalog.Find(r.DepartureProvinceCode)?.Name,
-            DeparturePoint: r.DeparturePoint);
+            DepartureProvinceName: VietnamProvinceCatalog.Find(r.DepartureProvinceCode)?.Name);
     }
 }

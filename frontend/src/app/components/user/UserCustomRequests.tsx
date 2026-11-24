@@ -464,7 +464,7 @@ export function UserCustomRequests({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                     <InfoRow label="Điểm đến" value={req.destinations} />
                     {req.departureProvinceName && (
-                      <InfoRow label="Khởi hành từ" value={req.departurePoint ? `${req.departureProvinceName} · ${req.departurePoint}` : req.departureProvinceName} />
+                      <InfoRow label="Khởi hành từ" value={req.departureProvinceName} />
                     )}
                     <InfoRow label="Ngày đi" value={formatDate(req.departureDate)} />
                     <InfoRow label="Ngày về" value={formatDate(req.returnDate)} />

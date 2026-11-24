@@ -1007,7 +1007,6 @@ export interface CustomTourRequest {
   destinations: string;
   departureProvinceCode?: string;
   departureProvinceName?: string;
-  departurePoint?: string;
   departureDate: string;
   returnDate: string;
   numberOfPeople: string;

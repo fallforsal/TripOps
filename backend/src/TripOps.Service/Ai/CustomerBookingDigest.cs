@@ -100,7 +100,7 @@ public sealed class CustomerBookingDigest(BookingService bookings, DesignRequest
             text.Append(i + 1).Append(". Yêu cầu #").Append(r.Id);
             if (!string.IsNullOrWhiteSpace(r.SharedTourName)) text.Append(" – phương án \"").Append(r.SharedTourName).Append('"');
             text.Append(", điểm đến ").Append(r.Destination)
-                .Append(r.DepartureProvinceName is { } from ? $", khởi hành từ {from}{(string.IsNullOrWhiteSpace(r.DeparturePoint) ? "" : $" ({r.DeparturePoint})")}" : "")
+                .Append(r.DepartureProvinceName is { } from ? $", khởi hành từ {from}" : "")
                 .Append(", ").Append(Vietnam(r.DepartureDate).ToString("dd/MM/yyyy", Vi))
                 .Append(r.ReturnDate is { } back ? " – " + Vietnam(back).ToString("dd/MM/yyyy", Vi) : "")
                 .Append(", ").Append(r.NumberOfPeople).Append(" khách")

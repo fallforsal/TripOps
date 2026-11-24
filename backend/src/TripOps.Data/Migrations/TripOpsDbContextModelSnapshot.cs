@@ -3480,11 +3480,6 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("destination");
 
-                    b.Property<string>("DeparturePoint")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("departure_point");
-
                     b.Property<string>("DepartureProvinceCode")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)")
