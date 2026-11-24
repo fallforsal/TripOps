@@ -49,7 +49,7 @@ public sealed class PasswordService(TripOpsDbContext db, EmailSender email, Paym
     public static readonly TimeSpan ResendAfter = TimeSpan.FromSeconds(60);
     public const int MaxSendsPerHour = 5;
     public const int MaxFailedAttempts = 5;
-    private const string GenericSent = "Nếu email này có tài khoản TripOps, mã xác nhận đã được gửi. Vui lòng kiểm tra hộp thư (cả mục Spam).";
+    private const string GenericSent = "Nếu email này có trên hệ thống, mã xác nhận đã được gửi. Vui lòng kiểm tra hộp thư (cả mục Spam).";
     private const string InvalidCode = "Mã xác nhận không đúng hoặc đã hết hạn.";
 
     private readonly PasswordHasher<User> hasher = new();
