@@ -694,59 +694,6 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.ThumbnailUrl).HasColumnName("thumbnail_url").HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
         });
-        modelBuilder.Entity<SubscriptionPlan>(entity =>
-        {
-            entity.ToTable("subscription_plans");
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.Name).HasColumnName("name").HasColumnType("nvarchar(100)").HasMaxLength(100).IsRequired();
-            entity.Property(e => e.Slug).HasColumnName("slug").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
-            entity.HasIndex(e => e.Slug).IsUnique();
-            entity.Property(e => e.Description).HasColumnName("description").HasColumnType("nvarchar(max)");
-            entity.Property(e => e.PriceMonthly).HasColumnName("price_monthly").HasColumnType("decimal(12, 2)").IsRequired();
-            entity.Property(e => e.PriceYearly).HasColumnName("price_yearly").HasColumnType("decimal(12, 2)");
-            entity.Property(e => e.IsPopular).HasColumnName("is_popular").HasColumnType("bit");
-            entity.Property(e => e.SortOrder).HasColumnName("sort_order").HasColumnType("int");
-            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(20)").HasMaxLength(20);
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
-        });
-        modelBuilder.Entity<AgencySubscription>(entity =>
-        {
-            entity.ToTable("agency_subscriptions");
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.AgencyId).HasColumnName("agency_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.SubscriptionPlanId).HasColumnName("plan_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.BillingCycle).HasColumnName("billing_cycle").HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
-            entity.Property(e => e.Price).HasColumnName("price").HasColumnType("decimal(12, 2)").IsRequired();
-            entity.Property(e => e.StartDate).HasColumnName("start_date").HasColumnType("date").IsRequired();
-            entity.Property(e => e.EndDate).HasColumnName("end_date").HasColumnType("date").IsRequired();
-            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
-            entity.Property(e => e.Status).HasConversion<string>();
-            entity.Property(e => e.AutoRenew).HasColumnName("auto_renew").HasColumnType("bit");
-            entity.Property(e => e.CancelledAt).HasColumnName("cancelled_at").HasColumnType("datetime2");
-            entity.Property(e => e.CancelReason).HasColumnName("cancel_reason").HasColumnType("nvarchar(max)");
-            entity.Property(e => e.LastPaymentDate).HasColumnName("last_payment_date").HasColumnType("datetime2");
-            entity.Property(e => e.NextPaymentDate).HasColumnName("next_payment_date").HasColumnType("datetime2");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime2");
-        });
-        modelBuilder.Entity<SubscriptionPaymentHistory>(entity =>
-        {
-            entity.ToTable("subscription_payment_history");
-            entity.Property(e => e.Id).HasColumnName("id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.AgencySubscriptionId).HasColumnName("subscription_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.CompanyId).HasColumnName("company_id").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
-            entity.Property(e => e.PlanId).HasColumnName("plan_id").HasColumnType("int").IsRequired();
-            entity.Property(e => e.Amount).HasColumnName("amount").HasColumnType("decimal(12, 2)").IsRequired();
-            entity.Property(e => e.PaymentMethod).HasColumnName("payment_method").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
-            entity.Property(e => e.TransactionCode).HasColumnName("transaction_code").HasColumnType("nvarchar(100)").HasMaxLength(100);
-            entity.Property(e => e.Status).HasColumnName("status").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
-            entity.Property(e => e.BillingPeriodStart).HasColumnName("billing_period_start").HasColumnType("date").IsRequired();
-            entity.Property(e => e.BillingPeriodEnd).HasColumnName("billing_period_end").HasColumnType("date").IsRequired();
-            entity.Property(e => e.PaymentDate).HasColumnName("paid_at").HasColumnType("datetime2");
-            entity.Property(e => e.AdminNote).HasColumnName("admin_note").HasColumnType("nvarchar(max)");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
-        });
         modelBuilder.Entity<BookingContract>(entity =>
         {
             entity.ToTable("booking_contracts", t =>
@@ -840,8 +787,6 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.CreatedBy).HasColumnName("created_by").HasColumnType("nvarchar(36)").HasMaxLength(36).IsRequired();
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("datetime2");
         });
-        modelBuilder.Entity<AgencySubscription>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<AgencySubscription>().HasOne(e => e.SubscriptionPlan).WithMany().HasForeignKey(e => e.SubscriptionPlanId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Booking>().HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Booking>().HasOne<TourDesignRequest>().WithMany().HasForeignKey(e => e.DesignRequestId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Booking>().HasOne(e => e.Tour).WithMany().HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.Restrict);
@@ -891,9 +836,6 @@ internal static class DatabaseDesignConfiguration
         modelBuilder.Entity<RefundRequest>().HasOne(e => e.Requester).WithMany().HasForeignKey(e => e.RequestedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<RefundRequest>().HasOne(e => e.Reviewer).WithMany().HasForeignKey(e => e.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Service>().HasOne(e => e.Provider).WithMany().HasForeignKey(e => e.ProviderId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<SubscriptionPaymentHistory>().HasOne(e => e.AgencySubscription).WithMany().HasForeignKey(e => e.AgencySubscriptionId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<SubscriptionPaymentHistory>().HasOne<User>().WithMany().HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<SubscriptionPaymentHistory>().HasOne<SubscriptionPlan>().WithMany().HasForeignKey(e => e.PlanId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<SystemBankAccount>().HasOne<User>().WithMany().HasForeignKey(e => e.UpdatedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<SystemCommissionConfig>().HasOne<User>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Tour>().HasOne(e => e.Agency).WithMany().HasForeignKey(e => e.AgencyId).OnDelete(DeleteBehavior.Restrict);

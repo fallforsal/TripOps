@@ -165,11 +165,3 @@ public enum RefundStatus
     Rejected,
     Completed
 }
-
-public enum SubscriptionStatus
-{
-    Active,
-    PastDue,
-    Cancelled,
-    Expired
-}
