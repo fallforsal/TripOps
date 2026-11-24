@@ -51,7 +51,6 @@ export function CustomTourRequestPage({
     contactPhone: currentUser?.phone ?? "",
     destinations: sourceTour?.destination || "",
     departureProvinceCode: "",
-    departurePoint: "",
     departureDate: TODAY,
     returnDate: TODAY,
     numberOfPeople: "",
@@ -169,7 +168,6 @@ export function CustomTourRequestPage({
         contactPhone: form.contactPhone.trim(),
         destinations: form.destinations.trim(),
         departureProvinceCode: form.departureProvinceCode,
-        departurePoint: form.departurePoint.trim() || undefined,
         departureDate: form.departureDate,
         returnDate: form.returnDate,
         numberOfPeople: form.numberOfPeople.trim(),
@@ -210,7 +208,7 @@ export function CustomTourRequestPage({
             <div className="flex justify-between gap-3">
               <span className="text-[#475569]">Khởi hành từ:</span>
               <strong className="text-right font-semibold">
-                {getProvinceName(form.departureProvinceCode)}{form.departurePoint.trim() ? ` · ${form.departurePoint.trim()}` : ""}
+                {getProvinceName(form.departureProvinceCode)}
               </strong>
             </div>
             <div className="flex justify-between">
@@ -298,23 +296,6 @@ export function CustomTourRequestPage({
                   disabled={submitting}
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <label htmlFor="departure-point" className="text-xs font-semibold text-[#0F172A]">
-                  Điểm đón cụ thể
-                </label>
-                <input
-                  id="departure-point"
-                  type="text"
-                  value={form.departurePoint}
-                  onChange={set("departurePoint")}
-                  maxLength={255}
-                  placeholder="VD: Sân bay Tân Sơn Nhất, văn phòng công ty tại Quận 1..."
-                  className="w-full h-10 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-[#0F172A]">
                   Ngày khởi hành dự kiến
