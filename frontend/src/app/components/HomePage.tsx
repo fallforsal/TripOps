@@ -712,7 +712,7 @@ export function HomePage({
                   <div className="w-10 h-10 rounded-[8px] bg-teal-50 text-[#0F766E] flex items-center justify-center">
                     <item.icon className="w-5 h-5" />
                   </div>
-                  <span className="text-2xl font-black text-slate-300 font-mono">
+                  <span className="text-2xl font-black text-slate-400 font-mono">
                     {item.step}
                   </span>
                 </div>
