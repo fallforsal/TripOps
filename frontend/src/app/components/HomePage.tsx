@@ -206,35 +206,34 @@ export function HomePage({
       >
         {/* Lớp nền (ảnh/video) tự cắt mép; khung tìm kiếm phía trên được phép nổi ra ngoài hero mà không đẩy bố cục */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Background Landscape Photo: Poster / Fallback when video fails or prefers-reduced-motion */}
-        <img
-          src={heroImage}
-          alt="Phong cảnh non nước Ninh Bình, Việt Nam"
-          loading="eager"
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-        />
-
-        {/* Scenic Flycam Video: Only loaded and mounted when prefers-reduced-motion is false */}
-        {!prefersReducedMotion && !videoError && (
-          <video
-            ref={videoRef}
-            src={`${import.meta.env.BASE_URL}videos/ninh-binh-hero.mp4`}
-            poster={heroImage}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            onLoadedData={() => setVideoLoaded(true)}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onError={() => setVideoError(true)}
-            className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-1000 ${
-              videoLoaded ? "opacity-100" : "opacity-0"
-            }`}
+          {/* Background Landscape Photo: Poster / Fallback when video fails or prefers-reduced-motion */}
+          <img
+            src={heroImage}
+            alt="Phong cảnh non nước Ninh Bình, Việt Nam"
+            loading="eager"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
           />
-        )}
+
+          {/* Scenic Flycam Video: Only loaded and mounted when prefers-reduced-motion is false */}
+          {!prefersReducedMotion && !videoError && (
+            <video
+              ref={videoRef}
+              src={`${import.meta.env.BASE_URL}videos/ninh-binh-hero.mp4`}
+              poster={heroImage}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onLoadedData={() => setVideoLoaded(true)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onError={() => setVideoError(true)}
+              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-1000 ${videoLoaded ? "opacity-100" : "opacity-0"
+                }`}
+            />
+          )}
 
         </div>
 
@@ -737,32 +736,7 @@ export function HomePage({
           className="max-w-[1300px] mx-auto px-6 sm:px-8 lg:px-12 pb-16 lg:pb-20"
           aria-labelledby="ai-title"
         >
-          <div className="rounded-[12px] bg-teal-50/80 border border-teal-200/80 p-6 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-[8px] bg-[#0F766E] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3
-                  id="ai-title"
-                  className="text-base sm:text-lg font-bold text-[#172523]"
-                >
-                  Chưa biết lựa chọn hành trình nào?
-                </h3>
-                <p className="text-xs sm:text-sm text-[#62706C] mt-0.5">
-                  Trò chuyện cùng trợ lý AI của TripOps để nhận gợi ý tour và dự toán chi phí phù hợp nhất cho đoàn trong 1 phút.
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={onOpenAIAdvisor}
-              className="border-[#0F766E] text-[#0F766E] hover:bg-[#0F766E] hover:text-white font-semibold text-xs h-10 px-5 rounded-[8px] shrink-0 transition-colors flex items-center gap-1.5 bg-white"
-            >
-              <span>Tìm tour cùng AI</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+
         </section>
       )}
     </div>
