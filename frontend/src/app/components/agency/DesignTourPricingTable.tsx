@@ -42,67 +42,65 @@ export function DesignTourPricingTable({ rows, onRowsChange, company, agencies, 
             : "Khung vé do Agency chủ trì thiết lập. Bạn chỉ nhập giá phần dịch vụ của công ty mình."}
         </p>
       </div>
-      {isLead && <Button type="button" size="sm" onClick={onAdd}><Plus className="mr-1 h-4 w-4"/>Thêm khung vé</Button>}
+      {isLead && <Button type="button" size="sm" variant="outline" onClick={onAdd}><Plus className="mr-1 h-4 w-4"/>Thêm khung vé</Button>}
     </div>
 
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-      <table className="w-full border-separate border-spacing-0 text-left text-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="w-full border-collapse text-left text-sm">
         <thead>
-          <tr>
-            <th scope="col" className="min-w-[220px] border-b border-slate-200 bg-slate-50 p-4 align-bottom">
-              <span className="font-semibold text-slate-700">Phân loại khách & độ tuổi</span>
-              <p className="mt-1 text-xs font-normal text-slate-500">{isLead ? "Chủ trì được thêm, sửa, xóa" : "Khung vé chung · Chỉ xem"}</p>
+          <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
+            <th scope="col" className="min-w-[280px] px-4 py-3 align-bottom font-medium">
+              <span className="block text-sm font-semibold text-slate-800">Khung vé & độ tuổi</span>
+              {isLead ? "Bạn thêm, sửa, xóa khung vé" : "Do Agency chủ trì thiết lập"}
             </th>
             {members.map(agency => {
               const own = agency.companyId === company.id;
-              return <th key={agency.companyId} scope="col" className={`min-w-[250px] max-w-[340px] border-b p-4 align-top ${own ? "border-x-2 border-t-2 border-violet-300 bg-violet-50/60" : "border-slate-200 bg-slate-50"}`}>
-                <span className={`mb-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${own ? "bg-violet-100 text-violet-800" : "bg-slate-200/70 text-slate-600"}`}>
-                  {own ? <Pencil className="h-3 w-3"/> : <LockKeyhole className="h-3 w-3"/>}
-                  {own ? "Phần của bạn · Được sửa" : "Đối tác · Chỉ xem"}
+              return <th key={agency.companyId} scope="col" className={`min-w-[220px] max-w-[320px] px-4 py-3 align-bottom font-medium ${own ? "bg-[#F0F9FF]" : ""}`}>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                  {own ? <Pencil className="h-3.5 w-3.5 text-[#075985]"/> : <LockKeyhole className="h-3.5 w-3.5 text-slate-400"/>}
+                  <span className="truncate">{agency.companyName}</span>
+                  {own && <span className="shrink-0 rounded-full bg-[#075985] px-2 py-0.5 text-[10px] font-semibold text-white">Bạn</span>}
                 </span>
-                <p className="font-semibold text-slate-900">{agency.companyName}{own ? " (Bạn)" : ""}</p>
-                <p className="mt-1 line-clamp-2 text-xs font-normal text-slate-500">{agency.assignedSegments || (agency.role === "lead" ? "Agency chủ trì" : "Agency liên minh")}</p>
+                <span className="mt-0.5 block line-clamp-1">{agency.assignedSegments || (agency.role === "lead" ? "Agency chủ trì" : "Agency liên minh")}{own ? "" : " · chỉ xem"}</span>
               </th>;
             })}
-            <th scope="col" className="min-w-[180px] border-b border-emerald-100 bg-emerald-50 p-4 text-right align-bottom">
-              <span className="font-semibold text-emerald-900">Đơn giá bán / khách</span>
-              <p className="mt-1 text-xs font-normal text-emerald-700">Tự động cộng giá các bên</p>
+            <th scope="col" className="min-w-[170px] px-4 py-3 text-right align-bottom font-medium">
+              <span className="block text-sm font-semibold text-slate-800">Giá bán / khách</span>
+              Tổng giá các bên
             </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
             const total = members.reduce((sum, agency) => sum + (agency.companyId === company.id ? row.price : partnerPrice(agency.companyId, row)?.pricePerGuest ?? 0), 0);
-            return <tr key={row.tierKey || index}>
-              <td className="border-b border-slate-100 bg-slate-50/40 p-4 align-top">
-                {isLead ? <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Input aria-label={`Tên khung vé ${index + 1}`} value={row.ageGroupLabel} onChange={e => update(index, { ageGroupLabel: e.target.value })} className="h-9 bg-white font-semibold" maxLength={100}/>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <span>Từ</span><Input aria-label={`Tuổi tối thiểu khung ${index + 1}`} type="number" min={0} max={150} value={row.minAge ?? ""} onChange={e => update(index, { minAge: e.target.value === "" ? undefined : Number(e.target.value) })} className="h-8 w-16 bg-white px-2"/>
-                      <span>đến</span><Input aria-label={`Tuổi tối đa khung ${index + 1}`} type="number" min={0} max={150} placeholder="∞" value={row.maxAge ?? ""} onChange={e => update(index, { maxAge: e.target.value === "" ? undefined : Number(e.target.value) })} className="h-8 w-16 bg-white px-2"/>
-                    </div>
+            return <tr key={row.tierKey || index} className="border-b border-slate-100 last:border-b-0">
+              <td className="px-4 py-3 align-middle">
+                {isLead ? <div className="flex items-center gap-2">
+                  <Input aria-label={`Tên khung vé ${index + 1}`} value={row.ageGroupLabel} onChange={e => update(index, { ageGroupLabel: e.target.value })} className="h-9 min-w-0 flex-1 font-medium" maxLength={100}/>
+                  <div className="flex shrink-0 items-center gap-1 text-xs text-slate-500">
+                    <Input aria-label={`Tuổi tối thiểu khung ${index + 1}`} type="number" min={0} max={150} value={row.minAge ?? ""} onChange={e => update(index, { minAge: e.target.value === "" ? undefined : Number(e.target.value) })} className="h-9 w-14 px-2 text-center"/>
+                    <span>–</span>
+                    <Input aria-label={`Tuổi tối đa khung ${index + 1}`} type="number" min={0} max={150} placeholder="∞" value={row.maxAge ?? ""} onChange={e => update(index, { maxAge: e.target.value === "" ? undefined : Number(e.target.value) })} className="h-9 w-14 px-2 text-center"/>
+                    <span>tuổi</span>
                   </div>
-                  <button type="button" aria-label={`Xóa khung vé ${row.ageGroupLabel}`} title="Xóa khung vé chung" disabled={rows.length <= 1} onClick={() => onRemove(index)} className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"><Trash2 className="h-4 w-4"/></button>
-                </div> : <div><p className="font-semibold text-slate-900">{row.ageGroupLabel}</p><p className="mt-2 text-xs text-slate-500">{ageRange(row)}</p></div>}
+                  <button type="button" aria-label={`Xóa khung vé ${row.ageGroupLabel}`} title="Xóa khung vé" disabled={rows.length <= 1} onClick={() => onRemove(index)} className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"><Trash2 className="h-4 w-4"/></button>
+                </div> : <div><p className="font-medium text-slate-900">{row.ageGroupLabel}</p><p className="mt-0.5 text-xs text-slate-500">{ageRange(row)}</p></div>}
               </td>
               {members.map(agency => {
                 const own = agency.companyId === company.id;
                 const saved = partnerPrice(agency.companyId, row);
-                return <td key={agency.companyId} className={`border-b p-4 align-top ${own ? "border-x-2 border-violet-300 bg-violet-50/30" : "border-slate-100 bg-slate-50/30"}`}>
-                  {own ? <>
-                    <div className="relative"><Input aria-label={`Giá ${row.ageGroupLabel} của ${company.name}`} inputMode="numeric" value={row.price.toLocaleString("vi-VN")} onChange={e => {
+                return <td key={agency.companyId} className={`px-4 py-3 align-middle ${own ? "bg-[#F0F9FF]/60" : ""}`}>
+                  {own ? <div className="relative">
+                    <Input aria-label={`Giá ${row.ageGroupLabel} của ${company.name}`} inputMode="numeric" value={row.price.toLocaleString("vi-VN")} onChange={e => {
                       const digits = e.target.value.replace(/\D/g, "");
                       const value = digits ? Number(digits) : 0;
                       if (value <= 9999999999) update(index, { price: value });
-                    }} className="h-10 border-violet-300 bg-white pr-14 font-semibold text-violet-900 focus-visible:ring-violet-400"/><span className="pointer-events-none absolute right-3 top-3 text-xs text-violet-600">VNĐ</span></div>
-                    <p className="mt-2 text-xs text-violet-600">{money(row.price)} / khách</p>
-                  </> : <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-100/70 px-3 text-slate-600">
-                    <span className="font-medium tabular-nums">{saved ? money(saved.pricePerGuest) : "Chưa nhập giá"}</span><LockKeyhole className="h-3.5 w-3.5 shrink-0 text-slate-400"/>
-                  </div>}
+                    }} className="h-9 bg-white pr-8 text-right font-medium tabular-nums focus-visible:ring-[#075985]/30"/>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">đ</span>
+                  </div> : <p className="text-right tabular-nums text-slate-600">{saved ? money(saved.pricePerGuest) : <span className="text-xs text-slate-400">Chưa nhập giá</span>}</p>}
                 </td>;
               })}
-              <td className="border-b border-emerald-100 bg-emerald-50/70 p-4 text-right align-middle font-bold tabular-nums text-emerald-800">{money(total)}</td>
+              <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-[#075985]">{money(total)}</td>
             </tr>;
           })}
           {!rows.length && <tr><td colSpan={members.length + 2} className="p-8 text-center text-slate-500">{isLead ? "Thêm khung vé để các Agency nhập giá." : "Agency chủ trì chưa thiết lập khung vé."}</td></tr>}
