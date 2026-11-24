@@ -126,6 +126,7 @@ public string ContactName { get; set; } = string.Empty;
 public string ContactEmail { get; set; } = string.Empty;
 public string ContactPhone { get; set; } = string.Empty;
 public string Destination { get; set; } = string.Empty;
+public string? DepartureProvinceCode { get; set; }
 public DateTime StartDate { get; set; }
 public DateTime? EndDate { get; set; }
 public int? NumberOfGuests { get; set; }

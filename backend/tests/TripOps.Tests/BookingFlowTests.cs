@@ -10,6 +10,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using TripOps.Api.Infrastructure;
 using TripOps.Data;
 using TripOps.Data.Entities;
 using TripOps.Data.Enums;
@@ -46,6 +48,11 @@ public sealed partial class BookingFlowTests
             }));
             builder.ConfigureServices(services =>
             {
+                // The notification worker would query the shared in-memory SQLite connection
+                // while EnsureCreatedAsync is still initializing it.
+                foreach (var descriptor in services.Where(d => d.ServiceType == typeof(IHostedService)
+                    && d.ImplementationType == typeof(NotificationDispatchWorker)).ToArray())
+                    services.Remove(descriptor);
                 services.RemoveAll<DbContextOptions<TripOpsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<TripOpsDbContext>>();
                 services.AddDbContext<TripOpsDbContext>(o => o.UseSqlite(connection));

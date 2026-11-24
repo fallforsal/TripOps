@@ -342,6 +342,7 @@ Table tour_design_requests {
 
   // 3. THÔNG TIN THIẾT KẾ TOUR
   destination varchar(255) [not null] // Điểm đến mong muốn (*)
+  departure_province_code varchar(30) // Mã tỉnh/thành khách khởi hành (theo danh mục 34 tỉnh/thành)
   departure_date date [not null] // Ngày khởi hành dự kiến
   return_date date // Ngày về
   number_of_participants int // Số người tham gia
@@ -629,7 +630,6 @@ Table booking_incidents {
   title varchar(255) [not null, note: 'Tiêu đề sự cố: VD: Hỏng xe tại đèo, Sạt lở đường...']
   description text [not null, note: 'Mô tả chi tiết sự cố và phương án xử lý (VD: bỏ qua 1 số điểm tham quan)']
 
-  status varchar(30) [default: 'REPORTED', note: 'REPORTED (Đã báo), IN_PROGRESS (Đang xử lý), RESOLVED (Đã khắc phục)']
   evidence_urls json [note: 'Ảnh chụp hiện trường sự cố / biên bản xác nhận']
   resolved_at timestamp [note: 'Thời điểm sự cố được khắc phục xong']
 
@@ -658,12 +658,12 @@ Table payment_requests {
   created_by varchar(36) [note: 'FK tới users.id']
   created_at timestamp [default: `now()`]
   paid_at timestamp
+  credit_amount decimal(19,2) [not null, default: 0, note: 'Số tiền được trừ vào khoản này từ khoản giảm giá/điều chỉnh đã được duyệt']
 
   indexes {
     (booking_id, id) [unique]
     (booking_id, stage) [unique, name: 'UX_payment_requests_active_stage', note: 'Lọc: stage IS NOT NULL AND status IN (Pending, Overdue, Paid) — mỗi đơn chỉ một khoản đang hiệu lực cho mỗi đợt']
   }
-  credit_amount decimal(19,2) [not null, default: 0, note: 'Approved credit against this installment']
 }
 
 // ============================================================================
@@ -1251,6 +1251,24 @@ Table workflow_notifications {
   BookingId int
   CreatedAt timestamp [not null]
   ReadAt timestamp
+  DispatchAttempts int [not null, default: 0, note: 'Số lần đã thử gửi thông báo đẩy (FCM)']
+  DispatchClaimedUntil timestamp [note: 'Tiến trình gửi đang giữ thông báo này tới thời điểm này, tránh hai tiến trình gửi trùng']
+  DispatchedAt timestamp [note: 'Thời điểm đã gửi thông báo đẩy xong; NULL = chưa gửi']
+}
+
+// Thiết bị nhận thông báo đẩy (app HDV Android/iOS) của người dùng.
+Table notification_device_tokens {
+  Id int [pk, increment]
+  UserId varchar(36) [not null, note: 'Người dùng sở hữu thiết bị']
+  Token varchar(512) [not null, note: 'FCM registration token của thiết bị']
+  Platform varchar(12) [not null, note: 'android | ios']
+  CreatedAt timestamp [not null]
+  LastSeenAt timestamp [not null, note: 'Lần cuối app đăng ký lại token']
+
+  indexes {
+    Token [unique]
+    (UserId, LastSeenAt)
+  }
 }
 
 Ref: tours.cloned_from_tour_id > tours.id
@@ -1325,3 +1343,4 @@ Ref: booking_financial_changes.(booking_id, agency_id) > booking_agencies.(booki
 Ref: workflow_notifications.UserId > users.id
 Ref: workflow_notifications.BookingId > bookings.id
 Ref: workflow_notifications.RequestId > tour_design_requests.id
+Ref: notification_device_tokens.UserId > users.id

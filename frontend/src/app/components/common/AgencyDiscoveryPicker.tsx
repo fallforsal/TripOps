@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Building2, Check, ExternalLink, MapPin, Search, Star, X } from "lucide-react";
+import { Building2, Check, ExternalLink, Info, MapPin, Search, Star, X } from "lucide-react";
 import type { TourCompany } from "@/app/types";
 import { requestAgencies } from "@/app/services/customTourRequests";
 import { currentProvinceCode, getProvinceName, suggestProvincesFromDestinationText, VIETNAM_PROVINCES } from "@/app/data/vietnamProvinces";
@@ -33,6 +33,13 @@ export function AgencyDiscoveryPicker({ value, onSelect, destination = "", initi
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("all");
   const [profile, setProfile] = useState<TourCompany | null>(null);
+  // Tự lọc theo tỉnh/thành đọc được từ điểm đến cho tới khi khách tự chỉnh bộ lọc.
+  const [touched, setTouched] = useState(initialProvinceCodes.length > 0);
+  useEffect(() => {
+    if (touched) return;
+    const timer = setTimeout(() => setCodes(suggestProvincesFromDestinationText(destination, []).map(p => p.code)), 400);
+    return () => clearTimeout(timer);
+  }, [destination, touched]);
   const searchId = useId();
   const provinceId = useId();
   const provinceKey = codes.join(",");
@@ -52,14 +59,18 @@ export function AgencyDiscoveryPicker({ value, onSelect, destination = "", initi
   const rows = tab === "matched" ? matched : searched;
   const selected = available.find(a => a.id === value);
   const suggestions = suggestProvincesFromDestinationText(destination, codes);
+  // Tỉnh/thành chưa có Agency nào có tour hoặc chuyến đã hoàn thành.
+  const uncovered = loading || error || onlyAgencyId ? [] : codes.filter(code => !available.some(a => a.evidence?.matchedProvinceCodes.includes(code)));
+  const selectedUncovered = !!selected && codes.length > 0 && !(selected.evidence?.matchedProvinceCodes.length);
+  useEffect(() => { if (codes.length > 0 && uncovered.length === codes.length && tab === "matched") setTab("all"); }, [codes.length, uncovered.length, tab]);
 
   return <div className="space-y-4 text-sm" aria-busy={loading}>
     <div className="rounded-lg border border-sky-100 bg-sky-50/60 p-4">
       <label htmlFor={provinceId} className="mb-2 flex items-center gap-2 font-semibold text-[#075985]"><MapPin size={16} />Tìm Agency theo tỉnh/thành của hành trình</label>
       <SearchableCombobox id={provinceId} options={VIETNAM_PROVINCES.filter(p => !codes.includes(p.code)).map(p => ({ value: p.code, label: p.name, keywords: p.popularDestinations.join(" ") }))}
-        value="" onChange={code => { if (code) setCodes(previous => [...previous, code]); }} placeholder="Chọn tỉnh/thành, có thể chọn nhiều" disabled={disabled} />
-      {!!codes.length && <div className="mt-2 flex flex-wrap gap-2">{codes.map(code => <button type="button" disabled={disabled} key={code} onClick={() => { setCodes(codes.filter(c => c !== code)); setTab("all"); }} className="flex items-center gap-1 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-800" aria-label={`Bỏ ${getProvinceName(code)}`}>{getProvinceName(code)}<X size={12} /></button>)}</div>}
-      {!!suggestions.length && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">Gợi ý từ điểm đến:{suggestions.map(p => <button key={p.code} disabled={disabled} type="button" onClick={() => setCodes([...codes, p.code])} className="rounded-full border border-dashed border-sky-300 bg-white px-2.5 py-1 text-sky-800">+ {p.name}</button>)}</div>}
+        value="" onChange={code => { if (code) { setTouched(true); setCodes(previous => [...previous, code]); } }} placeholder="Chọn tỉnh/thành, có thể chọn nhiều" disabled={disabled} />
+      {!!codes.length && <div className="mt-2 flex flex-wrap gap-2">{codes.map(code => <button type="button" disabled={disabled} key={code} onClick={() => { setTouched(true); setCodes(codes.filter(c => c !== code)); setTab("all"); }} className="flex items-center gap-1 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-800" aria-label={`Bỏ ${getProvinceName(code)}`}>{getProvinceName(code)}<X size={12} /></button>)}</div>}
+      {!!suggestions.length && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">Gợi ý từ điểm đến:{suggestions.map(p => <button key={p.code} disabled={disabled} type="button" onClick={() => { setTouched(true); setCodes([...codes, p.code]); }} className="rounded-full border border-dashed border-sky-300 bg-white px-2.5 py-1 text-sky-800">+ {p.name}</button>)}</div>}
       <p className="mt-2 text-xs leading-relaxed text-slate-500">Kết quả ưu tiên địa bàn phù hợp, chuyến đã hoàn thành và tour đang cung cấp. Thông tin hoạt động không thay thế chứng nhận năng lực chuyên môn.</p>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -68,7 +79,12 @@ export function AgencyDiscoveryPicker({ value, onSelect, destination = "", initi
       </div>
       <div className="relative min-w-48 flex-1 sm:max-w-xs"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input id={searchId} aria-label="Tìm tên Agency" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm tên Agency, địa chỉ..." className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs" /></div>
     </div>
+    {uncovered.length > 0 && <div role="status" className="flex items-center gap-2.5 rounded-lg border border-sky-200 bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]">
+      <Info size={16} className="shrink-0 text-[#075985]" />
+      <p>Hiện TripOps chưa có Agency nào hoạt động tại <strong className="font-semibold">{uncovered.map(getProvinceName).join(", ")}</strong>.</p>
+    </div>}
     {selected && <p className="flex items-center gap-2 text-xs text-[#075985]"><Check size={14} />Đã chọn: <strong>{selected.name}</strong></p>}
+    {selectedUncovered && <p className="text-xs text-slate-500">Agency này chưa có tour hoặc chuyến đã hoàn thành tại điểm đến bạn chọn.</p>}
     {loading ? <p role="status" className="p-5 text-center text-slate-500">Đang tải hồ sơ Agency...</p> : error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">{error}<button type="button" onClick={() => setRetry(n => n + 1)} className="ml-3 underline">Tải lại</button></div> : <>
       {!rows.length && <p className="rounded-lg border border-dashed p-6 text-center text-slate-500">{tab === "matched" ? "Chưa có bằng chứng hoạt động tại địa bàn này. Bạn vẫn có thể chọn trong tab Tất cả Agency." : "Không có Agency phù hợp với tìm kiếm."}</p>}
       <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2">

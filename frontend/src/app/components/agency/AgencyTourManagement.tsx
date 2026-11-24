@@ -3602,50 +3602,6 @@ export function TourFormPage(props: TourFormPageProps) {
           </div>
         </div>
 
-        {/* Co-Hosting Collaboration Header & Multi-Company Alliance Bar */}
-        {isCoHostedTour && (
-          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-950 text-white px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs border-b border-purple-600 shadow-md">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-400 text-purple-950 flex items-center justify-center font-bold shadow-xs flex-shrink-0">
-                <Handshake className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-extrabold uppercase tracking-wider text-amber-300">
-                    LIÊN MINH ĐA CÔNG TY ({coHostsList.length} ĐƠN VỊ PHỐI HỢP)
-                  </span>
-                  <span className="text-[10px] bg-purple-800 text-purple-200 px-2 py-0.5 rounded font-medium border border-purple-600">
-                    {isLeadCompany
-                      ? "Bạn là Đơn vị Chủ trì (Lead)"
-                      : "Bạn là Đối tác Liên minh (Partner)"}
-                  </span>
-                </div>
-                <p className="text-purple-200 text-[11px] mt-0.5">
-                  Mỗi công ty tự thiết lập chặng mình phụ trách và{" "}
-                  <strong>bị vô hiệu hóa</strong> không được chỉnh sửa phần của
-                  đối tác khác.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {coHostsList.map((ch) => (
-                <span
-                  key={ch.id || ch.companyId}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-2xs ${ch.companyId === company.id
-                    ? "bg-emerald-500 text-white border border-emerald-400"
-                    : "bg-white/15 text-purple-100 border border-white/20"
-                    }`}
-                >
-                  <span>{ch.companyName}</span>
-                  <span className="text-[10px] opacity-80">
-                    ({ch.role === "lead" ? "Chủ trì" : "Đối tác"})
-                  </span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
       </>}
       {/* Sticky Tabs Bar */}

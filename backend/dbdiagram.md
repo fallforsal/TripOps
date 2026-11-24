@@ -26,6 +26,52 @@ Table users {
   status varchar(30) [not null, default: 'active', note: 'active, inactive, banned']
   created_at timestamp [not null, default: `now()` ]
   updated_at timestamp [not null, default: `now()` ]
+  bank_name varchar(150) [note: 'Ngân hàng nhận tiền hoàn của khách (lưu trong hồ sơ)']
+  bank_account_number varchar(50) [note: 'Số tài khoản nhận tiền hoàn, chỉ gồm chữ số']
+  bank_account_holder varchar(150) [note: 'Tên chủ tài khoản, IN HOA không dấu']
+  bank_account_updated_at timestamp [note: 'Lần cập nhật tài khoản gần nhất']
+  organization_name varchar(200) [note: 'Tên cơ quan/doanh nghiệp của khách (tùy chọn)']
+  address_line varchar(255) [note: 'Số nhà, tên đường do khách tự nhập']
+  province_code varchar(10) [note: 'Mã tỉnh/thành theo danh mục hành chính hiện hành']
+  province_name varchar(100) [note: 'Tên tỉnh/thành tại thời điểm lưu']
+  ward_code varchar(10) [note: 'Mã phường/xã thuộc tỉnh đã chọn']
+  ward_name varchar(150) [note: 'Tên phường/xã tại thời điểm lưu']
+  password_changed_at timestamp [note: 'Lần đổi/đặt lại mật khẩu gần nhất; phiên đăng nhập cũ hơn mốc này bị đăng xuất']
+}
+
+// Mẫu hợp đồng riêng của Travel Agency: hiện đủ các điều theo mẫu TripOps, Agency giữ nguyên hoặc sửa từng điều, tự soạn bảng phí hủy (Điều 4) và thêm điều khoản bổ sung.
+Table agency_contract_templates {
+  id int [pk, increment]
+  agency_id varchar(36) [not null, note: 'FK tới users.id (role travel_agency); một Agency lưu được nhiều mẫu']
+  name varchar(120) [not null, note: 'Tên mẫu do Agency đặt, VD "Mùa thường", "Lễ Tết"']
+  is_active boolean [not null, default: false, note: 'Mẫu đang áp dụng cho các đơn đặt mới; mỗi Agency tối đa một mẫu true, không có thì dùng mẫu mặc định TripOps']
+  cancellation_tiers text [not null, note: 'JSON các mốc [{minDays, feePercent}]: còn từ minDays ngày trở lên thì phí feePercent% tổng giá trị tour']
+  cancellation_note varchar(2000) [note: 'Ghi chú thêm về chính sách hủy của Agency']
+  additional_terms text [note: 'Điều khoản bổ sung của Agency, in thành một điều riêng trong hợp đồng']
+  clauses text [note: 'JSON nội dung các điều Agency sửa lại theo mã điều (program, price, payment, cancellation, changes, duties, closing); điều không có trong JSON dùng bản mặc định TripOps']
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Ngày khởi hành trở đi phí 100% và miễn phí trong 72 giờ sau lần thanh toán đầu (còn ≥ 15 ngày) là luật chung của nền tảng.'
+  indexes {
+    agency_id
+  }
+}
+
+Ref: agency_contract_templates.agency_id > users.id
+
+// Mã OTP quên mật khẩu (gửi qua email). Chỉ lưu mã băm SHA-256.
+Table password_reset_codes {
+  id int [pk, increment]
+  user_id varchar(36) [not null, note: 'FK tới users.id']
+  code_hash varchar(64) [not null, note: 'SHA-256 của mã OTP 6 số']
+  expires_at timestamp [not null, note: 'Hết hạn sau 10 phút']
+  failed_attempts int [not null, note: 'Số lần nhập sai; từ 5 lần thì mã bị khóa']
+  used_at timestamp [note: 'Thời điểm đã dùng để đặt lại mật khẩu, hoặc bị thay bằng mã mới']
+  created_at timestamp [not null, note: 'Thời điểm gửi; dùng để giới hạn gửi lại 60 giây và 5 lần/giờ']
+
+  indexes {
+    (user_id, created_at)
+  }
 }
 
 // Hồ sơ chuyên môn HDV; tài khoản và Agency quản lý vẫn nằm trong users.
@@ -56,6 +102,12 @@ Table business_profiles {
   approved_at timestamp
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+
+  // TÀI KHOẢN NHẬN TIỀN QUYẾT TOÁN (Agency tự nhập)
+  bank_name varchar(100) [note: 'Tên ngân hàng, phải có trong danh sách chi hộ payOS (VietnamBanks)']
+  bank_account_number varchar(50)
+  bank_account_holder varchar(150) [note: 'Tên chủ tài khoản (in hoa không dấu)']
+  bank_account_updated_at timestamp [note: 'Lần đổi tài khoản gần nhất; vừa đổi trong 24 giờ thì không chuyển tự động']
 }
 
 // ============================================================================
@@ -290,6 +342,7 @@ Table tour_design_requests {
 
   // 3. THÔNG TIN THIẾT KẾ TOUR
   destination varchar(255) [not null] // Điểm đến mong muốn (*)
+  departure_province_code varchar(30) // Mã tỉnh/thành khách khởi hành (theo danh mục 34 tỉnh/thành)
   departure_date date [not null] // Ngày khởi hành dự kiến
   return_date date // Ngày về
   number_of_participants int // Số người tham gia
@@ -363,6 +416,7 @@ Table bookings {
   status varchar(20) [default: 'pending', note: 'pending, confirmed, completed, cancelled, rejected']
   cancel_reason text
   cancelled_at timestamp
+  contract_terms_snapshot text [note: 'Bản chụp JSON chính sách hủy (mốc ngày/% phí, ghi chú) và điều khoản bổ sung của Agency chủ trì lúc đặt; null = chính sách mặc định TripOps']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   Note: 'Khách đặt tour qua tour_id. BE kiểm tra design_request_id khớp yêu cầu nguồn của tour nếu có. tour_versions chỉ lưu lịch sử chỉnh sửa tour, không có FK từ booking tới version. Các bảng booking_timelines, booking_locations, booking_restaurants, booking_hotels và booking_participants giữ dữ liệu đã chốt khi đặt; không cập nhật theo tour gốc.'
@@ -540,10 +594,13 @@ Table booking_hotels {
       guide_id varchar(36) [not null, note: 'FK tới users.id - Hướng dẫn viên phụ trách dẫn điểm/xe này']
       agency_id varchar(36) [not null, note: 'FK tới users.id - Công ty trực tiếp quản lý HDV này']
 
-      attendance_status varchar(30) [default: 'PENDING', note: 'PENDING (Chưa đến) - CHECKED_IN (Đã đến điểm) -SKIPPED (Bỏ qua/sự cố)']
+      attendance_status varchar(30) [default: 'PENDING', note: 'PENDING (Chưa đến) - CHECKED_IN (Đã đến điểm) - CHECKED_OUT (Đã rời điểm) - SKIPPED (Bỏ qua/sự cố)']
       checked_at timestamp [note: 'Thời điểm check-in hoặc báo skip thực tế']
       photo_proof_url text [note: 'Ảnh chụp minh chứng đoàn đã tới điểm']
       notes text [note: 'Ghi chú của HDV: nổ lốp xe, kẹt xe, thời tiết xấu nên đổi điểm...']
+      checked_out_at timestamp [note: 'Thời điểm HDV check-out rời điểm tham quan']
+      checkout_photo_proof_url text [note: 'Ảnh minh chứng khi rời điểm']
+      checkout_notes text [note: 'Ghi chú của HDV khi check-out']
 
       created_at timestamp [default: `now()`]
       updated_at timestamp [default: `now()`]
@@ -573,7 +630,6 @@ Table booking_incidents {
   title varchar(255) [not null, note: 'Tiêu đề sự cố: VD: Hỏng xe tại đèo, Sạt lở đường...']
   description text [not null, note: 'Mô tả chi tiết sự cố và phương án xử lý (VD: bỏ qua 1 số điểm tham quan)']
 
-  status varchar(30) [default: 'REPORTED', note: 'REPORTED (Đã báo), IN_PROGRESS (Đang xử lý), RESOLVED (Đã khắc phục)']
   evidence_urls json [note: 'Ảnh chụp hiện trường sự cố / biên bản xác nhận']
   resolved_at timestamp [note: 'Thời điểm sự cố được khắc phục xong']
 
@@ -602,12 +658,12 @@ Table payment_requests {
   created_by varchar(36) [note: 'FK tới users.id']
   created_at timestamp [default: `now()`]
   paid_at timestamp
+  credit_amount decimal(19,2) [not null, default: 0, note: 'Số tiền được trừ vào khoản này từ khoản giảm giá/điều chỉnh đã được duyệt']
 
   indexes {
     (booking_id, id) [unique]
     (booking_id, stage) [unique, name: 'UX_payment_requests_active_stage', note: 'Lọc: stage IS NOT NULL AND status IN (Pending, Overdue, Paid) — mỗi đơn chỉ một khoản đang hiệu lực cho mỗi đợt']
   }
-  credit_amount decimal(19,2) [not null, default: 0, note: 'Approved credit against this installment']
 }
 
 // ============================================================================
@@ -729,9 +785,21 @@ Table booking_agencies {
   // 2. THÔNG TIN GIẢI NGÂN CỦA NỀN TẢNG (DISBURSEMENT / PAYOUT)
   platform_fee decimal(12, 2) [default: 0, note: 'Phí hoa hồng nền tảng giữ lại (VD: 10%)']
   net_payout decimal(12, 2) [default: 0, note: 'Tiền thực tế công ty nhận được (final_amount - platform_fee)']
-  settlement_status varchar(30) [default: 'UNPAID', note: 'UNPAID (Chưa giải ngân), READY (Đã hoàn thành tour, chờ chuyển), PAID (Đã giải ngân)']
+  settlement_status varchar(30) [default: 'Unpaid', note: 'Unpaid (tour chưa xong), Ready (HDV đã bấm hoàn thành, chờ chuyển), Processing (đang chi hộ payOS), Paid (đã chuyển), Failed (chi hộ lỗi, chờ Admin), OnHold (Admin tạm giữ)']
   payout_transferred_at timestamp [note: 'Thời điểm nền tảng chuyển khoản thực tế']
   bank_reference_code varchar(100) [note: 'Mã ủy nhiệm chi / GD ngân hàng']
+  tour_completed_at timestamp [note: 'Lúc Agency chủ trì bấm hoàn thành tour; mốc tính ngày chuyển tự động']
+  auto_payout_at timestamp [note: 'Từ thời điểm này được chuyển tự động (mặc định hoàn thành + 2 ngày). NULL = chỉ Admin chuyển tay']
+  fee_percent decimal(5, 2) [note: 'Tỷ lệ phí sàn (%) chốt lúc tour hoàn thành, VD 10']
+  payout_method varchar(20) [note: 'PAYOS (chi hộ payOS) hoặc MANUAL (Admin chuyển khoản tay)']
+  payout_reference varchar(60) [note: 'Mã lệnh chi SETTLE-{id}-{lần}; unique khi khác NULL; là khóa chống chi trùng gửi payOS']
+  payout_gateway_id varchar(100) [note: 'Mã lệnh chi phía payOS']
+  payout_attempts int [not null, default: 0, note: 'Số lần đã tạo lệnh chi hộ']
+  payout_note varchar(500) [note: 'Lỗi chi hộ / lý do tạm giữ / ghi chú Admin gần nhất']
+  payout_bank_name varchar(100) [note: 'Bản chụp tài khoản nhận lúc chuyển']
+  payout_account_number varchar(50)
+  payout_account_holder varchar(150)
+  settled_by varchar(36) [note: 'users.id của Admin thực hiện; NULL khi hệ thống tự chuyển (liên kết logic, chưa có khóa ngoại)']
 
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
@@ -756,7 +824,7 @@ Table feedbacks {
   overall_comment text [note: 'Nhận xét về lịch trình, cảnh quan, ẩm thực...']
 
   // Đánh giá công ty du lịch chủ trì
-  agency_rating int [not null, note: 'Điểm số 1 - 5 sao về chất lượng phục vụ của cty']
+  agency_rating int [not null, note: 'Khách không chấm riêng: BE lưu bằng overall_rating. Sao Agency tính bằng công thức Bayes từ overall_rating của mọi tour thuộc Agency']
   agency_comment text [note: 'Nhận xét về thái độ phục vụ, điều phối tour']
 
   images json [note: 'Ảnh chụp thực tế do khách đính kèm review']
@@ -780,9 +848,11 @@ Table feedbacks {
 // ============================================================================
 Table complaints {
   id int [pk, increment]
-  booking_id int [not null, note: 'FK tới bookings.id']
+  booking_id int [note: 'FK tới bookings.id - Bắt buộc với khiếu nại chuyến đi (Trip), NULL với khiếu nại nền tảng (Platform)']
   customer_id varchar(36) [not null, note: 'FK tới users.id - Khách hàng khiếu nại']
-  agency_id varchar(36) [not null, note: 'FK tới users.id - Công ty chủ trì bị khiếu nại']
+  agency_id varchar(36) [note: 'FK tới users.id - Công ty chủ trì của booking (Trip); NULL với khiếu nại nền tảng']
+  complaint_type varchar(20) [not null, default: 'Trip', note: 'Trip (về chuyến đi, trong 1 ngày sau khi tour hoàn thành) | Platform (về nền tảng TripOps)']
+  reason_code varchar(50) [not null, default: 'other', note: 'Trip: accommodation_food, schedule_change, guide_attitude, service_quality, pricing_billing, other; Platform: payment_refund, account, app_error, other']
 
   // Thông tin khiếu nại từ khách
   subject varchar(255) [not null, note: 'Tiêu đề khiếu nại (VD: Sai hạng phòng khách sạn so với cam kết)']
@@ -795,14 +865,14 @@ Table complaints {
 
   // Trọng tài Admin xử lý
   admin_id varchar(36) [note: 'FK tới users.id - Admin sàn giải quyết khiếu nại']
-  admin_notes text [note: 'Kết luận và phán quyết xử lý của Admin']
+  admin_notes text [note: 'Phản hồi của Admin gửi khách: lý do chấp nhận / không chấp nhận và cách xử lý']
   status varchar(30) [default: 'PENDING', note: 'PENDING (Chờ cty giải trình), IN_REVIEW (Admin đang xử lý), RESOLVED (Đã giải quyết), REJECTED (Bác bỏ)']
   resolved_at timestamp
 
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   deleted_at timestamp [note: 'Soft delete nếu cần']
-  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị.'
+  Note: 'BE kiểm tra customer_id và agency_id khớp các bên của booking; admin_id phải có vai trò quản trị. Agency không xem/trả lời khiếu nại trên hệ thống. Admin xem khiếu nại, ghi phản hồi vào admin_notes rồi chấp nhận (RESOLVED) hoặc không chấp nhận (REJECTED); cần trao đổi thêm thì gọi điện hoặc dùng chat. Khiếu nại Trip đang mở (PENDING/IN_REVIEW) chặn tự chuyển tiền quyết toán.'
 }
 
 // ============================================================================
@@ -810,6 +880,8 @@ Table complaints {
     // ============================================================================
 
     Table chat_conversations {
+      pair_low varchar(36) [note: 'Persisted computed canonical user id (min)']
+      pair_high varchar(36) [note: 'Persisted computed canonical user id (max)']
       id int [pk, increment]
       user_one_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ nhất']
       user_two_id varchar(36) [not null, note: 'FK tới users.id - Người tham gia thứ hai']
@@ -831,6 +903,7 @@ Table complaints {
 
     Table chat_messages {
       design_request_id int
+      client_message_id uniqueidentifier [note: 'Idempotency key, unique with conversation_id and sender_id when non-null']
       id int [pk, increment]
       conversation_id int [not null, note: 'FK tới chat_conversations.id']
       sender_id varchar(36) [not null, note: 'FK tới users.id - Người gửi']
@@ -1087,10 +1160,13 @@ Ref: complaints.booking_id > bookings.id
 Ref: complaints.customer_id > users.id
 Ref: complaints.agency_id > users.id
 Ref: complaints.admin_id > users.id
+Ref: password_reset_codes.user_id > users.id
 
 // Khóa ngoại liên kết
 Ref: booking_agencies.booking_id > bookings.id
 Ref: booking_agencies.agency_id > users.id
+// Liên kết logic (chưa có khóa ngoại): Admin thực hiện quyết toán.
+Ref: booking_agencies.settled_by > users.id
 
 // Các liên kết khóa ngoại
 Ref: payment_requests.booking_id > bookings.id
@@ -1175,6 +1251,24 @@ Table workflow_notifications {
   BookingId int
   CreatedAt timestamp [not null]
   ReadAt timestamp
+  DispatchAttempts int [not null, default: 0, note: 'Số lần đã thử gửi thông báo đẩy (FCM)']
+  DispatchClaimedUntil timestamp [note: 'Tiến trình gửi đang giữ thông báo này tới thời điểm này, tránh hai tiến trình gửi trùng']
+  DispatchedAt timestamp [note: 'Thời điểm đã gửi thông báo đẩy xong; NULL = chưa gửi']
+}
+
+// Thiết bị nhận thông báo đẩy (app HDV Android/iOS) của người dùng.
+Table notification_device_tokens {
+  Id int [pk, increment]
+  UserId varchar(36) [not null, note: 'Người dùng sở hữu thiết bị']
+  Token varchar(512) [not null, note: 'FCM registration token của thiết bị']
+  Platform varchar(12) [not null, note: 'android | ios']
+  CreatedAt timestamp [not null]
+  LastSeenAt timestamp [not null, note: 'Lần cuối app đăng ký lại token']
+
+  indexes {
+    Token [unique]
+    (UserId, LastSeenAt)
+  }
 }
 
 Ref: tours.cloned_from_tour_id > tours.id
@@ -1245,3 +1339,8 @@ Table booking_financial_changes {
   }
 }
 Ref: booking_financial_changes.(booking_id, agency_id) > booking_agencies.(booking_id, agency_id)
+// Chỉ là liên kết logic để dbdiagram vẽ đường nối: database hiện CHƯA có khóa ngoại cho 3 cột này.
+Ref: workflow_notifications.UserId > users.id
+Ref: workflow_notifications.BookingId > bookings.id
+Ref: workflow_notifications.RequestId > tour_design_requests.id
+Ref: notification_device_tokens.UserId > users.id
