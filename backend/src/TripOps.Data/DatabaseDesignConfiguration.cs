@@ -157,6 +157,7 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.Name).HasColumnName("name").HasColumnType("nvarchar(255)").HasMaxLength(255);
             entity.Property(e => e.Destination).HasColumnName("location").HasColumnType("nvarchar(max)");
             entity.Property(e => e.DepartureLocation).HasColumnName("departure_location").HasColumnType("nvarchar(max)");
+            entity.Property(e => e.TravelStyle).HasColumnName("travel_style").HasColumnType("nvarchar(30)").HasMaxLength(30);
             entity.Property(e => e.DurationTour).HasColumnName("duration_tour").HasColumnType("nvarchar(max)");
             entity.Property(e => e.OperationPeriod).HasColumnName("operation_period").HasColumnType("nvarchar(255)").HasMaxLength(255);
             entity.Property(e => e.DurationDays).HasColumnName("duration_days").HasColumnType("int");

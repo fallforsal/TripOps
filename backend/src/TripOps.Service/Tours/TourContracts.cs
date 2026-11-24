@@ -24,7 +24,8 @@ public sealed record TourConfiguration(
     [StringLength(50)] string? Code = null,
     string[]? ProvinceCodes = null, [Range(1, 1000)] int? NumberOfGuests = null, DesignCoHostDto[]? CoHosts = null, AgencyPricingInput[]? AgencyPricing = null,
     OwnedTextItem[]? OwnedHighlights = null, OwnedTextItem[]? OwnedInclusions = null, OwnedTextItem[]? OwnedExclusions = null,
-    OwnedTextItem[]? OwnedCancellationPolicy = null, OwnedImageItem[]? OwnedImages = null, bool ShareAllVersions = false);
+    OwnedTextItem[]? OwnedCancellationPolicy = null, OwnedImageItem[]? OwnedImages = null, bool ShareAllVersions = false,
+    [StringLength(30)] string? TravelStyle = null);
 
 public sealed record OwnedTextItem([Required, StringLength(2000)] string Text, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);
 public sealed record OwnedImageItem([Required, StringLength(1000)] string Url, [StringLength(100)] string? Id = null, [StringLength(36)] string? AgencyId = null);

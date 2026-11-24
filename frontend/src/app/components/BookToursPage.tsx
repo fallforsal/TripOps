@@ -17,6 +17,7 @@ import { EmptyState } from "@/app/components/customer/EmptyState";
 import { Button } from "@/app/components/ui/button";
 import { matchesTourSearch, normalizeDestination, type TourSearchCriteria } from "@/app/components/customer/tour-search";
 import { VIETNAM_PROVINCES, getProvinceName } from "@/app/data/vietnamProvinces";
+import { TRAVEL_STYLES, getTravelStyleLabel } from "@/app/data/travelStyles";
 
 interface BookToursPageProps {
   initialSearch?: TourSearchCriteria;
@@ -38,6 +39,7 @@ interface SavedBookToursState {
   searchGuests?: string;
   searchDeparture?: string;
   selectedDestination?: string;
+  selectedStyle?: string;
   selectedCompany?: string;
   selectedPriceRange?: string;
   selectedDuration?: string;
@@ -67,7 +69,7 @@ export function BookToursPage({
   const [savedFilters] = useState<SavedBookToursState | null>(() => getSavedBookToursState());
 
   const hasExplicitInitialSearch = Boolean(
-    initialSearch?.destination || initialSearch?.guests || initialSearch?.departureDate
+    initialSearch?.destination || initialSearch?.guests || initialSearch?.departureDate || initialSearch?.travelStyle
   );
 
   const [searchTerm, setSearchTerm] = useState<string>(() => {
@@ -84,6 +86,9 @@ export function BookToursPage({
   });
   const [selectedDestination, setSelectedDestination] = useState<string>(
     () => (hasExplicitInitialSearch ? "all" : savedFilters?.selectedDestination ?? "all")
+  );
+  const [selectedStyle, setSelectedStyle] = useState<string>(() =>
+    hasExplicitInitialSearch ? initialSearch?.travelStyle || "all" : savedFilters?.selectedStyle ?? "all"
   );
   const [selectedCompany, setSelectedCompany] = useState<string>(
     () => savedFilters?.selectedCompany ?? "all"
@@ -103,14 +108,15 @@ export function BookToursPage({
 
   // Sync when user executes a new search from elsewhere (e.g., header search or home search)
   useEffect(() => {
-    if (initialSearch && (initialSearch.destination || initialSearch.guests || initialSearch.departureDate)) {
+    if (initialSearch && (initialSearch.destination || initialSearch.guests || initialSearch.departureDate || initialSearch.travelStyle)) {
       setSearchTerm(initialSearch.destination || "");
+      setSelectedStyle(initialSearch.travelStyle || "all");
       setSearchGuests(initialSearch.guests || "");
       setSearchDeparture(initialSearch.departureDate || "");
       setSelectedDestination("all");
       setCurrentPage(1);
     }
-  }, [initialSearch?.destination, initialSearch?.guests, initialSearch?.departureDate]);
+  }, [initialSearch?.destination, initialSearch?.guests, initialSearch?.departureDate, initialSearch?.travelStyle]);
 
   // Persist current filters & pagination to sessionStorage
   useEffect(() => {
@@ -122,6 +128,7 @@ export function BookToursPage({
           searchGuests,
           searchDeparture,
           selectedDestination,
+          selectedStyle,
           selectedCompany,
           selectedPriceRange,
           selectedDuration,
@@ -135,6 +142,7 @@ export function BookToursPage({
     searchGuests,
     searchDeparture,
     selectedDestination,
+    selectedStyle,
     selectedCompany,
     selectedPriceRange,
     selectedDuration,
@@ -189,6 +197,11 @@ export function BookToursPage({
         return false;
       }
 
+      // Travel style filter
+      if (selectedStyle !== "all" && tour.travelStyle !== selectedStyle) {
+        return false;
+      }
+
       // Company filter
       if (selectedCompany !== "all" && tour.companyName !== selectedCompany) {
         return false;
@@ -211,7 +224,7 @@ export function BookToursPage({
 
       return true;
     });
-  }, [publicTours, searchTerm, selectedDestination, selectedCompany, selectedDuration, selectedPriceRange, searchGuests, searchDeparture]);
+  }, [publicTours, searchTerm, selectedDestination, selectedStyle, selectedCompany, selectedDuration, selectedPriceRange, searchGuests, searchDeparture]);
 
   // Sort
   const sortedTours = useMemo(() => {
@@ -235,6 +248,7 @@ export function BookToursPage({
 
   const activeFiltersCount = [
     selectedDestination !== "all",
+    selectedStyle !== "all",
     selectedCompany !== "all",
     selectedPriceRange !== "all",
     selectedDuration !== "all",
@@ -252,6 +266,7 @@ export function BookToursPage({
     setSearchDeparture("");
     setSearchTerm("");
     setSelectedDestination("all");
+    setSelectedStyle("all");
     setSelectedCompany("all");
     setSelectedPriceRange("all");
     setSelectedDuration("all");
@@ -324,7 +339,7 @@ export function BookToursPage({
         </div>
 
         {/* Filter Selectors Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[#F1F5F9]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-[#F1F5F9]">
           {/* Destination */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-[#475569]">Tỉnh/thành &amp; Điểm đến</label>
@@ -345,6 +360,26 @@ export function BookToursPage({
               {destinations.map((d) => (
                 <option key={d} value={d}>
                   {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Travel style */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-[#475569]">Phong cách du lịch</label>
+            <select
+              value={selectedStyle}
+              onChange={(e) => {
+                setSelectedStyle(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full h-9 px-2.5 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+            >
+              <option value="all">Tất cả phong cách</option>
+              {TRAVEL_STYLES.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -419,6 +454,15 @@ export function BookToursPage({
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F0F9FF] border border-[#BAE6FD] text-[#075985] text-xs rounded-[4px]">
                   Địa bàn: {getProvinceName(selectedDestination)}
                   <button onClick={() => setSelectedDestination("all")}>
+                    <X className="w-3 h-3 text-[#075985] hover:text-[#0C4A6E]" />
+                  </button>
+                </span>
+              )}
+
+              {selectedStyle !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F0F9FF] border border-[#BAE6FD] text-[#075985] text-xs rounded-[4px]">
+                  Phong cách: {getTravelStyleLabel(selectedStyle)}
+                  <button onClick={() => setSelectedStyle("all")}>
                     <X className="w-3 h-3 text-[#075985] hover:text-[#0C4A6E]" />
                   </button>
                 </span>

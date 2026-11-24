@@ -1,4 +1,5 @@
 import { customerTourPreview } from "@/app/lib/tourEditorPreview";
+import { TRAVEL_STYLES } from "@/app/data/travelStyles";
 import { supplierKind, supplierLabel, supplierTag } from "@/app/lib/supplierLabel";
 import { suggestTourCode } from "@/app/lib/tourCode";
 import { normalizeDesignHosts, hasDesignPartners } from "@/app/lib/designAlliance";
@@ -1302,6 +1303,7 @@ export function TourFormPage(props: TourFormPageProps) {
       ? [...tour.provinceCodes]
       : [],
   );
+  const [travelStyle, setTravelStyle] = useState<string>(tour?.travelStyle ?? "");
   const [provinceSearchQuery, setProvinceSearchQuery] = useState("");
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [provinceFieldError, setProvinceFieldError] = useState("");
@@ -3364,6 +3366,7 @@ export function TourFormPage(props: TourFormPageProps) {
       departureLocation,
       departureCity: departureLocation,
       provinceCodes,
+      travelStyle: isCustom ? tour?.travelStyle ?? null : travelStyle || null,
       duration,
       numberOfDays,
       numberOfNights,
@@ -3796,6 +3799,29 @@ export function TourFormPage(props: TourFormPageProps) {
                   className="mt-1"
                 />
               </div>
+
+              {!isCustom && (
+                <div>
+                  <Label htmlFor="tour-travel-style" className="text-xs font-semibold text-gray-700">
+                    Phong cách du lịch
+                  </Label>
+                  <select
+                    id="tour-travel-style"
+                    value={travelStyle}
+                    onChange={(e) => setTravelStyle(e.target.value)}
+                    disabled={isGeneralLocked}
+                    className="mt-1 w-full h-9 rounded-md border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985] disabled:bg-slate-50 disabled:text-slate-500"
+                  >
+                    <option value="">Chưa phân loại</option>
+                    {TRAVEL_STYLES.map((s) => (
+                      <option key={s.code} value={s.code}>{s.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Tour sẽ hiện khi khách bấm thẻ phong cách tương ứng ở trang chủ.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs font-semibold text-gray-700">

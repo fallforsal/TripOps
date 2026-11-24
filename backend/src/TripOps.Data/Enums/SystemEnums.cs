@@ -53,6 +53,22 @@ public enum TourStatus
     Deleted
 }
 
+/// <summary>Phong cách du lịch của tour (cột tours.travel_style) — dùng cho các thẻ "Khám phá theo phong cách du lịch" ở trang chủ.</summary>
+public static class TravelStyles
+{
+    public const string BeachResort = "BEACH_RESORT";
+    public const string HeritageCulture = "HERITAGE_CULTURE";
+    public const string MountainAdventure = "MOUNTAIN_ADVENTURE";
+    public const string TeamBuilding = "TEAM_BUILDING";
+    public static readonly string[] All = [BeachResort, HeritageCulture, MountainAdventure, TeamBuilding];
+
+    /// <summary>Chuẩn hóa về mã viết hoa; rỗng → null; mã lạ giữ nguyên để bước kiểm tra báo lỗi.</summary>
+    public static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+
+    public static bool IsValid(string? value) => value is null || All.Contains(value);
+}
+
 public enum TourVisibility
 {
     Hidden,

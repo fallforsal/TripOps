@@ -163,7 +163,7 @@ public sealed partial class TourService
             ConfigurationData = JsonSerializer.Serialize(c,Json), Version = version.VersionNumber, SharedVersion = identity.SharedVersion, Status = TourStatus.Completed,
             Visibility = TourVisibility.Hidden };
         var normalizedProvinces = VietnamProvinceCatalog.NormalizeDistinct(c.ProvinceCodes);
-        tour.Name = c.Name.Trim(); tour.Destination = c.Destination;
+        tour.Name = c.Name.Trim(); tour.Destination = c.Destination; tour.TravelStyle = TravelStyles.Normalize(c.TravelStyle);
         tour.DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim();
         tour.DurationDays = c.DurationDays; tour.DurationNights = c.DurationNights; tour.BasePrice = Money(c.BasePrice);
         tour.DurationTour = $"{c.DurationDays} ngày {c.DurationNights} đêm";

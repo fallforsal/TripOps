@@ -148,37 +148,38 @@ export function HomePage({
   const travelThemes = [
     {
       title: "Biển đảo & Nghỉ dưỡng",
-      dest: "Phú Quốc",
+      style: "BEACH_RESORT",
       desc: "Làn nước ngọc bích & bãi cát trắng mịn",
       image: `${import.meta.env.BASE_URL}images/destinations/phu-quoc.webp`,
       icon: Palmtree,
     },
     {
       title: "Di sản văn hóa & Cố đô",
-      dest: "Ninh Bình",
+      style: "HERITAGE_CULTURE",
       desc: "Quần thể danh thắng Tràng An & Hoa Lư",
       image: `${import.meta.env.BASE_URL}images/destinations/ninh-binh.webp`,
       icon: Landmark,
     },
     {
       title: "Núi rừng & Chinh phục",
-      dest: "Sapa",
+      style: "MOUNTAIN_ADVENTURE",
       desc: "Ruộng bậc thang vàng óng & nóc nhà Đông Dương",
       image: `${import.meta.env.BASE_URL}images/destinations/sapa.webp`,
       icon: Mountain,
     },
     {
       title: "Team Building doanh nghiệp",
-      dest: "Đà Nẵng",
+      style: "TEAM_BUILDING",
       desc: "Bãi biển Mỹ Khê & không gian gala gắn kết",
       image: `${import.meta.env.BASE_URL}images/destinations/da-nang.webp`,
       icon: Briefcase,
     },
   ];
 
-  function search(place = destination) {
+  function search(place = destination, travelStyle?: string) {
     const criteria: TourSearchCriteria = {
       destination: place.trim(),
+      travelStyle,
       departureDate: departureDate, // giữ nguyên định dạng yyyy-MM-dd gửi API
       guests,
     };
@@ -551,7 +552,7 @@ export function HomePage({
             <button
               key={theme.title}
               type="button"
-              onClick={() => search(theme.dest)}
+              onClick={() => search("", theme.style)}
               className="group relative rounded-[12px] overflow-hidden text-left bg-white border border-[#E5EAE7] hover:border-slate-300 shadow-xs hover:shadow-md transition-all cursor-pointer aspect-[3/4] flex flex-col justify-end p-5"
             >
               <img

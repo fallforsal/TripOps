@@ -4,6 +4,8 @@ import { getProvinceName } from "@/app/data/vietnamProvinces";
 export interface TourSearchCriteria {
   destination: string;
   provinceCode?: string;
+  /** Phong cách du lịch từ thẻ "Khám phá theo phong cách" ở trang chủ. */
+  travelStyle?: string;
   departureDate: string;
   guests: string;
 }
@@ -23,6 +25,7 @@ export function normalizeDestination(value: string) {
     .trim();
 }
 export function matchesTourSearch(tour: Tour, criteria: TourSearchCriteria) {
+  if (criteria.travelStyle && tour.travelStyle !== criteria.travelStyle) return false;
   if (
     criteria.provinceCode &&
     criteria.provinceCode !== "all" &&
