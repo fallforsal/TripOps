@@ -66,13 +66,10 @@ public class TripOpsDbContext : DbContext
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
     public DbSet<AgencyContractTemplate> AgencyContractTemplates => Set<AgencyContractTemplate>();
 
-    // 7. Chat & Subscription Extensions
+    // 7. Chat Extensions
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ChatAttachment> ChatAttachments => Set<ChatAttachment>();
-    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
-    public DbSet<AgencySubscription> AgencySubscriptions => Set<AgencySubscription>();
-    public DbSet<SubscriptionPaymentHistory> SubscriptionPaymentHistories => Set<SubscriptionPaymentHistory>();
 
     private void PrepareForSave()
     {
@@ -124,7 +121,6 @@ public class TripOpsDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.Entity<AgencySubscription>().ToTable("agency_subscriptions");
         modelBuilder.Entity<Booking>().ToTable("bookings");
         modelBuilder.Entity<BookingAccommodation>().ToTable("booking_hotels");
         modelBuilder.Entity<BookingAgency>().ToTable("booking_agencies");
@@ -151,8 +147,6 @@ public class TripOpsDbContext : DbContext
         modelBuilder.Entity<BookingContract>().ToTable("booking_contracts");
         modelBuilder.Entity<ContractSignSession>().ToTable("contract_sign_sessions");
         modelBuilder.Entity<Service>().ToTable("services");
-        modelBuilder.Entity<SubscriptionPaymentHistory>().ToTable("subscription_payment_history");
-        modelBuilder.Entity<SubscriptionPlan>().ToTable("subscription_plans");
         modelBuilder.Entity<SystemBankAccount>().ToTable("system_bank_accounts");
         modelBuilder.Entity<SystemCommissionConfig>().ToTable("system_commission_configs");
         modelBuilder.Entity<Tour>().ToTable("tours");
