@@ -79,15 +79,12 @@ export function AgencyDiscoveryPicker({ value, onSelect, destination = "", initi
       </div>
       <div className="relative min-w-48 flex-1 sm:max-w-xs"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input id={searchId} aria-label="Tìm tên Agency" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm tên Agency, địa chỉ..." className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs" /></div>
     </div>
-    {uncovered.length > 0 && <div role="status" className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
-      <Info size={16} className="mt-0.5 shrink-0 text-amber-600" />
-      <div>
-        <p className="font-semibold">Hiện TripOps chưa có Agency nào hoạt động tại {uncovered.map(getProvinceName).join(", ")}.</p>
-        <p className="mt-0.5">Bạn vẫn có thể gửi yêu cầu cho một Agency trong danh sách Tất cả Agency (Agency có thể liên kết đối tác địa phương để thực hiện), hoặc đổi điểm đến.</p>
-      </div>
+    {uncovered.length > 0 && <div role="status" className="flex items-center gap-2.5 rounded-lg border border-sky-200 bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]">
+      <Info size={16} className="shrink-0 text-[#075985]" />
+      <p>Hiện TripOps chưa có Agency nào hoạt động tại <strong className="font-semibold">{uncovered.map(getProvinceName).join(", ")}</strong>.</p>
     </div>}
     {selected && <p className="flex items-center gap-2 text-xs text-[#075985]"><Check size={14} />Đã chọn: <strong>{selected.name}</strong></p>}
-    {selectedUncovered && <p className="text-xs text-amber-800">Agency này chưa có tour hoặc chuyến đã hoàn thành tại điểm đến bạn chọn.</p>}
+    {selectedUncovered && <p className="text-xs text-slate-500">Agency này chưa có tour hoặc chuyến đã hoàn thành tại điểm đến bạn chọn.</p>}
     {loading ? <p role="status" className="p-5 text-center text-slate-500">Đang tải hồ sơ Agency...</p> : error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">{error}<button type="button" onClick={() => setRetry(n => n + 1)} className="ml-3 underline">Tải lại</button></div> : <>
       {!rows.length && <p className="rounded-lg border border-dashed p-6 text-center text-slate-500">{tab === "matched" ? "Chưa có bằng chứng hoạt động tại địa bàn này. Bạn vẫn có thể chọn trong tab Tất cả Agency." : "Không có Agency phù hợp với tìm kiếm."}</p>}
       <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
