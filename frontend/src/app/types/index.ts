@@ -1005,6 +1005,9 @@ export interface CustomTourRequest {
   contactPhone: string;
   // Tour design
   destinations: string;
+  departureProvinceCode?: string;
+  departureProvinceName?: string;
+  departurePoint?: string;
   departureDate: string;
   returnDate: string;
   numberOfPeople: string;

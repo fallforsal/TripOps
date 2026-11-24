@@ -342,6 +342,8 @@ Table tour_design_requests {
 
   // 3. THÔNG TIN THIẾT KẾ TOUR
   destination varchar(255) [not null] // Điểm đến mong muốn (*)
+  departure_province_code varchar(30) // Mã tỉnh/thành khách khởi hành (theo danh mục 34 tỉnh/thành)
+  departure_point varchar(255) // Điểm đón cụ thể (không bắt buộc, vd: sân bay Tân Sơn Nhất)
   departure_date date [not null] // Ngày khởi hành dự kiến
   return_date date // Ngày về
   number_of_participants int // Số người tham gia
@@ -629,7 +631,6 @@ Table booking_incidents {
   title varchar(255) [not null, note: 'Tiêu đề sự cố: VD: Hỏng xe tại đèo, Sạt lở đường...']
   description text [not null, note: 'Mô tả chi tiết sự cố và phương án xử lý (VD: bỏ qua 1 số điểm tham quan)']
 
-  status varchar(30) [default: 'REPORTED', note: 'REPORTED (Đã báo), IN_PROGRESS (Đang xử lý), RESOLVED (Đã khắc phục)']
   evidence_urls json [note: 'Ảnh chụp hiện trường sự cố / biên bản xác nhận']
   resolved_at timestamp [note: 'Thời điểm sự cố được khắc phục xong']
 

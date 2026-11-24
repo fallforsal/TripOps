@@ -267,6 +267,8 @@ internal static class DatabaseDesignConfiguration
             entity.Property(e => e.ContactEmail).HasColumnName("contact_email").HasColumnType("nvarchar(191)").HasMaxLength(191).IsRequired();
             entity.Property(e => e.ContactPhone).HasColumnName("contact_phone").HasColumnType("nvarchar(30)").HasMaxLength(30).IsRequired();
             entity.Property(e => e.Destination).HasColumnName("destination").HasColumnType("nvarchar(255)").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.DepartureProvinceCode).HasColumnName("departure_province_code").HasColumnType("nvarchar(30)").HasMaxLength(30);
+            entity.Property(e => e.DeparturePoint).HasColumnName("departure_point").HasColumnType("nvarchar(255)").HasMaxLength(255);
             entity.Property(e => e.StartDate).HasColumnName("departure_date").HasColumnType("date").IsRequired();
             entity.Property(e => e.EndDate).HasColumnName("return_date").HasColumnType("date");
             entity.Property(e => e.NumberOfGuests).HasColumnName("number_of_participants").HasColumnType("int");

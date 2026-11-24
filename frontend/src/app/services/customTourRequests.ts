@@ -12,6 +12,7 @@ type RequestDto = {
   id: number; customerId: string; agencyId: string; agencyName: string;
   contactName: string; contactEmail: string; contactPhone: string;
   destination: string; departureDate: string; returnDate: string | null;
+  departureProvinceCode?: string | null; departureProvinceName?: string | null; departurePoint?: string | null;
   numberOfPeople: number; budgetPerPerson: number | null;
   hotelStars: string | null; additionalInfo: string | null;
   businessName: string | null;
@@ -30,6 +31,8 @@ const fromDto = (r: RequestDto): CustomTourRequest => ({
   targetCompanyName: r.agencyName, contactName: r.contactName,
   contactEmail: r.contactEmail, contactPhone: r.contactPhone,
   destinations: r.destination, departureDate: r.departureDate.slice(0, 10),
+  departureProvinceCode: r.departureProvinceCode || undefined, departureProvinceName: r.departureProvinceName || undefined,
+  departurePoint: r.departurePoint || undefined,
   returnDate: (r.returnDate || r.departureDate).slice(0, 10),
   numberOfPeople: String(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson == null ? undefined : String(r.budgetPerPerson),
   hotelStars: r.hotelStars || undefined, additionalInfo: r.additionalInfo || undefined,
@@ -53,6 +56,7 @@ export const submitDesignRequest = async (r: Omit<CustomTourRequest, "id" | "cre
   fromDto(await http<RequestDto>("/tour-design-requests", { method: "POST", body: JSON.stringify({
     initialChanges: r.initialChanges, sourceTourId: r.sourceTourId ? Number(r.sourceTourId) : null, agencyId: r.targetCompanyId, contactName: r.contactName, contactEmail: r.contactEmail,
     contactPhone: r.contactPhone, destination: r.destinations,
+    departureProvinceCode: r.departureProvinceCode || null, departurePoint: r.departurePoint || null,
     departureDate: r.departureDate, returnDate: r.returnDate,
     numberOfPeople: Number(r.numberOfPeople), budgetPerPerson: r.budgetPerPerson ? Number(r.budgetPerPerson) : null,
     hotelStars: r.hotelStars, additionalInfo: r.additionalInfo,

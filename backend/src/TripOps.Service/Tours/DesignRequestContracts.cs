@@ -14,7 +14,9 @@ public sealed record CreateDesignRequestInput(
     [StringLength(50)] string? HotelStars = null,
     [StringLength(10000)] string? AdditionalInfo = null,
     [StringLength(255)] string? BusinessName = null,
-    int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null);
+    int? SourceTourId = null, System.Text.Json.JsonElement? InitialChanges = null,
+    [StringLength(30)] string? DepartureProvinceCode = null,
+    [StringLength(255)] string? DeparturePoint = null);
 
 public sealed record AgencyChoiceDto(string Id, string Name, string Address, string Phone, string Email,
     string? LogoUrl = null, string? Description = null, AgencyEvidenceDto? Evidence = null);
@@ -23,7 +25,8 @@ public sealed record DesignRequestDto(int Id, string CustomerId, string AgencyId
     string ContactName, string ContactEmail, string ContactPhone, string Destination,
     DateTime DepartureDate, DateTime? ReturnDate, int NumberOfPeople, decimal? BudgetPerPerson,
     string? HotelStars, string? AdditionalInfo, string? BusinessName, string Status, DateTime CreatedAt, int? DesignedTourId, int? CurrentVersion,
-    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null, string? SharedTourThumbnail = null, string? SharedTourName = null, DateTime? ArchivedAt = null, DateTime? ClosedAt = null, string? CloseReason = null, int? BookingId = null, int[]? CollaborationVersions = null, bool HasCollaborations = false, DesignInvitationDto[]? CollaborationInvitations = null, bool ShareAllVersions = false);
+    decimal? QuotedPricePerPerson, string? RejectionReason = null, DateTime? RespondedAt = null, int? SharedVersion = null, DesignCoHostDto[]? CoHosts = null, string? SharedTourThumbnail = null, string? SharedTourName = null, DateTime? ArchivedAt = null, DateTime? ClosedAt = null, string? CloseReason = null, int? BookingId = null, int[]? CollaborationVersions = null, bool HasCollaborations = false, DesignInvitationDto[]? CollaborationInvitations = null, bool ShareAllVersions = false,
+    string? DepartureProvinceCode = null, string? DepartureProvinceName = null, string? DeparturePoint = null);
 
 public sealed record DesignInvitationDto(string CompanyId,int Version,string Status,string? Segment,DateTime InvitedAt,DateTime? RespondedAt,decimal? Budget=null,string? Notes=null,string? RejectionReason=null);
 

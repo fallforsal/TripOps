@@ -19,6 +19,8 @@ import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/customer/PageHeader";
 import { VietnameseDatePicker } from "@/app/components/ui/VietnameseDatePicker";
 import { AgencyDiscoveryPicker } from "@/app/components/common/AgencyDiscoveryPicker";
+import { SearchableCombobox } from "@/app/components/common/SearchableCombobox";
+import { getProvinceName, VIETNAM_PROVINCES } from "@/app/data/vietnamProvinces";
 
 interface CustomTourRequestPageProps {
   sourceTour?: import("@/app/types").Tour;
@@ -48,6 +50,8 @@ export function CustomTourRequestPage({
     contactEmail: currentUser?.email ?? "",
     contactPhone: currentUser?.phone ?? "",
     destinations: sourceTour?.destination || "",
+    departureProvinceCode: "",
+    departurePoint: "",
     departureDate: TODAY,
     returnDate: TODAY,
     numberOfPeople: "",
@@ -142,6 +146,7 @@ export function CustomTourRequestPage({
       !form.contactEmail.trim() ||
       !form.contactPhone.trim() ||
       !form.destinations.trim() ||
+      !form.departureProvinceCode ||
       !form.numberOfPeople.trim()
     ) {
       setErrorMsg("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
@@ -163,6 +168,8 @@ export function CustomTourRequestPage({
         contactEmail: form.contactEmail.trim(),
         contactPhone: form.contactPhone.trim(),
         destinations: form.destinations.trim(),
+        departureProvinceCode: form.departureProvinceCode,
+        departurePoint: form.departurePoint.trim() || undefined,
         departureDate: form.departureDate,
         returnDate: form.returnDate,
         numberOfPeople: form.numberOfPeople.trim(),
@@ -199,6 +206,12 @@ export function CustomTourRequestPage({
             <div className="flex justify-between">
               <span className="text-[#475569]">Điểm đến mong muốn:</span>
               <strong className="font-semibold">{form.destinations}</strong>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#475569]">Khởi hành từ:</span>
+              <strong className="text-right font-semibold">
+                {getProvinceName(form.departureProvinceCode)}{form.departurePoint.trim() ? ` · ${form.departurePoint.trim()}` : ""}
+              </strong>
             </div>
             <div className="flex justify-between">
               <span className="text-[#475569]">Số khách dự kiến:</span>
@@ -357,6 +370,36 @@ export function CustomTourRequestPage({
             <h2 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">
               3. Thông số lịch trình & Nhu cầu dịch vụ
             </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="departure-province" className="text-xs font-semibold text-[#0F172A]">
+                Khởi hành từ (tỉnh/thành) <span className="text-[#B91C1C]">*</span>
+              </label>
+              <SearchableCombobox
+                id="departure-province"
+                options={VIETNAM_PROVINCES.map((p) => ({ value: p.code, label: p.name }))}
+                value={form.departureProvinceCode}
+                onChange={(code) => setForm((p) => ({ ...p, departureProvinceCode: code }))}
+                placeholder="Chọn tỉnh/thành nơi đoàn xuất phát"
+                disabled={submitting}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="departure-point" className="text-xs font-semibold text-[#0F172A]">
+                Điểm đón cụ thể
+              </label>
+              <input
+                id="departure-point"
+                type="text"
+                value={form.departurePoint}
+                onChange={set("departurePoint")}
+                maxLength={255}
+                placeholder="VD: Sân bay Tân Sơn Nhất, văn phòng công ty tại Quận 1..."
+                className="w-full h-9 px-3 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#075985]"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

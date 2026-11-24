@@ -34,6 +34,8 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             "Ngày đi/về không hợp lệ.");
         Require(!string.IsNullOrWhiteSpace(input.Destination) && !string.IsNullOrWhiteSpace(input.ContactName),
             "Vui lòng nhập điểm đến và người liên hệ.");
+        var departureProvince = string.IsNullOrWhiteSpace(input.DepartureProvinceCode) ? null : VietnamProvinceCatalog.Find(input.DepartureProvinceCode);
+        Require(string.IsNullOrWhiteSpace(input.DepartureProvinceCode) || departureProvince is not null, "Tỉnh/thành khởi hành không hợp lệ.");
         var agency = await db.Users.Include(u => u.BusinessProfile).SingleOrDefaultAsync(u => u.Id == input.AgencyId &&
             u.Role == UserRole.TravelAgency && u.Status == UserStatus.Active && u.BusinessProfile != null &&
             u.BusinessProfile.Status == BusinessProfileStatus.Approved, ct)
@@ -42,6 +44,8 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             CustomerId = actor, AgencyId = agency.Id, ContactName = input.ContactName.Trim(),
             ContactEmail = input.ContactEmail.Trim(), ContactPhone = input.ContactPhone.Trim(),
             Destination = input.Destination.Trim(), StartDate = input.DepartureDate.Date,
+            DepartureProvinceCode = departureProvince?.Code,
+            DeparturePoint = string.IsNullOrWhiteSpace(input.DeparturePoint) ? null : input.DeparturePoint.Trim(),
             EndDate = input.ReturnDate.Date, NumberOfGuests = input.NumberOfPeople,
             BudgetPerPerson = input.BudgetPerPerson, HotelRatingRequirement = input.HotelStars,
             SpecialRequirements = input.AdditionalInfo, BusinessName = input.BusinessName,
@@ -180,6 +184,9 @@ public sealed partial class DesignRequestService(TripOpsDbContext db, AccountSer
             r.ContactName, r.ContactEmail, r.ContactPhone, r.Destination,
             r.StartDate, r.EndDate, r.NumberOfGuests ?? 0, r.BudgetPerPerson,
             r.HotelRatingRequirement, r.SpecialRequirements, r.BusinessName, status, r.CreatedAt ?? DateTime.UnixEpoch,
-            tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion, ShareAllVersions: shareAll);
+            tour?.Id, tour?.Version, null, r.RejectionReason, r.RespondedAt, tour?.SharedVersion, ShareAllVersions: shareAll,
+            DepartureProvinceCode: r.DepartureProvinceCode,
+            DepartureProvinceName: VietnamProvinceCatalog.Find(r.DepartureProvinceCode)?.Name,
+            DeparturePoint: r.DeparturePoint);
     }
 }

@@ -321,6 +321,17 @@ export function CustomRequestDetailModal({
                 </span>
               </div>
 
+              {/* Nơi khởi hành */}
+              {request.departureProvinceName && (
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <span className="text-slate-400 block font-medium">Khởi hành từ:</span>
+                  <span className="text-sm font-bold text-slate-900 block mt-0.5">
+                    {request.departureProvinceName}
+                    {request.departurePoint && <span className="font-normal text-slate-600"> · Điểm đón: {request.departurePoint}</span>}
+                  </span>
+                </div>
+              )}
+
               {/* Thời gian dự kiến */}
               <div className="sm:col-span-2">
                 <span className="text-slate-400 block font-medium">Thời gian dự kiến:</span>
