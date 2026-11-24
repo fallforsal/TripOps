@@ -1,3 +1,4 @@
+import { isTravelStyle } from "@/app/data/travelStyles";
 import { ChatTourPage } from "@/app/components/chat/ChatTourPage";
 import { getAllAgencyGuides } from "@/app/services/agencyGuides";
 import { http } from "@/app/lib/http";
@@ -415,6 +416,7 @@ function Application() {
         const requestedDate = params.get("date") || "";
         setTourSearch({
           destination: params.get("destination") || "",
+          travelStyle: isTravelStyle(params.get("style")) ? params.get("style") || "" : "",
           departureDate: /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
             ? requestedDate
             : "",
@@ -575,6 +577,7 @@ function Application() {
         const search = criteria || emptyTourSearch;
         setTourSearch(search);
         if (search.destination) params.set("destination", search.destination);
+        if (search.travelStyle) params.set("style", search.travelStyle);
         if (search.departureDate) params.set("date", search.departureDate);
         if (search.guests) params.set("guests", search.guests);
       }

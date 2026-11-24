@@ -121,6 +121,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         ValidateObject(config!);
         Require(config!.MinGuests == null || config.MaxGuests == null || config.MinGuests <= config.MaxGuests, "Invalid guest range.");
         Require(config.DurationNights <= config.DurationDays, "Nights cannot exceed duration days.");
+        Require(TravelStyles.IsValid(TravelStyles.Normalize(config.TravelStyle)), "Invalid travel style.");
         if (config.ProvinceCodes is not null)
         {
             Require(config.ProvinceCodes.Length <= VietnamProvinceCatalog.MaxCount, "Số lượng tỉnh/thành không được vượt quá 63.");
@@ -266,7 +267,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             var current = JsonSerializer.Deserialize<TourConfiguration>(tour.ConfigurationData, Json);
             if (current is not null) {
                 var provinces = ExtractProvinces(tour);
-                return EnsureOwnership(current with { ProvinceCodes = provinces.Length > 0 ? provinces : current.ProvinceCodes }, tour.AgencyId);
+                return EnsureOwnership(current with { ProvinceCodes = provinces.Length > 0 ? provinces : current.ProvinceCodes, TravelStyle = tour.TravelStyle ?? current.TravelStyle }, tour.AgencyId);
             }
         }
         var relationalProvinces = ExtractProvinces(tour);
@@ -280,7 +281,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
                 {
                     var snapshotProvinces = VietnamProvinceCatalog.NormalizeDistinct(snapshot.Configuration.ProvinceCodes);
                     var resolvedProvinces = relationalProvinces.Length > 0 ? relationalProvinces : snapshotProvinces;
-                    return EnsureOwnership(snapshot.Configuration with { ProvinceCodes = resolvedProvinces },tour.AgencyId);
+                    return EnsureOwnership(snapshot.Configuration with { ProvinceCodes = resolvedProvinces, TravelStyle = tour.TravelStyle ?? snapshot.Configuration.TravelStyle },tour.AgencyId);
                 }
             }
             catch (JsonException) { /* Legacy rows fall back to their normalized relational data. */ }
@@ -306,7 +307,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
                 d.Meals.OrderBy(m => m.Id).Select(m => new MealInput(m.MealType, m.RestaurantName, m.Description, m.IsDefault == true, m.PriceDifference, m.ServiceId, m.Time.HasValue ? m.Time.Value.TimeOfDay : null, m.SupplierSource, m.AgencySupplierId, m.SupplierSnapshot is null ? null : JsonSerializer.Deserialize<SupplierSnapshotInput>(m.SupplierSnapshot, Json))).ToArray(),
                 stays.GetValueOrDefault(d.DayNumber, []).Select(a => new AccommodationInput(a.HotelName, a.DestinationName,
                     null, a.NightsCount ?? 0, a.StarRating ?? 3, a.IsDefault == true, a.PriceDifference ?? 0, a.AddressNotes, a.ServiceId, a.SupplierSource, a.AgencySupplierId, a.SupplierSnapshot is null ? null : JsonSerializer.Deserialize<SupplierSnapshotInput>(a.SupplierSnapshot, Json))).ToArray())).ToArray(),
-            tour.DepartureLocation, tour.Code, relationalProvinces);
+            tour.DepartureLocation, tour.Code, relationalProvinces) { TravelStyle = tour.TravelStyle };
     }
 
     private TourDto Dto(Tour t) => new(t.Id, t.AgencyId ?? "", t.Code, State(t.Status), State(t.Visibility),
@@ -322,6 +323,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
             Name = c.Name.Trim(), BasePrice = Money(c.BasePrice),
             DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim(),
             ProvinceCodes = normalizedProvinces,
+            TravelStyle = TravelStyles.Normalize(c.TravelStyle),
             PricingTiers = (c.PricingTiers ?? []).Select(p => p with { PricePerGuest = Money(p.PricePerGuest) }).ToArray(),
             Timelines = (c.Timelines ?? []).Select(d => d with {
                 Meals = (d.Meals ?? []).Select(m => m with { PriceDifference = Money(m.PriceDifference) }).ToArray(),
@@ -334,7 +336,7 @@ public sealed partial class TourService(TourRepository repository, AccountServic
         pending.Add(tour, c);
         tour.ConfigurationData = JsonSerializer.Serialize(c, Json);
         repository.RemoveConfiguration(tour);
-        tour.Name = c.Name.Trim(); tour.Destination = c.Destination;
+        tour.Name = c.Name.Trim(); tour.Destination = c.Destination; tour.TravelStyle = c.TravelStyle;
         tour.DepartureLocation = string.IsNullOrWhiteSpace(c.DepartureLocation) ? null : c.DepartureLocation.Trim();
         tour.DurationDays = c.DurationDays; tour.DurationNights = c.DurationNights; tour.BasePrice = Money(c.BasePrice);
         tour.DurationTour = $"{c.DurationDays} ngày {c.DurationNights} đêm";

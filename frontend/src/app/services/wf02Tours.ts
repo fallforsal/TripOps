@@ -87,6 +87,7 @@ export type TourConfiguration = {
   pricingTiers: Tier[];
   timelines: Day[];
   provinceCodes?: string[];
+  travelStyle?: string | null;
   ownedHighlights?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
   ownedInclusions?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
   ownedExclusions?: { id?: string | null; text: string; agencyId?: string | null }[] | null;
@@ -360,6 +361,7 @@ export function toConfiguration(tour: Partial<Tour>): TourConfiguration {
           .filter(Boolean),
       ),
     ),
+    travelStyle: tour.travelStyle || null,
   };
 }
 
@@ -502,6 +504,7 @@ export function fromConfiguration(
     name: c.name,
     destination: c.destination || "",
     provinceCodes: c.provinceCodes || [],
+    travelStyle: c.travelStyle ?? null,
     duration: `${c.durationDays} ngày ${c.durationNights} đêm`,
     numberOfDays: c.durationDays,
     numberOfNights: c.durationNights,

@@ -215,7 +215,7 @@ public sealed class AccountUnitTests : IDisposable
 
     // ============================================================ F-03 PasswordService.Forgot
 
-    private const string Generic = "Nếu email này có tài khoản TripOps, mã xác nhận đã được gửi. Vui lòng kiểm tra hộp thư (cả mục Spam).";
+    private const string Generic = "Nếu email này có trên hệ thống, mã xác nhận đã được gửi. Vui lòng kiểm tra hộp thư (cả mục Spam).";
 
     [Fact]
     public async Task F03_UTCID01_active_email_receives_a_six_digit_code()

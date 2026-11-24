@@ -148,37 +148,38 @@ export function HomePage({
   const travelThemes = [
     {
       title: "Biển đảo & Nghỉ dưỡng",
-      dest: "Phú Quốc",
+      style: "BEACH_RESORT",
       desc: "Làn nước ngọc bích & bãi cát trắng mịn",
       image: `${import.meta.env.BASE_URL}images/destinations/phu-quoc.webp`,
       icon: Palmtree,
     },
     {
       title: "Di sản văn hóa & Cố đô",
-      dest: "Ninh Bình",
+      style: "HERITAGE_CULTURE",
       desc: "Quần thể danh thắng Tràng An & Hoa Lư",
       image: `${import.meta.env.BASE_URL}images/destinations/ninh-binh.webp`,
       icon: Landmark,
     },
     {
       title: "Núi rừng & Chinh phục",
-      dest: "Sapa",
+      style: "MOUNTAIN_ADVENTURE",
       desc: "Ruộng bậc thang vàng óng & nóc nhà Đông Dương",
       image: `${import.meta.env.BASE_URL}images/destinations/sapa.webp`,
       icon: Mountain,
     },
     {
       title: "Team Building doanh nghiệp",
-      dest: "Đà Nẵng",
+      style: "TEAM_BUILDING",
       desc: "Bãi biển Mỹ Khê & không gian gala gắn kết",
       image: `${import.meta.env.BASE_URL}images/destinations/da-nang.webp`,
       icon: Briefcase,
     },
   ];
 
-  function search(place = destination) {
+  function search(place = destination, travelStyle?: string) {
     const criteria: TourSearchCriteria = {
       destination: place.trim(),
+      travelStyle,
       departureDate: departureDate, // giữ nguyên định dạng yyyy-MM-dd gửi API
       guests,
     };
@@ -205,35 +206,34 @@ export function HomePage({
       >
         {/* Lớp nền (ảnh/video) tự cắt mép; khung tìm kiếm phía trên được phép nổi ra ngoài hero mà không đẩy bố cục */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Background Landscape Photo: Poster / Fallback when video fails or prefers-reduced-motion */}
-        <img
-          src={heroImage}
-          alt="Phong cảnh non nước Ninh Bình, Việt Nam"
-          loading="eager"
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-        />
-
-        {/* Scenic Flycam Video: Only loaded and mounted when prefers-reduced-motion is false */}
-        {!prefersReducedMotion && !videoError && (
-          <video
-            ref={videoRef}
-            src={`${import.meta.env.BASE_URL}videos/ninh-binh-hero.mp4`}
-            poster={heroImage}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            onLoadedData={() => setVideoLoaded(true)}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onError={() => setVideoError(true)}
-            className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-1000 ${
-              videoLoaded ? "opacity-100" : "opacity-0"
-            }`}
+          {/* Background Landscape Photo: Poster / Fallback when video fails or prefers-reduced-motion */}
+          <img
+            src={heroImage}
+            alt="Phong cảnh non nước Ninh Bình, Việt Nam"
+            loading="eager"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
           />
-        )}
+
+          {/* Scenic Flycam Video: Only loaded and mounted when prefers-reduced-motion is false */}
+          {!prefersReducedMotion && !videoError && (
+            <video
+              ref={videoRef}
+              src={`${import.meta.env.BASE_URL}videos/ninh-binh-hero.mp4`}
+              poster={heroImage}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onLoadedData={() => setVideoLoaded(true)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onError={() => setVideoError(true)}
+              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-1000 ${videoLoaded ? "opacity-100" : "opacity-0"
+                }`}
+            />
+          )}
 
         </div>
 
@@ -551,7 +551,7 @@ export function HomePage({
             <button
               key={theme.title}
               type="button"
-              onClick={() => search(theme.dest)}
+              onClick={() => search("", theme.style)}
               className="group relative rounded-[12px] overflow-hidden text-left bg-white border border-[#E5EAE7] hover:border-slate-300 shadow-xs hover:shadow-md transition-all cursor-pointer aspect-[3/4] flex flex-col justify-end p-5"
             >
               <img
@@ -712,7 +712,7 @@ export function HomePage({
                   <div className="w-10 h-10 rounded-[8px] bg-teal-50 text-[#0F766E] flex items-center justify-center">
                     <item.icon className="w-5 h-5" />
                   </div>
-                  <span className="text-2xl font-black text-slate-300 font-mono">
+                  <span className="text-2xl font-black text-slate-400 font-mono">
                     {item.step}
                   </span>
                 </div>
@@ -736,32 +736,7 @@ export function HomePage({
           className="max-w-[1300px] mx-auto px-6 sm:px-8 lg:px-12 pb-16 lg:pb-20"
           aria-labelledby="ai-title"
         >
-          <div className="rounded-[12px] bg-teal-50/80 border border-teal-200/80 p-6 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-[8px] bg-[#0F766E] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3
-                  id="ai-title"
-                  className="text-base sm:text-lg font-bold text-[#172523]"
-                >
-                  Chưa biết lựa chọn hành trình nào?
-                </h3>
-                <p className="text-xs sm:text-sm text-[#62706C] mt-0.5">
-                  Trò chuyện cùng trợ lý AI của TripOps để nhận gợi ý tour và dự toán chi phí phù hợp nhất cho đoàn trong 1 phút.
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={onOpenAIAdvisor}
-              className="border-[#0F766E] text-[#0F766E] hover:bg-[#0F766E] hover:text-white font-semibold text-xs h-10 px-5 rounded-[8px] shrink-0 transition-colors flex items-center gap-1.5 bg-white"
-            >
-              <span>Tìm tour cùng AI</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+
         </section>
       )}
     </div>

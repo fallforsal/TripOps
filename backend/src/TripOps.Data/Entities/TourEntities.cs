@@ -7,6 +7,7 @@ public string Code { get; set; } = string.Empty;
 public string? Name { get; set; }
 public string? Destination { get; set; }
 public string? DepartureLocation { get; set; }
+public string? TravelStyle { get; set; }
 public string? DurationTour { get; set; }
 public string? OperationPeriod { get; set; }
 public int? DurationDays { get; set; }

@@ -542,6 +542,7 @@ export interface Tour {
   name: string;
   destination: string;
   provinceCodes?: string[]; // Danh sách mã tỉnh/thành chuẩn hóa mà tour đi qua (VD: ["LAM_DONG", "KHANH_HOA"])
+  travelStyle?: string | null; // Phong cách du lịch (BEACH_RESORT | HERITAGE_CULTURE | MOUNTAIN_ADVENTURE | TEAM_BUILDING)
   region?: string; // Khu vực: Miền Bắc | Miền Trung | Miền Nam | Tây Nguyên | Miền Tây
   duration: string;
   numberOfDays?: number;

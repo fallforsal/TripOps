@@ -3037,6 +3037,11 @@ namespace TripOps.Data.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("thumbnail_urls");
 
+                    b.Property<string>("TravelStyle")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("travel_style");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")

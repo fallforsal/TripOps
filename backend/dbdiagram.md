@@ -179,6 +179,7 @@ Table tours {
   name varchar(255)
   location text
   departure_location text
+  travel_style varchar(30) [note: 'Phong cách du lịch: BEACH_RESORT, HERITAGE_CULTURE, MOUNTAIN_ADVENTURE, TEAM_BUILDING; null = chưa phân loại']
   duration_tour text
   operation_period varchar(255)
   duration_days int

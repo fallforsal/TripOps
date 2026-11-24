@@ -1,4 +1,5 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { OtpCodeInput } from "@/app/components/ui/otp-code-input";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Clock, FileText, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -196,14 +197,7 @@ export function SignContractPage({ token }: { token: string }) {
             </p>
           )}
           {otpSent && (
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={otp}
-              onChange={(e) => setOtp(normalizeOtp(e.target.value))}
-              placeholder="Nhập 6 số OTP"
-              className="w-full h-11 rounded-lg border border-gray-300 px-3 text-center font-mono text-lg tracking-[0.4em]"
-            />
+            <OtpCodeInput value={otp} onChange={(v) => setOtp(normalizeOtp(v))} />
           )}
         </div>
 

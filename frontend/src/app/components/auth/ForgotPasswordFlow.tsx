@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Mail } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { OtpCodeInput } from "@/app/components/ui/otp-code-input";
 import { newPasswordProblem, requestPasswordReset, resetPassword, verifyResetCode } from "@/app/services/password";
 
 type Step = "email" | "code" | "password" | "done";
@@ -118,17 +119,15 @@ export function ForgotPasswordFlow({
 
       {step === "code" && (
         <>
-          <p className="text-[#475569] leading-relaxed">{info} Mã có hiệu lực 10 phút.</p>
+          <p className="text-[#475569] leading-relaxed">{info}</p>
           {devCode && (
             <p className="rounded-[6px] border border-amber-200 bg-amber-50 p-2 text-amber-900">
               Môi trường thử nghiệm chưa cấu hình gửi email — mã của bạn là <strong className="font-mono">{devCode}</strong>.
             </p>
           )}
           <div className="space-y-1.5">
-            <label htmlFor="forgot-code" className="font-semibold text-[#0F172A]">Mã xác nhận (6 số) gửi tới {email}:</label>
-            <input id="forgot-code" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6} value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              className={`${input} h-11 text-center text-lg tracking-[0.5em] font-mono`} placeholder="••••••" />
+            <label htmlFor="forgot-code" className="font-semibold text-[#0F172A]">Mã xác nhận gửi tới {email}:</label>
+            <OtpCodeInput id="forgot-code" autoFocus value={code} onChange={setCode} />
           </div>
           <button type="button" disabled={cooldown > 0 || busy} onClick={() => void send()}
             className="text-[11px] text-[#075985] hover:underline disabled:text-[#94A3B8] disabled:no-underline">
