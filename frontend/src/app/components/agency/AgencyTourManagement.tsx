@@ -3604,26 +3604,22 @@ export function TourFormPage(props: TourFormPageProps) {
 
         {/* Co-Hosting Collaboration Header & Multi-Company Alliance Bar */}
         {isCoHostedTour && (
-          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-950 text-white px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs border-b border-purple-600 shadow-md">
+          <div className="bg-[#F0F9FF] border-y border-sky-200 px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-400 text-purple-950 flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-white border border-sky-200 text-[#075985] flex items-center justify-center flex-shrink-0">
                 <Handshake className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-extrabold uppercase tracking-wider text-amber-300">
-                    LIÊN MINH ĐA CÔNG TY ({coHostsList.length} ĐƠN VỊ PHỐI HỢP)
+                  <span className="text-sm font-semibold text-[#0C4A6E]">
+                    Tour Liên Minh · {coHostsList.length} đơn vị phối hợp
                   </span>
-                  <span className="text-[10px] bg-purple-800 text-purple-200 px-2 py-0.5 rounded font-medium border border-purple-600">
-                    {isLeadCompany
-                      ? "Bạn là Đơn vị Chủ trì (Lead)"
-                      : "Bạn là Đối tác Liên minh (Partner)"}
+                  <span className="text-[11px] bg-white text-[#075985] px-2 py-0.5 rounded-full font-medium border border-sky-200">
+                    {isLeadCompany ? "Bạn là đơn vị chủ trì" : "Bạn là đối tác"}
                   </span>
                 </div>
-                <p className="text-purple-200 text-[11px] mt-0.5">
-                  Mỗi công ty tự thiết lập chặng mình phụ trách và{" "}
-                  <strong>bị vô hiệu hóa</strong> không được chỉnh sửa phần của
-                  đối tác khác.
+                <p className="text-slate-600 text-[11px] mt-0.5">
+                  Mỗi công ty tự thiết lập chặng mình phụ trách, không chỉnh sửa được phần của đối tác khác.
                 </p>
               </div>
             </div>
@@ -3632,14 +3628,14 @@ export function TourFormPage(props: TourFormPageProps) {
               {coHostsList.map((ch) => (
                 <span
                   key={ch.id || ch.companyId}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-2xs ${ch.companyId === company.id
-                    ? "bg-emerald-500 text-white border border-emerald-400"
-                    : "bg-white/15 text-purple-100 border border-white/20"
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1.5 border ${ch.companyId === company.id
+                    ? "bg-[#075985] text-white border-[#075985]"
+                    : "bg-white text-slate-700 border-slate-200"
                     }`}
                 >
                   <span>{ch.companyName}</span>
-                  <span className="text-[10px] opacity-80">
-                    ({ch.role === "lead" ? "Chủ trì" : "Đối tác"})
+                  <span className="opacity-75">
+                    · {ch.role === "lead" ? "Chủ trì" : "Đối tác"}
                   </span>
                 </span>
               ))}
