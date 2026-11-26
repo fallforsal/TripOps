@@ -8,7 +8,7 @@ import { AgencyRefundHistory } from "@/app/components/agency/AgencyRefundHistory
  */
 export function AgencyFinancePage() {
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
+    <div className="w-full pb-10">
       <Tabs defaultValue="payouts" className="space-y-4">
         <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-2 space-x-6">
           <TabsTrigger

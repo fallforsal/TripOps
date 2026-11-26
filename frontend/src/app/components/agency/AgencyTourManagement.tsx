@@ -5222,7 +5222,9 @@ export function TourFormPage(props: TourFormPageProps) {
 
                         {/* GỢI Ý ĐIỂM THAM QUAN / CHECK-IN NỔI BẬT THEO ĐIỂM ĐẾN */}
                         {(() => {
-                          if (isCustom) return null;
+                          // Ẩn khối "Gợi ý điểm check-in nổi bật" (đặt true để bật lại)
+                          const SHOW_CHECKIN_SUGGESTIONS = false;
+                          if (isCustom || !SHOW_CHECKIN_SUGGESTIONS) return null;
                           const destPreset = getSuggestionsByDestination(
                             destination || "Đà Lạt",
                           );

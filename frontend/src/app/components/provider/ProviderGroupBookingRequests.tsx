@@ -301,20 +301,20 @@ export function ProviderGroupBookingRequests({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="w-full space-y-6">
 
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+            <h1 className="text-2xl font-bold text-slate-900">
               Yêu cầu Dịch vụ Đoàn
             </h1>
             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#E0F2FE] text-[#075985] border border-sky-200">
               {stats.pending} yêu cầu chờ xử lý
             </span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             Tiếp nhận yêu cầu dịch vụ khách sạn lưu trú và nhà hàng ẩm thực từ các Công ty Lữ hành, kiểm tra danh sách đoàn và báo giá xác nhận.
           </p>
         </div>

@@ -9,14 +9,29 @@ public sealed partial class TourService
     public async Task<TourDto> CloneForRequest(string actor, int requestId, DesignCloneInput input, CancellationToken ct)
     {
         var source = await Owned(actor, input.TourId, ct);
-        Require(source.IsRequest != true, "Hãy chọn tour có sẵn của Agency làm mẫu.");
+        if (source.IsRequest == true)
+        {
+            // Chỉ cho dùng lại tour riêng đã thiết kế cho chính khách hàng của yêu cầu này.
+            var targetCustomer = await db.TourDesignRequests.Where(r => r.Id == requestId && r.AgencyId == actor).Select(r => r.CustomerId).SingleOrDefaultAsync(ct);
+            var sourceCustomer = source.DesignRequestId is int sourceRequestId
+                ? await db.TourDesignRequests.Where(r => r.Id == sourceRequestId && r.AgencyId == actor).Select(r => r.CustomerId).SingleOrDefaultAsync(ct)
+                : null;
+            Require(source.DesignRequestId != requestId && targetCustomer is not null && sourceCustomer == targetCustomer,
+                "Chỉ dùng được tour có sẵn của Agency hoặc tour đã thiết kế cho chính khách hàng này.");
+        }
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await LockDesignRequest(actor, requestId, ct);
-        var created = await CreateForRequest(actor, requestId, DefaultServicesOnly(Configuration(source)) with { Code = null, Name = "Tour riêng: " + (source.Name ?? "Tour") }, ct);
+        var created = await CreateForRequest(actor, requestId, DefaultServicesOnly(Configuration(source)) with { Code = null, Name = "Tour riêng: " + StripPrivatePrefix(source.Name) }, ct);
         var tour = await db.Tours.SingleAsync(t => t.Id == created.Id, ct);
         tour.ClonedFromTourId = source.Id;
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return Dto(tour);
+    }
+    private static string StripPrivatePrefix(string? name)
+    {
+        var value = (name ?? "Tour").Trim();
+        while (value.StartsWith("Tour riêng:", StringComparison.OrdinalIgnoreCase)) value = value["Tour riêng:".Length..].Trim();
+        return value.Length == 0 ? "Tour" : value;
     }
     private static TourConfiguration DefaultServicesOnly(TourConfiguration configuration) => configuration with {
         Timelines = configuration.Timelines?.Select(day => day with {

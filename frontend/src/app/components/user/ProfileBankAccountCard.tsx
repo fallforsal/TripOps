@@ -86,7 +86,7 @@ export function ProfileBankAccountCard() {
       <div className="flex items-center justify-between gap-2 border-b border-[#F1F5F9] pb-3">
         <div className="flex items-center gap-2">
           <Landmark className="w-4 h-4 text-[#075985]" />
-          <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">Tài khoản nhận tiền hoàn</h3>
+          <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">Số tài khoản</h3>
         </div>
         {saved?.hasAccount && (
           <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-[4px]">
@@ -94,10 +94,7 @@ export function ProfileBankAccountCard() {
           </span>
         )}
       </div>
-      <p className="text-xs text-[#475569]">
-        Dùng để nhận tiền khi hủy tour hoặc được hoàn tiền. Khi gửi yêu cầu hoàn tiền, thông tin này được điền sẵn; nếu bạn
-        nhập tài khoản khác ở đó, hồ sơ cũng tự cập nhật theo.
-      </p>
+
 
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-[#64748B]">

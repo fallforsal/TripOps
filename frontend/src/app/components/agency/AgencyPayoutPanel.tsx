@@ -106,7 +106,7 @@ export function AgencyPayoutPanel() {
           </div>
         </div>
         <p className="text-[11px] text-slate-500">
-          Tên chủ tài khoản phải trùng với ngân hàng (in hoa, không dấu). Sau khi đổi tài khoản, khoản tiền đến hạn trong 24 giờ đầu sẽ chờ đủ 24 giờ rồi mới tự chuyển vào tài khoản mới.
+          Sau khi đổi tài khoản, khoản tiền đến hạn trong 24 giờ đầu sẽ chờ đủ 24 giờ rồi mới tự chuyển vào tài khoản mới.
         </p>
         {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
         {saved && !changed && (
@@ -161,7 +161,7 @@ export function AgencyPayoutPanel() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 max-w-[220px] truncate">{s.tourName}</p>
+                      <p className="text-[11px] text-slate-500 max-w-[420px] truncate">{s.tourName}</p>
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       <p>{formatVND(s.grossAmount)}</p>

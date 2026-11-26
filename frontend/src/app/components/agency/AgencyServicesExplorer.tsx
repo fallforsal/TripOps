@@ -516,33 +516,30 @@ function ExplorerOsmMap({
       <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md p-1 rounded-xl shadow-md border border-gray-200 flex items-center gap-1 text-xs">
         <button
           onClick={() => setMapType("google")}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-            mapType === "google"
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${mapType === "google"
               ? "bg-[#075985] text-white shadow-xs"
               : "text-gray-700 hover:bg-gray-100"
-          }`}
+            }`}
           title="Google Maps Bản đồ đường phố"
         >
           Google Maps
         </button>
         <button
           onClick={() => setMapType("satellite")}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-            mapType === "satellite"
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${mapType === "satellite"
               ? "bg-[#075985] text-white shadow-xs"
               : "text-gray-700 hover:bg-gray-100"
-          }`}
+            }`}
           title="Ảnh Vệ tinh Google"
         >
           Vệ tinh
         </button>
         <button
           onClick={() => setMapType("osm")}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-            mapType === "osm"
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${mapType === "osm"
               ? "bg-[#075985] text-white shadow-xs"
               : "text-gray-700 hover:bg-gray-100"
-          }`}
+            }`}
           title="OpenStreetMap tốc độ cao"
         >
           OpenStreetMap
@@ -577,9 +574,9 @@ export function AgencyServicesExplorer({
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   useEffect(() => {
-    const sync=()=>{const id=/^#\/agency\/(?:services|provider-services)\/(\d+)/.exec(window.location.hash)?.[1];if(id)setSelectedService(services.find(s=>s.id===id)??null);};
-    sync();window.addEventListener("hashchange",sync);return()=>window.removeEventListener("hashchange",sync);
-  },[services]);
+    const sync = () => { const id = /^#\/agency\/(?:services|provider-services)\/(\d+)/.exec(window.location.hash)?.[1]; if (id) setSelectedService(services.find(s => s.id === id) ?? null); };
+    sync(); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync);
+  }, [services]);
 
   // Extract unique provinces for filter dropdown
   const provincesList = Array.from(
@@ -649,7 +646,7 @@ export function AgencyServicesExplorer({
 
           {/* B2B Action Button: Contact Provider */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <ChatWithButton userId={selectedService.providerId} context={{kind:"service",id:Number(selectedService.id),title:selectedService.name,thumbnailUrl:selectedService.thumbnailUrl}}>Chat với Provider</ChatWithButton>
+            <ChatWithButton userId={selectedService.providerId} context={{ kind: "service", id: Number(selectedService.id), title: selectedService.name, thumbnailUrl: selectedService.thumbnailUrl }}>Chat với Provider</ChatWithButton>
           </div>
         </div>
 
@@ -690,11 +687,10 @@ export function AgencyServicesExplorer({
                   <button
                     key={idx}
                     onClick={() => setActiveImageIndex(idx)}
-                    className={`relative flex-shrink-0 w-20 h-16 rounded-xl overflow-hidden border-2 transition-all ${
-                      activeImageIndex === idx
+                    className={`relative flex-shrink-0 w-20 h-16 rounded-xl overflow-hidden border-2 transition-all ${activeImageIndex === idx
                         ? "border-[#075985] ring-2 ring-blue-600/30 scale-102"
                         : "border-gray-200 opacity-75 hover:opacity-100"
-                    }`}
+                      }`}
                   >
                     <img
                       src={img}
@@ -911,9 +907,9 @@ export function AgencyServicesExplorer({
               </p>
 
               {selectedService.policies &&
-              (Array.isArray(selectedService.policies)
-                ? selectedService.policies.length > 0
-                : Boolean(selectedService.policies)) ? (
+                (Array.isArray(selectedService.policies)
+                  ? selectedService.policies.length > 0
+                  : Boolean(selectedService.policies)) ? (
                 <div className="space-y-2">
                   {Array.isArray(selectedService.policies) ? (
                     selectedService.policies.map((policy, idx) => (
@@ -1062,7 +1058,7 @@ export function AgencyServicesExplorer({
               </div>
 
               <div className="space-y-2 pt-1 text-xs">
-                <ChatWithButton userId={selectedService.providerId} context={{kind:"service",id:Number(selectedService.id),title:selectedService.name,thumbnailUrl:selectedService.thumbnailUrl}}>Chat với Provider</ChatWithButton>
+                <ChatWithButton userId={selectedService.providerId} context={{ kind: "service", id: Number(selectedService.id), title: selectedService.name, thumbnailUrl: selectedService.thumbnailUrl }}>Chat với Provider</ChatWithButton>
               </div>
             </div>
           </div>
@@ -1126,11 +1122,10 @@ export function AgencyServicesExplorer({
             <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200">
               <button
                 onClick={() => setViewMode("split")}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                  viewMode === "split"
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === "split"
                     ? "bg-white text-[#075985] shadow-xs"
                     : "text-gray-600 hover:text-gray-900"
-                }`}
+                  }`}
                 title="Bản đồ & Danh sách song song"
               >
                 <Columns className="w-4 h-4" />
@@ -1139,11 +1134,10 @@ export function AgencyServicesExplorer({
 
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                  viewMode === "grid"
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === "grid"
                     ? "bg-white text-[#075985] shadow-xs"
                     : "text-gray-600 hover:text-gray-900"
-                }`}
+                  }`}
                 title="Lưới bài đăng"
               >
                 <Grid className="w-4 h-4" />
@@ -1162,22 +1156,20 @@ export function AgencyServicesExplorer({
 
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
-              selectedCategory === "all"
+            className={`px-3 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap ${selectedCategory === "all"
                 ? "bg-[#075985] text-white shadow-xs"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+              }`}
           >
             Tất cả ({approvedServices.length})
           </button>
 
           <button
             onClick={() => setSelectedCategory("hotel")}
-            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-              selectedCategory === "hotel"
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${selectedCategory === "hotel"
                 ? "bg-[#075985] text-white shadow-xs"
                 : "bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] border border-[#CBD5E1]"
-            }`}
+              }`}
           >
             <Hotel className="w-3.5 h-3.5" />
             Lưu trú & Khách sạn (
@@ -1186,11 +1178,10 @@ export function AgencyServicesExplorer({
 
           <button
             onClick={() => setSelectedCategory("fnb")}
-            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-              selectedCategory === "fnb"
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${selectedCategory === "fnb"
                 ? "bg-orange-600 text-white shadow-xs"
                 : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
-            }`}
+              }`}
           >
             <Utensils className="w-3.5 h-3.5" />
             Ẩm thực & Nhà hàng (
@@ -1204,11 +1195,10 @@ export function AgencyServicesExplorer({
 
           <button
             onClick={() => setSelectedCategory("attraction")}
-            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-              selectedCategory === "attraction"
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${selectedCategory === "attraction"
                 ? "bg-teal-600 text-white shadow-xs"
                 : "bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200"
-            }`}
+              }`}
           >
             <Compass className="w-3.5 h-3.5" />
             Tham quan & Trải nghiệm (
@@ -1222,11 +1212,10 @@ export function AgencyServicesExplorer({
 
           <button
             onClick={() => setSelectedCategory("transportation")}
-            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-              selectedCategory === "transportation"
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${selectedCategory === "transportation"
                 ? "bg-cyan-600 text-white shadow-xs"
                 : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200"
-            }`}
+              }`}
           >
             <Car className="w-3.5 h-3.5" />
             Vận chuyển & Xe tour (
@@ -1259,7 +1248,7 @@ export function AgencyServicesExplorer({
                 </div>
               </div>
               <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                🏷️ Nhấp vào nhãn giá để xem chi tiết
+                Nhấp vào nhãn giá để xem chi tiết
               </span>
             </div>
 
@@ -1320,7 +1309,7 @@ export function AgencyServicesExplorer({
                         >
                           {service.province || "Việt Nam"} • {service.providerName}
                         </span>
-                        
+
                       </div>
 
                       <h4
@@ -1418,7 +1407,7 @@ export function AgencyServicesExplorer({
                     <CatIcon className="w-3 h-3" />
                     {meta.shortLabel}
                   </span>
-                  
+
                 </div>
 
                 <div className="p-4 flex-1 flex flex-col justify-between">

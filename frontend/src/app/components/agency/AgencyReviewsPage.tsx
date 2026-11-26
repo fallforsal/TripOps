@@ -63,8 +63,7 @@ export function AgencyReviewsPage() {
           <div className="sm:max-w-[220px] text-[11px] text-slate-500 flex gap-1.5">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <p>
-              Điểm xếp hạng trên sàn: <strong className="text-slate-700">{rating.score.toFixed(2)}</strong>. Điểm này kéo về mức trung bình toàn sàn
-              khi còn ít đánh giá, nên càng nhiều đánh giá tốt thì xếp hạng càng ổn định.
+              Điểm xếp hạng trên sàn: <strong className="text-slate-700">{rating.score.toFixed(2)}</strong>
             </p>
           </div>
         </div>

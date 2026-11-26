@@ -42,6 +42,7 @@ import { matchesServicePostFilter, servicePostCounts, servicePostState, serviceP
 const STATUS_FILTERS: ServicePostFilter[] = ["all", "pending", "approved", "paused", "hidden", "rejected"];
 const STATUS_ICONS = { pending: Clock, approved: CheckCircle2, paused: PauseCircle, hidden: EyeOff, rejected: XCircle };
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const UI_TEST_LABEL = /\bui[\s_-]*test\b/i;
 
 interface ServicePostApprovalProps {
   services: Service[];
@@ -72,10 +73,14 @@ export function ServicePostApproval({
   const [rejectingService, setRejectingService] = useState<Service | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const counts = useMemo(() => servicePostCounts(services), [services]);
+  const visibleServices = useMemo(
+    () => services.filter((service) => !UI_TEST_LABEL.test(service.name) && !UI_TEST_LABEL.test(service.providerName)),
+    [services],
+  );
+  const counts = useMemo(() => servicePostCounts(visibleServices), [visibleServices]);
 
   const filteredServices = useMemo(() => {
-    return services.filter((service) => {
+    return visibleServices.filter((service) => {
       if (!matchesServicePostFilter(service, selectedStatus)) return false;
 
       // Category filter
@@ -99,7 +104,7 @@ export function ServicePostApproval({
 
       return true;
     });
-  }, [services, selectedStatus, selectedCategory, searchQuery]);
+  }, [visibleServices, selectedStatus, selectedCategory, searchQuery]);
 
   // Apply pagination after all filters so search, counts and page numbers stay consistent.
   const totalPages = Math.max(1, Math.ceil(filteredServices.length / pageSize));
@@ -224,7 +229,7 @@ export function ServicePostApproval({
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
             <Compass className="w-3.5 h-3.5" />
             Tham quan
           </span>

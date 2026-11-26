@@ -6,7 +6,7 @@ export type ServicePostFilter = "all" | ServicePostState;
 export const servicePostStates = {
   pending: { label: "Chờ duyệt", tone: "bg-amber-50 text-amber-800 border-amber-200" },
   approved: { label: "Đang hiển thị", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  paused: { label: "Provider tạm ngừng", tone: "bg-violet-50 text-violet-700 border-violet-200" },
+  paused: { label: "Provider tạm ngừng", tone: "bg-sky-50 text-sky-700 border-sky-200" },
   hidden: { label: "Admin đã ẩn", tone: "bg-rose-50 text-rose-700 border-rose-200" },
   rejected: { label: "Từ chối", tone: "bg-red-50 text-red-700 border-red-200" },
 } satisfies Record<ServicePostState, { label: string; tone: string }>;

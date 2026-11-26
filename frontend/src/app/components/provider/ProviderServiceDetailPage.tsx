@@ -140,7 +140,7 @@ export function ProviderServiceDetailPage({
         );
       case "approved":
         if (service.isPaused) return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
             <PauseCircle className="w-3.5 h-3.5" />
             Đã duyệt · Provider tạm ngừng
           </span>
@@ -390,7 +390,7 @@ export function ProviderServiceDetailPage({
         </div>
       </div>}
       {/* Admin Hidden Notice Banner */}
-      {service.isPaused && <div role="status" className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-800 text-sm">
+      {service.isPaused && <div role="status" className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-800 text-sm">
         Nhà cung cấp đang tạm ngừng cung cấp dịch vụ này. Bài đăng không xuất hiện trên sàn cho đến khi Provider mở lại và trạng thái kiểm duyệt là đã duyệt.
       </div>}
       {service.status === "hidden" && (
