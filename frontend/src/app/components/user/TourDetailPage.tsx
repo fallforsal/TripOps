@@ -40,7 +40,6 @@ import {
   Share2,
   Heart,
   Sparkles,
-  Handshake,
   ShieldCheck,
   Check,
   FileText,
@@ -110,9 +109,9 @@ function formatVND(n: number) {
 
 // -------- Program Tab --------
 function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
-  const ownerLogo=(id?:string,name?:string)=>{
-    const owner=tour.coHosts?.find(h=>h.companyId===(id||tour.companyId));
-    return <AgencyLogo name={owner?.companyName||name||tour.companyName} logo={owner?.companyLogo||((!id||id===tour.companyId)?tour.companyLogo:undefined)}/>;
+  const ownerLogo = (id?: string, name?: string) => {
+    const owner = tour.coHosts?.find(h => h.companyId === (id || tour.companyId));
+    return <AgencyLogo name={owner?.companyName || name || tour.companyName} logo={owner?.companyLogo || ((!id || id === tour.companyId) ? tour.companyLogo : undefined)} />;
   };
   const [viewingMealService, setViewingMealService] = useState<Service | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
@@ -175,7 +174,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
         </section>
       )}
 
-      {(tour.is_request || tour.tourType === "custom_request") && <TourAccommodationSummary tour={tour} services={services}/>}
+      {(tour.is_request || tour.tourType === "custom_request") && <TourAccommodationSummary tour={tour} services={services} />}
 
       {/* Highlights */}
       {tour.highlights.length > 0 && (
@@ -316,7 +315,7 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                           Bản đồ
                                         </a>
                                       </div>
-                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(loc.createdByCompanyId,loc.createdByCompanyName)}</div>
+                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(loc.createdByCompanyId, loc.createdByCompanyName)}</div>
                                     </div>
                                   </div>
                                 );
@@ -335,46 +334,42 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                   <div key={meal.id || `meal-${idx}`} className="relative flex items-start gap-2.5">
                                     {/* Time pill */}
                                     <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-1.5">
-                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${
-                                        isBreakfast
-                                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                                          : isLunch
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${isBreakfast
+                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                        : isLunch
                                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                           : "bg-purple-50 text-purple-700 border-purple-200"
-                                      }`}>
+                                        }`}>
                                         <Clock className="w-3 h-3" />
                                         {time}
                                       </span>
                                     </div>
 
                                     {/* Dot on line */}
-                                    <div className={`relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${
-                                      isBreakfast
-                                        ? "border-amber-400 text-amber-600"
-                                        : isLunch
+                                    <div className={`relative z-10 w-7 h-7 mt-1 rounded-full bg-white border-2 flex items-center justify-center flex-shrink-0 shadow-2xs ${isBreakfast
+                                      ? "border-amber-400 text-amber-600"
+                                      : isLunch
                                         ? "border-emerald-500 text-emerald-600"
                                         : "border-[#F97316] text-[#EA580C]"
-                                    }`}>
+                                      }`}>
                                       {isBreakfast ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
                                     </div>
 
                                     {/* Meal card */}
-                                    <div className={`flex-1 border rounded-xl p-3 bg-white shadow-2xs ${
-                                      isBreakfast
-                                        ? "border-amber-200 bg-amber-50/20"
-                                        : isLunch
+                                    <div className={`flex-1 border rounded-xl p-3 bg-white shadow-2xs ${isBreakfast
+                                      ? "border-amber-200 bg-amber-50/20"
+                                      : isLunch
                                         ? "border-emerald-200 bg-emerald-50/20"
                                         : "border-purple-200 bg-purple-50/20"
-                                    }`}>
+                                      }`}>
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <div className="flex items-center gap-2">
-                                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${
-                                            isBreakfast
-                                              ? "bg-amber-100 text-amber-800 border-amber-300"
-                                              : isLunch
+                                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${isBreakfast
+                                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                                            : isLunch
                                               ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                               : "bg-[#F97316]/15 text-[#EA580C] border-purple-300"
-                                          }`}>
+                                            }`}>
                                             {mealLabel}
                                           </span>
                                           <h5 className="text-xs sm:text-sm font-bold text-gray-900">{meal.serviceName || "Nhà hàng theo chương trình"}</h5>
@@ -385,33 +380,33 @@ function ProgramTab({ tour, services }: { tour: Tour; services: Service[] }) {
                                           </span>
                                         )}
                                         <div className="flex items-center gap-2">
-                                        {service && (
-                                          <button
-                                            type="button"
-                                            onClick={() => setViewingMealService(service)}
-                                            aria-label={`Xem bài dịch vụ ${service.name}`}
-                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
-                                          >
-                                            <Eye className="w-3 h-3" /> Xem bài dịch vụ
-                                          </button>
-                                        )}
-                                        {address && (
-                                          <a
-                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([meal.serviceName, address].filter(Boolean).join(", "))}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
-                                          >
-                                            <MapPin className="w-3 h-3" /> Bản đồ
-                                          </a>
-                                        )}
+                                          {service && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setViewingMealService(service)}
+                                              aria-label={`Xem bài dịch vụ ${service.name}`}
+                                              className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                            >
+                                              <Eye className="w-3 h-3" /> Xem bài dịch vụ
+                                            </button>
+                                          )}
+                                          {address && (
+                                            <a
+                                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([meal.serviceName, address].filter(Boolean).join(", "))}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                                            >
+                                              <MapPin className="w-3 h-3" /> Bản đồ
+                                            </a>
+                                          )}
                                         </div>
                                       </div>
                                       <p className="text-xs text-gray-600 mt-1 leading-relaxed flex items-start gap-1.5">
                                         <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
                                         <span>{address || "Chưa cập nhật địa chỉ"}</span>
                                       </p>
-                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(meal.createdByCompanyId,meal.createdByCompanyName)}</div>
+                                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">Tạo bởi: {ownerLogo(meal.createdByCompanyId, meal.createdByCompanyName)}</div>
                                     </div>
                                   </div>
                                 );
@@ -935,8 +930,8 @@ function CustomTab({
             choice.mode === "custom"
               ? (choice.customName || "Khách sạn tự đề xuất")
               : choice.mode === "provider"
-              ? `${choice.systemName || "Khách sạn đối tác"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
-              : `${choice.systemName} (${choice.systemStars ?? 4}★)`,
+                ? `${choice.systemName || "Khách sạn đối tác"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
+                : `${choice.systemName} (${choice.systemStars ?? 4}★)`,
           mode: choice.mode,
           stars: choice.systemStars || 4,
           newPricePerNight: choice.systemPricePerNight,
@@ -1091,10 +1086,10 @@ function CustomTab({
                       {choice.mode === "system"
                         ? `${choice.systemName ?? "Chưa chọn"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
                         : choice.mode === "provider"
-                        ? `🌟 Đối tác: ${choice.systemName || "Khách sạn đối tác"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
-                        : choice.customName
-                          ? `Tự nhập: ${choice.customName}`
-                          : "Tự nhập (chưa điền)"}
+                          ? `🌟 Đối tác: ${choice.systemName || "Khách sạn đối tác"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
+                          : choice.customName
+                            ? `Tự nhập: ${choice.customName}`
+                            : "Tự nhập (chưa điền)"}
                     </p>
                   </div>
                 </div>
@@ -1126,11 +1121,10 @@ function CustomTab({
                     <button
                       type="button"
                       onClick={() => updateDestHotel(destination, { ...choice, mode: "system" })}
-                      className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                        choice.mode === "system"
-                          ? "bg-white text-[#075985] shadow-xs border border-[#CBD5E1]"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
+                      className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${choice.mode === "system"
+                        ? "bg-white text-[#075985] shadow-xs border border-[#CBD5E1]"
+                        : "text-gray-600 hover:text-gray-900"
+                        }`}
                     >
                       <Building2 className="w-3.5 h-3.5" />
                       Khách sạn theo Tour
@@ -1138,11 +1132,10 @@ function CustomTab({
                     <button
                       type="button"
                       onClick={() => updateDestHotel(destination, { ...choice, mode: "custom" })}
-                      className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                        choice.mode === "custom"
-                          ? "bg-white text-amber-700 shadow-xs border border-amber-300"
-                          : "text-gray-600 hover:text-amber-700"
-                      }`}
+                      className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${choice.mode === "custom"
+                        ? "bg-white text-amber-700 shadow-xs border border-amber-300"
+                        : "text-gray-600 hover:text-amber-700"
+                        }`}
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       Tự đề xuất
@@ -1237,20 +1230,18 @@ function CustomTab({
                             <ServiceOptionCard
                               label={`Khách sạn: ${opt.name}`} selected={isSel} onSelect={selectOption}
                               key={opt.name}
-                              className={`rounded-2xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 ${
-                                isSel
-                                  ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
-                                  : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
-                              }`}
+                              className={`rounded-2xl border-2 transition-all p-3.5 flex flex-col justify-between gap-3 ${isSel
+                                ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
+                                : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
+                                }`}
                             >
                               <div>
                                 {/* Top Banner Tag */}
                                 <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-gray-100 flex-wrap gap-1">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                                    opt.diff === 0
-                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                      : "bg-amber-50 text-amber-900 border-amber-300"
-                                  }`}>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${opt.diff === 0
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-amber-50 text-amber-900 border-amber-300"
+                                    }`}>
                                     <Star className="w-3 h-3 fill-current text-amber-500" />
                                     {opt.diff === 0 ? "Khách sạn Tiêu chuẩn (Mặc định)" : `Phương án thay thế (Option ${optIdx + 1})`}
                                   </span>
@@ -1296,11 +1287,10 @@ function CustomTab({
                                     )}
                                     <div className="mt-1">
                                       {opt.diff !== 0 && (
-                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border inline-block ${
-                                          opt.diff > 0
-                                            ? "text-amber-800 bg-amber-50 border-amber-200"
-                                            : "text-emerald-800 bg-emerald-50 border-emerald-200"
-                                        }`}>
+                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border inline-block ${opt.diff > 0
+                                          ? "text-amber-800 bg-amber-50 border-amber-200"
+                                          : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                          }`}>
                                           {opt.diff > 0 ? "Phụ thu +" : "Tiết kiệm "}{formatVND(Math.abs(opt.diff))}/đêm
                                         </span>
                                       )}
@@ -1527,16 +1517,14 @@ function CustomTab({
                                 </div>
 
                                 {/* Dot */}
-                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
-                                  loc.changed ? "bg-amber-400 border-amber-400 text-white" : "bg-white border-blue-400 text-blue-500"
-                                }`}>
+                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${loc.changed ? "bg-amber-400 border-amber-400 text-white" : "bg-white border-blue-400 text-blue-500"
+                                  }`}>
                                   <MapPin className="w-3.5 h-3.5" />
                                 </div>
 
                                 {/* Content Card */}
-                                <div className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${
-                                  loc.changed ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white hover:border-blue-300"
-                                }`}>
+                                <div className={`flex-1 rounded-xl border p-3 shadow-2xs transition-all ${loc.changed ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white hover:border-blue-300"
+                                  }`}>
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="flex-1">
                                       {loc.changed ? (
@@ -1566,11 +1554,10 @@ function CustomTab({
                                         changed: !loc.changed,
                                         changeRequest: loc.changed ? "" : loc.changeRequest,
                                       })}
-                                      className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                                        loc.changed
-                                          ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                                          : "bg-gray-100 text-gray-600 hover:bg-[#F97316]/15 hover:text-[#EA580C]"
-                                      }`}
+                                      className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${loc.changed
+                                        ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                        : "bg-gray-100 text-gray-600 hover:bg-[#F97316]/15 hover:text-[#EA580C]"
+                                        }`}
                                     >
                                       {loc.changed ? "Huỷ thay đổi" : "Thay đổi"}
                                     </button>
@@ -1603,342 +1590,330 @@ function CustomTab({
                               <div key={act.key} className="relative flex items-start gap-2.5">
                                 {/* Time badge */}
                                 <div className="w-[72px] flex-shrink-0 text-right pr-1 pt-2.5">
-                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${
-                                    mealType === "breakfast"
-                                      ? "bg-amber-50 text-amber-800 border-amber-200"
-                                      : mealType === "lunch"
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono border shadow-2xs ${mealType === "breakfast"
+                                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                                    : mealType === "lunch"
                                       ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                                       : "bg-purple-50 text-[#EA580C] border-purple-200"
-                                  }`}>
-                                    <Clock className={`w-3 h-3 ${
-                                      mealType === "breakfast" ? "text-amber-600" : mealType === "lunch" ? "text-emerald-600" : "text-[#F97316]"
-                                    }`} />
+                                    }`}>
+                                    <Clock className={`w-3 h-3 ${mealType === "breakfast" ? "text-amber-600" : mealType === "lunch" ? "text-emerald-600" : "text-[#F97316]"
+                                      }`} />
                                     {act.time}
                                   </span>
                                 </div>
 
                                 {/* Dot */}
-                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${
-                                  mealType === "breakfast"
-                                    ? "bg-amber-100 border-amber-400 text-amber-700"
-                                    : mealType === "lunch"
+                                <div className={`relative z-10 flex-shrink-0 mt-2.5 w-7 h-7 rounded-full flex items-center justify-center border-2 shadow-2xs ${mealType === "breakfast"
+                                  ? "bg-amber-100 border-amber-400 text-amber-700"
+                                  : mealType === "lunch"
                                     ? "bg-emerald-100 border-emerald-500 text-emerald-700"
                                     : "bg-[#F97316]/15 border-purple-500 text-[#EA580C]"
-                                }`}>
+                                  }`}>
                                   {mealType === "breakfast" ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
                                 </div>
 
                                 {/* Meal Accordion Content */}
                                 <div className="flex-1 min-w-0">
                                   {(() => {
-                        const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
-                        const mealChoice = mealChoices.find((mc) => mc.mealType === mealType);
-                        const mealKey = `${day.id}-${mealType}`;
-                        const isExpanded = expandedMeal === mealKey;
-                        const mealLabel = mealType === "breakfast" ? "Bữa sáng" : mealType === "lunch" ? "Bữa trưa" : "Bữa tối";
-                        const isCustom = mealChoice?.mode === "custom" && Boolean(mealChoice.customName?.trim());
-                        const isSystemChanged =
-                          mealChoice?.mode === "system" &&
-                          Boolean(mealChoice.systemName) &&
-                          Boolean(defaultMeal.serviceName) &&
-                          mealChoice.systemName !== defaultMeal.serviceName;
+                                    const mealType = defaultMeal.type as "breakfast" | "lunch" | "dinner";
+                                    const mealChoice = mealChoices.find((mc) => mc.mealType === mealType);
+                                    const mealKey = `${day.id}-${mealType}`;
+                                    const isExpanded = expandedMeal === mealKey;
+                                    const mealLabel = mealType === "breakfast" ? "Bữa sáng" : mealType === "lunch" ? "Bữa trưa" : "Bữa tối";
+                                    const isCustom = mealChoice?.mode === "custom" && Boolean(mealChoice.customName?.trim());
+                                    const isSystemChanged =
+                                      mealChoice?.mode === "system" &&
+                                      Boolean(mealChoice.systemName) &&
+                                      Boolean(defaultMeal.serviceName) &&
+                                      mealChoice.systemName !== defaultMeal.serviceName;
 
-                        return (
-                          <div key={mealKey} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedMeal(isExpanded ? null : mealKey)}
-                              className={`w-full flex items-center justify-between px-3.5 py-2.5 transition-colors text-left ${
-                                mealType === "breakfast"
-                                  ? "bg-amber-50/60 hover:bg-amber-100/50"
-                                  : mealType === "lunch"
-                                  ? "bg-emerald-50/60 hover:bg-emerald-100/50"
-                                  : "bg-[#F0F9FF]/60 hover:bg-[#F97316]/15/50"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                  mealType === "breakfast"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : mealType === "lunch"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-[#F97316]/15 text-[#EA580C]"
-                                }`}>
-                                  {mealType === "breakfast" ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-semibold text-gray-900">
-                                    {mealLabel}:{" "}
-                                    <span className="font-bold text-gray-900">
-                                      {mealChoice?.mode === "custom"
-                                        ? (mealChoice.customName || "Tự nhập (chưa điền)")
-                                        : mealChoice?.mode === "provider"
-                                        ? `🌟 Đối tác: ${mealChoice.systemName || "Nhà hàng đối tác"}`
-                                        : (mealChoice?.systemName || defaultMeal.serviceName || "Nhà hàng theo tour")}
-                                    </span>
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    Mặc định: {defaultMeal.serviceName || "Nhà hàng địa phương"}
-                                  </p>
-                                </div>
-                              </div>
+                                    return (
+                                      <div key={mealKey} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                                        <button
+                                          type="button"
+                                          onClick={() => setExpandedMeal(isExpanded ? null : mealKey)}
+                                          className={`w-full flex items-center justify-between px-3.5 py-2.5 transition-colors text-left ${mealType === "breakfast"
+                                            ? "bg-amber-50/60 hover:bg-amber-100/50"
+                                            : mealType === "lunch"
+                                              ? "bg-emerald-50/60 hover:bg-emerald-100/50"
+                                              : "bg-[#F0F9FF]/60 hover:bg-[#F97316]/15/50"
+                                            }`}
+                                        >
+                                          <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${mealType === "breakfast"
+                                              ? "bg-amber-100 text-amber-700"
+                                              : mealType === "lunch"
+                                                ? "bg-emerald-100 text-emerald-700"
+                                                : "bg-[#F97316]/15 text-[#EA580C]"
+                                              }`}>
+                                              {mealType === "breakfast" ? <Sun className="w-3.5 h-3.5" /> : <Utensils className="w-3.5 h-3.5" />}
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="text-xs font-semibold text-gray-900">
+                                                {mealLabel}:{" "}
+                                                <span className="font-bold text-gray-900">
+                                                  {mealChoice?.mode === "custom"
+                                                    ? (mealChoice.customName || "Tự nhập (chưa điền)")
+                                                    : mealChoice?.mode === "provider"
+                                                      ? `🌟 Đối tác: ${mealChoice.systemName || "Nhà hàng đối tác"}`
+                                                      : (mealChoice?.systemName || defaultMeal.serviceName || "Nhà hàng theo tour")}
+                                                </span>
+                                              </p>
+                                              <p className="text-[11px] text-gray-500">
+                                                Mặc định: {defaultMeal.serviceName || "Nhà hàng địa phương"}
+                                              </p>
+                                            </div>
+                                          </div>
 
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  {isCustom && (
-                                    <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium border border-amber-200">
-                                      Tự nhập – chờ báo giá
-                                    </span>
-                                  )}
-                                  {mealChoice?.mode === "provider" && (
-                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold border border-indigo-200 flex items-center gap-1">
-                                      <Sparkles className="w-3 h-3 text-amber-500" />
-                                      Đối tác Nền tảng
-                                    </span>
-                                  )}
-                                  {isSystemChanged && (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium border border-emerald-200">
-                                        Đã đổi
-                                      </span>
-                                      {mealChoice?.priceDifference !== undefined ? (
-                                        mealChoice.priceDifference !== 0 && (
-                                          <span className={`text-xs font-bold ${mealChoice.priceDifference > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                                            {mealChoice.priceDifference > 0 ? "+" : ""}{formatVND(mealChoice.priceDifference)}
-                                          </span>
-                                        )
-                                      ) : (
-                                        mealChoice?.systemPrice !== undefined && defaultMeal.pricePerPerson !== undefined && (
-                                          <span className={`text-xs font-bold ${
-                                            mealChoice.systemPrice - defaultMeal.pricePerPerson > 0 ? "text-amber-600" : "text-emerald-600"
-                                          }`}>
-                                            {mealChoice.systemPrice - defaultMeal.pricePerPerson > 0 ? "+" : ""}
-                                            {formatVND(mealChoice.systemPrice - defaultMeal.pricePerPerson)}
-                                          </span>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-                                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-                                </div>
-                              </button>
-
-                              {isExpanded && (
-                                <div className="p-3.5 space-y-3 bg-white border-t border-gray-100">
-                                  {/* Mode tabs (Tour / Custom) */}
-                                  <div className="flex flex-wrap gap-1.5 p-1 bg-gray-100 rounded-xl">
-                                    <button
-                                      type="button"
-                                      onClick={() => updateMealChoice(day.id, mealType, { mode: "system" })}
-                                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                                        mealChoice?.mode === "system"
-                                          ? "bg-white text-emerald-700 shadow-xs border border-emerald-200"
-                                          : "text-gray-600 hover:text-gray-900"
-                                      }`}
-                                    >
-                                      <Utensils className="w-3.5 h-3.5" />
-                                      Nhà hàng theo Tour
-                                    </button>
-                                    {defaultMeal.allowCustomMealRequest === true && (
-                                      <button
-                                        type="button"
-                                        onClick={() => updateMealChoice(day.id, mealType, { mode: "custom" })}
-                                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                                          mealChoice?.mode === "custom"
-                                            ? "bg-white text-amber-700 shadow-xs border border-amber-300"
-                                            : "text-gray-600 hover:text-amber-700"
-                                        }`}
-                                      >
-                                        <Edit3 className="w-3.5 h-3.5" />
-                                        Tự đề xuất
-                                      </button>
-                                    )}
-                                  </div>
-
-                                  {/* System restaurant list */}
-                                  {mealChoice?.mode === "system" && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      {(() => {
-                                        const options: Array<{ name: string; description?: string; diff: number; pricePerPerson?: number; isDirectory?: boolean }> = [];
-
-                                        // 1. Mặc định theo tour (0đ)
-                                        options.push({
-                                          name: defaultMeal.serviceName || "Nhà hàng theo tour",
-                                          description: defaultMeal.description || "Thực đơn tiêu chuẩn của chương trình",
-                                          diff: 0,
-                                          pricePerPerson: defaultMeal.pricePerPerson,
-                                          isDirectory: Boolean(
-                                            defaultMeal.isCustom ||
-                                            defaultMeal.supplierSource === "AGENCY_SUPPLIER" ||
-                                            defaultMeal.agencySupplierId ||
-                                            defaultMeal.providerName === "Nhà cung cấp của agency" ||
-                                            defaultMeal.serviceId?.startsWith("custom-") ||
-                                            defaultMeal.serviceId?.startsWith("agency-supplier-"),
-                                          ),
-                                        });
-
-                                        // 2. Nếu tour đã cấu hình danh sách alternativeMeals
-                                        if (defaultMeal.alternativeMeals && defaultMeal.alternativeMeals.length > 0) {
-                                          defaultMeal.alternativeMeals.forEach((alt) => {
-                                            options.push({
-                                              name: alt.restaurantName,
-                                              description: alt.description || alt.address || "",
-                                              diff: alt.priceDifference,
-                                              pricePerPerson: (defaultMeal.pricePerPerson || 0) + alt.priceDifference,
-                                              isDirectory: Boolean(
-                                                alt.isCustom ||
-                                                alt.supplierSource === "AGENCY_SUPPLIER" ||
-                                                alt.agencySupplierId ||
-                                                alt.providerName === "Nhà cung cấp của agency" ||
-                                                alt.serviceId?.startsWith("custom-") ||
-                                                alt.serviceId?.startsWith("agency-supplier-"),
-                                              ),
-                                            });
-                                          });
-                                        }
-
-                                        return options.map((opt, optIdx) => {
-                                          const isSel = (mealChoice?.systemName || defaultMeal.serviceName) === opt.name;
-                                          const linkedService = opt.isDirectory
-                                            ? undefined
-                                            : services.find((s) =>
-                                                s.category === "fnb" &&
-                                                (s.name.toLowerCase().includes(opt.name.toLowerCase()) ||
-                                                  opt.name.toLowerCase().includes(s.name.toLowerCase()))
-                                              );
-                                          const imgUrl = opt.isDirectory ? "" : (serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500");
-                                          const providerName = opt.isDirectory ? "Nhà cung cấp của agency" : (linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Heritage");
-                                          const selectOption = () => updateMealChoice(day.id, mealType, {
-                                            mode: "system",
-                                            systemName: opt.name,
-                                            systemPrice: opt.pricePerPerson,
-                                            priceDifference: opt.diff,
-                                          });
-
-                                          return (
-                                            <ServiceOptionCard
-                                              label={`Nhà hàng: ${opt.name}`} selected={isSel} onSelect={selectOption}
-                                              key={opt.name}
-                                              className={`rounded-2xl border-2 transition-all p-3 flex flex-col justify-between gap-2.5 ${
-                                                isSel
-                                                  ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
-                                                  : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
-                                              }`}
-                                            >
-                                              <div>
-                                                {/* Top Banner Tag */}
-                                                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-gray-100 flex-wrap gap-1">
-                                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                                                    opt.diff === 0
-                                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                                      : "bg-amber-50 text-amber-900 border-amber-300"
-                                                  }`}>
-                                                    <Utensils className="w-3 h-3 text-emerald-600" />
-                                                    {opt.diff === 0 ? "Món ăn Tiêu chuẩn (Mặc định)" : `Lựa chọn đổi món (Option ${optIdx + 1})`}
-                                                  </span>
-                                                  {isSel && (
-                                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                                                      <Check className="w-3 h-3 text-emerald-600" /> Đang chọn
+                                          <div className="flex items-center gap-2 flex-shrink-0">
+                                            {isCustom && (
+                                              <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium border border-amber-200">
+                                                Tự nhập – chờ báo giá
+                                              </span>
+                                            )}
+                                            {mealChoice?.mode === "provider" && (
+                                              <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold border border-indigo-200 flex items-center gap-1">
+                                                <Sparkles className="w-3 h-3 text-amber-500" />
+                                                Đối tác Nền tảng
+                                              </span>
+                                            )}
+                                            {isSystemChanged && (
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium border border-emerald-200">
+                                                  Đã đổi
+                                                </span>
+                                                {mealChoice?.priceDifference !== undefined ? (
+                                                  mealChoice.priceDifference !== 0 && (
+                                                    <span className={`text-xs font-bold ${mealChoice.priceDifference > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                                                      {mealChoice.priceDifference > 0 ? "+" : ""}{formatVND(mealChoice.priceDifference)}
                                                     </span>
-                                                  )}
-                                                </div>
-
-                                                {/* Body */}
-                                                <div className="flex items-start gap-2.5">
-                                                  <div className="w-16 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-gray-200">
-                                                    {opt.isDirectory || !imgUrl ? (
-                                                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1 text-center select-none">
-                                                        <div className="w-6 h-6 rounded-lg bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-0.5">
-                                                          <Utensils className="w-3.5 h-3.5" />
-                                                        </div>
-                                                        <span className="text-[8px] font-bold text-purple-800 leading-none">
-                                                          Danh bạ
-                                                        </span>
-                                                      </div>
-                                                    ) : (
-                                                      <img src={imgUrl} alt={opt.name} className="w-full h-full object-cover" />
-                                                    )}
-                                                  </div>
-                                                  <div className="min-w-0 flex-1">
-                                                    <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 inline-block truncate max-w-full">
-                                                      {providerName}
+                                                  )
+                                                ) : (
+                                                  mealChoice?.systemPrice !== undefined && defaultMeal.pricePerPerson !== undefined && (
+                                                    <span className={`text-xs font-bold ${mealChoice.systemPrice - defaultMeal.pricePerPerson > 0 ? "text-amber-600" : "text-emerald-600"
+                                                      }`}>
+                                                      {mealChoice.systemPrice - defaultMeal.pricePerPerson > 0 ? "+" : ""}
+                                                      {formatVND(mealChoice.systemPrice - defaultMeal.pricePerPerson)}
                                                     </span>
-                                                    <h5 className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 truncate">{opt.name}</h5>
-                                                    {opt.description && (
-                                                      <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{opt.description}</p>
-                                                    )}
-                                                    <div className="mt-1">
-                                                      {opt.diff !== 0 && (
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${
-                                                          opt.diff > 0
-                                                            ? "text-amber-800 bg-amber-50 border-amber-200"
-                                                            : "text-emerald-800 bg-emerald-50 border-emerald-200"
-                                                        }`}>
-                                                          {opt.diff > 0 ? "Phụ thu +" : "Tiết kiệm "}{formatVND(Math.abs(opt.diff))}/người
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                </div>
+                                                  )
+                                                )}
                                               </div>
+                                            )}
+                                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                                          </div>
+                                        </button>
 
-                                              {/* Action Footer */}
-                                              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 flex-wrap">
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (linkedService) {
-                                                      setModalService(linkedService);
-                                                      setModalTarget({ type: "meal", dayId: day.id, mealType });
-                                                      setIsModalOpen(true);
-                                                    }
-                                                  }}
-                                                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
-                                                  title="Xem bài viết & Bản đồ nhà hàng"
-                                                >
-                                                  <FileText className="w-3.5 h-3.5 text-blue-600" />
-                                                  <span>Xem bài viết &amp; Bản đồ</span>
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={selectOption}
-                                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                                                    isSel
-                                                      ? "bg-emerald-600 text-white cursor-default"
-                                                      : "bg-[#075985] text-white hover:bg-[#F97316] cursor-pointer"
+                                        {isExpanded && (
+                                          <div className="p-3.5 space-y-3 bg-white border-t border-gray-100">
+                                            {/* Mode tabs (Tour / Custom) */}
+                                            <div className="flex flex-wrap gap-1.5 p-1 bg-gray-100 rounded-xl">
+                                              <button
+                                                type="button"
+                                                onClick={() => updateMealChoice(day.id, mealType, { mode: "system" })}
+                                                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${mealChoice?.mode === "system"
+                                                  ? "bg-white text-emerald-700 shadow-xs border border-emerald-200"
+                                                  : "text-gray-600 hover:text-gray-900"
                                                   }`}
+                                              >
+                                                <Utensils className="w-3.5 h-3.5" />
+                                                Nhà hàng theo Tour
+                                              </button>
+                                              {defaultMeal.allowCustomMealRequest === true && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => updateMealChoice(day.id, mealType, { mode: "custom" })}
+                                                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${mealChoice?.mode === "custom"
+                                                    ? "bg-white text-amber-700 shadow-xs border border-amber-300"
+                                                    : "text-gray-600 hover:text-amber-700"
+                                                    }`}
                                                 >
-                                                  {isSel ? "✓ Đang chọn" : "Chọn món này"}
+                                                  <Edit3 className="w-3.5 h-3.5" />
+                                                  Tự đề xuất
                                                 </button>
-                                              </div>
-                                            </ServiceOptionCard>
-                                          );
-                                        });
-                                      })()}
-                                    </div>
-                                  )}
+                                              )}
+                                            </div>
 
-                                  {/* Custom restaurant form */}
-                                  {mealChoice?.mode === "custom" && (
-                                    <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs">
-                                      <label className="font-semibold text-gray-800 block">Tên nhà hàng / quán ăn hoặc ghi chú khẩu vị:</label>
-                                      <input
-                                        type="text"
-                                        value={mealChoice.customName ?? ""}
-                                        onChange={(e) => updateMealChoice(day.id, mealType, { customName: e.target.value })}
-                                        placeholder={`VD: Quán nướng ngói Đà Lạt, yêu cầu ăn chay, hoặc nhà hàng bạn muốn...`}
-                                        className="w-full border border-amber-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                                      />
-                                      <p className="text-[11px] text-amber-700 flex items-center gap-1 mt-1">
-                                        <Info className="w-3.5 h-3.5 flex-shrink-0" />
-                                        Công ty du lịch sẽ liên hệ kiểm tra với nhà hàng và báo giá chốt cho bạn.
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                                            {/* System restaurant list */}
+                                            {mealChoice?.mode === "system" && (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {(() => {
+                                                  const options: Array<{ name: string; description?: string; diff: number; pricePerPerson?: number; isDirectory?: boolean }> = [];
+
+                                                  // 1. Mặc định theo tour (0đ)
+                                                  options.push({
+                                                    name: defaultMeal.serviceName || "Nhà hàng theo tour",
+                                                    description: defaultMeal.description || "Thực đơn tiêu chuẩn của chương trình",
+                                                    diff: 0,
+                                                    pricePerPerson: defaultMeal.pricePerPerson,
+                                                    isDirectory: Boolean(
+                                                      defaultMeal.isCustom ||
+                                                      defaultMeal.supplierSource === "AGENCY_SUPPLIER" ||
+                                                      defaultMeal.agencySupplierId ||
+                                                      defaultMeal.providerName === "Nhà cung cấp của agency" ||
+                                                      defaultMeal.serviceId?.startsWith("custom-") ||
+                                                      defaultMeal.serviceId?.startsWith("agency-supplier-"),
+                                                    ),
+                                                  });
+
+                                                  // 2. Nếu tour đã cấu hình danh sách alternativeMeals
+                                                  if (defaultMeal.alternativeMeals && defaultMeal.alternativeMeals.length > 0) {
+                                                    defaultMeal.alternativeMeals.forEach((alt) => {
+                                                      options.push({
+                                                        name: alt.restaurantName,
+                                                        description: alt.description || alt.address || "",
+                                                        diff: alt.priceDifference,
+                                                        pricePerPerson: (defaultMeal.pricePerPerson || 0) + alt.priceDifference,
+                                                        isDirectory: Boolean(
+                                                          alt.isCustom ||
+                                                          alt.supplierSource === "AGENCY_SUPPLIER" ||
+                                                          alt.agencySupplierId ||
+                                                          alt.providerName === "Nhà cung cấp của agency" ||
+                                                          alt.serviceId?.startsWith("custom-") ||
+                                                          alt.serviceId?.startsWith("agency-supplier-"),
+                                                        ),
+                                                      });
+                                                    });
+                                                  }
+
+                                                  return options.map((opt, optIdx) => {
+                                                    const isSel = (mealChoice?.systemName || defaultMeal.serviceName) === opt.name;
+                                                    const linkedService = opt.isDirectory
+                                                      ? undefined
+                                                      : services.find((s) =>
+                                                        s.category === "fnb" &&
+                                                        (s.name.toLowerCase().includes(opt.name.toLowerCase()) ||
+                                                          opt.name.toLowerCase().includes(s.name.toLowerCase()))
+                                                      );
+                                                    const imgUrl = opt.isDirectory ? "" : (serviceThumbnail(linkedService) || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500");
+                                                    const providerName = opt.isDirectory ? "Nhà cung cấp của agency" : (linkedService?.providerName || "Tổ hợp Dịch vụ Du lịch Heritage");
+                                                    const selectOption = () => updateMealChoice(day.id, mealType, {
+                                                      mode: "system",
+                                                      systemName: opt.name,
+                                                      systemPrice: opt.pricePerPerson,
+                                                      priceDifference: opt.diff,
+                                                    });
+
+                                                    return (
+                                                      <ServiceOptionCard
+                                                        label={`Nhà hàng: ${opt.name}`} selected={isSel} onSelect={selectOption}
+                                                        key={opt.name}
+                                                        className={`rounded-2xl border-2 transition-all p-3 flex flex-col justify-between gap-2.5 ${isSel
+                                                          ? "border-emerald-500 bg-emerald-50/20 shadow-sm ring-1 ring-emerald-400"
+                                                          : "border-[#CBD5E1] bg-white hover:border-gray-300 shadow-2xs"
+                                                          }`}
+                                                      >
+                                                        <div>
+                                                          {/* Top Banner Tag */}
+                                                          <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-gray-100 flex-wrap gap-1">
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${opt.diff === 0
+                                                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                                              : "bg-amber-50 text-amber-900 border-amber-300"
+                                                              }`}>
+                                                              <Utensils className="w-3 h-3 text-emerald-600" />
+                                                              {opt.diff === 0 ? "Món ăn Tiêu chuẩn (Mặc định)" : `Lựa chọn đổi món (Option ${optIdx + 1})`}
+                                                            </span>
+                                                            {isSel && (
+                                                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                                                <Check className="w-3 h-3 text-emerald-600" /> Đang chọn
+                                                              </span>
+                                                            )}
+                                                          </div>
+
+                                                          {/* Body */}
+                                                          <div className="flex items-start gap-2.5">
+                                                            <div className="w-16 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-gray-200">
+                                                              {opt.isDirectory || !imgUrl ? (
+                                                                <div className="w-full h-full bg-gradient-to-br from-purple-100 via-fuchsia-50 to-purple-200/80 flex flex-col items-center justify-center p-1 text-center select-none">
+                                                                  <div className="w-6 h-6 rounded-lg bg-white/90 border border-purple-200/80 shadow-2xs flex items-center justify-center text-purple-700 mb-0.5">
+                                                                    <Utensils className="w-3.5 h-3.5" />
+                                                                  </div>
+                                                                  <span className="text-[8px] font-bold text-purple-800 leading-none">
+                                                                    Danh bạ
+                                                                  </span>
+                                                                </div>
+                                                              ) : (
+                                                                <img src={imgUrl} alt={opt.name} className="w-full h-full object-cover" />
+                                                              )}
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 inline-block truncate max-w-full">
+                                                                {providerName}
+                                                              </span>
+                                                              <h5 className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 truncate">{opt.name}</h5>
+                                                              {opt.description && (
+                                                                <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{opt.description}</p>
+                                                              )}
+                                                              <div className="mt-1">
+                                                                {opt.diff !== 0 && (
+                                                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${opt.diff > 0
+                                                                    ? "text-amber-800 bg-amber-50 border-amber-200"
+                                                                    : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                                                    }`}>
+                                                                    {opt.diff > 0 ? "Phụ thu +" : "Tiết kiệm "}{formatVND(Math.abs(opt.diff))}/người
+                                                                  </span>
+                                                                )}
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Action Footer */}
+                                                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 flex-wrap">
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              if (linkedService) {
+                                                                setModalService(linkedService);
+                                                                setModalTarget({ type: "meal", dayId: day.id, mealType });
+                                                                setIsModalOpen(true);
+                                                              }
+                                                            }}
+                                                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                                                            title="Xem bài viết & Bản đồ nhà hàng"
+                                                          >
+                                                            <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                                            <span>Xem bài viết &amp; Bản đồ</span>
+                                                          </button>
+
+                                                          <button
+                                                            type="button"
+                                                            onClick={selectOption}
+                                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${isSel
+                                                              ? "bg-emerald-600 text-white cursor-default"
+                                                              : "bg-[#075985] text-white hover:bg-[#F97316] cursor-pointer"
+                                                              }`}
+                                                          >
+                                                            {isSel ? "✓ Đang chọn" : "Chọn món này"}
+                                                          </button>
+                                                        </div>
+                                                      </ServiceOptionCard>
+                                                    );
+                                                  });
+                                                })()}
+                                              </div>
+                                            )}
+
+                                            {/* Custom restaurant form */}
+                                            {mealChoice?.mode === "custom" && (
+                                              <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs">
+                                                <label className="font-semibold text-gray-800 block">Tên nhà hàng / quán ăn hoặc ghi chú khẩu vị:</label>
+                                                <input
+                                                  type="text"
+                                                  value={mealChoice.customName ?? ""}
+                                                  onChange={(e) => updateMealChoice(day.id, mealType, { customName: e.target.value })}
+                                                  placeholder={`VD: Quán nướng ngói Đà Lạt, yêu cầu ăn chay, hoặc nhà hàng bạn muốn...`}
+                                                  className="w-full border border-amber-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                                />
+                                                <p className="text-[11px] text-amber-700 flex items-center gap-1 mt-1">
+                                                  <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                                                  Công ty du lịch sẽ liên hệ kiểm tra với nhà hàng và báo giá chốt cho bạn.
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     );
                                   })()}
                                 </div>
@@ -1991,143 +1966,7 @@ function CustomTab({
       )}
 
       {/* Action button to book with customized itinerary */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 rounded-2xl p-6 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5 border border-blue-500">
-        <div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase bg-amber-400 text-amber-950 px-2.5 py-0.5 rounded-full mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            Lịch trình theo ý muốn
-          </span>
-          <h4 className="text-lg font-bold">
-            Hoàn tất tùy chỉnh &amp; Đặt tour ngay
-          </h4>
-          <p className="text-xs text-blue-100 mt-1 max-w-xl">
-            Toàn bộ thông tin thay đổi về chỗ ở/khách sạn, chế độ ẩm thực (chỗ ăn) và địa điểm tham quan sẽ được gửi trực tiếp đến công ty du lịch để đối soát và chốt giá.
-          </p>
-        </div>
-        <Button
-          size="lg"
-          onClick={() => {
-            const customHotelChanges: CustomHotelChange[] = [];
-            Object.values(destHotels).forEach((g) => {
-              const choice = g.hotelChoice;
-              const def = g.defaultHotel;
-              const isCustomMode = choice.mode === "custom" && Boolean(choice.customName?.trim());
-              const isProviderMode = choice.mode === "provider" && Boolean(choice.serviceId);
-              const isSystemChanged =
-                choice.mode === "system" &&
-                Boolean(choice.systemName) &&
-                Boolean(def) &&
-                choice.systemName !== def?.name;
 
-              if (isCustomMode || isProviderMode || isSystemChanged) {
-                customHotelChanges.push({
-                  destination: g.destination,
-                  originalHotelName: def ? `${def.name} (${def.stars || 4}★)` : "Khách sạn mặc định của tour",
-                  originalPricePerNight: def?.pricePerNight ?? 0,
-                  newHotelName:
-                    choice.mode === "custom"
-                      ? (choice.customName || "Khách sạn tự đề xuất")
-                      : choice.mode === "provider"
-                      ? `${choice.systemName || "Khách sạn đối tác"}${choice.systemStars ? ` (${choice.systemStars}★)` : ""}`
-                      : `${choice.systemName} (${choice.systemStars ?? 4}★)`,
-                  mode: choice.mode,
-                  stars: choice.systemStars || 4,
-                  newPricePerNight: choice.systemPricePerNight,
-                  address: choice.customAddress,
-                  note: choice.customNote,
-                  isProviderService: choice.isProviderService,
-                  serviceId: choice.serviceId,
-                  providerId: choice.providerId,
-                  providerName: choice.providerName,
-                  providerPhone: choice.providerPhone,
-                  providerEmail: choice.providerEmail,
-                  providerAddress: choice.providerAddress,
-                  providerRepresentative: choice.providerRepresentative,
-                  serviceImage: choice.serviceImage,
-                  latitude: choice.latitude,
-                  longitude: choice.longitude,
-                });
-              }
-            });
-
-            // Gather custom meal changes
-            const customMealChanges: CustomMealChange[] = [];
-            tour.itinerary.forEach((day) => {
-              const dayState = days[day.id];
-              if (!dayState) return;
-              dayState.mealChoices.forEach((mc) => {
-                const defaultMeal = day.meals?.find((m) => m.type === mc.mealType);
-                const isCustom = mc.mode === "custom" && Boolean(mc.customName?.trim());
-                const isProvider = mc.mode === "provider" && Boolean(mc.serviceId);
-                const isSystemChanged =
-                  mc.mode === "system" &&
-                  Boolean(mc.systemName) &&
-                  Boolean(defaultMeal?.serviceName) &&
-                  mc.systemName !== defaultMeal?.serviceName;
-
-                if (isCustom || isProvider || isSystemChanged) {
-                  customMealChanges.push({
-                    dayNumber: day.day,
-                    mealType: mc.mealType,
-                    originalMealName: defaultMeal?.serviceName || "Nhà hàng theo tour",
-                    newMealName:
-                      mc.mode === "custom"
-                        ? (mc.customName || "Nhà hàng tự chọn")
-                        : mc.systemName || "",
-                    mode: mc.mode,
-                    pricePerPerson: mc.systemPrice,
-                    isProviderService: mc.isProviderService,
-                    serviceId: mc.serviceId,
-                    providerId: mc.providerId,
-                    providerName: mc.providerName,
-                    providerPhone: mc.providerPhone,
-                    providerEmail: mc.providerEmail,
-                    providerAddress: mc.providerAddress,
-                    providerRepresentative: mc.providerRepresentative,
-                    serviceImage: mc.serviceImage,
-                    latitude: mc.latitude,
-                    longitude: mc.longitude,
-                  });
-                }
-              });
-            });
-
-            const locationChanges: CustomLocationChange[] = [];
-            tour.itinerary.forEach((day) => {
-              const dayState = days[day.id];
-              if (!dayState) return;
-              const changedLocs = dayState.locations.filter((l) => l.changed && l.changeRequest.trim());
-              changedLocs.forEach((changedLoc) => {
-                locationChanges.push({
-                  dayId: day.id,
-                  dayNumber: day.day,
-                  locationId: changedLoc.locationId,
-                  originalLocationName: changedLoc.locationName,
-                  originalLocations: [changedLoc.locationName],
-                  requestedLocations: changedLoc.changeRequest.trim(),
-                  note: `Đổi "${changedLoc.locationName}" sang "${changedLoc.changeRequest.trim()}"`,
-                });
-              });
-            });
-
-            const hasRealCustomization =
-              customHotelChanges.some((h) => h.mode !== "system") ||
-              customMealChanges.some((m) => m.mode !== "system") ||
-              locationChanges.length > 0;
-
-            onBookCustom?.({
-              customHotelChanges,
-              customMealChanges,
-              locationChanges,
-              hasLocationCustomization: hasRealCustomization,
-              estimatedPrice: estimatedTotal ?? basePrice,
-            });
-          }}
-          className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-6 py-3 rounded-xl shadow-lg whitespace-nowrap text-sm flex-shrink-0"
-        >
-          Đặt tour theo lịch trình này →
-        </Button>
-      </div>
 
       {/* Service Blog Detail Modal */}
       <ServiceBlogDetailModal
@@ -2142,8 +1981,8 @@ function CustomTab({
         isSelected={
           modalService
             ? (modalTarget?.type === "hotel" && modalTarget.destination
-                ? destHotels[modalTarget.destination]?.hotelChoice.serviceId === modalService.id
-                : modalTarget?.type === "meal" && modalTarget.dayId && modalTarget.mealType
+              ? destHotels[modalTarget.destination]?.hotelChoice.serviceId === modalService.id
+              : modalTarget?.type === "meal" && modalTarget.dayId && modalTarget.mealType
                 ? days[modalTarget.dayId]?.mealChoices.find((m) => m.mealType === modalTarget.mealType)?.serviceId === modalService.id
                 : false)
             : false
@@ -2450,11 +2289,10 @@ export function TourDetailPage({
                     type="button"
                     key={i}
                     onClick={() => setSelectedPhoto(img)}
-                    className={`relative rounded-xl overflow-hidden border-2 flex-shrink-0 w-20 h-14 transition-all ${
-                      (selectedPhoto === img)
-                        ? "border-[#075985] ring-2 ring-blue-500/50 scale-105"
-                        : "border-gray-200 hover:border-blue-300 opacity-70 hover:opacity-100"
-                    }`}
+                    className={`relative rounded-xl overflow-hidden border-2 flex-shrink-0 w-20 h-14 transition-all ${(selectedPhoto === img)
+                      ? "border-[#075985] ring-2 ring-blue-500/50 scale-105"
+                      : "border-gray-200 hover:border-blue-300 opacity-70 hover:opacity-100"
+                      }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
@@ -2494,13 +2332,12 @@ export function TourDetailPage({
 
             {/* Co-Hosting Alliance Banner */}
             {tour.isCoHosted && tour.coHosts && tour.coHosts.length > 0 && (
-              <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-blue-50 border border-purple-300 rounded-2xl p-4.5 space-y-3 shadow-xs">
+              <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
-                    <Handshake className="w-4 h-4 text-amber-300" />
+                  <span className="bg-[#075985] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                     TOUR LIÊN MINH ĐỐI TÁC CHUYÊN NGHIỆP
                   </span>
-                  <span className="text-xs text-purple-900 font-semibold">
+                  <span className="text-xs text-[#075985] font-semibold">
                     Đồng tổ chức bởi 2 thương hiệu uy tín
                   </span>
                 </div>
@@ -2513,19 +2350,18 @@ export function TourDetailPage({
                   {tour.coHosts.map((ch) => (
                     <div
                       key={ch.id}
-                      className="bg-white rounded-xl p-3 border border-purple-100 shadow-2xs space-y-1"
+                      className="bg-white rounded-xl p-3 border border-[#E0F2FE] space-y-1"
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-gray-900 flex items-center gap-2">
-                          <AgencyLogo name={ch.companyName} logo={ch.companyLogo} className="h-9 w-9"/>
+                          <AgencyLogo name={ch.companyName} logo={ch.companyLogo} className="h-9 w-9" />
                           {ch.companyName}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                            ch.role === "lead"
-                              ? "bg-[#E0F2FE] text-blue-800"
-                              : "bg-[#F97316]/15 text-purple-800"
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${ch.role === "lead"
+                            ? "bg-[#E0F2FE] text-blue-800"
+                            : "bg-[#F1F5F9] text-[#334155]"
+                            }`}
                         >
                           {ch.role === "lead" ? "Đơn vị chủ trì" : "Đối tác địa phương"}
                         </span>
@@ -2547,11 +2383,10 @@ export function TourDetailPage({
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex-shrink-0 px-4 py-3 text-sm font-medium transition-all border-b-2 ${
-                      activeTab === tab.id
-                        ? "border-[#075985] text-[#075985] bg-[#F0F9FF]/50"
-                        : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
+                    className={`flex-shrink-0 px-4 py-3 text-sm font-medium transition-all border-b-2 ${activeTab === tab.id
+                      ? "border-[#075985] text-[#075985] bg-[#F0F9FF]/50"
+                      : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -2593,11 +2428,11 @@ export function TourDetailPage({
               </div>
 
               {isCustomTour && (
-                <div className="bg-[#F0F9FF] border border-[#F97316]/30 rounded-xl p-3 text-xs text-purple-900 space-y-1">
-                  <p className="font-bold flex items-center gap-1 text-purple-950">
-                    <span>🔒</span> Tour thiết kế riêng độc quyền
+                <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl p-3 text-xs space-y-1">
+                  <p className="font-bold text-[#075985]">
+                    Tour thiết kế riêng độc quyền
                   </p>
-                  <p className="text-[11px] text-[#EA580C] leading-relaxed">
+                  <p className="text-[11px] text-[#475569] leading-relaxed">
                     Giá và dịch vụ đã chốt theo yêu cầu riêng. Quý khách bấm đặt tour bên dưới để hoàn tất giữ chỗ.
                   </p>
                 </div>
@@ -2677,11 +2512,7 @@ export function TourDetailPage({
                 <>
                   <Button
                     onClick={handleBook}
-                    className={`w-full ${
-                      isCustomTour
-                        ? "bg-[#F97316] hover:bg-[#EA580C] text-white"
-                        : "bg-red-600 hover:bg-red-700 text-white"
-                    } font-semibold py-3 text-base rounded-xl`}
+                    className="w-full bg-[#075985] hover:bg-[#0C4A6E] text-white font-semibold py-3 text-base rounded-xl"
                   >
                     {currentUser ? (isCustomTour ? "Đặt Tour Thiết Kế Này Ngay" : "Đặt tour ngay") : "Đăng nhập để đặt"}
                   </Button>
@@ -2729,7 +2560,7 @@ export function TourDetailPage({
                       </div>}
                     </div>
 
-                    {!previewOnly && <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{kind:"tour",id:Number(tour.id),version:tour.is_request?tour.version:undefined,title:tour.name,thumbnailUrl:tour.image}} className="w-full">Tin nhắn</ChatWithButton>}
+                    {!previewOnly && <ChatWithButton onRequireLogin={onShowLogin} userId={tour.companyId} context={{ kind: "tour", id: Number(tour.id), version: tour.is_request ? tour.version : undefined, title: tour.name, thumbnailUrl: tour.image }} className="w-full">Tin nhắn</ChatWithButton>}
                   </div>
                 );
               })()}
@@ -2764,11 +2595,10 @@ export function TourDetailPage({
                         key={idx}
                         type="button"
                         onClick={() => setHideReason(suggestion)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all ${
-                          hideReason === suggestion
-                            ? "bg-amber-100 border-amber-400 text-amber-900 font-semibold"
-                            : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                        }`}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all ${hideReason === suggestion
+                          ? "bg-amber-100 border-amber-400 text-amber-900 font-semibold"
+                          : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                          }`}
                       >
                         {suggestion}
                       </button>

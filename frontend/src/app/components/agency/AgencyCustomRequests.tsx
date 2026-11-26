@@ -100,6 +100,8 @@ export function AgencyCustomRequests({
   const [reason, setReason] = useState("");
   const [cloning, setCloning] = useState<CustomTourRequest | null>(null);
   const [sourceId, setSourceId] = useState("");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceKind, setSourceKind] = useState<"" | "agency" | "customer">("");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
 
@@ -145,6 +147,8 @@ export function AgencyCustomRequests({
     if (!active(request)) return;
     if (!existing) {
       setSourceId("");
+      setSourceSearch("");
+      setSourceKind("");
       setError("");
       setCloning(request);
       return;
@@ -210,10 +214,10 @@ export function AgencyCustomRequests({
           targetVersion === null
             ? await shareDesignTour(request.id, (await getDesignVersion(request.id, currentTour(request)?.version || 1)).revision!, null, false)
             : await selectCustomerDesignVersion(
-                targetVersion,
-                selected => getDesignVersion(request.id, selected),
-                (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected, shareAll),
-              );
+              targetVersion,
+              selected => getDesignVersion(request.id, selected),
+              (freshRevision, selected) => shareDesignTour(request.id, freshRevision, selected, shareAll),
+            );
         setOverrides(previous => ({ ...previous, [request.id]: saved }));
         setRevision(value => value + 1);
         try {
@@ -294,6 +298,44 @@ export function AgencyCustomRequests({
   );
 
   const collaboration = requests.find(r => r.id === collaborating);
+  const templateGroups = [
+    {
+      kind: "agency" as const,
+      label: "Tour của Agency",
+      items: tours
+        .filter(t =>
+          !t.is_request &&
+          !t.customRequestId &&
+          t.tourType !== "custom_request" &&
+          !t.targetUserId &&
+          !t.targetCustomerName &&
+          !(t.tourCode || "").trim().toUpperCase().startsWith("TC-") &&
+          !(t.name || "").trim().toLowerCase().startsWith("tour riêng:") &&
+          t.status !== "deleted")
+        .map(t => ({ id: t.id, name: t.name, detail: t.tourCode || "Tour có sẵn" })),
+    },
+    {
+      kind: "customer" as const,
+      label: "Tour đã thiết kế cho khách này",
+      items: cloning?.userId
+        ? tours
+          .map(t => ({ tour: t, request: requests.find(r => r.id === t.customRequestId) }))
+          .filter(({ tour, request }) =>
+            request &&
+            request.id !== cloning.id &&
+            request.userId === cloning.userId &&
+            tour.status !== "deleted")
+          .map(({ tour, request }) => ({
+            id: tour.id,
+            name: tour.name,
+            detail: `Yêu cầu #${request!.id} · ${labels[request!.status] || request!.status}`,
+          }))
+        : [],
+    },
+  ].map(group => ({
+    ...group,
+    items: group.items.filter(item => `${item.name} ${item.detail}`.toLocaleLowerCase("vi-VN").includes(sourceSearch.trim().toLocaleLowerCase("vi-VN"))),
+  }));
   const detailOpen = !!(
     preview ||
     collaboration ||
@@ -402,16 +444,14 @@ export function AgencyCustomRequests({
               aria-selected={filter === status}
               aria-controls="agency-design-request-rows"
               key={status}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-3 text-sm transition-colors ${
-                filter === status ? "border-[#075985] font-semibold text-[#075985]" : "border-transparent text-slate-500 hover:text-slate-900"
-              }`}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-3 text-sm transition-colors ${filter === status ? "border-[#075985] font-semibold text-[#075985]" : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
               onClick={() => setFilter(status)}
             >
               {status === "all" ? "Tất cả" : labels[status]}
               <span
-                className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${
-                  filter === status ? "bg-sky-100 text-[#075985]" : "bg-slate-200/70 text-slate-600"
-                }`}
+                className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${filter === status ? "bg-sky-100 text-[#075985]" : "bg-slate-200/70 text-slate-600"
+                  }`}
               >
                 {requests.filter(r => r.targetCompanyId === company.id && matchesTab(r, status)).length}
               </span>
@@ -471,6 +511,7 @@ export function AgencyCustomRequests({
 
                     <div>
                       <ChatWithButton
+                        className="h-9 px-4"
                         userId={request.userId}
                         context={{ kind: "design-request", id: Number(request.id), title: `Yêu cầu thiết kế #${request.id}`, subtitle: request.destinations }}
                       >
@@ -530,7 +571,7 @@ export function AgencyCustomRequests({
                   </div>
 
                   {/* Cột 3: Phương án & Thao tác */}
-                  <div className="flex flex-col justify-start gap-2.5 self-start">
+                  <div className="flex flex-col justify-between gap-2.5 self-stretch">
                     {tour ? (
                       <DesignVersionSelector
                         requestId={request.id}
@@ -555,15 +596,15 @@ export function AgencyCustomRequests({
                       </div>
                     )}
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={busy}
-                        className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        className="h-9 w-full justify-center gap-1.5 border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         onClick={() => setViewing(request.id)}
                       >
-                        <FileText className="h-3.5 w-3.5 text-[#075985]" />
+                        <FileText className="h-4 w-4 text-[#075985]" />
                         Hồ sơ
                       </Button>
 
@@ -572,7 +613,7 @@ export function AgencyCustomRequests({
                           <Button
                             size="sm"
                             disabled={busy}
-                            className="bg-[#075985] text-white hover:bg-[#0369a1]"
+                            className="h-9 w-full justify-center gap-1.5 bg-[#075985] text-white hover:bg-[#0369a1]"
                             onClick={() => void decide(request, "reviewing")}
                           >
                             <CheckCircle2 className="h-4 w-4" />
@@ -582,10 +623,10 @@ export function AgencyCustomRequests({
                             size="sm"
                             variant="outline"
                             disabled={busy}
-                            className="border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                            className="h-9 w-full justify-center gap-1.5 border-red-500 bg-white font-semibold text-red-600 hover:bg-red-600 hover:text-white"
                             onClick={() => void decide(request, "rejected")}
                           >
-                            <XCircle className="h-3.5 w-3.5" />
+                            <XCircle className="h-4 w-4" />
                             Từ chối
                           </Button>
                         </>
@@ -593,16 +634,16 @@ export function AgencyCustomRequests({
                         <Button
                           size="sm"
                           disabled={busy}
-                          className="bg-[#075985] text-white hover:bg-[#0369a1]"
+                          className="h-9 w-full justify-center gap-1.5 bg-[#075985] text-white hover:bg-[#0369a1]"
                           onClick={() => beginDesign(request, tour, tour?.version)}
                         >
-                          <Sparkles className="h-3.5 w-3.5" />
+                          <Sparkles className="h-4 w-4" />
                           Thiết kế tour
                         </Button>
                       ) : null}
 
                       {request.bookingId && (
-                        <Button size="sm" variant="outline" className="border-teal-200 bg-teal-50/70 text-teal-800 hover:bg-teal-100" onClick={() => onViewBooking?.(request.bookingId!)}>
+                        <Button size="sm" variant="outline" className="h-9 w-full justify-center gap-1.5 border-teal-200 bg-teal-50/70 text-teal-800 hover:bg-teal-100" onClick={() => onViewBooking?.(request.bookingId!)}>
                           Xem booking
                         </Button>
                       )}
@@ -612,10 +653,10 @@ export function AgencyCustomRequests({
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                          className="h-9 w-full justify-center gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50"
                           onClick={() => openWorkspace(request)}
                         >
-                          <Handshake className="h-3.5 w-3.5 text-teal-700" />
+                          <Handshake className="h-4 w-4 text-teal-700" />
                           Mời đối tác
                         </Button>
                       )}
@@ -625,10 +666,10 @@ export function AgencyCustomRequests({
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          className="border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                          className="h-9 w-full justify-center gap-1.5 border-red-500 bg-white font-semibold text-red-600 hover:bg-red-600 hover:text-white"
                           onClick={() => void lifecycle(request, "close")}
                         >
-                          <XCircle className="h-3.5 w-3.5" />
+                          <XCircle className="h-4 w-4" />
                           Đóng yêu cầu
                         </Button>
                       )}
@@ -638,10 +679,10 @@ export function AgencyCustomRequests({
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          className="border-sky-200 bg-white text-[#075985] hover:bg-sky-50"
+                          className="h-9 w-full justify-center gap-1.5 border-sky-200 bg-white text-[#075985] hover:bg-sky-50"
                           onClick={() => void lifecycle(request, "reopen")}
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <CheckCircle2 className="h-4 w-4" />
                           Mở lại yêu cầu
                         </Button>
                       )}
@@ -726,12 +767,13 @@ export function AgencyCustomRequests({
           {error && <NotificationMessage tone="error" message={error} />}
           <div className="flex justify-end gap-2">
             <AlertDialogCancel asChild>
-              <Button data-slot="alert-dialog-cancel" variant="outline" disabled={busy} onClick={() => setRejecting(null)}>
+              <Button data-slot="alert-dialog-cancel" variant="outline" className="border-red-500 font-semibold text-red-600 hover:bg-red-50 hover:text-red-700" disabled={busy} onClick={() => setRejecting(null)}>
                 Hủy
               </Button>
             </AlertDialogCancel>
             <Button
               data-slot="alert-dialog-action"
+              className="bg-red-600 font-semibold text-white hover:bg-red-700"
               disabled={busy || !reason.trim()}
               onClick={() =>
                 void perform(async () => {
@@ -750,85 +792,133 @@ export function AgencyCustomRequests({
       </AlertDialog>
 
       <Dialog open={Boolean(cloning)} onOpenChange={open => { if (!busy && !open) setCloning(null); }}>
-        <DialogContent className="bg-white sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#075985]">
-              <Sparkles className="h-5 w-5" />
-              Bắt đầu thiết kế tour · Yêu cầu #{cloning?.id}
-            </DialogTitle>
-            <DialogDescription>
-              Bạn muốn dùng một tour có sẵn của Agency làm mẫu hay thiết kế mới hoàn toàn từ đầu?
+        <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto bg-white p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-sky-100 bg-sky-50/70 px-6 py-5 pr-12">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#075985] text-white">
+                <Sparkles className="h-5 w-5" />
+              </span>
+              <div>
+                <DialogTitle className="text-lg text-slate-900">Bắt đầu thiết kế tour</DialogTitle>
+                <p className="mt-1 text-xs font-medium text-[#075985]">Yêu cầu #{cloning?.id}</p>
+              </div>
+            </div>
+            <DialogDescription className="text-left leading-relaxed text-slate-600">
+              Chọn một tour để làm điểm bắt đầu, hoặc tạo lịch trình mới cho khách.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <Copy className="h-4 w-4 text-[#075985]" />
-                Dùng tour có sẵn làm mẫu
+          <div className="space-y-4 p-5 sm:p-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-[#075985]"><Copy className="h-4 w-4" /></span>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Dùng tour có sẵn làm mẫu</h3>
+                </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Tạo bản sao riêng cho yêu cầu này để chỉnh sửa nhanh. Tour gốc không bị thay đổi.
-              </p>
-              <select
-                aria-label="Tour mẫu để clone"
-                value={sourceId}
-                onChange={e => setSourceId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm outline-none focus:border-[#075985] focus:ring-2 focus:ring-sky-100"
+              <p className="mb-2 text-sm font-medium text-slate-700">Lấy mẫu từ <span className="text-rose-600">*</span></p>
+              <div role="radiogroup" aria-label="Nguồn tour mẫu" className="mb-3 grid gap-2 sm:grid-cols-2">
+                {([
+                  { kind: "agency", title: "Tour của Agency", hint: "Tour đang có trong Quản lý Tour" },
+                  { kind: "customer", title: "Tour đã thiết kế cho khách này", hint: "Phương án ở các yêu cầu trước của khách" },
+                ] as const).map(option => (
+                  <button
+                    key={option.kind}
+                    type="button"
+                    role="radio"
+                    aria-checked={sourceKind === option.kind}
+                    disabled={busy}
+                    onClick={() => { setSourceKind(option.kind); setSourceId(""); setSourceSearch(""); }}
+                    className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${sourceKind === option.kind ? "border-[#075985] bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                  >
+                    <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 ${sourceKind === option.kind ? "border-[#075985] bg-[#075985] ring-2 ring-white ring-inset" : "border-slate-300"}`} />
+                    <span>
+                      <span className="block text-sm font-medium text-slate-800">{option.title}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{option.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {sourceKind && (<>
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    aria-label="Tìm tour làm mẫu"
+                    value={sourceSearch}
+                    onChange={e => { setSourceSearch(e.target.value); setSourceId(""); }}
+                    placeholder="Tìm theo tên tour hoặc mã yêu cầu..."
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#075985] focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+                <div role="group" aria-label="Tour mẫu để sao chép" className="mt-3 max-h-56 space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+                  {templateGroups.filter(group => group.kind === sourceKind).some(group => group.items.length > 0) ? templateGroups.filter(group => group.kind === sourceKind).map(group => group.items.length > 0 && (
+                    <div key={group.label}>
+                      <div className="space-y-1">
+                        {group.items.map(item => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={sourceId === item.id}
+                            disabled={busy}
+                            onClick={() => setSourceId(item.id)}
+                            className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075985] ${sourceId === item.id ? "border-sky-300 bg-sky-50" : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"}`}
+                          >
+                            <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 ${sourceId === item.id ? "border-[#075985] bg-[#075985] ring-2 ring-white ring-inset" : "border-slate-300"}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium leading-snug text-slate-800">{item.name}</span>
+                              <span className="mt-0.5 block text-xs text-slate-500">{item.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )) : <p className="px-3 py-6 text-center text-sm text-slate-500">{sourceKind === "customer" && !sourceSearch.trim() ? "Khách này chưa có tour nào được thiết kế trước đây." : "Không tìm thấy tour phù hợp."}</p>}
+                </div>
+              </>)}
+              {error && <div className="mt-3"><NotificationMessage tone="error" message={error} /></div>}
+              <Button
+                disabled={busy || !sourceId}
+                className="mt-4 w-full bg-[#075985] text-white hover:bg-[#0369a1] sm:w-auto"
+                onClick={() =>
+                  void perform(async () => {
+                    if (!cloning) return;
+                    const saved = await cloneDesignTour(cloning.id, sourceId);
+                    setOverrides(prev => ({ ...prev, [cloning.id]: saved }));
+                    await onUpdateRequest(cloning.id, {});
+                    setEditing(saved);
+                    setTemplate(null);
+                    setDesigning(cloning);
+                    setCloning(null);
+                    toast.success("Đã tạo bản sao thành tour riêng. Bạn có thể chỉnh sửa ngay.");
+                  })
+                }
               >
-                <option value="">— Chọn tour của Agency —</option>
-                {tours
-                  .filter(t => !t.is_request && t.status !== "deleted")
-                  .map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-              </select>
-              {error && <NotificationMessage tone="error" message={error} />}
-              <div className="flex justify-end">
-                <Button
-                  disabled={busy || !sourceId}
-                  className="bg-[#075985] text-white hover:bg-[#0369a1]"
-                  onClick={() =>
-                    void perform(async () => {
-                      if (!cloning) return;
-                      const saved = await cloneDesignTour(cloning.id, sourceId);
-                      setOverrides(prev => ({ ...prev, [cloning.id]: saved }));
-                      await onUpdateRequest(cloning.id, {});
-                      setEditing(saved);
-                      setTemplate(null);
-                      setDesigning(cloning);
-                      setCloning(null);
-                      toast.success("Đã tạo bản sao thành tour riêng. Bạn có thể chỉnh sửa ngay.");
-                    })
-                  }
-                >
-                  <Copy className="h-4 w-4" />
-                  Dùng tour đã chọn &amp; Thiết kế
-                </Button>
-              </div>
-            </div>
+                <Copy className="h-4 w-4" />
+                Dùng tour đã chọn
+              </Button>
+            </section>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 bg-white p-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Không dùng tour mẫu?</p>
-                <p className="text-xs text-slate-500">Tự thiết kế lịch trình và bảng giá mới hoàn toàn từ đầu.</p>
+            <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#075985]"><Sparkles className="h-4 w-4" /></span>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Thiết kế mới từ đầu</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Tạo lịch trình và bảng giá riêng cho yêu cầu này.</p>
+                </div>
               </div>
               <Button
                 variant="outline"
                 disabled={busy}
-                className="border-sky-200 text-[#075985] hover:bg-sky-50"
+                className="shrink-0 border-sky-200 bg-white text-[#075985] hover:bg-sky-50"
                 onClick={() => {
                   const target = cloning;
                   setCloning(null);
                   if (target) void start(target, null);
                 }}
               >
-                <Sparkles className="h-4 w-4" />
-                Thiết kế mới từ đầu
+                Bắt đầu mới
               </Button>
-            </div>
+            </section>
           </div>
         </DialogContent>
       </Dialog>

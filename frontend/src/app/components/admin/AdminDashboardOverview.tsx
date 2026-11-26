@@ -143,13 +143,13 @@ export function AdminDashboardOverview({
   const platformFeeCollected = useMemo(() => settlements === null ? null :
     settlements.filter((s) => s.status === "Paid" && (period === "all" || inPeriod(s.transferredAt, start!, now)))
       .reduce((sum, s) => sum + Math.max(0, s.platformFee || 0), 0),
-  [settlements, period, start, now]);
+    [settlements, period, start, now]);
 
   // Unpaid means the tour is not yet eligible. Count only settlement rows awaiting payout.
   const pendingSettlement = useMemo(() => settlements === null ? null :
     settlements.filter((s) => ["Ready", "Processing", "Failed", "OnHold"].includes(s.status))
       .reduce((sum, s) => sum + Math.max(0, s.netPayout || 0), 0),
-  [settlements]);
+    [settlements]);
 
   const pendingServices = useMemo(() => services.filter((s) => s.status === "pending"), [services]);
   const pendingRefunds = useMemo(() => refundRequests.filter((r) => waitingRefund(r.status)), [refundRequests]);
@@ -194,7 +194,6 @@ export function AdminDashboardOverview({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tổng quan hệ thống</h1>
           <p className="mt-1 text-sm text-slate-500">Theo dõi tình hình kinh doanh và các công việc cần xử lý trên TripOps.</p>
-          <p className="mt-1 text-xs text-slate-400">Thống kê Booking toàn hệ thống từ API; công việc và quyết toán lấy từ các phân hệ tương ứng.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled={loading || bookingLoading}
@@ -289,23 +288,23 @@ export function AdminDashboardOverview({
               {bookingLoading ? "Đang tải thống kê Booking..." : "Không tải được dữ liệu biểu đồ."}
             </div>
           ) : (
-          <div className="h-64 w-full" role="img" aria-label="Biểu đồ số lượng booking theo thời gian">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="admin-booking-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0284c7" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#0284c7" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ stroke: "#bae6fd" }} contentStyle={{ fontSize: 12, borderRadius: 12 }} />
-                <Area name="Booking" type="monotone" dataKey="count" stroke="#075985" strokeWidth={2.5} fill="url(#admin-booking-gradient)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+            <div className="h-64 w-full" role="img" aria-label="Biểu đồ số lượng booking theo thời gian">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="admin-booking-gradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0284c7" stopOpacity={0.22} />
+                      <stop offset="100%" stopColor="#0284c7" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ stroke: "#bae6fd" }} contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+                  <Area name="Booking" type="monotone" dataKey="count" stroke="#075985" strokeWidth={2.5} fill="url(#admin-booking-gradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
 
@@ -317,25 +316,25 @@ export function AdminDashboardOverview({
               {bookingLoading ? "Đang tải trạng thái Booking..." : "Không tải được dữ liệu trạng thái."}
             </p>
           ) : (
-          <>
-          <div className="mt-6 space-y-5">
-            {statusBreakdown.map((item) => {
-              const percentage = chartBookingCount > 0 ? Math.round(item.count * 100 / chartBookingCount) : 0;
-              return (
-                <div key={item.label} className="space-y-2">
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="font-medium text-slate-600">{item.label}</span>
-                    <span className="font-bold tabular-nums text-slate-800">{numberFormatter.format(item.count)} · {percentage}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className={"h-full rounded-full transition-all " + item.color} style={{ width: percentage + "%" }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {chartBookingCount === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong 30 ngày gần nhất.</p>}
-          </>
+            <>
+              <div className="mt-6 space-y-5">
+                {statusBreakdown.map((item) => {
+                  const percentage = chartBookingCount > 0 ? Math.round(item.count * 100 / chartBookingCount) : 0;
+                  return (
+                    <div key={item.label} className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium text-slate-600">{item.label}</span>
+                        <span className="font-bold tabular-nums text-slate-800">{numberFormatter.format(item.count)} · {percentage}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className={"h-full rounded-full transition-all " + item.color} style={{ width: percentage + "%" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {chartBookingCount === 0 && <p className="mt-4 text-xs text-slate-500">Chưa có booking trong 30 ngày gần nhất.</p>}
+            </>
           )}
         </div>
       </section>

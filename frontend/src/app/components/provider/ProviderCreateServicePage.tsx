@@ -81,7 +81,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     description: "Khách sạn, Resort nghỉ dưỡng, Homestay, Biệt thự villa, Glamping",
     icon: Hotel,
     color: "from-blue-600 to-indigo-600",
-    bgLight: "bg-blue-50 text-blue-700",
+    bgLight: "bg-sky-50 text-[#075985]",
     borderColor: "border-blue-500",
     defaultName: "Khách Sạn Heritage Đà Lạt",
     subCategories: [
@@ -145,7 +145,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     description: "Nhà hàng, Quán ăn đặc sản, Cà phê, Buffet tiệc đoàn lữ hành",
     icon: Utensils,
     color: "from-amber-500 to-orange-600",
-    bgLight: "bg-orange-50 text-orange-700",
+    bgLight: "bg-sky-50 text-[#075985]",
     borderColor: "border-orange-500",
     defaultName: "Nhà hàng Hải Sản Biển Xanh Phú Quốc",
     subCategories: [
@@ -208,7 +208,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     description: "Xe du lịch 4-45 chỗ, Xe Limousine VIP, Tàu cano cao tốc",
     icon: Car,
     color: "from-cyan-500 to-blue-600",
-    bgLight: "bg-cyan-50 text-cyan-700",
+    bgLight: "bg-sky-50 text-[#075985]",
     borderColor: "border-cyan-500",
     defaultName: "Nhà Xe Limousine Heritage VIP",
     subCategories: [
@@ -270,7 +270,7 @@ export const CATEGORY_CONFIGS: Record<ServiceCategory, CategoryMeta> = {
     description: "Danh lam thắng cảnh, Di tích lịch sử, Khu du lịch sinh thái",
     icon: Compass,
     color: "from-teal-500 to-emerald-600",
-    bgLight: "bg-teal-50 text-teal-700",
+    bgLight: "bg-sky-50 text-[#075985]",
     borderColor: "border-teal-500",
     defaultName: "Khu Du Lịch Thung Lũng Tình Yêu Đà Lạt",
     subCategories: [
@@ -659,26 +659,26 @@ export function ProviderCreateServicePage({
   };
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-200 max-w-6xl mx-auto">
+    <div className="w-full space-y-6 pb-20">
       {saveError && <NotificationMessage tone="error" message={saveError} />}
       {(saving || uploading) && <p role="status" className="text-sm text-sky-800">{uploading ? "Đang tải ảnh lên Cloudinary…" : "Đang lưu bài đăng…"}</p>}
       {/* Top Header Bar */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200">
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 min-w-0">
           <Button
             variant="outline"
             size="sm"
             onClick={onBack}
-            className="rounded-xl border-gray-200 hover:bg-gray-100 text-gray-700"
+            className="h-10 rounded-xl border-gray-300 hover:bg-gray-100 text-gray-700 text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
             Quay lại danh sách
           </Button>
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900">
-              {isEditing ? "Chỉnh sửa bài đăng dịch vụ" : "Đăng Dịch Vụ Mới"}
+            <h1 className="text-2xl font-bold text-slate-900">
+              {isEditing ? "Chỉnh sửa bài đăng dịch vụ" : "Đăng dịch vụ mới"}
             </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-0.5">
               Cung cấp dịch vụ lên sàn TripOps để các công ty lữ hành dễ dàng tìm kiếm và tích hợp tour
             </p>
           </div>
@@ -689,7 +689,7 @@ export function ProviderCreateServicePage({
           <button
             type="button"
             onClick={() => setViewMode("form")}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`inline-flex h-9 items-center gap-1.5 px-4 rounded-lg text-sm font-semibold transition-all ${
               viewMode === "form"
                 ? "bg-white text-[#075985] shadow-sm"
                 : "text-gray-600 hover:text-gray-900"
@@ -701,7 +701,7 @@ export function ProviderCreateServicePage({
           <button
             type="button"
             onClick={() => setViewMode("preview")}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`inline-flex h-9 items-center gap-1.5 px-4 rounded-lg text-sm font-semibold transition-all ${
               viewMode === "preview"
                 ? "bg-[#075985] text-white shadow-sm"
                 : "text-gray-600 hover:text-gray-900"
@@ -714,8 +714,7 @@ export function ProviderCreateServicePage({
             type="button"
             onClick={() => handleSubmit()}
             disabled={saving || uploading}
-            size="sm"
-            className="bg-[#075985] hover:bg-[#0C4A6E] text-white font-bold rounded-lg text-xs gap-1.5"
+            className="h-9 bg-[#075985] hover:bg-[#0C4A6E] text-white font-semibold rounded-lg text-sm gap-1.5 px-4"
           >
             <CheckCircle2 className="w-4 h-4" />
             {saving || uploading ? "Đang gửi…" : isEditing ? "Cập nhật bài đăng" : "Gửi duyệt ngay"}
@@ -729,13 +728,13 @@ export function ProviderCreateServicePage({
       {viewMode === "form" && (
         <div className="space-y-6">
           {/* Stepper Navigation Indicator - NO NUMERIC 1,2,3 LABELS IN HEADINGS */}
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+          <div className="bg-white p-4 rounded-2xl border border-gray-200">
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {/* Step 1 */}
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
-                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                className={`flex items-center gap-3 p-3 sm:p-4 rounded-xl text-left transition-all border border-transparent ${
                   currentStep === 1
                     ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
                     : currentStep > 1
@@ -744,7 +743,7 @@ export function ProviderCreateServicePage({
                 }`}
               >
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                     currentStep === 1
                       ? "bg-[#075985] text-white"
                       : currentStep > 1
@@ -755,10 +754,10 @@ export function ProviderCreateServicePage({
                   {currentStep > 1 ? <Check className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                 </div>
                 <div className="hidden sm:block">
-                  <div className="text-xs font-bold leading-none">
+                  <div className="text-sm font-semibold leading-none">
                     Loại hình & Hình ảnh
                   </div>
-                  <div className="text-[11px] opacity-75 mt-0.5">
+                  <div className="text-xs opacity-75 mt-1">
                     Chọn dịch vụ & Chọn Thumbnail
                   </div>
                 </div>
@@ -769,7 +768,7 @@ export function ProviderCreateServicePage({
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                className={`flex items-center gap-3 p-3 sm:p-4 rounded-xl text-left transition-all border border-transparent ${
                   currentStep === 2
                     ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
                     : currentStep > 2
@@ -778,7 +777,7 @@ export function ProviderCreateServicePage({
                 }`}
               >
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                     currentStep === 2
                       ? "bg-[#075985] text-white"
                       : currentStep > 2
@@ -789,10 +788,10 @@ export function ProviderCreateServicePage({
                   {currentStep > 2 ? <Check className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
                 </div>
                 <div className="hidden sm:block">
-                  <div className="text-xs font-bold leading-none">
+                  <div className="text-sm font-semibold leading-none">
                     Thông tin & Bảng giá
                   </div>
-                  <div className="text-[11px] opacity-75 mt-0.5">
+                  <div className="text-xs opacity-75 mt-1">
                     Tên, phân loại, giá, tiện ích & quy định
                   </div>
                 </div>
@@ -803,14 +802,14 @@ export function ProviderCreateServicePage({
               <button
                 type="button"
                 onClick={() => setCurrentStep(3)}
-                className={`flex items-center gap-2.5 p-2 sm:p-3 rounded-xl text-left transition-all ${
+                className={`flex items-center gap-3 p-3 sm:p-4 rounded-xl text-left transition-all border border-transparent ${
                   currentStep === 3
                     ? "bg-[#F0F9FF] border border-[#CBD5E1] text-[#075985]"
                     : "text-gray-400 hover:bg-gray-50"
                 }`}
               >
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                     currentStep === 3
                       ? "bg-[#075985] text-white"
                       : "bg-gray-200 text-gray-500"
@@ -819,10 +818,10 @@ export function ProviderCreateServicePage({
                   <MapPin className="w-4 h-4" />
                 </div>
                 <div className="hidden sm:block">
-                  <div className="text-xs font-bold leading-none">
+                  <div className="text-sm font-semibold leading-none">
                     Vị trí & Bản đồ
                   </div>
-                  <div className="text-[11px] opacity-75 mt-0.5">
+                  <div className="text-xs opacity-75 mt-1">
                     Click ghim trên bản đồ GPS
                   </div>
                 </div>
@@ -837,14 +836,14 @@ export function ProviderCreateServicePage({
           {currentStep === 1 && (
             <div className="space-y-6 animate-in fade-in duration-150">
               {/* Section: 4 Loại hình dịch vụ (NO 1234 numbering in title) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <Layers className="w-4 h-4 text-[#075985]" />
                       Chọn loại hình dịch vụ du lịch
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Chọn đúng danh mục giúp hệ thống phân phối tới đúng các công ty lữ hành phù hợp
                     </p>
                   </div>
@@ -864,7 +863,7 @@ export function ProviderCreateServicePage({
                         key={opt.value}
                         type="button"
                         onClick={() => handleSelectCategory(opt.value)}
-                        className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between h-32 relative overflow-hidden group ${
+                        className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between h-36 relative overflow-hidden group ${
                           isSelected
                             ? "border-[#075985] bg-[#F0F9FF]/80 shadow-xs ring-2 ring-[#075985]/20"
                             : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
@@ -876,15 +875,15 @@ export function ProviderCreateServicePage({
                           </div>
                         )}
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br ${opt.color} shadow-xs`}
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center bg-sky-50 text-[#075985]`}
                         >
                           <Icon className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-bold text-xs sm:text-sm text-gray-900">
+                          <div className="font-semibold text-sm text-gray-900">
                             {opt.label}
                           </div>
-                          <div className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                          <div className="text-xs text-gray-500 line-clamp-1 mt-0.5">
                             {opt.description}
                           </div>
                         </div>
@@ -895,14 +894,14 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Section: Quản lý ảnh & Chọn Thumbnail (NO 1234, URL removed) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <ImageIcon className="w-4 h-4 text-[#075985]" />
                       Bộ sưu tập hình ảnh & Chọn ảnh đại diện (Thumbnail)
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Tải lên hình ảnh từ máy tính. Bấm vào nút <strong>"Đặt làm Thumbnail"</strong> hoặc click trực tiếp vào ảnh để chọn làm ảnh bìa chính trên sàn.
                     </p>
                   </div>
@@ -928,15 +927,15 @@ export function ProviderCreateServicePage({
                   />
                   <label
                     htmlFor="service-image-file-input"
-                    className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#CBD5E1] hover:border-[#075985] rounded-2xl cursor-pointer bg-gradient-to-b from-[#F0F9FF]/30 to-gray-50/50 hover:bg-[#F0F9FF]/60 transition-all text-center h-28 group"
+                    className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#CBD5E1] hover:border-[#075985] rounded-2xl cursor-pointer bg-slate-50 hover:bg-sky-50 transition-colors text-center h-36 group"
                   >
-                    <div className="w-10 h-10 rounded-full bg-white shadow-2xs flex items-center justify-center text-[#075985] group-hover:scale-110 transition-transform mb-1.5 border border-blue-100">
+                    <div className="w-10 h-10 rounded-full bg-white shadow-2xs flex items-center justify-center text-[#075985] mb-2 border border-blue-100">
                       <UploadCloud className="w-5 h-5" />
                     </div>
-                    <span className="text-xs font-bold text-gray-800">
+                    <span className="text-sm font-semibold text-gray-800">
                       Nhấp để chọn ảnh từ máy tính của bạn
                     </span>
-                    <span className="text-[11px] text-gray-500 mt-0.5">
+                    <span className="text-xs text-gray-500 mt-1">
                       Hỗ trợ PNG, JPG, JPEG, tối đa 5 MB/ảnh (Có thể chọn cùng lúc nhiều ảnh)
                     </span>
                   </label>
@@ -944,14 +943,14 @@ export function ProviderCreateServicePage({
 
                 {/* Images Grid with Thumbnail Selection */}
                 <div className="pt-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
                     {images.length === 0 ? (
                       <div className="col-span-full py-10 px-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/60 text-center flex flex-col items-center justify-center">
                         <div className="w-12 h-12 rounded-full bg-blue-50 text-[#075985] flex items-center justify-center mb-2">
                           <ImageIcon className="w-6 h-6" />
                         </div>
                         <p className="text-xs font-bold text-gray-700">Chưa có hình ảnh nào được tải lên</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-400 mt-0.5">
                           Vui lòng bấm vào khung phía trên để tải lên ít nhất 1 hình ảnh từ thiết bị của bạn
                         </p>
                       </div>
@@ -962,7 +961,7 @@ export function ProviderCreateServicePage({
                         <div
                           key={idx}
                           onClick={() => setThumbnailIndex(idx)}
-                          className={`relative rounded-xl overflow-hidden border-2 transition-all cursor-pointer group h-44 bg-gray-100 ${
+                          className={`relative rounded-xl overflow-hidden border-2 transition-all cursor-pointer group h-52 bg-gray-100 ${
                             isThumbnail
                               ? "border-[#075985] ring-4 ring-[#075985]/20 shadow-md"
                               : "border-gray-200 hover:border-gray-400 hover:shadow-xs"
@@ -979,7 +978,7 @@ export function ProviderCreateServicePage({
 
                           {/* Thumbnail Badge (Always visible on thumbnail) */}
                           {isThumbnail ? (
-                            <div className="absolute top-2.5 left-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md">
+                            <div className="absolute top-2.5 left-2.5 bg-[#075985] text-white text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1.5">
                               <Star className="w-3.5 h-3.5 fill-white" />
                               Ảnh đại diện chính (Thumbnail)
                             </div>
@@ -1024,19 +1023,19 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Bottom Next Step Bar */}
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={onBack}
-                  className="rounded-xl border-gray-300 text-xs"
+                  className="h-10 rounded-xl border-gray-300 text-sm px-4"
                 >
                   Hủy bỏ
                 </Button>
                 <Button
                   type="button"
                   onClick={() => setCurrentStep(2)}
-                  className="bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold px-6 shadow-xs"
+                  className="h-10 bg-[#075985] hover:bg-[#0C4A6E] text-white rounded-xl text-sm font-semibold px-6"
                 >
                   Tiếp tục: Thông tin & Bảng giá
                   <ChevronRight className="w-4 h-4 ml-1.5" />
@@ -1051,14 +1050,14 @@ export function ProviderCreateServicePage({
           {currentStep === 2 && (
             <div className="space-y-6 animate-in fade-in duration-150">
               {/* Card 1: Thông tin cơ bản & Quy mô (NO 1234 in title) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-[#075985]" />
                       Thông tin nhận diện & Quy mô cơ sở
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Các trường thông tin sẽ lưu trực tiếp xuống bảng <strong>service</strong> trong cơ sở dữ liệu
                     </p>
                   </div>
@@ -1071,7 +1070,7 @@ export function ProviderCreateServicePage({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Tên cơ sở / Dịch vụ */}
                   <div className="md:col-span-2 lg:col-span-3">
-                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Tên dịch vụ / Cơ sở đăng tải *
                     </label>
                     <input
@@ -1086,7 +1085,7 @@ export function ProviderCreateServicePage({
 
                   {/* Phân loại chi tiết (subCategory) */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Phân loại chi tiết *
                     </label>
                     <select
@@ -1104,7 +1103,7 @@ export function ProviderCreateServicePage({
 
                   {/* Sức chứa / Quy mô (capacity) */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       {currentConfig.capacityLabel} *
                     </label>
                     <div className="relative">
@@ -1126,7 +1125,7 @@ export function ProviderCreateServicePage({
                   {/* Hạng sao (nếu là khách sạn) */}
                   {category === "hotel" && (
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Xếp hạng sao
                       </label>
                       <select
@@ -1165,7 +1164,7 @@ export function ProviderCreateServicePage({
 
                   {/* Mô tả giới thiệu */}
                   <div className="md:col-span-2 lg:col-span-3">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Mô tả giới thiệu dịch vụ
                     </label>
                     <textarea
@@ -1180,14 +1179,14 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Card 2: Bảng giá niêm yết (Formatted with dot separator: 500.000, NO 1234 in title) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-[#075985]" />
                       Khoảng giá tham khảo niêm yết
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Mức giá giúp các công ty lữ hành ước tính chi phí khi lên chương trình tour
                     </p>
                   </div>
@@ -1204,7 +1203,7 @@ export function ProviderCreateServicePage({
                   </label>
                   {/* Mức giá từ */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Mức giá từ (Tối thiểu / {category === "hotel" ? "phòng" : "người"}) *
                     </label>
                     <div className="relative">
@@ -1228,7 +1227,7 @@ export function ProviderCreateServicePage({
 
                   {/* Mức giá đến */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Mức giá đến (Tối đa / {category === "hotel" ? "phòng" : "người"})
                     </label>
                     <div className="relative">
@@ -1252,14 +1251,14 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Card 3: Tiện ích & Tiện nghi cơ sở (NO 1234, INDIVIDUAL CARDS, EMERALD COLOR THEME) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-emerald-600" />
                       Tiện ích & Tiện nghi cơ sở
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Các tiện nghi phòng, trang thiết bị, dịch vụ gia tăng phục vụ khách đoàn
                     </p>
                   </div>
@@ -1329,7 +1328,7 @@ export function ProviderCreateServicePage({
 
                 {/* Quick Add Preset Amenities Chips */}
                 <div className="pt-2 border-t border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
+                  <span className="text-xs font-semibold text-gray-500 block mb-1.5">
                     Gợi ý tiện ích theo ngành (Bấm để thêm nhanh):
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-2">
@@ -1363,14 +1362,14 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Card 4: Chính sách, điều kiện & Quy định phục vụ (NO 1234 numbering in title or cards, "Áp dụng mẫu chuẩn" removed) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-4">
                 <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-[#075985]" />
                       Chính sách, điều kiện & Quy định phục vụ
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       Khung giờ phục vụ, chính sách FOC cho HDV/lái xe, điều kiện hủy đổi, trẻ em và xuất hóa đơn VAT
                     </p>
                   </div>
@@ -1432,7 +1431,7 @@ export function ProviderCreateServicePage({
 
                 {/* Rich industry suggestions from research (Google/Hospitality standard) */}
                 <div className="pt-2 border-t border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-500 block mb-1.5">
+                  <span className="text-xs font-semibold text-gray-500 block mb-1.5">
                     Gợi ý chính sách thực tế theo ngành du lịch (Bấm để thêm nhanh vào danh sách):
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-2">
@@ -1466,12 +1465,12 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Navigation buttons */}
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setCurrentStep(1)}
-                  className="rounded-xl border-gray-300 text-xs gap-1.5"
+                  className="h-10 rounded-xl border-gray-300 text-sm gap-1.5 px-4"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Quay lại: Ảnh & Dịch vụ
@@ -1479,7 +1478,7 @@ export function ProviderCreateServicePage({
                 <Button
                   type="button"
                   onClick={() => setCurrentStep(3)}
-                  className="bg-[#075985] hover:bg-[#0369a1] text-white rounded-xl text-xs font-semibold px-6 shadow-xs"
+                  className="h-10 bg-[#075985] hover:bg-[#0C4A6E] text-white rounded-xl text-sm font-semibold px-6"
                 >
                   Tiếp tục: Vị trí & Bản đồ
                   <ChevronRight className="w-4 h-4 ml-1.5" />
@@ -1493,13 +1492,13 @@ export function ProviderCreateServicePage({
           {/* ========================================================= */}
           {currentStep === 3 && (
             <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-5">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 space-y-5">
                 <div className="border-b border-gray-100 pb-3">
-                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-[#075985]" />
                     Địa chỉ hành chính & Định vị bản đồ GPS
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 mt-1">
                     Chọn Tỉnh/Thành, Phường/Xã và nhấp chuột trực tiếp lên bản đồ để lấy tọa độ chính xác cho cơ sở
                   </p>
                 </div>
@@ -1507,7 +1506,7 @@ export function ProviderCreateServicePage({
                 {/* 2-level address: Province & Ward */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="service-province" className="block text-xs font-bold text-gray-700 mb-1.5">
+                    <label htmlFor="service-province" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Tỉnh / Thành phố *
                     </label>
                     <select
@@ -1530,7 +1529,7 @@ export function ProviderCreateServicePage({
                   </div>
 
                   <div>
-                    <label htmlFor="service-ward" className="block text-xs font-bold text-gray-700 mb-1.5">
+                    <label htmlFor="service-ward" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Phường / Xã *
                     </label>
                     <select
@@ -1561,7 +1560,7 @@ export function ProviderCreateServicePage({
                     <p className="sm:col-span-2 text-xs text-amber-800">Đang giữ địa chỉ đã lưu trước đây. Chọn lại tỉnh/thành và phường/xã nếu muốn cập nhật sang danh mục hiện hành.</p>}
 
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       Số nhà, Tên đường / Khu vực cụ thể
                     </label>
                     <input
@@ -1587,16 +1586,16 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Summary review before submit */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-5 rounded-2xl border border-blue-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="bg-sky-50 p-4 sm:p-5 rounded-2xl border border-sky-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-[#075985] text-white flex items-center justify-center flex-shrink-0">
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-blue-950">
+                    <h4 className="font-semibold text-base text-slate-900">
                       Sẵn sàng đăng tải dịch vụ "{name}"
                     </h4>
-                    <p className="text-xs text-blue-800 mt-0.5">
+                    <p className="text-sm text-slate-600 mt-0.5">
                       {currentConfig.label} • {images.length} hình ảnh (Ảnh bìa đã chọn) • {formatPriceRangeDisplay()}
                     </p>
                   </div>
@@ -1607,7 +1606,7 @@ export function ProviderCreateServicePage({
                     type="button"
                     variant="outline"
                     onClick={() => setViewMode("preview")}
-                    className="rounded-xl border-blue-300 text-blue-900 hover:bg-blue-100/70 text-xs font-semibold"
+                    className="h-10 rounded-xl border-slate-300 text-[#075985] hover:bg-white text-sm font-semibold"
                   >
                     <Eye className="w-4 h-4 mr-1.5" />
                     Xem trước bài đăng
@@ -1616,12 +1615,12 @@ export function ProviderCreateServicePage({
               </div>
 
               {/* Navigation buttons */}
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setCurrentStep(2)}
-                  className="rounded-xl border-gray-300 text-xs gap-1.5"
+                  className="h-10 rounded-xl border-gray-300 text-sm gap-1.5 px-4"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Quay lại: Thông tin & Giá
