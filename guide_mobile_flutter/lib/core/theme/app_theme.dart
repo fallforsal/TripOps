@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 /// TripOps glass palette: high contrast text over soft, translucent surfaces.
@@ -30,7 +31,7 @@ abstract final class TripOpsTheme {
         TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       }),
       appBarTheme: const AppBarTheme(
-        backgroundColor: const Color(0xDFFFFFFF),
+        backgroundColor: Color(0xDFFFFFFF),
         foregroundColor: ink,
         centerTitle: true,
         titleSpacing: 12,
