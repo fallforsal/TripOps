@@ -10,7 +10,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Express
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Chua dat MSSQL_SA_PASSWORD trong deploy/.env}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
       MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-3072}
       TZ: Asia/Ho_Chi_Minh
     volumes:
