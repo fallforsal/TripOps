@@ -84,18 +84,22 @@ class _LocationScreenState extends State<LocationScreen> {
     setState(() => _refreshing = true);
     try {
       final updated = await widget.guides.detail(current.id);
-      if (mounted) setState(() {
-        _accept(updated);
-        error = null;
-        errorStop = null;
-        _errorAction = null;
-      });
+      if (mounted) {
+        setState(() {
+          _accept(updated);
+          error = null;
+          errorStop = null;
+          _errorAction = null;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() {
-        error = readableError(e);
-        errorStop = null;
-        _errorAction = null;
-      });
+      if (mounted) {
+        setState(() {
+          error = readableError(e);
+          errorStop = null;
+          _errorAction = null;
+        });
+      }
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -219,9 +223,11 @@ class _LocationScreenState extends State<LocationScreen> {
     // a time until it is mounted. Any manual drag cancels this operation.
     for (var attempt = 0; attempt <= stops.length + 2; attempt++) {
       if (!mounted || generation != _scrollGeneration || !_scroll.hasClients ||
-          ModalRoute.of(context)?.isCurrent != true) return;
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
       final target = _anchors[id]?.currentContext;
-      if (target != null) {
+      if (target != null && target.mounted) {
         await Scrollable.ensureVisible(target,
           alignment: 0.06,
           duration: reducedMotion ? Duration.zero : const Duration(milliseconds: 280),

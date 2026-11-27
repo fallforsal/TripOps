@@ -203,7 +203,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
                                       key: ValueKey('selected-proof-$index'),
                                       width: 86, height: 86, fit: BoxFit.cover,
                                       cacheWidth: (86 * MediaQuery.devicePixelRatioOf(context) * 2).ceil(),
-                                      errorBuilder: (_, _, _) => const SizedBox(
+                                      errorBuilder: (context, error, stackTrace) => const SizedBox(
                                         width: 86, height: 86,
                                         child: Icon(Icons.broken_image_outlined, color: muted),
                                       ),

@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,7 +11,7 @@ import '../../assigned_tours/domain/booking_models.dart';
 class LocationPhotoCache {
   LocationPhotoCache(this._download);
   final Future<Uint8List> Function(String) _download;
-  final _entries = LinkedHashMap<String, Future<Uint8List>>();
+  final _entries = <String, Future<Uint8List>>{};
 
   Future<Uint8List> load(String url) {
     final existing = _entries.remove(url);
@@ -78,9 +77,11 @@ class _EvidenceGroup extends StatelessWidget {
             color: ink, fontWeight: FontWeight.w700, fontSize: 13,
           )),
           if (recordedAt != null)
-            Text(MaterialLocalizations.of(context).formatShortDate(recordedAt!.toLocal()) +
-                ' · ' + MaterialLocalizations.of(context).formatTimeOfDay(
-                  TimeOfDay.fromDateTime(recordedAt!.toLocal()), alwaysUse24HourFormat: true),
+            Text(
+              '${MaterialLocalizations.of(context).formatShortDate(recordedAt!.toLocal())} · '
+              '${MaterialLocalizations.of(context).formatTimeOfDay(
+                TimeOfDay.fromDateTime(recordedAt!.toLocal()), alwaysUse24HourFormat: true,
+              )}',
               style: const TextStyle(color: muted, fontSize: 12)),
           if (urls.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -89,7 +90,7 @@ class _EvidenceGroup extends StatelessWidget {
               primary: false,
               padding: EdgeInsets.zero,
               itemCount: urls.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 7),
+              separatorBuilder: (context, index) => const SizedBox(width: 7),
               itemBuilder: (context, index) => SizedBox(
                 width: 78,
                 child: ClipRRect(
@@ -162,7 +163,7 @@ class _ProofImageState extends State<_ProofImage> {
         fit: widget.full ? BoxFit.contain : BoxFit.cover,
         width: widget.full ? null : 78, height: widget.full ? null : 78,
         cacheWidth: widget.full ? null : (78 * MediaQuery.devicePixelRatioOf(context) * 2).ceil(),
-        errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined, color: muted)),
+        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image_outlined, color: muted)),
       );
       return widget.full
           ? InteractiveViewer(minScale: 1, maxScale: 4, child: Center(child: image))
