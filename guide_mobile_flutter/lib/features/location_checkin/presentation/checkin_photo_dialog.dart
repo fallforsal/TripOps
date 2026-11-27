@@ -145,7 +145,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
               style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             const Text('JPG, PNG, WebP · tối đa 5 MB/ảnh, 20 MB tổng',
-              style: TextStyle(color: muted, fontSize: 13)),
+              style: TextStyle(color: muted, fontSize: 11)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (_selected.length < CheckinPhotoLimits.maxFiles) ...[
@@ -176,8 +176,8 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
                       borderRadius: BorderRadius.circular(8),
                       child: Image.file(
                         File(_selected[index].path),
-                        width: 96,
-                        height: 96,
+                        width: 72,
+                        height: 72,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
                             const Icon(Icons.broken_image_outlined, size: 65),
@@ -201,7 +201,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
               const SizedBox(height: 7),
               Text('${_selected.length}/5 ảnh  •  '
                   '${(_selected.fold<int>(0, (n, p) => n + p.bytes) / (1024 * 1024)).toStringAsFixed(1)} MB',
-                style: const TextStyle(color: muted, fontSize: 13)),
+                style: const TextStyle(color: muted, fontSize: 11)),
             ],
             if (_photoError != null) ...[
               const SizedBox(height: 8),

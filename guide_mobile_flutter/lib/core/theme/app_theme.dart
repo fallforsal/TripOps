@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 /// Colors follow the TripOps Guide interactive mobile prototype.
 const ink = Color(0xFF172B46);
-const muted = Color(0xFF526579);
-const teal = Color(0xFF007F79);
+const muted = Color(0xFF8697AC);
+const teal = Color(0xFF009F98);
 const deepTeal = Color(0xFF137C79);
 const canvas = Color(0xFFF4F7FB);
 const line = Color(0xFFE5ECF2);
@@ -32,7 +32,7 @@ abstract final class TripOpsTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
-          fontSize: 22, fontWeight: FontWeight.w800, color: ink,
+          fontSize: 18, fontWeight: FontWeight.w800, color: ink,
         ),
       ),
       cardTheme: CardThemeData(
@@ -46,8 +46,8 @@ abstract final class TripOpsTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        hintStyle: const TextStyle(fontSize: 14, color: muted),
-        labelStyle: const TextStyle(fontSize: 14, color: muted),
+        hintStyle: const TextStyle(fontSize: 13, color: muted),
+        labelStyle: const TextStyle(fontSize: 13, color: muted),
         prefixIconColor: muted,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16, vertical: 16,
@@ -77,18 +77,18 @@ abstract final class TripOpsTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: ink,
           side: const BorderSide(color: line),
-          minimumSize: const Size(0, 48),
+          minimumSize: const Size(0, 45),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -102,7 +102,7 @@ abstract final class TripOpsTheme {
           borderRadius: BorderRadius.circular(9),
         ),
         labelStyle: const TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w700, color: muted,
+          fontSize: 12, fontWeight: FontWeight.w700, color: muted,
         ),
       ),
       dividerTheme: const DividerThemeData(color: line, thickness: 1),

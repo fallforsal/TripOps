@@ -172,7 +172,7 @@ class _GuideShellState extends State<GuideShell> {
                   const Text(
                     'Tour Guide',
                     style: TextStyle(
-                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
+                      fontSize: 10, color: muted, fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -241,7 +241,6 @@ class _GuideShellState extends State<GuideShell> {
             child: switch (tab) {
               0 => HomeScreen(
                 account: widget.account,
-                guides: widget.guides,
                 bookings: bookings,
                 inProgressEndDates: endDates,
                 onOpenTour: openTour,

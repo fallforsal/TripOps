@@ -36,7 +36,6 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
   List<GuideNotification> items = [];
   bool loading = true;
   bool updating = false;
-  bool unreadOnly = false;
   String? error;
 
   @override
@@ -112,7 +111,6 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final unread = items.where((n) => n.readAt == null).length;
-    final visible = unreadOnly ? items.where((n) => n.readAt == null).toList() : items;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Thông báo'),
@@ -142,23 +140,15 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
                 ))
               : items.isEmpty
                   ? const Center(child: Text('Chưa có thông báo.'))
-                  : Column(children: [
-                      Padding(padding: const EdgeInsets.all(12), child: Row(children: [
-                        ChoiceChip(label: const Text('Tất cả'), selected: !unreadOnly, onSelected: (_) => setState(() => unreadOnly = false)),
-                        const SizedBox(width: 8),
-                        ChoiceChip(label: Text('Chưa đọc ($unread)'), selected: unreadOnly, onSelected: (_) => setState(() => unreadOnly = true)),
-                      ])),
-                      Expanded(child: visible.isEmpty ? const Center(child: Text('Bạn đã đọc tất cả thông báo.')) : RefreshIndicator(
+                  : RefreshIndicator(
                       onRefresh: load,
                       child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: visible.length,
+                        itemCount: items.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
-                          final n = visible[index];
+                          final n = items[index];
                           final unseen = n.readAt == null;
                           return ListTile(
-                            tileColor: unseen ? const Color(0xFFE6F6F2) : null,
                             leading: Icon(
                               unseen ? Icons.notifications_active_outlined
                                   : Icons.notifications_none_outlined,
@@ -168,15 +158,14 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
                               style: TextStyle(
                                 fontWeight: unseen ? FontWeight.w700 : FontWeight.normal,
                               )),
-                            subtitle: Text(n.createdAt == null ? '' : '${n.createdAt!.day.toString().padLeft(2, '0')}/${n.createdAt!.month.toString().padLeft(2, '0')}/${n.createdAt!.year} · ${n.createdAt!.hour.toString().padLeft(2, '0')}:${n.createdAt!.minute.toString().padLeft(2, '0')}'),
+                            subtitle: Text(n.createdAt?.toString().substring(0, 16) ?? ''),
                             trailing: n.bookingId == null
                                 ? null : const Icon(Icons.chevron_right_rounded),
                             onTap: () => openNotice(n),
                           );
                         },
                       ),
-                    )),
-                    ]),
+                    ),
     );
   }
 }

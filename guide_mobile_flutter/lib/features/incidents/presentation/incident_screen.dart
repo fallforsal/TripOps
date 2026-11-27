@@ -123,15 +123,10 @@ class _IncidentScreenState extends State<IncidentScreen> {
           space(15),
           const GuideInfoBanner(
             icon: Icons.shield_outlined,
-            message: 'Hãy báo cáo ngay các tình huống ảnh hưởng tới an toàn và lịch trình của đoàn. Báo cáo sẽ được gửi đến đơn vị phụ trách.',
+            message: 'Hãy báo cáo ngay các tình huống ảnh hưởng tới an toàn và lịch trình của đoàn. Nội dung được gửi trực tiếp đến backend.',
           ),
           space(22),
           if (widget.detail.incidents.isNotEmpty) ...[
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Lịch sử báo cáo'),
-              subtitle: Text('${widget.detail.incidents.length} báo cáo đã gửi'),
-              children: [
             GuideSectionTitle(
               'Đã báo cáo (${widget.detail.incidents.length})',
             ),
@@ -168,7 +163,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
                               const SizedBox(height: 3),
                               Text(incident.description, maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 14, color: muted)),
+                                style: const TextStyle(fontSize: 11, color: muted)),
                             ],
                           ),
                         ),
@@ -204,8 +199,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
               )),
             )),
             space(15),
-              ],
-            ),
           ],
           const GuideSectionTitle('Tạo báo cáo mới'),
           space(12),
