@@ -22,14 +22,14 @@ class HistoryScreen extends StatelessWidget {
     final guests = history.fold<int>(0, (total, b) => total + b.guestCount);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 28 + MediaQuery.paddingOf(context).bottom),
       children: [
         const Text('Những hành trình đã hoàn tất',
-          style: TextStyle(color: ink, fontSize: 20,
-            fontWeight: FontWeight.w900)),
+          style: TextStyle(color: ink, fontSize: 30, letterSpacing: -0.7,
+            fontWeight: FontWeight.w700)),
         space(6),
         const Text('Lưu lại những chuyến đi và dấu ấn đã thực hiện.',
-          style: TextStyle(color: muted, fontSize: 12)),
+          style: TextStyle(color: muted, fontSize: 14)),
         space(17),
         Row(children: [
           Expanded(child: GuideMetric(

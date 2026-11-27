@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'guide_glass.dart';
 
 /// Shared presentation-only widgets. No hard-coded tour or passenger data.
 class GuideSectionTitle extends StatelessWidget {
@@ -12,11 +13,11 @@ class GuideSectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Expanded(child: Text(title, style: const TextStyle(
-        fontSize: 17, fontWeight: FontWeight.w800, color: ink,
+        fontSize: 21, fontWeight: FontWeight.w700, color: ink,
       ))),
       if (trailing != null)
         TextButton(onPressed: onTap, child: Text(trailing!,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800))),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
     ],
   );
 }
@@ -46,7 +47,7 @@ class GuideInfoBanner extends StatelessWidget {
       Icon(icon, size: 17, color: warning ? const Color(0xFFAE6B25) : deepTeal),
       const SizedBox(width: 10),
       Expanded(child: Text(message, style: TextStyle(
-        fontSize: 12,
+        fontSize: 13,
         height: 1.48,
         color: warning ? const Color(0xFF916033) : const Color(0xFF497E77),
       ))),
@@ -70,8 +71,8 @@ class GuideMetric extends StatelessWidget {
     constraints: const BoxConstraints(minHeight: 112),
     padding: const EdgeInsets.all(11),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      color: const Color(0xDFFFFFFF),
+      borderRadius: BorderRadius.circular(24),
       border: Border.all(color: line),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -87,12 +88,12 @@ class GuideMetric extends StatelessWidget {
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,
         child: Text(value, style: const TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w900, color: ink,
+          fontSize: 24, fontWeight: FontWeight.w700, color: ink,
         )),
       ),
       const SizedBox(height: 3),
       Text(label, style: const TextStyle(
-        fontSize: 10, height: 1.3, color: muted, fontWeight: FontWeight.w600,
+        fontSize: 13, height: 1.3, color: muted, fontWeight: FontWeight.w600,
       )),
     ]),
   );
@@ -110,9 +111,9 @@ class GuideActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.white,
+    color: const Color(0xEFFFFFFF),
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(23),
       side: const BorderSide(color: line),
     ),
     clipBehavior: Clip.antiAlias,
@@ -126,12 +127,12 @@ class GuideActionTile extends StatelessWidget {
             Icon(icon, size: 23, color: teal),
             const SizedBox(height: 10),
             Text(title, style: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w800, color: ink,
+              fontSize: 13, fontWeight: FontWeight.w600, color: ink,
             )),
             if (subtitle != null) ...[
               const SizedBox(height: 3),
               Text(subtitle!, style: const TextStyle(
-                fontSize: 10, height: 1.3, color: muted,
+                fontSize: 13, height: 1.3, color: muted,
               )),
             ],
           ],
@@ -151,9 +152,9 @@ class GuideStatusPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
     decoration: BoxDecoration(color: background,
-      borderRadius: BorderRadius.circular(8)),
+      borderRadius: BorderRadius.circular(20)),
     child: Text(text, style: TextStyle(
-      color: foreground, fontSize: 10, fontWeight: FontWeight.w800,
+      color: foreground, fontSize: 13, fontWeight: FontWeight.w600,
     )),
   );
 }
@@ -170,80 +171,67 @@ class GuideHero extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [Color(0xFF173F56), Color(0xFF137D78)],
-      ),
-      borderRadius: BorderRadius.circular(19),
-    ),
-    child: Stack(children: [
-      Positioned(right: -36, top: -54, child: Container(
-        width: 164, height: 164,
-        decoration: BoxDecoration(shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12),
-            width: 1.2)),
-      )),
-      Positioned(right: -65, top: 40, child: Container(
-        width: 174, height: 174,
-        decoration: BoxDecoration(shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10),
-            width: 1.2)),
-      )),
-      Padding(
-        padding: EdgeInsets.all(compact ? 18 : 20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Text(label.toUpperCase(), style: const TextStyle(
-                color: Colors.white, fontSize: 10,
-                fontWeight: FontWeight.w800, letterSpacing: 0.35,
-              )),
-            ),
-            const SizedBox(height: 14),
-            Text(title, style: TextStyle(
-              fontSize: compact ? 20 : 23, color: Colors.white,
-              fontWeight: FontWeight.w900, height: 1.14,
-            )),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              Text(subtitle!, style: const TextStyle(
-                fontSize: 12, height: 1.4, color: Color(0xFFD5ECEB),
-              )),
-            ],
-            if (actionLabel != null && onTap != null) ...[
-              const SizedBox(height: 19),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: deepTeal,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13, vertical: 10,
-                  ),
-                ),
-                onPressed: onTap,
-                label: Text(actionLabel!, style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w800,
-                )),
-                icon: const Icon(Icons.arrow_forward, size: 15),
-                iconAlignment: IconAlignment.end,
-              ),
-            ],
-          ],
+  Widget build(BuildContext context) => GuideGlass(
+    radius: 30,
+    blurSigma: 0,
+    padding: EdgeInsets.zero,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFFF5FCFC), Color(0xFFB9E1DE), Color(0xFFDCE7F6)],
+          ),
         ),
+        child: Stack(children: [
+          Positioned(right: -45, top: -70, child: Container(
+            width: 200, height: 200,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x8870BFB8)),
+          )),
+          Positioned(right: 10, bottom: -70, child: Container(
+            width: 170, height: 170,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x90FFFFFF)),
+          )),
+          GuideGlass(
+            radius: 30,
+            shadow: false,
+            blurSigma: 20,
+            tint: const Color(0x60FFFFFF),
+            padding: EdgeInsets.all(compact ? 20 : 24),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                GuideStatusPill(label, background: const Color(0xD9FFFFFF), foreground: deepTeal),
+                const SizedBox(height: 16),
+                Text(title, style: TextStyle(fontSize: compact ? 22 : 28,
+                  color: ink, fontWeight: FontWeight.w700, height: 1.16, letterSpacing: -0.6)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 9),
+                  Text(subtitle!, style: const TextStyle(fontSize: 14, height: 1.4, color: muted)),
+                ],
+                if (actionLabel != null && onTap != null) ...[
+                  const SizedBox(height: 20),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      backgroundColor: const Color(0xEFFFFFFF),
+                      foregroundColor: deepTeal,
+                      minimumSize: const Size(0, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    ),
+                    onPressed: onTap,
+                    label: Text(actionLabel!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 15),
+                    iconAlignment: IconAlignment.end,
+                  ),
+                ],
+              ]),
+            ),
+          ),
+        ]),
       ),
-    ]),
+    ),
   );
 }
 
@@ -260,7 +248,7 @@ class GuideEmptyState extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
     decoration: BoxDecoration(
-      color: Colors.white, borderRadius: BorderRadius.circular(17),
+      color: Colors.white, borderRadius: BorderRadius.circular(24),
       border: Border.all(color: line),
     ),
     child: Column(children: [
@@ -273,12 +261,12 @@ class GuideEmptyState extends StatelessWidget {
       ),
       const SizedBox(height: 13),
       Text(title, style: const TextStyle(
-        fontWeight: FontWeight.w800, color: ink, fontSize: 15,
+        fontWeight: FontWeight.w600, color: ink, fontSize: 15,
       )),
       const SizedBox(height: 6),
       Text(message, textAlign: TextAlign.center,
         style: const TextStyle(
-          fontSize: 12, color: muted, height: 1.45,
+          fontSize: 13, color: muted, height: 1.45,
         )),
     ]),
   );
@@ -352,7 +340,7 @@ class _GuideTextInputDialogState extends State<_GuideTextInputDialog> {
   Widget build(BuildContext context) => AlertDialog(
     title: Text(
       widget.title,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
     ),
     content: TextField(
       controller: _controller,

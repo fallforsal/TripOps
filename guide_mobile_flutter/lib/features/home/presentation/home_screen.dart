@@ -44,20 +44,20 @@ class HomeScreen extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.paddingOf(context).bottom),
       children: [
         Text('CHÀO MỪNG TRỞ LẠI', style: const TextStyle(
-          fontSize: 10, fontWeight: FontWeight.w800,
+          fontSize: 12, fontWeight: FontWeight.w600,
           color: teal, letterSpacing: 1.1,
         )),
         space(5),
-        Text('Xin chào, ${account.name}! 👋',
+        Text('Xin chào, ${account.name}!',
           style: const TextStyle(
-            fontSize: 24, fontWeight: FontWeight.w900, color: ink,
+            fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.8, color: ink,
           )),
         const SizedBox(height: 5),
         const Text('Chúc bạn một ngày làm việc thật hiệu quả.',
-          style: TextStyle(fontSize: 12, color: muted)),
+          style: TextStyle(fontSize: 14, color: muted)),
         space(20),
         GuideHero(
           label: chosen == null ? 'KHÔNG CÓ TOUR' :

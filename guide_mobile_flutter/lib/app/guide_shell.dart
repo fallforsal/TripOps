@@ -5,6 +5,7 @@ import '../core/notifications/guide_push_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
+import '../core/widgets/guide_glass.dart';
 import '../features/assigned_tours/data/guide_repository.dart';
 import '../features/assigned_tours/domain/booking_models.dart';
 import '../features/assigned_tours/domain/tour_catalog.dart';
@@ -142,8 +143,12 @@ class _GuideShellState extends State<GuideShell> {
   Widget build(BuildContext context) {
     const names = ['Trang chủ', 'Tour của tôi', 'Lịch sử', 'Cá nhân'];
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
-        toolbarHeight: 64,
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        toolbarHeight: 66,
         automaticallyImplyLeading: false,
         titleSpacing: 17,
         title: Row(
@@ -166,13 +171,13 @@ class _GuideShellState extends State<GuideShell> {
                     names[tab],
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 15, color: ink, fontWeight: FontWeight.w900,
+                      fontSize: 17, color: ink, fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Text(
                     'Tour Guide',
                     style: TextStyle(
-                      fontSize: 10, color: muted, fontWeight: FontWeight.w600,
+                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -260,22 +265,27 @@ class _GuideShellState extends State<GuideShell> {
               ),
             },
           ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: line)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
-            child: Row(
-              children: [
-                _nav(0, Icons.home_outlined, Icons.home_rounded, 'Trang chủ'),
-                _nav(1, Icons.route_outlined, Icons.route_rounded, 'Tour'),
-                _nav(2, Icons.history_outlined, Icons.history_rounded, 'Lịch sử'),
-                _nav(3, Icons.person_outline, Icons.person_rounded, 'Cá nhân'),
-              ],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: GuideGlass(
+              radius: 36,
+              blurSigma: 22,
+              tint: const Color(0xA6FFFFFF),
+              padding: const EdgeInsets.all(5),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Row(children: [
+                  _nav(0, Icons.home_outlined, Icons.home_rounded, 'Trang chủ'),
+                  _nav(1, Icons.route_outlined, Icons.route_rounded, 'Tour'),
+                  _nav(2, Icons.history_outlined, Icons.history_rounded, 'Lịch sử'),
+                  _nav(3, Icons.person_outline, Icons.person_rounded, 'Cá nhân'),
+                ]),
+              ),
             ),
           ),
         ),
@@ -286,28 +296,33 @@ class _GuideShellState extends State<GuideShell> {
   Widget _nav(int index, IconData normal, IconData selected, String label) {
     final active = tab == index;
     return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => tab = index),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              decoration: BoxDecoration(
-                color: active ? paleTeal : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(active ? selected : normal, size: 22,
-                color: active ? teal : muted),
+      child: Semantics(
+        selected: active,
+        button: true,
+        child: InkWell(
+          onTap: () => setState(() => tab = index),
+          borderRadius: BorderRadius.circular(30),
+          child: AnimatedContainer(
+            duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: active ? const LinearGradient(
+                colors: [Color(0xE6FFFFFF), Color(0xC9D4ECE8)],
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+              ) : null,
+              border: Border.all(color: active ? const Color(0xE6FFFFFF) : Colors.transparent),
+              borderRadius: BorderRadius.circular(30),
             ),
-            const SizedBox(height: 3),
-            Text(label, maxLines: 1, style: TextStyle(
-              fontSize: 10, fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-              color: active ? teal : muted,
-            )),
-          ]),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(active ? selected : normal, size: 24, color: active ? deepTeal : muted),
+              const SizedBox(height: 4),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? deepTeal : muted)),
+            ]),
+          ),
         ),
       ),
     );

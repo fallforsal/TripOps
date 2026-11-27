@@ -31,14 +31,14 @@ class TourListScreen extends StatelessWidget {
     );
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 25),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 25 + MediaQuery.paddingOf(context).bottom),
       children: [
         const Text('Các chuyến đi được giao', style: TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w900, color: ink,
+          fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.7, color: ink,
         )),
         space(5),
         const Text('Theo dõi các tour và lịch trình bạn đang phụ trách.',
-          style: TextStyle(fontSize: 12, color: muted)),
+          style: TextStyle(fontSize: 14, color: muted)),
         space(17),
         TextFormField(
           key: const ValueKey('tour-search'),

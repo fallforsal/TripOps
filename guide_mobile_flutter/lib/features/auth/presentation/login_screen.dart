@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/widgets/view_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -65,30 +66,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text('GUIDE',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: teal, fontSize: 11,
-                      fontWeight: FontWeight.w900, letterSpacing: 2.5)),
+                      fontWeight: FontWeight.w700, letterSpacing: 2.5)),
                   space(7),
                   const Text('Chào mừng trở lại',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 26,
-                      fontWeight: FontWeight.w900, color: ink)),
+                    style: TextStyle(fontSize: 32, letterSpacing: -0.8,
+                      fontWeight: FontWeight.w700, color: ink)),
                   space(6),
                   const Text('Đăng nhập để quản lý hành trình và vận hành tour',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: muted)),
+                    style: TextStyle(fontSize: 14, color: muted)),
                   space(28),
-                  Card(child: Padding(
-                    padding: const EdgeInsets.all(20),
+                  GuideGlass(
+                    radius: 32,
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const Text('ĐĂNG NHẬP HƯỚNG DẪN VIÊN',
                           style: TextStyle(fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 0.6, color: ink)),
                         space(20),
                         const Text('Địa chỉ email',
-                          style: TextStyle(fontSize: 12,
-                            fontWeight: FontWeight.w800, color: ink)),
+                          style: TextStyle(fontSize: 14,
+                            fontWeight: FontWeight.w600, color: ink)),
                         space(7),
                         TextFormField(
                           controller: email,
@@ -103,8 +105,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         space(16),
                         const Text('Mật khẩu',
-                          style: TextStyle(fontSize: 12,
-                            fontWeight: FontWeight.w800, color: ink)),
+                          style: TextStyle(fontSize: 14,
+                            fontWeight: FontWeight.w600, color: ink)),
                         space(7),
                         TextFormField(
                           controller: password,
@@ -141,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                       ],
                     ),
-                  )),
+                  ),
                   space(21),
                   const GuideInfoBanner(
                     icon: Icons.info_outline,
