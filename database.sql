@@ -5035,6 +5035,27 @@ GO
 BEGIN TRANSACTION;
 IF NOT EXISTS (
     SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261119122206_AddAgencyAiSubscription'
+)
+BEGIN
+    ALTER TABLE [users] ADD [AgencyAiSubscribed] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261119122206_AddAgencyAiSubscription'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261119122206_AddAgencyAiSubscription', N'10.0.10');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
     WHERE [MigrationId] = N'20261119140000_AddContractTemplateClauses'
 )
 BEGIN
