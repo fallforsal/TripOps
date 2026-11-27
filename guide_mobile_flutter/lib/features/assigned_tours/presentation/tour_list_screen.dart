@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_segmented_control.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../domain/booking_models.dart';
 import '../domain/tour_catalog.dart';
@@ -50,16 +51,14 @@ class TourListScreen extends StatelessWidget {
           onChanged: onQueryChanged,
         ),
         space(12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: TourFilter.values.map((option) => Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(tourFilterLabel(option)),
-              selected: filter == option,
-              onSelected: (_) => onFilterChanged(option),
-            ),
-          )).toList()),
+        GuideSegmentedControl<TourFilter>(
+          key: const ValueKey('tour-filter-segmented-control'),
+          value: filter,
+          labels: {
+            for (final option in TourFilter.values)
+              option: tourFilterLabel(option),
+          },
+          onChanged: onFilterChanged,
         ),
         space(20),
         GuideSectionTitle('Danh sách tour (${visible.length})'),
