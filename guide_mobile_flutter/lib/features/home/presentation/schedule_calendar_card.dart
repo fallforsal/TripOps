@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_glass.dart';
-import '../../../core/widgets/guide_ui.dart';
 import '../../assigned_tours/domain/booking_models.dart';
-import '../../assigned_tours/domain/tour_catalog.dart';
+import '../../assigned_tours/presentation/tour_status_pill.dart';
 import '../domain/home_trip_picker.dart';
 
 const _completedColor = Color(0xFF427AB4);
@@ -400,11 +399,7 @@ class _CalendarEvent extends StatelessWidget {
                       Text('$date · ${tour.guestCount} khách',
                         style: const TextStyle(fontSize: 12, color: muted)),
                       const SizedBox(height: 6),
-                      GuideStatusPill(
-                        bookingStatusLabel(tour.status),
-                        background: tour.isCompleted ? _completedTint : paleTeal,
-                        foreground: accent,
-                      ),
+                      TourStatusPill(status: tour.status),
                     ],
                   ),
                 ),

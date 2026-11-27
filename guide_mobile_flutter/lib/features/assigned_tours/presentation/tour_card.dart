@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_glass.dart';
-import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/tour_thumbnail.dart';
 import '../domain/booking_models.dart';
-import '../domain/tour_catalog.dart';
+import 'tour_status_pill.dart';
 
 class TourCard extends StatelessWidget {
   const TourCard({
@@ -21,12 +20,6 @@ class TourCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inProgress = tour.status == 'InProgress';
-    final completed = tour.status == 'Completed';
-    final statusColor = inProgress ? const Color(0xFF137F78)
-        : completed ? const Color(0xFF427AB4) : const Color(0xFF87601C);
-    final statusBg = inProgress ? paleTeal
-        : completed ? const Color(0xFFEAF2FD) : const Color(0xFFFFF4DF);
     final date = tour.endDate != null && vnDate(tour.endDate!) != vnDate(tour.startDate)
         ? '${vnDate(tour.startDate)} – ${vnDate(tour.endDate!)}'
         : vnDate(tour.startDate);
@@ -67,11 +60,7 @@ class TourCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              GuideStatusPill(
-                                bookingStatusLabel(tour.status),
-                                background: statusBg,
-                                foreground: statusColor,
-                              ),
+                              TourStatusPill(status: tour.status),
                               const SizedBox(height: 6),
                               Text(
                                 tour.name,

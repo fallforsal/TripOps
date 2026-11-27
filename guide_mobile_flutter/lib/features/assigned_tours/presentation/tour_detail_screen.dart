@@ -4,6 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../domain/tour_catalog.dart';
+import 'tour_status_pill.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../attendance/presentation/attendance_screen.dart';
@@ -108,6 +109,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                         GuideHero(
                           title: d.name,
                           label: bookingStatusLabel(d.status),
+                          labelWidget: TourStatusPill(status: d.status),
                           subtitle: vnDate(d.startDate) == vnDate(d.endDate)
                               ? '${d.code}  •  ${vnDate(d.startDate)}'
                               : '${d.code}  •  ${vnDate(d.startDate)} – ${vnDate(d.endDate)}',

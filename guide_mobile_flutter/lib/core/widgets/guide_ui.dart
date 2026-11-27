@@ -163,10 +163,12 @@ class GuideHero extends StatelessWidget {
   const GuideHero({
     super.key, required this.title, required this.label,
     this.subtitle, this.actionLabel, this.onTap,
+    this.labelWidget,
     this.compact = false,
   });
   final String title, label;
   final String? subtitle, actionLabel;
+  final Widget? labelWidget;
   final VoidCallback? onTap;
   final bool compact;
 
@@ -177,7 +179,7 @@ class GuideHero extends StatelessWidget {
     child: SizedBox(
       width: double.infinity,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        GuideStatusPill(label, background: const Color(0xD9FFFFFF), foreground: deepTeal),
+        labelWidget ?? GuideStatusPill(label, background: const Color(0xD9FFFFFF), foreground: deepTeal),
         const SizedBox(height: 16),
         Text(title, style: TextStyle(fontSize: compact ? 22 : 28,
           color: ink, fontWeight: FontWeight.w700, height: 1.16, letterSpacing: -0.6)),
