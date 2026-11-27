@@ -7,6 +7,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/guide_glass_metric.dart';
+import '../../../core/widgets/guide_search_bar.dart';
+import '../../../core/widgets/guide_segmented_control.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
@@ -179,30 +181,37 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           ),
           space(16),
-          Card(child: Padding(
+          GuideStaticGlass(
+            key: const ValueKey('attendance-progress'),
+            radius: 28,
+            compact: true,
+            tint: const Color(0xFFB9E1DE),
+            glow: const Color(0x3870BFB8),
+            highlightTint: const Color(0xE6FFFFFF),
             padding: const EdgeInsets.all(15),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 const Expanded(child: Text('Tiến độ điểm danh',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
                     color: ink))),
                 Text('$checked / ${all.length}', style: const TextStyle(
-                  fontSize: 13, color: teal, fontWeight: FontWeight.w900,
+                  fontSize: 16, color: deepTeal, fontWeight: FontWeight.w700,
                 )),
               ]),
               space(12),
               LinearProgressIndicator(
                 value: all.isEmpty ? 0 : checked / all.length,
-                minHeight: 8,
+                minHeight: 10,
                 borderRadius: BorderRadius.circular(16),
-                backgroundColor: paleTeal,
+                backgroundColor: const Color(0xFFE0EFEB),
+                color: deepTeal,
               ),
               space(9),
               Text('$absent khách vắng mặt', style: const TextStyle(
                 fontSize: 13, color: muted,
               )),
             ]),
-          )),
+          ),
           space(14),
           if (!canRecord) ...[
             GuideInfoBanner(
@@ -217,27 +226,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           space(20),
           const GuideSectionTitle('Danh sách hành khách'),
           space(11),
-          TextField(
-            key: const ValueKey('passenger-search'),
-            decoration: const InputDecoration(
-              hintText: 'Tìm theo tên hoặc số điện thoại...',
-              prefixIcon: Icon(Icons.search),
-            ),
+          GuideSearchBar(
+            value: query,
+            placeholder: 'Tìm tên hoặc SĐT',
+            fieldKey: const ValueKey('passenger-search'),
             onChanged: (value) => setState(() => query = value),
           ),
           space(11),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: AttendanceFilter.values.map((option) =>
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(attendanceFilterLabel(option)),
-                  selected: filter == option,
-                  onSelected: (_) => setState(() => filter = option),
-                ),
-              ),
-            ).toList()),
+          GuideSegmentedControl<AttendanceFilter>(
+            key: const ValueKey('attendance-filter-segmented-control'),
+            value: filter,
+            labels: {
+              for (final option in AttendanceFilter.values)
+                option: attendanceFilterLabel(option),
+            },
+            onChanged: (option) => setState(() => filter = option),
           ),
           space(13),
           if (error != null) ...[
