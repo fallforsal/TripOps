@@ -1,0 +1,77 @@
+# TripOps production stack: SQL Server + API (.NET 10) + Web (Caddy, HTTPS tự động)
+# Chạy từ thư mục gốc repo:
+#   docker compose -f deploy/compose.prod.yaml --env-file deploy/.env up -d --build
+name: tripops
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Chua dat MSSQL_SA_PASSWORD trong deploy/.env}
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-3072}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./backups:/var/opt/mssql/backup
+    # Chỉ mở cho chính VPS (dùng SSH tunnel nếu muốn kết nối SSMS từ máy nhà)
+    ports:
+      - "127.0.0.1:1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: tripops-api:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__TripOps: "Server=sqlserver,1433;Database=${DB_NAME:-TripOps};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=True"
+      Cors__AllowedOrigins__0: https://${DOMAIN}
+      Cors__AllowedOrigins__1: https://www.${DOMAIN}
+    volumes:
+      - api-appdata:/app/App_Data
+      - api-keys:/home/app/.aspnet/DataProtection-Keys
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  web:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        PUBLIC_APP_URL: https://${DOMAIN}
+    image: tripops-web:latest
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+volumes:
+  mssql-data:
+  api-appdata:
+  api-keys:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,42 @@
+# Caddy: HTTPS tự động (Let's Encrypt) cho {$DOMAIN}, proxy API và phục vụ file React.
+{
+	email {$ACME_EMAIL}
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# API + webhook payOS
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+	# SignalR (chat, thông báo) dùng WebSocket
+	handle /hubs/* {
+		reverse_proxy api:8080
+	}
+	handle /health {
+		reverse_proxy api:8080
+	}
+
+	# Frontend (dùng hash routing #/..., nên chỉ cần trả index.html khi không thấy file)
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html path / /index.html
+		header @html Cache-Control "no-cache"
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
