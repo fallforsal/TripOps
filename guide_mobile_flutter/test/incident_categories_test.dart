@@ -11,7 +11,7 @@ class _StubGuideRepository implements GuideRepository {
 }
 
 void main() {
-  test('dropdown has exactly the eight canonical incident categories', () {
+  test('category picker has exactly the eight canonical incident categories', () {
     expect(incidentCategories.map((item) => item.code).toList(), [
       'HEALTH', 'VEHICLE', 'WEATHER', 'CUSTOMER', 'SECURITY',
       'SERVICE_PROVIDER', 'SCHEDULE', 'OTHER',
@@ -23,7 +23,7 @@ void main() {
       'Dịch vụ & Nhà cung cấp');
   });
 
-  testWidgets('incident report requires choosing a category from dropdown',
+  testWidgets('incident report requires choosing a category from selection sheet',
       (tester) async {
     final booking = BookingDetail.fromJson({
       'id': 18, 'bookingCode': 'INC-TEST', 'tourName': 'Tour thử nghiệm',
@@ -38,26 +38,22 @@ void main() {
     expect(find.text('Chọn loại sự cố'), findsOneWidget);
     expect(find.text('Mức độ ảnh hưởng'), findsNothing);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('incident-submit')), 180,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('incident-submit')));
     await tester.pumpAndSettle();
     expect(find.text('Vui lòng chọn loại sự cố'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('incident-type-dropdown')), -180,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(find.byKey(const ValueKey('incident-type-dropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('incident-type-dropdown')));
     await tester.pumpAndSettle();
-    expect(find.text('Dịch vụ & Nhà cung cấp'), findsWidgets);
-    await tester.tap(find.text('Dịch vụ & Nhà cung cấp').last);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    final category = find.byKey(const ValueKey('incident-category-SERVICE_PROVIDER'));
+    await tester.scrollUntilVisible(category, 150,
+      scrollable: find.descendant(of: find.byType(BottomSheet), matching: find.byType(Scrollable)).first);
+    await tester.tap(category);
     await tester.pumpAndSettle();
     expect(find.text('Vui lòng chọn loại sự cố'), findsNothing);
+    expect(find.text('Dịch vụ & Nhà cung cấp'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

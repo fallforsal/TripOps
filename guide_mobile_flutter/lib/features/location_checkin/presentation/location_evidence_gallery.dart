@@ -85,7 +85,29 @@ class _EvidenceGroup extends StatelessWidget {
               style: const TextStyle(color: muted, fontSize: 12)),
           if (urls.isNotEmpty) ...[
             const SizedBox(height: 8),
-            SizedBox(height: 78, child: ListView.separated(
+            EvidencePhotoStrip(urls: urls, cache: cache, title: title),
+          ],
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text('$notePrefix: $text', style: const TextStyle(
+              fontSize: 12, color: ink, height: 1.4,
+            )),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Lazy evidence thumbnails shared by location and incident reports.
+class EvidencePhotoStrip extends StatelessWidget {
+  const EvidencePhotoStrip({super.key, required this.urls, required this.cache, required this.title});
+  final List<String> urls;
+  final LocationPhotoCache cache;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(height: 78, child: ListView.separated(
               scrollDirection: Axis.horizontal,
               primary: false,
               padding: EdgeInsets.zero,
@@ -106,18 +128,7 @@ class _EvidenceGroup extends StatelessWidget {
                   ),
                 ),
               ),
-            )),
-          ],
-          if (text.isNotEmpty) ...[
-            const SizedBox(height: 7),
-            Text('$notePrefix: $text', style: const TextStyle(
-              fontSize: 12, color: ink, height: 1.4,
-            )),
-          ],
-        ]),
-      ),
-    );
-  }
+            ));
 }
 
 class _ProofImage extends StatefulWidget {
