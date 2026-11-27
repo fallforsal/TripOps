@@ -8,6 +8,7 @@ import '../../assigned_tours/presentation/tour_card.dart';
 import '../../auth/domain/guide_account.dart';
 import '../domain/home_trip_picker.dart';
 import 'schedule_calendar_card.dart';
+import 'home_metric_tile.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -70,27 +71,36 @@ class HomeScreen extends StatelessWidget {
           onTap: chosen == null ? onTourTab : () => onOpenTour(chosen),
         ),
         space(15),
-        Row(children: [
-          Expanded(child: GuideMetric(
-            icon: Icons.route_outlined, value: '$active', label: 'Tour đang phụ trách',
-          )),
-          const SizedBox(width: 9),
-          Expanded(child: GuideMetric(
-            icon: Icons.event_outlined,
-            value: daysToGo == null ? '—' :
-              daysToGo > 0 ? '$daysToGo' : '0',
-            label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
-            iconColor: const Color(0xFFB78330),
-            tint: const Color(0xFFFFF3DF),
-          )),
-          const SizedBox(width: 9),
-          Expanded(child: GuideMetric(
-            icon: Icons.verified_outlined,
-            value: '$completed', label: 'Tour đã hoàn thành',
-            iconColor: const Color(0xFF477DB4),
-            tint: const Color(0xFFEAF3FC),
-          )),
-        ]),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: HomeMetricTile(
+                icon: Icons.route_outlined,
+                value: active,
+                label: 'Tour đang phụ trách',
+                color: deepTeal,
+                tint: const Color(0xB3B4DDD6),
+              )),
+              const SizedBox(width: 9),
+              Expanded(child: HomeMetricTile(
+                icon: Icons.event_outlined,
+                value: daysToGo == null ? null : (daysToGo > 0 ? daysToGo : 0),
+                label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
+                color: const Color(0xFF87601C),
+                tint: const Color(0xB3F4DFB9),
+              )),
+              const SizedBox(width: 9),
+              Expanded(child: HomeMetricTile(
+                icon: Icons.verified_outlined,
+                value: completed,
+                label: 'Tour đã hoàn thành',
+                color: const Color(0xFF315F91),
+                tint: const Color(0xB3CBDCF5),
+              )),
+            ],
+          ),
+        ),
         space(22),
         const GuideSectionTitle('Lịch dẫn tour'),
         space(10),
