@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
@@ -108,7 +109,14 @@ class _IncidentScreenState extends State<IncidentScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Báo cáo sự cố')),
+    appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,title: const Text('Báo cáo sự cố')),
     body: Form(
       key: form,
       child: ListView(
@@ -147,7 +155,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
                           width: 40, height: 40,
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF0E4),
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: const Icon(Icons.report_problem_outlined,
                             color: alertOrange),
@@ -163,7 +171,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
                               const SizedBox(height: 3),
                               Text(incident.description, maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11, color: muted)),
+                                style: const TextStyle(fontSize: 12, color: muted)),
                             ],
                           ),
                         ),
@@ -174,7 +182,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
                       Wrap(spacing: 7, runSpacing: 7, children: [
                         for (final url in incident.evidenceUrls)
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(9),
+                            borderRadius: BorderRadius.circular(16),
                             child: FutureBuilder<Uint8List>(
                               future: _photoDownloads.putIfAbsent(
                                 url, () => widget.guides.imageBytes(url)),

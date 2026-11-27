@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_client.dart';
@@ -126,6 +127,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
         title: const Text('Điểm danh hành khách'),
         actions: [
           IconButton(
@@ -172,12 +180,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               LinearProgressIndicator(
                 value: all.isEmpty ? 0 : checked / all.length,
                 minHeight: 8,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(16),
                 backgroundColor: paleTeal,
               ),
               space(9),
               Text('$absent khách vắng mặt', style: const TextStyle(
-                fontSize: 11, color: muted,
+                fontSize: 13, color: muted,
               )),
             ]),
           )),
@@ -241,7 +249,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13, color: ink, fontWeight: FontWeight.w800,
+                        fontSize: 15, color: ink, fontWeight: FontWeight.w600,
                       ),
                     )),
                     const SizedBox(width: 8),
@@ -261,7 +269,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   space(8),
                   Row(children: [
                     const Text('SĐT: ', style: TextStyle(
-                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
+                      fontSize: 13, color: muted, fontWeight: FontWeight.w600,
                     )),
                     Expanded(child: Text(
                       passengerPhone(p.phone) ?? 'Chưa cập nhật',
@@ -309,7 +317,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(

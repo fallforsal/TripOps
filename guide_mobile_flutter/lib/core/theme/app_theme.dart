@@ -33,6 +33,7 @@ abstract final class TripOpsTheme {
         backgroundColor: const Color(0xDFFFFFFF),
         foregroundColor: ink,
         centerTitle: true,
+        titleSpacing: 12,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -85,6 +86,7 @@ abstract final class TripOpsTheme {
           backgroundColor: teal,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),

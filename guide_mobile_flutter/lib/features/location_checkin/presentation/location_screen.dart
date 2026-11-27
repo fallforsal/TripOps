@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
@@ -270,6 +271,13 @@ class _LocationScreenState extends State<LocationScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
         title: const Text('Check-in / Check-out địa điểm'),
         actions: [
           IconButton(
@@ -374,7 +382,12 @@ class _LocationScreenState extends State<LocationScreen> {
                                       : 'Sẵn sàng check-in hoặc bỏ qua';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Card(child: Padding(
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        side: BorderSide(color: isNext ? const Color(0xFF7CC5BF) : Colors.white, width: isNext ? 1.6 : 1),
+                      ),
+                      child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +401,7 @@ class _LocationScreenState extends State<LocationScreen> {
                                     : skipped
                                         ? const Color(0xFFFFECEC)
                                         : const Color(0xFFEEF2F8),
-                                borderRadius: BorderRadius.circular(11),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               child: Icon(
                                 checkedIn || checkedOut
@@ -450,7 +463,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           ]),
                           space(8),
                           Text(blockedReason, style: const TextStyle(
-                            fontSize: 11, color: muted,
+                            fontSize: 12, color: muted,
                           )),
                           _buildProofSection(
                             title: skipped ? 'Ảnh bỏ qua đã gửi' : 'Ảnh check-in đã gửi',

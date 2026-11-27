@@ -111,6 +111,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
     title: Text(widget.isCheckout
         ? 'Check-out ${widget.stopName}'
         : widget.isSkip
@@ -145,7 +146,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
               style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             const Text('JPG, PNG, WebP · tối đa 5 MB/ảnh, 20 MB tổng',
-              style: TextStyle(color: muted, fontSize: 11)),
+              style: TextStyle(color: muted, fontSize: 12)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (_selected.length < CheckinPhotoLimits.maxFiles) ...[
@@ -173,11 +174,11 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
                 for (var index = 0; index < _selected.length; index++)
                   Stack(clipBehavior: Clip.none, children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(16),
                       child: Image.file(
                         File(_selected[index].path),
-                        width: 72,
-                        height: 72,
+                        width: 84,
+                        height: 84,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
                             const Icon(Icons.broken_image_outlined, size: 65),
@@ -201,7 +202,7 @@ class _CheckinPhotoDialogState extends State<CheckinPhotoDialog> {
               const SizedBox(height: 7),
               Text('${_selected.length}/5 ảnh  •  '
                   '${(_selected.fold<int>(0, (n, p) => n + p.bytes) / (1024 * 1024)).toStringAsFixed(1)} MB',
-                style: const TextStyle(color: muted, fontSize: 11)),
+                style: const TextStyle(color: muted, fontSize: 12)),
             ],
             if (_photoError != null) ...[
               const SizedBox(height: 8),

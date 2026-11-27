@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/network/api_client.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/presentation/tour_detail_screen.dart';
@@ -113,6 +114,13 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
     final unread = items.where((n) => n.readAt == null).length;
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
         title: const Text('Thông báo'),
         actions: [
           IconButton(
@@ -143,16 +151,24 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
                   : RefreshIndicator(
                       onRefresh: load,
                       child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                         itemCount: items.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final n = items[index];
                           final unseen = n.readAt == null;
-                          return ListTile(
-                            leading: Icon(
+                          return Card(
+                            clipBehavior: Clip.antiAlias,
+                            child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                            leading: CircleAvatar(
+                              backgroundColor: unseen ? const Color(0xFFDDF2EE) : const Color(0xFFF0F3F5),
+                              child: Icon(
                               unseen ? Icons.notifications_active_outlined
                                   : Icons.notifications_none_outlined,
                               color: unseen ? const Color(0xFF087E84) : Colors.grey,
+                              ),
                             ),
                             title: Text(n.message,
                               style: TextStyle(
@@ -162,6 +178,7 @@ class _GuideNotificationsScreenState extends State<GuideNotificationsScreen> {
                             trailing: n.bookingId == null
                                 ? null : const Icon(Icons.chevron_right_rounded),
                             onTap: () => openNotice(n),
+                            ),
                           );
                         },
                       ),

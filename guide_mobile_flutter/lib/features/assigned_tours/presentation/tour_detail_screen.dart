@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
@@ -79,6 +80,13 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     final d = detail;
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
         title: const Text('Chi tiết tour'),
         actions: [
           IconButton(
@@ -128,7 +136,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                             tint: const Color(0xFFFFF0E3),
                           )),
                         ]),
-                        space(19),
+                        space(22),
                         if (acting) ...[
                           const LinearProgressIndicator(),
                           space(10),
@@ -171,7 +179,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                             )),
                           )),
                         ]),
-                        space(22),
+                        space(26),
                         const GuideSectionTitle('Thông tin đoàn'),
                         space(10),
                         Card(child: Padding(
@@ -183,7 +191,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.person_outline, color: teal),
                               title: const Text('Khách hàng',
-                                style: TextStyle(color: muted, fontSize: 11)),
+                                style: TextStyle(color: muted, fontSize: 12)),
                               subtitle: Text(d.customerName ?? 'Không có dữ liệu',
                                 style: const TextStyle(color: ink,
                                   fontWeight: FontWeight.w700)),
