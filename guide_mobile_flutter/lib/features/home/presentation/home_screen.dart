@@ -8,7 +8,7 @@ import '../../assigned_tours/presentation/tour_card.dart';
 import '../../auth/domain/guide_account.dart';
 import '../domain/home_trip_picker.dart';
 import 'schedule_calendar_card.dart';
-import 'home_metric_tile.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: HomeMetricTile(
+              Expanded(child: GuideGlassMetric(
                 icon: Icons.route_outlined,
                 value: active,
                 label: 'Tour đang phụ trách',
@@ -83,7 +83,7 @@ class HomeScreen extends StatelessWidget {
                 tint: const Color(0xFFB9E1DE),
               )),
               const SizedBox(width: 9),
-              Expanded(child: HomeMetricTile(
+              Expanded(child: GuideGlassMetric(
                 icon: Icons.event_outlined,
                 value: daysToGo == null ? null : (daysToGo > 0 ? daysToGo : 0),
                 label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
@@ -91,7 +91,7 @@ class HomeScreen extends StatelessWidget {
                 tint: const Color(0xFFF2E1BE),
               )),
               const SizedBox(width: 9),
-              Expanded(child: HomeMetricTile(
+              Expanded(child: GuideGlassMetric(
                 icon: Icons.verified_outlined,
                 value: completed,
                 label: 'Tour đã hoàn thành',

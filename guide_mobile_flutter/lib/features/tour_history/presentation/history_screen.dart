@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../../assigned_tours/domain/tour_catalog.dart';
@@ -28,19 +29,30 @@ class HistoryScreen extends StatelessWidget {
         const Text('Lưu lại những chuyến đi và dấu ấn đã thực hiện.',
           style: TextStyle(color: muted, fontSize: 14)),
         space(17),
-        Row(children: [
-          Expanded(child: GuideMetric(
-            icon: Icons.verified_outlined,
-            value: '${history.length}', label: 'Tour hoàn thành',
-          )),
-          const SizedBox(width: 9),
-          Expanded(child: GuideMetric(
-            icon: Icons.groups_outlined,
-            value: '$guests', label: 'Tổng lượt khách',
-            iconColor: const Color(0xFF477DB4),
-            tint: const Color(0xFFEAF3FC),
-          )),
-        ]),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: GuideGlassMetric(
+                key: const ValueKey('history-completed-metric'),
+                icon: Icons.verified_outlined,
+                value: history.length,
+                label: 'Tour hoàn thành',
+                color: const Color(0xFF315F91),
+                tint: const Color(0xFFCFE0F7),
+              )),
+              const SizedBox(width: 9),
+              Expanded(child: GuideGlassMetric(
+                key: const ValueKey('history-guests-metric'),
+                icon: Icons.groups_outlined,
+                value: guests,
+                label: 'Tổng lượt khách',
+                color: deepTeal,
+                tint: const Color(0xFFB9E1DE),
+              )),
+            ],
+          ),
+        ),
         space(22),
         GuideSectionTitle('Lịch sử tour (${history.length})'),
         space(11),

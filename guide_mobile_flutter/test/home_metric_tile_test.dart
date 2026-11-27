@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripops_guide/core/theme/app_theme.dart';
 import 'package:tripops_guide/core/widgets/guide_glass.dart';
-import 'package:tripops_guide/features/home/presentation/home_metric_tile.dart';
+import 'package:tripops_guide/core/widgets/guide_glass_metric.dart';
 
 void main() {
   testWidgets('home KPI widgets have equal heights and display actual values', (tester) async {
@@ -23,17 +23,17 @@ void main() {
           IntrinsicHeight(child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: HomeMetricTile(
+              Expanded(child: GuideGlassMetric(
                 key: const ValueKey('active'), icon: Icons.route_outlined,
                 value: value, label: 'Tour đang phụ trách', color: deepTeal, tint: paleTeal,
               )),
               const SizedBox(width: 9),
-              const Expanded(child: HomeMetricTile(
+              const Expanded(child: GuideGlassMetric(
                 key: ValueKey('departure'), icon: Icons.event_outlined,
                 value: null, label: 'Ngày tới khởi hành', color: ink, tint: paleTeal,
               )),
               const SizedBox(width: 9),
-              const Expanded(child: HomeMetricTile(
+              const Expanded(child: GuideGlassMetric(
                 key: ValueKey('completed'), icon: Icons.verified_outlined,
                 value: 2, label: 'Tour đã hoàn thành', color: ink, tint: paleTeal,
               )),
