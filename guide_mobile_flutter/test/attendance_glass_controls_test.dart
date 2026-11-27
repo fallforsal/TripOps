@@ -8,6 +8,7 @@ import 'package:tripops_guide/features/assigned_tours/data/guide_repository.dart
 import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart';
 import 'package:tripops_guide/features/attendance/domain/attendance_filter.dart';
 import 'package:tripops_guide/features/attendance/presentation/attendance_screen.dart';
+import 'package:tripops_guide/features/attendance/presentation/attendance_progress_card.dart';
 
 class _FakeGuideRepository implements GuideRepository {
   @override
@@ -44,12 +45,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final progress = find.byKey(const ValueKey('attendance-progress'));
-    expect(tester.widget<GuideStaticGlass>(progress), isA<GuideStaticGlass>());
+    expect(find.descendant(of: progress, matching: find.byType(GuideStaticGlass)), findsOneWidget);
     expect(find.descendant(of: progress, matching: find.byType(BackdropFilter)), findsNothing);
-    final bar = find.descendant(of: progress, matching: find.byType(LinearProgressIndicator));
-    expect(tester.widget<LinearProgressIndicator>(bar).value, 0.5);
-    expect(find.text('2 / 4'), findsOneWidget);
-    expect(find.text('1 khách vắng mặt'), findsOneWidget);
+    expect(tester.widget<AttendanceProgressCard>(progress).recorded, 3);
+    expect(find.text('3 / 4'), findsOneWidget);
+    expect(find.text('1 vắng mặt'), findsOneWidget);
 
     final control = find.byType(GuideSegmentedControl<AttendanceFilter>);
     expect(control, findsOneWidget);
@@ -86,8 +86,8 @@ void main() {
     expect(find.text('Lê Chi'), findsOneWidget);
     expect(find.text('Nguyễn Văn An'), findsNothing);
     expect(find.text('Khách đã xóa'), findsNothing);
-    expect(tester.widget<LinearProgressIndicator>(bar).value, 0.5);
-    expect(find.text('1 khách vắng mặt'), findsOneWidget);
+    expect(tester.widget<AttendanceProgressCard>(progress).recorded, 3);
+    expect(find.text('1 vắng mặt'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
