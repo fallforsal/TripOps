@@ -44,7 +44,7 @@ class HomeScreen extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.paddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 24 + MediaQuery.paddingOf(context).bottom),
       children: [
         Text('CHÀO MỪNG TRỞ LẠI', style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w600,

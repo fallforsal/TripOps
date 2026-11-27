@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/network/api_client.dart';
 import '../core/notifications/guide_push_service.dart';
 import '../core/theme/app_theme.dart';
@@ -144,104 +145,87 @@ class _GuideShellState extends State<GuideShell> {
     const names = ['Trang chủ', 'Tour của tôi', 'Lịch sử', 'Cá nhân'];
     return Scaffold(
       extendBody: true,
-      appBar: AppBar(
-        centerTitle: false,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
-        toolbarHeight: 66,
-        automaticallyImplyLeading: false,
-        titleSpacing: 17,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/TripOps_logo_transparent.png',
-              height: 25,
-              fit: BoxFit.contain,
-              semanticLabel: 'TripOps Logo',
-            ),
-            const SizedBox(width: 10),
-            Container(width: 1, height: 22, color: line),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    names[tab],
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17, color: ink, fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Text(
-                    'Tour Guide',
-                    style: TextStyle(
-                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                tooltip: 'Thông báo',
-                onPressed: openNotices,
-                icon: const Icon(Icons.notifications_none_rounded, color: ink, size: 23),
-              ),
-              if (unreadNotices > 0)
-                Positioned(
-                  right: 2, top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent, borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(unreadNotices > 99 ? '99+' : '$unreadNotices',
-                      style: const TextStyle(fontSize: 9, color: Colors.white)),
-                  ),
-                ),
-            ],
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(80),
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
           ),
-          IconButton(
-            tooltip: 'Làm mới',
-            onPressed: loading ? null : refresh,
-            icon: const Icon(Icons.refresh_rounded, color: ink, size: 21),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 17, left: 4),
-            child: () {
-              final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
-              return CircleAvatar(
-                radius: 17,
-                backgroundColor: paleTeal,
-                child: avatarUrl == null
-                    ? const Icon(Icons.person_rounded, color: deepTeal, size: 19)
-                    : ClipOval(
-                        child: Image.network(
-                          avatarUrl,
-                          width: 34,
-                          height: 34,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.person_rounded,
-                            color: deepTeal,
-                            size: 19,
-                          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: GuideGlass(
+                    key: const ValueKey('floating-guide-header'),
+                    radius: 32,
+                    blurSigma: 20,
+                    highlightTint: const Color(0xC9FFFFFF),
+                    tint: const Color(0x80FFFFFF),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => Row(
+                          children: [
+                            Image.asset(
+                              'assets/images/TripOps_logo_transparent.png',
+                              height: 25,
+                              width: constraints.maxWidth < 300 ? 72 : 88,
+                              fit: BoxFit.contain,
+                              semanticLabel: 'TripOps Logo',
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(names[tab], maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 17, color: ink, fontWeight: FontWeight.w700)),
+                                  const Text('Tour Guide', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            _headerAction(
+                              icon: Icons.notifications_none_rounded,
+                              tooltip: 'Thông báo',
+                              onPressed: openNotices,
+                              badge: unreadNotices > 0 ? (unreadNotices > 99 ? '99+' : '$unreadNotices') : null,
+                            ),
+                            if (constraints.maxWidth >= 340) ...[
+                              const SizedBox(width: 4),
+                              _headerAction(
+                                icon: Icons.refresh_rounded,
+                                tooltip: 'Làm mới',
+                                onPressed: loading ? null : refresh,
+                              ),
+                            ],
+                            const SizedBox(width: 6),
+                            _headerAvatar(),
+                          ],
                         ),
                       ),
-              );
-            }(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
+        ),
       ),
-      body: loading ? const Center(child: CircularProgressIndicator())
-        : error != null ? ErrorState(message: error!, onRetry: refresh)
+      body: Builder(builder: (bodyContext) => loading
+        ? const SafeArea(child: Center(child: CircularProgressIndicator()))
+        : error != null ? SafeArea(child: ErrorState(message: error!, onRetry: refresh))
         : RefreshIndicator(
+            edgeOffset: MediaQuery.paddingOf(bodyContext).top,
             onRefresh: refresh,
             child: switch (tab) {
               0 => HomeScreen(
@@ -264,7 +248,7 @@ class _GuideShellState extends State<GuideShell> {
                 account: widget.account, onLogout: widget.onLogout,
               ),
             },
-          ),
+          )),
       bottomNavigationBar: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(14, 4, 14, 12),
@@ -289,6 +273,63 @@ class _GuideShellState extends State<GuideShell> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _headerAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    String? badge,
+  }) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Material(
+        color: const Color(0x80FFFFFF),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 23),
+          color: ink,
+        ),
+      ),
+      if (badge != null)
+        Positioned(
+          right: -2,
+          top: -3,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _headerAvatar() {
+    final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: const BoxDecoration(color: Color(0xA6FFFFFF), shape: BoxShape.circle),
+      child: CircleAvatar(
+        radius: 19,
+        backgroundColor: paleTeal,
+        child: avatarUrl == null
+            ? const Icon(Icons.person_rounded, color: deepTeal, size: 20)
+            : ClipOval(
+                child: Image.network(
+                  avatarUrl, width: 38, height: 38, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: deepTeal, size: 20),
+                ),
+              ),
       ),
     );
   }

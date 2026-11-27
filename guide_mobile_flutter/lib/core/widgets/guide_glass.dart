@@ -13,6 +13,7 @@ class GuideGlass extends StatelessWidget {
     this.shadow = true,
     this.padding = EdgeInsets.zero,
     this.tint = const Color(0xBFFFFFFF),
+    this.highlightTint = const Color(0xF2FFFFFF),
   });
 
   final Widget child;
@@ -21,6 +22,7 @@ class GuideGlass extends StatelessWidget {
   final bool shadow;
   final EdgeInsetsGeometry padding;
   final Color tint;
+  final Color highlightTint;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +33,7 @@ class GuideGlass extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [const Color(0xF2FFFFFF), tint],
+          colors: [highlightTint, tint],
         ),
         border: Border.all(color: const Color(0xE6FFFFFF), width: 1.2),
       ),
