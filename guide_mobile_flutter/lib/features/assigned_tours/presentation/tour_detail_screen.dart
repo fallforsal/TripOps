@@ -53,7 +53,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       if (!mounted) return;
       await refresh(); // backend is the source of truth
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backend đã xác nhận thành công.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã cập nhật hành trình thành công.')));
     } catch (e) {
       if (!mounted) return;
       if (e is ApiFailure && e.statusCode == 401) {
@@ -82,7 +82,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         title: const Text('Chi tiết tour'),
         actions: [
           IconButton(
-            tooltip: 'Tải lại dữ liệu từ backend',
+            tooltip: 'Làm mới thông tin tour',
             onPressed: acting ? null : refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -141,6 +141,13 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                             label: const Text('Bắt đầu tour'),
                           ),
                         space(20),
+                        if (!d.canStartTour && d.canRecordAttendance && d.passengers.any((p) => p.status == 'Pending')) ...[
+                          FilledButton.icon(onPressed: acting ? null : () => open(AttendanceScreen(detail: d, guides: widget.guides)), icon: const Icon(Icons.fact_check_outlined), label: const Text('Tiếp tục điểm danh')),
+                          space(12),
+                        ] else if (d.canCheckInLocations && d.nextLocationCheckInId != null) ...[
+                          FilledButton.icon(onPressed: acting ? null : () => open(LocationScreen(detail: d, guides: widget.guides)), icon: const Icon(Icons.route_outlined), label: const Text('Tiếp tục hành trình')),
+                          space(12),
+                        ],
                         const GuideSectionTitle('Thao tác nhanh'),
                         space(10),
                         Row(children: [
@@ -155,7 +162,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                           const SizedBox(width: 9),
                           Expanded(child: GuideActionTile(
                             icon: Icons.location_on_outlined,
-                            title: 'Check-in',
+                            title: 'Lịch trình',
                             subtitle: 'Các điểm dừng',
                             onTap: () => open(LocationScreen(
                               detail: d, guides: widget.guides,
@@ -183,7 +190,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.person_outline, color: teal),
                               title: const Text('Khách hàng',
-                                style: TextStyle(color: muted, fontSize: 11)),
+                                style: TextStyle(color: muted, fontSize: 13)),
                               subtitle: Text(d.customerName ?? 'Không có dữ liệu',
                                 style: const TextStyle(color: ink,
                                   fontWeight: FontWeight.w700)),
@@ -193,7 +200,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.phone_outlined, color: teal),
                               title: const Text('Liên hệ',
-                                style: TextStyle(color: muted, fontSize: 11)),
+                                style: TextStyle(color: muted, fontSize: 13)),
                               subtitle: Text(d.contactPhone ?? 'Không có dữ liệu',
                                 style: const TextStyle(color: ink,
                                   fontWeight: FontWeight.w700)),
@@ -203,7 +210,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.business_outlined, color: teal),
                               title: const Text('Đơn vị phụ trách',
-                                style: TextStyle(color: muted, fontSize: 11)),
+                                style: TextStyle(color: muted, fontSize: 13)),
                               subtitle: Text(d.agencyName ?? 'Chưa cập nhật',
                                 style: const TextStyle(color: ink,
                                   fontWeight: FontWeight.w700)),

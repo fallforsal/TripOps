@@ -139,7 +139,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
         children: [
           Text(current.name, style: const TextStyle(
-            color: muted, fontSize: 12, fontWeight: FontWeight.w600,
+            color: muted, fontSize: 14, fontWeight: FontWeight.w600,
           )),
           space(14),
           Row(children: [
@@ -162,22 +162,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 const Expanded(child: Text('Tiến độ điểm danh',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                     color: ink))),
-                Text('$checked / ${all.length}', style: const TextStyle(
-                  fontSize: 13, color: teal, fontWeight: FontWeight.w900,
+                Text('${checked + absent} / ${all.length}', style: const TextStyle(
+                  fontSize: 15, color: teal, fontWeight: FontWeight.w900,
                 )),
               ]),
               space(12),
               LinearProgressIndicator(
-                value: all.isEmpty ? 0 : checked / all.length,
+                value: all.isEmpty ? 0 : (checked + absent) / all.length,
                 minHeight: 8,
                 borderRadius: BorderRadius.circular(8),
                 backgroundColor: paleTeal,
               ),
               space(9),
               Text('$absent khách vắng mặt', style: const TextStyle(
-                fontSize: 11, color: muted,
+                fontSize: 13, color: muted,
               )),
             ]),
           )),
@@ -241,13 +241,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13, color: ink, fontWeight: FontWeight.w800,
+                        fontSize: 15, color: ink, fontWeight: FontWeight.w800,
                       ),
                     )),
                     const SizedBox(width: 8),
                     GuideStatusPill(
                       p.status == 'CheckedIn' ? 'Có mặt'
-                        : p.status == 'Absent' ? 'Vắng' : 'Chưa rõ',
+                        : p.status == 'Absent' ? 'Vắng' : 'Chưa điểm danh',
                       background: p.status == 'CheckedIn'
                         ? paleTeal : p.status == 'Absent'
                           ? const Color(0xFFFFE8E8)
@@ -261,13 +261,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   space(8),
                   Row(children: [
                     const Text('SĐT: ', style: TextStyle(
-                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
+                      fontSize: 14, color: muted, fontWeight: FontWeight.w600,
                     )),
                     Expanded(child: Text(
                       passengerPhone(p.phone) ?? 'Chưa cập nhật',
                       key: ValueKey('passenger-phone-${p.id}'),
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: passengerPhone(p.phone) == null ? muted : ink,
                       ),
@@ -280,7 +280,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         tooltip: 'Sao chép số điện thoại',
                         visualDensity: VisualDensity.compact,
                         constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 35,
+                          minWidth: 48, minHeight: 48,
                         ),
                         icon: const Icon(Icons.copy_rounded, size: 17),
                         onPressed: () => copyPassengerPhone(
@@ -314,7 +314,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                       child: Text(
                         'Ghi chú HDV: ${p.statusNote!.trim()}',
-                        style: const TextStyle(fontSize: 12, color: ink),
+                        style: const TextStyle(fontSize: 14, color: ink),
                       ),
                     ),
                   ],

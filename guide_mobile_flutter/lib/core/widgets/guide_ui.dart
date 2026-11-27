@@ -16,7 +16,7 @@ class GuideSectionTitle extends StatelessWidget {
       ))),
       if (trailing != null)
         TextButton(onPressed: onTap, child: Text(trailing!,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800))),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800))),
     ],
   );
 }
@@ -46,7 +46,7 @@ class GuideInfoBanner extends StatelessWidget {
       Icon(icon, size: 17, color: warning ? const Color(0xFFAE6B25) : deepTeal),
       const SizedBox(width: 10),
       Expanded(child: Text(message, style: TextStyle(
-        fontSize: 12,
+        fontSize: 14,
         height: 1.48,
         color: warning ? const Color(0xFF916033) : const Color(0xFF497E77),
       ))),
@@ -92,7 +92,7 @@ class GuideMetric extends StatelessWidget {
       ),
       const SizedBox(height: 3),
       Text(label, style: const TextStyle(
-        fontSize: 10, height: 1.3, color: muted, fontWeight: FontWeight.w600,
+        fontSize: 14, height: 1.3, color: muted, fontWeight: FontWeight.w600,
       )),
     ]),
   );
@@ -126,12 +126,12 @@ class GuideActionTile extends StatelessWidget {
             Icon(icon, size: 23, color: teal),
             const SizedBox(height: 10),
             Text(title, style: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w800, color: ink,
+              fontSize: 14, fontWeight: FontWeight.w800, color: ink,
             )),
             if (subtitle != null) ...[
               const SizedBox(height: 3),
               Text(subtitle!, style: const TextStyle(
-                fontSize: 10, height: 1.3, color: muted,
+                fontSize: 14, height: 1.3, color: muted,
               )),
             ],
           ],
@@ -153,7 +153,7 @@ class GuideStatusPill extends StatelessWidget {
     decoration: BoxDecoration(color: background,
       borderRadius: BorderRadius.circular(8)),
     child: Text(text, style: TextStyle(
-      color: foreground, fontSize: 10, fontWeight: FontWeight.w800,
+      color: foreground, fontSize: 14, fontWeight: FontWeight.w800,
     )),
   );
 }
@@ -204,7 +204,7 @@ class GuideHero extends StatelessWidget {
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Text(label.toUpperCase(), style: const TextStyle(
-                color: Colors.white, fontSize: 10,
+                color: Colors.white, fontSize: 14,
                 fontWeight: FontWeight.w800, letterSpacing: 0.35,
               )),
             ),
@@ -216,7 +216,7 @@ class GuideHero extends StatelessWidget {
             if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(subtitle!, style: const TextStyle(
-                fontSize: 12, height: 1.4, color: Color(0xFFD5ECEB),
+                fontSize: 14, height: 1.4, color: Color(0xFFD5ECEB),
               )),
             ],
             if (actionLabel != null && onTap != null) ...[
@@ -234,7 +234,7 @@ class GuideHero extends StatelessWidget {
                 ),
                 onPressed: onTap,
                 label: Text(actionLabel!, style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w800,
+                  fontSize: 14, fontWeight: FontWeight.w800,
                 )),
                 icon: const Icon(Icons.arrow_forward, size: 15),
                 iconAlignment: IconAlignment.end,
@@ -278,7 +278,7 @@ class GuideEmptyState extends StatelessWidget {
       const SizedBox(height: 6),
       Text(message, textAlign: TextAlign.center,
         style: const TextStyle(
-          fontSize: 12, color: muted, height: 1.45,
+          fontSize: 14, color: muted, height: 1.45,
         )),
     ]),
   );

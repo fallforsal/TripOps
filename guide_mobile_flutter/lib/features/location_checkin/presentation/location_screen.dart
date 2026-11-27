@@ -227,7 +227,7 @@ class _LocationScreenState extends State<LocationScreen> {
         space(8),
         if (urls.isNotEmpty) ...[
           Text(title, style: const TextStyle(
-            fontSize: 11, color: ink, fontWeight: FontWeight.w700,
+            fontSize: 15, color: ink, fontWeight: FontWeight.w700,
           )),
           space(6),
         ],
@@ -273,7 +273,7 @@ class _LocationScreenState extends State<LocationScreen> {
         title: const Text('Check-in / Check-out địa điểm'),
         actions: [
           IconButton(
-            tooltip: 'Tải lại trạng thái từ backend',
+            tooltip: 'Làm mới trạng thái',
             onPressed: busy == null ? refresh : null,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -326,7 +326,7 @@ class _LocationScreenState extends State<LocationScreen> {
           if (stops.isEmpty)
             const GuideEmptyState(
               title: 'Chưa có điểm dừng',
-              message: 'Backend chưa trả về lịch trình check-in.',
+              message: 'Lịch trình chưa có điểm dừng được phân công.',
             ),
           ...current.days.map((day) => Padding(
             padding: const EdgeInsets.only(bottom: 17),
@@ -374,7 +374,9 @@ class _LocationScreenState extends State<LocationScreen> {
                                       : 'Sẵn sàng check-in hoặc bỏ qua';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Card(child: Padding(
+                    child: Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isNext ? teal : line, width: isNext ? 2 : 1)),
+                      child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +409,7 @@ class _LocationScreenState extends State<LocationScreen> {
                             const SizedBox(width: 11),
                             Expanded(child: Text(stop.name,
                               style: const TextStyle(
-                                fontSize: 13, color: ink,
+                                fontSize: 15, color: ink,
                                 fontWeight: FontWeight.w800,
                               ))),
                             GuideStatusPill(
@@ -438,7 +440,7 @@ class _LocationScreenState extends State<LocationScreen> {
                                 tooltip: 'Báo cáo sự cố',
                                 visualDensity: VisualDensity.compact,
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                                constraints: const BoxConstraints.tightFor(width: 48, height: 48),
                                 onPressed: reportIncident,
                                 icon: const Icon(
                                   Icons.report_problem_outlined,
@@ -450,7 +452,7 @@ class _LocationScreenState extends State<LocationScreen> {
                           ]),
                           space(8),
                           Text(blockedReason, style: const TextStyle(
-                            fontSize: 11, color: muted,
+                            fontSize: 13, color: muted,
                           )),
                           _buildProofSection(
                             title: skipped ? 'Ảnh bỏ qua đã gửi' : 'Ảnh check-in đã gửi',
@@ -468,7 +470,7 @@ class _LocationScreenState extends State<LocationScreen> {
                             space(9),
                             const LinearProgressIndicator(),
                           ],
-                          if (!checkedOut && !skipped) ...[
+                          if (isNext && !checkedOut && !skipped) ...[
                             space(10),
                             if (!checkedIn)
                               Row(children: [
@@ -504,7 +506,7 @@ class _LocationScreenState extends State<LocationScreen> {
                             else
                               Row(children: [
                                 Expanded(
-                                  child: OutlinedButton.icon(
+                                  child: FilledButton.icon(
                                     key: ValueKey('checkout-${stop.id}'),
                                     onPressed: canCheckout ? () => checkout(stop) : null,
                                     icon: const Icon(Icons.camera_alt_outlined, size: 18),
