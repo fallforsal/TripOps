@@ -1,7 +1,7 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { register } from "@/app/services/authService";
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   Compass,
   Building2,
@@ -13,19 +13,14 @@ import {
   Phone,
   User as UserIcon,
   CheckCircle2,
-  AlertCircle,
   ArrowRight,
   ShieldCheck,
-  ShieldAlert,
-  Sparkles,
-  Info,
   Check,
-  Zap,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { User, UserRole } from "@/app/types";
+import { User } from "@/app/types";
 import { TRIPOPS_LOGO } from "@/app/constants/logo";
 
 interface RegisterScreenProps {
@@ -51,9 +46,6 @@ interface RoleCardConfig {
   activeBgColor: string;
   iconBg: string;
   iconColor: string;
-  onboardingNote: string;
-  demoAccountName: string;
-  demoAccountEmail: string;
 }
 
 const ROLES_CONFIG: RoleCardConfig[] = [
@@ -71,10 +63,6 @@ const ROLES_CONFIG: RoleCardConfig[] = [
     activeBgColor: "bg-[#075985]/5",
     iconBg: "bg-sky-500",
     iconColor: "text-white",
-    onboardingNote:
-      "✨ Tài khoản cá nhân được kích hoạt ngay lập tức, không yêu cầu xét duyệt hồ sơ doanh nghiệp.",
-    demoAccountName: "Phạm Hải Đăng (Tập đoàn FPT)",
-    demoAccountEmail: "khachhang.fpt@gmail.com",
   },
   {
     id: "agency",
@@ -90,10 +78,6 @@ const ROLES_CONFIG: RoleCardConfig[] = [
     activeBgColor: "bg-amber-500/5",
     iconBg: "bg-amber-500",
     iconColor: "text-white",
-    onboardingNote:
-      "ℹ️ Đăng ký nhanh không cần giấy tờ. Hồ sơ ĐKKD & giấy phép lữ hành bạn có thể cập nhật sau trong Dashboard để Admin phê duyệt trước khi mở bán.",
-    demoAccountName: "Trần Quốc Bảo (Viettravel - Lead)",
-    demoAccountEmail: "viettravel.tour@gmail.com",
   },
   {
     id: "provider",
@@ -109,101 +93,8 @@ const ROLES_CONFIG: RoleCardConfig[] = [
     activeBgColor: "bg-emerald-500/5",
     iconBg: "bg-emerald-500",
     iconColor: "text-white",
-    onboardingNote:
-      "ℹ️ Hệ thống mở cho phép đăng mọi loại dịch vụ. Thông tin cơ sở & thuế có thể bổ sung trong Dashboard bất kỳ lúc nào.",
-    demoAccountName: "Heritage Resorts & Villas Đà Lạt",
-    demoAccountEmail: "provider.heritage@gmail.com",
   },
 ];
-
-// Helper tạo tài khoản Demo có sẵn dữ liệu chuẩn theo từng Role
-function createUnverifiedDemoUser(
-  role: RegisterableRole,
-  customName?: string,
-  customEmail?: string,
-  customPhone?: string,
-): User {
-  switch (role) {
-    case "agency":
-      return {
-        id: "company-admin-3",
-        name: customName?.trim() || "Phạm Trung Hiếu",
-        email: customEmail?.trim() || "company3@demo.com",
-        phone: customPhone?.trim() || "0912 345 678",
-        role: "agency",
-        companyId: "company-3",
-        companyName: "Fiditour",
-        avatar:
-          "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200",
-      };
-    case "provider":
-      return {
-        id: "provider-pending",
-        name: customName?.trim() || "Hoàng Minh Trí",
-        email: customEmail?.trim() || "provider.pending@tripops.vn",
-        phone: customPhone?.trim() || "0988 777 666",
-        role: "provider",
-        businessName: "Cơ sở Dịch vụ Mới",
-        accountStatus: "pending",
-        taxCode: "",
-        avatar:
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200",
-      };
-    case "user":
-    default:
-      return {
-        id: "user-new",
-        name: customName?.trim() || "Nguyễn Văn Mới",
-        email: customEmail?.trim() || "khachmoi@tripops.vn",
-        phone: customPhone?.trim() || "0933 444 555",
-        role: "user",
-        avatar:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-      };
-  }
-}
-
-function createDemoUser(
-  role: RegisterableRole,
-  customName?: string,
-  customEmail?: string,
-): User {
-  switch (role) {
-    case "agency":
-      return {
-        id: "company-admin-1",
-        name: customName?.trim() || "Trần Quốc Bảo (Viettravel - Lead)",
-        email: customEmail?.trim() || "viettravel.tour@gmail.com",
-        role: "agency",
-        companyId: "company-1",
-        companyName: "Viettravel",
-        avatar:
-          "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200",
-      };
-    case "provider":
-      return {
-        id: "provider-1",
-        name: customName?.trim() || "Heritage Resorts & Villas Đà Lạt",
-        email: customEmail?.trim() || "provider.heritage@gmail.com",
-        role: "provider",
-        businessName: "Heritage Resorts & Villas",
-        taxCode: "0123456789",
-        accountStatus: "approved",
-        avatar:
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200",
-      };
-    case "user":
-    default:
-      return {
-        id: "user-1",
-        name: customName?.trim() || "Phạm Hải Đăng (Tập đoàn FPT)",
-        email: customEmail?.trim() || "khachhang.fpt@gmail.com",
-        role: "user",
-        avatar:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-      };
-  }
-}
 
 export function RegisterScreen({
   onRegisterSuccess,
@@ -232,14 +123,6 @@ export function RegisterScreen({
 
   const activeRoleConfig =
     ROLES_CONFIG.find((r) => r.id === selectedRole) || ROLES_CONFIG[0];
-
-  // Xử lý 1-Click Demo Login nhanh cho vai trò đang chọn
-  // Xử lý vào xem giao diện CHƯA CẬP NHẬT HỒ SƠ
-  const handleUnverifiedDemoLogin = (_role?: RegisterableRole) =>
-    setError("Vui lòng đăng ký hoặc đăng nhập bằng tài khoản thật.");
-
-  const handleDirectDemoLogin = (_role?: RegisterableRole) =>
-    setError("Vui lòng đăng ký hoặc đăng nhập bằng tài khoản thật.");
 
   // Xử lý đăng ký form truyền thống
   const handleSubmit = async (e: React.FormEvent) => {
@@ -385,94 +268,6 @@ export function RegisterScreen({
               })}
             </div>
 
-            {/* Note banner giải thích tiến trình xác minh hồ sơ */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={selectedRole}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.15 }}
-                className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs"
-              >
-                <Info className="w-4 h-4 text-[#075985] shrink-0 mt-0.5" />
-                <span className="leading-relaxed">
-                  {activeRoleConfig.onboardingNote}
-                </span>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* QUICK DEMO BANNER */}
-            {selectedRole !== "user" ? (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/90 via-sky-50/70 to-emerald-50/60 border border-amber-200/90 shadow-2xs space-y-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-2xs shrink-0">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">
-                      Chế độ trải nghiệm thử vai trò {activeRoleConfig.title}:
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Khám phá trang riêng biệt{" "}
-                      <strong>
-                        Yêu cầu Cập nhật Profile (Không có sidebar)
-                      </strong>{" "}
-                      hoặc vào Demo tài khoản đã duyệt hoàn chỉnh.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                  <Button
-                    type="button"
-                    onClick={() => handleUnverifiedDemoLogin(selectedRole)}
-                    className="bg-[#075985] hover:bg-[#0369a1] text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-xs cursor-pointer gap-1.5 shrink-0"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
-                    <span>
-                      Xem Trang Cập nhật Profile (Tài khoản Chờ duyệt)
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleDirectDemoLogin(selectedRole)}
-                    className="bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs h-9 px-3.5 rounded-xl border-slate-300 shadow-2xs cursor-pointer gap-1.5 shrink-0"
-                  >
-                    <span>Vào Demo {activeRoleConfig.title} (Đã duyệt)</span>
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-sky-50 to-blue-50/60 border border-sky-200 shadow-2xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#075985] text-white flex items-center justify-center font-bold shadow-2xs shrink-0">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">
-                      Trải nghiệm ngay tài khoản Du khách mẫu:
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Vào trực tiếp nền tảng với dữ liệu của{" "}
-                      <strong>{activeRoleConfig.demoAccountName}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={() => handleDirectDemoLogin("user")}
-                  className="bg-[#075985] hover:bg-[#0369a1] text-white font-bold text-xs h-8.5 px-3.5 rounded-xl shadow-xs cursor-pointer gap-1.5 shrink-0"
-                >
-                  <span>Vào Demo Du khách</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            )}
           </div>
 
           <div className="border-t border-slate-100" />
@@ -673,7 +468,7 @@ export function RegisterScreen({
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL SUCCESS ONBOARDING (CÓ NÚT VÀO THẲNG DASHBOARD VỚI DỮ LIỆU DEMO) */}
+      {/* MODAL SUCCESS ONBOARDING */}
       {/* ========================================================================= */}
       {registeredRoleInfo && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
