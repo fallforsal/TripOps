@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripops_guide/core/theme/app_theme.dart';
+import 'package:tripops_guide/core/widgets/guide_glass.dart';
 import 'package:tripops_guide/features/home/presentation/home_metric_tile.dart';
 
 void main() {
@@ -49,7 +50,18 @@ void main() {
     final height = tester.getSize(find.byKey(const ValueKey('active'))).height;
     expect(tester.getSize(find.byKey(const ValueKey('departure'))).height, height);
     expect(tester.getSize(find.byKey(const ValueKey('completed'))).height, height);
-    expect(find.byType(BackdropFilter), findsNothing);
+    expect(find.byType(BackdropFilter), findsNWidgets(3));
+    for (final key in ['active', 'departure', 'completed']) {
+      final tile = find.byKey(ValueKey(key));
+      final glass = tester.widgetList<GuideGlass>(
+        find.descendant(of: tile, matching: find.byType(GuideGlass)),
+      ).toList();
+      expect(glass.length, 2);
+      expect(glass.first.shadow, isTrue);
+      expect(glass.first.blurSigma, 0);
+      expect(glass.last.blurSigma, 12);
+      expect(glass.last.shadow, isFalse);
+    }
     update(() => value = 5);
     await tester.pumpAndSettle();
     expect(find.text('5'), findsOneWidget);

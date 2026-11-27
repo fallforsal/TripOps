@@ -80,7 +80,7 @@ class HomeScreen extends StatelessWidget {
                 value: active,
                 label: 'Tour đang phụ trách',
                 color: deepTeal,
-                tint: const Color(0xB3B4DDD6),
+                tint: const Color(0xFFB9E1DE),
               )),
               const SizedBox(width: 9),
               Expanded(child: HomeMetricTile(
@@ -88,7 +88,7 @@ class HomeScreen extends StatelessWidget {
                 value: daysToGo == null ? null : (daysToGo > 0 ? daysToGo : 0),
                 label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
                 color: const Color(0xFF87601C),
-                tint: const Color(0xB3F4DFB9),
+                tint: const Color(0xFFF2E1BE),
               )),
               const SizedBox(width: 9),
               Expanded(child: HomeMetricTile(
@@ -96,7 +96,7 @@ class HomeScreen extends StatelessWidget {
                 value: completed,
                 label: 'Tour đã hoàn thành',
                 color: const Color(0xFF315F91),
-                tint: const Color(0xB3CBDCF5),
+                tint: const Color(0xFFCFE0F7),
               )),
             ],
           ),
