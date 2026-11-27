@@ -13,8 +13,11 @@ class _DialogHarnessState extends State<_DialogHarness> {
   CheckinSubmission? result;
 
   Future<void> open() async {
-    final submission = await showDialog<CheckinSubmission>(
+    final submission = await showModalBottomSheet<CheckinSubmission>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => const CheckinPhotoDialog(stopName: 'Điểm A'),
     );
     if (mounted && submission != null) setState(() => result = submission);
@@ -41,6 +44,7 @@ void main() {
     await tester.tap(find.text('Mở check-in'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('checkin-note-field')));
     await tester.enterText(
       find.byKey(const ValueKey('checkin-note-field')),
       'Đã đến điểm A',
@@ -57,6 +61,7 @@ void main() {
 
     await tester.tap(find.text('Mở check-in'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('checkin-note-field')));
     await tester.enterText(
       find.byKey(const ValueKey('checkin-note-field')),
       'Lần tiếp theo',
