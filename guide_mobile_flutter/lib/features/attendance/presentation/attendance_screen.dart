@@ -6,6 +6,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
@@ -150,20 +151,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             color: muted, fontSize: 12, fontWeight: FontWeight.w600,
           )),
           space(14),
-          Row(children: [
-            Expanded(child: GuideMetric(icon: Icons.groups_outlined,
-              value: '${all.length}', label: 'Tổng hành khách')),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(icon: Icons.check_circle_outline,
-              value: '$checked', label: 'Đã có mặt')),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.hourglass_empty_rounded,
-              value: '$pending', label: 'Chưa điểm danh',
-              iconColor: const Color(0xFFB78330),
-              tint: const Color(0xFFFFF3DF),
-            )),
-          ]),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.groups_outlined, value: all.length,
+                  label: 'Tổng hành khách',
+                  color: const Color(0xFF315F91),
+                  tint: const Color(0xFFCFE0F7),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.check_circle_outline, value: checked,
+                  label: 'Đã có mặt',
+                  color: deepTeal,
+                  tint: const Color(0xFFB9E1DE),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.hourglass_empty_rounded,
+                  value: pending, label: 'Chưa điểm danh',
+                  color: const Color(0xFF87601C),
+                  tint: const Color(0xFFF2E1BE),
+                )),
+              ],
+            ),
+          ),
           space(16),
           Card(child: Padding(
             padding: const EdgeInsets.all(15),

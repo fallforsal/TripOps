@@ -3,6 +3,7 @@ import '../../../core/widgets/guide_glass.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 import '../domain/tour_catalog.dart';
 import 'tour_status_pill.dart';
 import '../../../core/utils/tripops_dates.dart';
@@ -115,29 +116,36 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                               : '${d.code}  •  ${vnDate(d.startDate)} – ${vnDate(d.endDate)}',
                         ),
                         space(14),
-                        Row(children: [
-                          Expanded(child: GuideMetric(
-                            icon: Icons.groups_outlined,
-                            value: '${d.totalGuests}',
-                            label: 'Hành khách',
-                          )),
-                          const SizedBox(width: 9),
-                          Expanded(child: GuideMetric(
-                            icon: Icons.route_outlined,
-                            value: '${d.days.length}',
-                            label: 'Ngày lịch trình',
-                            iconColor: const Color(0xFF477DB4),
-                            tint: const Color(0xFFEAF3FC),
-                          )),
-                          const SizedBox(width: 9),
-                          Expanded(child: GuideMetric(
-                            icon: Icons.report_problem_outlined,
-                            value: '${d.incidents.length}',
-                            label: 'Sự cố đã báo',
-                            iconColor: alertOrange,
-                            tint: const Color(0xFFFFF0E3),
-                          )),
-                        ]),
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: GuideGlassMetric(
+                                icon: Icons.groups_outlined,
+                                value: d.totalGuests,
+                                label: 'Hành khách',
+                                color: deepTeal,
+                                tint: const Color(0xFFB9E1DE),
+                              )),
+                              const SizedBox(width: 9),
+                              Expanded(child: GuideGlassMetric(
+                                icon: Icons.route_outlined,
+                                value: d.days.length,
+                                label: 'Ngày lịch trình',
+                                color: const Color(0xFF315F91),
+                                tint: const Color(0xFFCFE0F7),
+                              )),
+                              const SizedBox(width: 9),
+                              Expanded(child: GuideGlassMetric(
+                                icon: Icons.report_problem_outlined,
+                                value: d.incidents.length,
+                                label: 'Sự cố đã báo',
+                                color: const Color(0xFF87601C),
+                                tint: const Color(0xFFF2E1BE),
+                              )),
+                            ],
+                          ),
+                        ),
                         space(22),
                         if (acting) ...[
                           const LinearProgressIndicator(),
@@ -153,34 +161,43 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                         space(20),
                         const GuideSectionTitle('Thao tác nhanh'),
                         space(10),
-                        Row(children: [
-                          Expanded(child: GuideActionTile(
-                            icon: Icons.fact_check_outlined,
-                            title: 'Điểm danh',
-                            subtitle: 'Danh sách khách',
-                            onTap: () => open(AttendanceScreen(
-                              detail: d, guides: widget.guides,
-                            )),
-                          )),
-                          const SizedBox(width: 9),
-                          Expanded(child: GuideActionTile(
-                            icon: Icons.location_on_outlined,
-                            title: 'Check-in',
-                            subtitle: 'Các điểm dừng',
-                            onTap: () => open(LocationScreen(
-                              detail: d, guides: widget.guides,
-                            )),
-                          )),
-                          const SizedBox(width: 9),
-                          Expanded(child: GuideActionTile(
-                            icon: Icons.warning_amber_outlined,
-                            title: 'Sự cố',
-                            subtitle: 'Gửi báo cáo',
-                            onTap: () => open(IncidentScreen(
-                              detail: d, guides: widget.guides,
-                            )),
-                          )),
-                        ]),
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: GuideActionTile(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Điểm danh',
+                                subtitle: 'Danh sách khách',
+                                onTap: () => open(AttendanceScreen(
+                                  detail: d, guides: widget.guides,
+                                )),
+                              )),
+                              const SizedBox(width: 9),
+                              Expanded(child: GuideActionTile(
+                                icon: Icons.location_on_outlined,
+                                title: 'Check-in',
+                                subtitle: 'Các điểm dừng',
+                                accent: const Color(0xFF315F91),
+                                tint: const Color(0xFFCFE0F7),
+                                onTap: () => open(LocationScreen(
+                                  detail: d, guides: widget.guides,
+                                )),
+                              )),
+                              const SizedBox(width: 9),
+                              Expanded(child: GuideActionTile(
+                                icon: Icons.warning_amber_outlined,
+                                title: 'Sự cố',
+                                subtitle: 'Gửi báo cáo',
+                                accent: const Color(0xFF87601C),
+                                tint: const Color(0xFFF2E1BE),
+                                onTap: () => open(IncidentScreen(
+                                  detail: d, guides: widget.guides,
+                                )),
+                              )),
+                            ],
+                          ),
+                        ),
                         space(26),
                         const GuideSectionTitle('Thông tin đoàn'),
                         space(10),

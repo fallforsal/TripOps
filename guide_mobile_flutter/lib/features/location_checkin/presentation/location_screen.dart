@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
@@ -294,25 +295,34 @@ class _LocationScreenState extends State<LocationScreen> {
             color: muted, fontSize: 12, fontWeight: FontWeight.w600,
           )),
           space(15),
-          Row(children: [
-            Expanded(child: GuideMetric(
-              icon: Icons.place_outlined, value: '${stops.length}',
-              label: 'Tổng điểm dừng',
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.check_circle_outline, value: '$checked',
-              label: 'Đã hoàn thành',
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.schedule_outlined,
-              value: '${stops.length - checked}',
-              label: 'Chưa hoàn thành',
-              iconColor: const Color(0xFFB78330),
-              tint: const Color(0xFFFFF3DF),
-            )),
-          ]),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.place_outlined, value: stops.length,
+                  label: 'Tổng điểm dừng',
+                  color: const Color(0xFF315F91),
+                  tint: const Color(0xFFCFE0F7),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.check_circle_outline, value: checked,
+                  label: 'Đã hoàn thành',
+                  color: deepTeal,
+                  tint: const Color(0xFFB9E1DE),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.schedule_outlined,
+                  value: stops.length - checked,
+                  label: 'Chưa hoàn thành',
+                  color: const Color(0xFF87601C),
+                  tint: const Color(0xFFF2E1BE),
+                )),
+              ],
+            ),
+          ),
           if (!enabledByDate) ...[
             space(15),
             GuideInfoBanner(

@@ -103,39 +103,57 @@ class GuideActionTile extends StatelessWidget {
   const GuideActionTile({
     super.key, required this.icon, required this.title,
     required this.onTap, this.subtitle,
+    this.accent = deepTeal,
+    this.tint = const Color(0xFFB9E1DE),
   });
   final IconData icon;
   final String title;
   final String? subtitle;
   final VoidCallback onTap;
+  final Color accent, tint;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xEFFFFFFF),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(23),
-      side: const BorderSide(color: line),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 23, color: teal),
-            const SizedBox(height: 10),
-            Text(title, style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w600, color: ink,
-            )),
-            if (subtitle != null) ...[
-              const SizedBox(height: 3),
-              Text(subtitle!, style: const TextStyle(
-                fontSize: 13, height: 1.3, color: muted,
-              )),
-            ],
-          ],
+  Widget build(BuildContext context) => GuideStaticGlass(
+    radius: 28,
+    compact: true,
+    tint: tint,
+    glow: accent.withValues(alpha: 0.20),
+    highlightTint: const Color(0xE6FFFFFF),
+    padding: EdgeInsets.zero,
+    child: Material(
+      type: MaterialType.transparency,
+      child: Semantics(
+        button: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 32, height: 32,
+                  decoration: const BoxDecoration(
+                    color: Color(0xD9FFFFFF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 19, color: accent),
+                ),
+                const SizedBox(height: 10),
+                Text(title, style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: ink,
+                )),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle!, style: const TextStyle(
+                    fontSize: 12, height: 1.3, color: muted,
+                  )),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     ),

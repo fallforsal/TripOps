@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'guide_glass.dart';
 
-/// Shared static-glass KPI tile for the home and tour history dashboards.
+/// Shared static-glass KPI tile for guide dashboards and tour operations.
 class GuideGlassMetric extends StatelessWidget {
   const GuideGlassMetric({
     super.key,
