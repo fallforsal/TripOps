@@ -50,13 +50,28 @@ class GuidePassengerCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Expanded(child: Text(p.name, style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: ink,
-              ))),
-              const SizedBox(width: 8),
-              Flexible(child: _PassengerStatus(status: p.status)),
-            ]),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    p.name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _PassengerStatus(status: p.status),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Row(children: [
               const Icon(Icons.phone_outlined, size: 17, color: muted),

@@ -77,16 +77,6 @@ class AttendanceProgressCard extends StatelessWidget {
             _Legend(color: muted, text: '$remaining chưa xử lý'),
           ],
         ),
-        if (complete) ...[
-          const SizedBox(height: 10),
-          const Row(children: [
-            Icon(Icons.check_circle_outline, size: 18, color: deepTeal),
-            SizedBox(width: 6),
-            Expanded(child: Text('Đã hoàn tất điểm danh', style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w600, color: deepTeal,
-            ))),
-          ]),
-        ],
       ],
     ),
   );
