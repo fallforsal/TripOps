@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
 import '../../../core/widgets/guide_segmented_control.dart';
+import '../../../core/widgets/guide_search_bar.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../domain/booking_models.dart';
 import '../domain/tour_catalog.dart';
@@ -41,13 +42,10 @@ class TourListScreen extends StatelessWidget {
         const Text('Theo dõi các tour và lịch trình bạn đang phụ trách.',
           style: TextStyle(fontSize: 14, color: muted)),
         space(17),
-        TextFormField(
-          key: const ValueKey('tour-search'),
-          initialValue: query,
-          decoration: const InputDecoration(
-            hintText: 'Tìm tên tour, mã booking, tên khách...',
-            prefixIcon: Icon(Icons.search),
-          ),
+        GuideSearchBar(
+          value: query,
+          placeholder: 'Tìm kiếm tour',
+          fieldKey: const ValueKey('tour-search'),
           onChanged: onQueryChanged,
         ),
         space(12),

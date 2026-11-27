@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tripops_guide/core/widgets/tour_thumbnail.dart';
 import 'package:tripops_guide/features/assigned_tours/domain/booking_models.dart';
 import 'package:tripops_guide/features/assigned_tours/presentation/tour_card.dart';
 
@@ -34,7 +35,12 @@ void main() {
     expect(find.text('12/11/2026'), findsOneWidget);
     expect(find.text('12 khách'), findsOneWidget);
 
-    await tester.tap(find.text('Xem chi tiết  ›'));
+    expect(find.text('Tour sắp tới'), findsOneWidget);
+    expect(find.text('Xem chi tiết  ›'), findsNothing);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(tester.widget<TourThumbnail>(find.byType(TourThumbnail)).width, greaterThan(56));
+    expect(find.byType(BackdropFilter), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tour-card-42')));
     expect(tapped, isTrue);
   });
 }
