@@ -37,6 +37,7 @@ class TourThumbnail extends StatelessWidget {
             : Image.network(
                 url,
                 fit: BoxFit.cover,
+                cacheWidth: (width * MediaQuery.devicePixelRatioOf(context) * 2).ceil(),
                 width: width,
                 height: height,
                 errorBuilder: (context, error, stackTrace) => fallback,

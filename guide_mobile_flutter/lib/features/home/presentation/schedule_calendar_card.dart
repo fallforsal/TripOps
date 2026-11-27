@@ -36,6 +36,7 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
   late DateTime _visibleMonth;
   late DateTime _selectedDate;
   int _direction = 1;
+  final Map<DateTime, List<BookingSummary>> _dayCache = {};
 
   DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
@@ -50,6 +51,10 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
   @override
   void didUpdateWidget(covariant ScheduleCalendarCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bookings, widget.bookings) ||
+        !identical(oldWidget.inProgressEndDates, widget.inProgressEndDates)) {
+      _dayCache.clear();
+    }
     final nextToday = _dateOnly(widget.today ?? DateTime.now());
     if (nextToday != _today) {
       final wasToday = _selectedDate == _today;
@@ -63,6 +68,7 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
 
   void _changeMonth(int delta) {
     setState(() {
+      _dayCache.clear();
       _direction = delta;
       _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + delta);
       _selectedDate = _visibleMonth.year == _today.year &&
@@ -74,6 +80,7 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
 
   void _goToday() {
     setState(() {
+      _dayCache.clear();
       final currentMonth = DateTime(_today.year, _today.month);
       _direction = currentMonth.isBefore(_visibleMonth) ? -1 : 1;
       _visibleMonth = currentMonth;
@@ -81,10 +88,13 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
     });
   }
 
-  List<BookingSummary> _toursOn(DateTime date) => bookingsForCalendarDay(
-    widget.bookings,
+  List<BookingSummary> _toursOn(DateTime date) => _dayCache.putIfAbsent(
     date,
-    inProgressEndDates: widget.inProgressEndDates,
+    () => bookingsForCalendarDay(
+      widget.bookings,
+      date,
+      inProgressEndDates: widget.inProgressEndDates,
+    ),
   );
 
   @override
@@ -92,7 +102,7 @@ class _ScheduleCalendarCardState extends State<ScheduleCalendarCard> {
     final selectedTours = _toursOn(_selectedDate);
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : const Duration(milliseconds: 220);
+        : const Duration(milliseconds: 200);
 
     return GuideGlass(
       radius: 28,

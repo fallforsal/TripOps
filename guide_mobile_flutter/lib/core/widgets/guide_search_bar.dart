@@ -68,11 +68,11 @@ class _GuideSearchBarState extends State<GuideSearchBar> {
   Widget build(BuildContext context) {
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : const Duration(milliseconds: 200);
+        : const Duration(milliseconds: 150);
 
     return GuideGlass(
       radius: 32,
-      blurSigma: 14,
+      blurSigma: 0,
       shadow: false,
       highlightTint: const Color(0xC9FFFFFF),
       tint: const Color(0x72FFFFFF),

@@ -36,6 +36,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(find.byType(BackdropFilter), findsNWidgets(2));
     final header = find.byKey(const ValueKey('floating-guide-header'));
     final list = find.byType(ListView);
     final greeting = find.text('CHÀO MỪNG TRỞ LẠI');

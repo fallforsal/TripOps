@@ -44,6 +44,8 @@ void main() {
           subtitle: 'BK-042 • 25 khách', actionLabel: 'Xem chi tiết tour', onTap: () => opened = true),
       ])),
     ));
+    expect(find.byType(GuideStaticGlass), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing);
     await tester.tap(find.text('Xem chi tiết tour'));
     expect(opened, isTrue);
     expect(tester.takeException(), isNull);

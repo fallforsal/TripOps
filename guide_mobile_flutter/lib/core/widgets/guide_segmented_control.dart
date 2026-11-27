@@ -27,14 +27,14 @@ class GuideSegmentedControl<T> extends StatelessWidget {
     final selectedIndex = options.indexWhere((entry) => entry.key == value);
     final animation = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : const Duration(milliseconds: 260);
+        : const Duration(milliseconds: 220);
     // Allow Vietnamese labels to wrap instead of hiding the last segment.
     final height = math.max(46.0, MediaQuery.textScalerOf(context).scale(13) * 2.4 + 10);
     final radius = (height + 8) / 2;
 
     return GuideGlass(
       radius: radius,
-      blurSigma: 12,
+      blurSigma: 0,
       shadow: false,
       highlightTint: const Color(0x92E5EEEE),
       tint: const Color(0x706F9293),

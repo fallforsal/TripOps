@@ -41,7 +41,7 @@ class _GuideShellState extends State<GuideShell> {
   String? error;
   List<BookingSummary> bookings = [];
   Map<int, DateTime> endDates = {};
-  int unreadNotices = 0;
+  final ValueNotifier<int> _unreadNotices = ValueNotifier<int>(0);
   Timer? _notificationsPoll;
   StreamSubscription<int?>? _openedPush;
   late final VoidCallback _inboxPushListener;
@@ -68,6 +68,7 @@ class _GuideShellState extends State<GuideShell> {
   @override
   void dispose() {
     _notificationsPoll?.cancel();
+    _unreadNotices.dispose();
     _openedPush?.cancel();
     GuidePushService.inboxRevision.removeListener(_inboxPushListener);
     super.dispose();
@@ -77,7 +78,7 @@ class _GuideShellState extends State<GuideShell> {
     try {
       final raw = await widget.guides.api.getList('notifications');
       final count = raw.where((n) => n is Map && n['readAt'] == null).length;
-      if (mounted) setState(() => unreadNotices = count);
+      if (mounted) _unreadNotices.value = count;
     } catch (_) {
       // Bookings remain usable even when notification fetching fails.
     }
@@ -164,7 +165,7 @@ class _GuideShellState extends State<GuideShell> {
                   child: GuideGlass(
                     key: const ValueKey('floating-guide-header'),
                     radius: 32,
-                    blurSigma: 20,
+                    blurSigma: 14,
                     highlightTint: const Color(0xC9FFFFFF),
                     tint: const Color(0x80FFFFFF),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -194,11 +195,14 @@ class _GuideShellState extends State<GuideShell> {
                               ),
                             ),
                             const SizedBox(width: 4),
-                            _headerAction(
-                              icon: Icons.notifications_none_rounded,
-                              tooltip: 'Thông báo',
-                              onPressed: openNotices,
-                              badge: unreadNotices > 0 ? (unreadNotices > 99 ? '99+' : '$unreadNotices') : null,
+                            ValueListenableBuilder<int>(
+                              valueListenable: _unreadNotices,
+                              builder: (context, count, _) => _headerAction(
+                                icon: Icons.notifications_none_rounded,
+                                tooltip: 'Thông báo',
+                                onPressed: openNotices,
+                                badge: count > 0 ? (count > 99 ? '99+' : '$count') : null,
+                              ),
                             ),
                             if (constraints.maxWidth >= 340) ...[
                               const SizedBox(width: 4),
@@ -258,7 +262,7 @@ class _GuideShellState extends State<GuideShell> {
             constraints: const BoxConstraints(maxWidth: 560),
             child: GuideGlass(
               radius: 36,
-              blurSigma: 22,
+              blurSigma: 16,
               tint: const Color(0xA6FFFFFF),
               padding: const EdgeInsets.all(5),
               child: Material(
@@ -344,7 +348,7 @@ class _GuideShellState extends State<GuideShell> {
           onTap: () => setState(() => tab = index),
           borderRadius: BorderRadius.circular(30),
           child: AnimatedContainer(
-            duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 240),
+            duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             constraints: const BoxConstraints(minHeight: 58),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),

@@ -20,10 +20,7 @@ class HistoryScreen extends StatelessWidget {
       bookings, filter: TourFilter.completed, today: DateTime.now(),
     );
     final guests = history.fold<int>(0, (total, b) => total + b.guestCount);
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 28 + MediaQuery.paddingOf(context).bottom),
-      children: [
+    final header = <Widget>[
         const Text('Những hành trình đã hoàn tất',
           style: TextStyle(color: ink, fontSize: 30, letterSpacing: -0.7,
             fontWeight: FontWeight.w700)),
@@ -53,10 +50,16 @@ class HistoryScreen extends StatelessWidget {
             message: 'Các chuyến đi hoàn thành sẽ xuất hiện ở đây.',
             icon: Icons.history_rounded,
           ),
-        ...history.map((tour) => TourCard(
-          tour: tour, onTap: () => onOpenTour(tour),
-        )),
-      ],
+    ];
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 28 + MediaQuery.paddingOf(context).bottom),
+      itemCount: header.length + history.length,
+      itemBuilder: (context, index) {
+        if (index < header.length) return header[index];
+        final tour = history[index - header.length];
+        return TourCard(key: ValueKey(tour.id), tour: tour, onTap: () => onOpenTour(tour));
+      },
     );
   }
 }

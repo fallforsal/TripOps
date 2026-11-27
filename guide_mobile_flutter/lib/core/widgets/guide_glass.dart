@@ -80,3 +80,99 @@ class GuideGlassBackground extends StatelessWidget {
     child: child,
   );
 }
+
+
+/// Decorative glass artwork. Unlike live glass, it never samples the scrolling
+/// backdrop. Soft radial glows approximate the original blurred shapes.
+class GuideStaticGlass extends StatelessWidget {
+  const GuideStaticGlass({
+    super.key,
+    required this.child,
+    required this.padding,
+    required this.radius,
+    this.tint = const Color(0xFFB9E1DE),
+    this.glow = const Color(0x8870BFB8),
+    this.compact = false,
+    this.highlightTint = const Color(0xF2FFFFFF),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final Color tint;
+  final Color glow;
+  final bool compact;
+  final Color highlightTint;
+
+  @override
+  Widget build(BuildContext context) => GuideGlass(
+    radius: radius,
+    blurSigma: 0,
+    child: Stack(
+      fit: StackFit.passthrough,
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [const Color(0xFFF5FCFC), tint, const Color(0xFFDCE7F6)],
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: compact ? -34 : -50,
+                    top: compact ? -40 : -75,
+                    child: _SoftGlassGlow(
+                      size: compact ? 124 : 230,
+                      color: glow,
+                    ),
+                  ),
+                  Positioned(
+                    right: compact ? -12 : 0,
+                    bottom: compact ? -42 : -80,
+                    child: _SoftGlassGlow(
+                      size: compact ? 120 : 210,
+                      color: const Color(0x90FFFFFF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        GuideGlass(
+          radius: radius,
+          blurSigma: 0,
+          shadow: false,
+          highlightTint: highlightTint,
+          tint: const Color(0x60FFFFFF),
+          padding: padding,
+          child: child,
+        ),
+      ],
+    ),
+  );
+}
+
+class _SoftGlassGlow extends StatelessWidget {
+  const _SoftGlassGlow({required this.size, required this.color});
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: size,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+          stops: const [0.25, 1.0],
+        ),
+      ),
+    ),
+  );
+}

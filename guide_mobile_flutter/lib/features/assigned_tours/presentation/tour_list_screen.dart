@@ -31,10 +31,7 @@ class TourListScreen extends StatelessWidget {
     final visible = filterBookings(
       bookings, filter: filter, today: DateTime.now(), query: query,
     );
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 25 + MediaQuery.paddingOf(context).bottom),
-      children: [
+    final header = <Widget>[
         const Text('Các chuyến đi được giao', style: TextStyle(
           fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.7, color: ink,
         )),
@@ -67,10 +64,16 @@ class TourListScreen extends StatelessWidget {
             message: 'Hãy thử từ khóa hoặc bộ lọc trạng thái khác.',
             icon: Icons.search_off_outlined,
           ),
-        ...visible.map((tour) => TourCard(
-          tour: tour, onTap: () => onOpenTour(tour),
-        )),
-      ],
+    ];
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 25 + MediaQuery.paddingOf(context).bottom),
+      itemCount: header.length + visible.length,
+      itemBuilder: (context, index) {
+        if (index < header.length) return header[index];
+        final tour = visible[index - header.length];
+        return TourCard(key: ValueKey(tour.id), tour: tour, onTap: () => onOpenTour(tour));
+      },
     );
   }
 }

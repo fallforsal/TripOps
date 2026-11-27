@@ -42,6 +42,7 @@ void main() {
         ]);
       })),
     ));
+    expect(find.text('3'), findsOneWidget);
     await tester.pumpAndSettle();
 
     expect(find.text('3'), findsOneWidget);
@@ -50,7 +51,7 @@ void main() {
     final height = tester.getSize(find.byKey(const ValueKey('active'))).height;
     expect(tester.getSize(find.byKey(const ValueKey('departure'))).height, height);
     expect(tester.getSize(find.byKey(const ValueKey('completed'))).height, height);
-    expect(find.byType(BackdropFilter), findsNWidgets(3));
+    expect(find.byType(BackdropFilter), findsNothing);
     for (final key in ['active', 'departure', 'completed']) {
       final tile = find.byKey(ValueKey(key));
       final glass = tester.widgetList<GuideGlass>(
@@ -59,7 +60,7 @@ void main() {
       expect(glass.length, 2);
       expect(glass.first.shadow, isTrue);
       expect(glass.first.blurSigma, 0);
-      expect(glass.last.blurSigma, 12);
+      expect(glass.last.blurSigma, 0);
       expect(glass.last.shadow, isFalse);
     }
     update(() => value = 5);

@@ -171,66 +171,37 @@ class GuideHero extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => GuideGlass(
+  Widget build(BuildContext context) => GuideStaticGlass(
     radius: 30,
-    blurSigma: 0,
-    padding: EdgeInsets.zero,
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(30),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFFF5FCFC), Color(0xFFB9E1DE), Color(0xFFDCE7F6)],
-          ),
-        ),
-        child: Stack(children: [
-          Positioned(right: -45, top: -70, child: Container(
-            width: 200, height: 200,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x8870BFB8)),
-          )),
-          Positioned(right: 10, bottom: -70, child: Container(
-            width: 170, height: 170,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x90FFFFFF)),
-          )),
-          GuideGlass(
-            radius: 30,
-            shadow: false,
-            blurSigma: 20,
-            tint: const Color(0x60FFFFFF),
-            padding: EdgeInsets.all(compact ? 20 : 24),
-            child: SizedBox(
-              width: double.infinity,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                GuideStatusPill(label, background: const Color(0xD9FFFFFF), foreground: deepTeal),
-                const SizedBox(height: 16),
-                Text(title, style: TextStyle(fontSize: compact ? 22 : 28,
-                  color: ink, fontWeight: FontWeight.w700, height: 1.16, letterSpacing: -0.6)),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 9),
-                  Text(subtitle!, style: const TextStyle(fontSize: 14, height: 1.4, color: muted)),
-                ],
-                if (actionLabel != null && onTap != null) ...[
-                  const SizedBox(height: 20),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      backgroundColor: const Color(0xEFFFFFFF),
-                      foregroundColor: deepTeal,
-                      minimumSize: const Size(0, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    ),
-                    onPressed: onTap,
-                    label: Text(actionLabel!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 15),
-                    iconAlignment: IconAlignment.end,
-                  ),
-                ],
-              ]),
+    padding: EdgeInsets.all(compact ? 20 : 24),
+    child: SizedBox(
+      width: double.infinity,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        GuideStatusPill(label, background: const Color(0xD9FFFFFF), foreground: deepTeal),
+        const SizedBox(height: 16),
+        Text(title, style: TextStyle(fontSize: compact ? 22 : 28,
+          color: ink, fontWeight: FontWeight.w700, height: 1.16, letterSpacing: -0.6)),
+        if (subtitle != null) ...[
+          const SizedBox(height: 9),
+          Text(subtitle!, style: const TextStyle(fontSize: 14, height: 1.4, color: muted)),
+        ],
+        if (actionLabel != null && onTap != null) ...[
+          const SizedBox(height: 20),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: const Color(0xEFFFFFFF),
+              foregroundColor: deepTeal,
+              minimumSize: const Size(0, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             ),
+            onPressed: onTap,
+            label: Text(actionLabel!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 15),
+            iconAlignment: IconAlignment.end,
           ),
-        ]),
-      ),
+        ],
+      ]),
     ),
   );
 }
