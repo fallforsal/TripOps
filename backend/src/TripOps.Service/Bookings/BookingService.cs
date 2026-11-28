@@ -315,34 +315,27 @@ public sealed partial class BookingService(BookingRepository repository, Account
             var ownedStopIds=GuideLocationCheckinRules.OrderedStopsForGuide(booking,actorId,ownAgency).Select(a=>a.Id).ToHashSet();
             var guideCheckinsByLocation = booking.Timelines
                 .SelectMany(d => d.Attractions)
-                .ToDictionary(a => a.Id, a => a.Checkins.SingleOrDefault(c => c.GuideId == actorId));
-            var sourceDays = ownedStopIds.Count > 0
-                ? dto.SnapshotDays?.Select(d => d with { Locations = d.Locations.Where(l => ownedStopIds.Contains(l.Id)).ToArray() }).Where(d => d.Locations.Count > 0)
-                : dto.SnapshotDays;
+                .Where(a => ownedStopIds.Contains(a.Id))
+                .ToDictionary(a => a.Id, a => a.Checkins.Single(c => c.GuideId == actorId && c.AgencyId == ownAgency));
+            // An empty route must remain empty; never fall back to the full snapshot.
+            var sourceDays = dto.SnapshotDays?.Select(d => d with
+                { Locations = d.Locations.Where(l => ownedStopIds.Contains(l.Id)).ToArray() })
+                .Where(d => d.Locations.Count > 0);
             var guideDays = sourceDays?.Select(d => d with
             {
                 Locations = d.Locations.Select(l =>
                 {
-                    var own = guideCheckinsByLocation.GetValueOrDefault(l.Id);
-                    if (own is not null)
+                    var own = guideCheckinsByLocation[l.Id];
+                    var photos = proofPhotos.GetValueOrDefault(own.Id);
+                    return l with
                     {
-                        var photos = proofPhotos.GetValueOrDefault(own.Id);
-                        return l with
-                        {
-                            AttendanceStatus = own.AttendanceStatus?.ToString() ?? "Pending",
-                            PhotoUrls = photos.Checkin ?? [],
-                            CheckinNote = own.Note,
-                            CheckoutPhotoUrls = photos.Checkout ?? [],
-                            CheckoutNote = own.CheckoutNote,
-                            CheckoutAt = own.CheckoutTime
-                        };
-                    }
-                    var hasOtherGuideCheckins = booking.Timelines
-                        .SelectMany(t => t.Attractions)
-                        .Any(a => a.Id == l.Id && a.Checkins.Count > 0);
-                    return hasOtherGuideCheckins
-                        ? l with { AttendanceStatus = "Pending", PhotoUrls = [], CheckinNote = null, CheckoutPhotoUrls = [], CheckoutNote = null, CheckoutAt = null }
-                        : l;
+                        AttendanceStatus = own.AttendanceStatus?.ToString() ?? "Pending",
+                        PhotoUrls = photos.Checkin ?? [],
+                        CheckinNote = own.Note,
+                        CheckoutPhotoUrls = photos.Checkout ?? [],
+                        CheckoutNote = own.CheckoutNote,
+                        CheckoutAt = own.CheckoutTime
+                    };
                 }).ToArray()
             }).ToArray();
             var ownAgencyName=booking.BookingAgencies.FirstOrDefault(a=>a.AgencyId==ownAgency)?.Agency?.BusinessProfile?.BusinessName
@@ -350,7 +343,7 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 ?? dto.AgencyName;
             dto=dto with {
                 StartDate=schedule.StartDate,EndDate=schedule.EndDate,AgencyName=ownAgencyName,SnapshotDays=guideDays,
-                AttractionCheckins=dto.AttractionCheckins?.Where(c=>c.GuideId==actorId).ToArray(),
+                AttractionCheckins=dto.AttractionCheckins?.Where(c=>c.GuideId==actorId && c.AgencyId==ownAgency && ownedStopIds.Contains(c.LocationId)).ToArray(),
                 Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency),
                 CanStartTour=GuideBookingRules.CanStartTour(booking,actorId,ownAgency,UtcNow),
                 CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,actorId,ownAgency,UtcNow),
