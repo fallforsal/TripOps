@@ -81,4 +81,38 @@ public sealed class GuideBookingRulesTests
         Assert.True(GuideLocationCheckinRules.CanCheckIn(booking, "g-partner", "partner", day3Utc));
         Assert.True(GuideBookingRules.CanRecordAttendance(booking, "g-partner", "partner", day3Utc));
     }
+
+    [Fact]
+    public void Guide_route_and_schedule_do_not_expand_when_the_last_assignment_is_completed()
+    {
+        var start = new DateTime(2026, 11, 19);
+        var assigned = new BookingAttractionCheckin { GuideId = "guide", AgencyId = "host" };
+        var booking = new Booking
+        {
+            StartDate = start,
+            Status = TripOps.Data.Enums.BookingStatus.Confirmed,
+            Tour = new Tour { AgencyId = "host" },
+            Timelines = [
+                new BookingTimeline { DayNumber = 1, Attractions = [new BookingTimelineAttraction { Id = 1, AgencyId = "host" }] },
+                new BookingTimeline { DayNumber = 2, Attractions = [new BookingTimelineAttraction { Id = 2, AgencyId = "host", Checkins = [assigned] }] },
+                new BookingTimeline { DayNumber = 3, Attractions = [new BookingTimelineAttraction { Id = 3, AgencyId = "host" }] }
+            ]
+        };
+        var before = GuideBookingRules.Schedule(booking, "guide", "host");
+        Assert.Equal(start.AddDays(1), before.StartDate);
+        Assert.Equal(start.AddDays(1), before.EndDate);
+        Assert.False(before.IsAssignedToDayOne);
+        Assert.Equal(2, GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, "guide", "host"));
+
+        assigned.AttendanceStatus = TripOps.Data.Enums.AttractionCheckinStatus.CheckedOut;
+        Assert.Equal(before, GuideBookingRules.Schedule(booking, "guide", "host"));
+        Assert.Equal(2, Assert.Single(GuideLocationCheckinRules.OrderedStopsForGuide(booking, "guide", "host")).Id);
+        Assert.Null(GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, "guide", "host"));
+
+        booking.Timelines.Single(d => d.DayNumber == 2).Attractions.Single().Checkins.Clear();
+        Assert.Empty(GuideLocationCheckinRules.OrderedStopsForGuide(booking, "guide", "host"));
+        Assert.False(GuideBookingRules.IsAssignedToDayOne(booking, "guide", "host"));
+        Assert.False(GuideLocationCheckinRules.CanCheckIn(booking, "guide", "host", start.AddDays(3)));
+    }
+
 }
