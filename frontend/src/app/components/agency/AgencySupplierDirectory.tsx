@@ -15,6 +15,7 @@ import {
 } from "@/app/components/ui/alert-dialog";
 
 type Filter = "ALL" | AgencySupplier["type"];
+const PAGE_SIZE = 10;
 const money = (value?: number | null) => value == null ? "Chưa cập nhật" : `${value.toLocaleString("vi-VN")}đ`;
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 const filters: { value: Filter; label: string }[] = [
@@ -48,6 +49,7 @@ export function AgencySupplierDirectory() {
   const [deleteError, setDeleteError] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<AgencySupplier | null>(null);
   const [editing, setEditing] = useState<AgencySupplier | null>(null);
   const [creating, setCreating] = useState(false);
@@ -116,7 +118,7 @@ export function AgencySupplierDirectory() {
       if (creating) {
         const created = await createAgencySupplier({ ...draft, name: draft.name.trim(), contactPhone, contactEmail: contactEmail || null, status: "ACTIVE" });
         setSuppliers((items) => [created, ...items]);
-        setSearch(""); setFilter("ALL");
+        setSearch(""); setFilter("ALL"); setPage(1);
         toast.success("Đã thêm nhà cung cấp vào danh bạ.");
       } else if (editing) {
         const updated = await updateAgencySupplier(editing.id, { ...draft, contactPhone, contactEmail: contactEmail || null });
@@ -147,8 +149,11 @@ export function AgencySupplierDirectory() {
     (filter === "ALL" || supplier.type === filter) &&
     (!query || normalize([supplier.name, supplier.area, supplier.address, supplier.contactName, supplier.contactPhone, supplier.contactEmail].filter(Boolean).join(" ")).includes(query)),
   );
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageSuppliers = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const resetFilters = () => { setSearch(""); setFilter("ALL"); };
+  const resetFilters = () => { setSearch(""); setFilter("ALL"); setPage(1); };
   const areaValue = draft?.area?.trim() ?? "";
   const matchedProvince = provinceOptions.find((province) =>
     normalize(province.value) === normalize(areaValue) ||
@@ -175,13 +180,13 @@ export function AgencySupplierDirectory() {
         <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-3xl lg:flex-1">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input aria-label="Tìm nhà cung cấp" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm tên nhà cung cấp, tỉnh/thành phố, số điện thoại..." className="h-10 border-slate-300 pl-9 text-sm" />
+            <Input aria-label="Tìm nhà cung cấp" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Tìm tên nhà cung cấp, tỉnh/thành phố, số điện thoại..." className="h-10 border-slate-300 pl-9 text-sm" />
           </div>
           <div role="group" aria-label="Lọc theo loại nhà cung cấp" className="flex shrink-0 flex-wrap gap-1 self-start rounded-lg bg-slate-100 p-1">
             {filters.map((item) => {
               const count = item.value === "ALL" ? suppliers.length : suppliers.filter((s) => s.type === item.value).length;
               return (
-                <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => setFilter(item.value)}
+                <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => { setFilter(item.value); setPage(1); }}
                   className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 ${filter === item.value ? "bg-[#075985] text-white" : "text-slate-600 hover:bg-white"}`}>
                   {item.label}<span className={`rounded px-1.5 py-0.5 text-[11px] ${filter === item.value ? "bg-white/15" : "bg-slate-200/70"}`}>{count}</span>
                 </button>
@@ -202,7 +207,7 @@ export function AgencySupplierDirectory() {
                 <tr>{["Nhà cung cấp", "Phân loại", "Tỉnh/thành phố", "Liên hệ", "Giá tham khảo", "Thao tác"].map((label) => <th key={label} scope="col" className={`px-5 py-3.5 ${label === "Thao tác" ? "text-center" : ""}`}>{label}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visible.map((supplier) => (
+                {pageSuppliers.map((supplier) => (
                   <tr key={supplier.id} className="transition-colors hover:bg-sky-50/40">
                     <td className="px-5 py-5 align-middle">
                       <button type="button" disabled={loadingDetailId !== null} onClick={() => void viewSupplier(supplier)} title={supplier.name} className="block w-full truncate text-left font-semibold text-[#075985] hover:underline focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-60">{supplier.name}</button>
@@ -230,8 +235,13 @@ export function AgencySupplierDirectory() {
             {suppliers.length === 0 && <Button type="button" className="mt-5 gap-2 bg-[#075985] text-white hover:bg-[#0369a1]" onClick={addSupplier}><Plus className="h-4 w-4" />Thêm nhà cung cấp</Button>}
           </div>
         )}
-        <footer className="flex flex-wrap justify-between gap-2 border-t border-slate-200 bg-slate-50/50 px-5 py-3.5 text-xs text-slate-500">
-          <span aria-live="polite">Hiển thị {visible.length} / {suppliers.length} nhà cung cấp</span><span>Giá tham khảo · Cần xác nhận lại trước khi đặt</span>
+        <footer className="flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50/50 px-5 py-3.5 text-xs text-slate-500">
+          <span aria-live="polite">{visible.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(currentPage * PAGE_SIZE, visible.length)} / {visible.length} nhà cung cấp</span>
+          {totalPages > 1 && <nav aria-label="Phân trang nhà cung cấp" className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Trước</Button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((number) => <Button key={number} variant={number === currentPage ? "default" : "outline"} size="sm" aria-label={`Trang ${number}`} aria-current={number === currentPage ? "page" : undefined} onClick={() => setPage(number)} className={number === currentPage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}>{number}</Button>)}
+            <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>Sau</Button>
+          </nav>}
         </footer>
       </section>
 
