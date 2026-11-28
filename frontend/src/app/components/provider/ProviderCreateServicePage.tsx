@@ -377,7 +377,7 @@ export function ProviderCreateServicePage({
       initialService?.seats?.toString() ||
       ""
   );
-  const [stars, setStars] = useState(initialService?.stars?.toString() || "4");
+  const [stars, setStars] = useState(initialService ? String(initialService.stars ?? 0) : "4");
   const [description, setDescription] = useState(initialService?.description || "");
   const [operatingHours, setOperatingHours] = useState(
     initialService?.operatingHours || currentConfig.defaultOperatingHours
@@ -576,7 +576,7 @@ export function ProviderCreateServicePage({
       priceTo: toVal,
       pricePerPerson: fromVal,
       capacity: capacityVal,
-      stars: category === "hotel" ? parseInt(stars) || 4 : undefined,
+      stars: category === "hotel" && stars !== "0" ? Number(stars) : undefined,
       policies,
       amenities,
       location: fullLocation,
@@ -639,7 +639,7 @@ export function ProviderCreateServicePage({
     priceTo: parseMoneyNumber(priceToDisplay) || parseMoneyNumber(priceFromDisplay),
     pricePerPerson: parseMoneyNumber(priceFromDisplay),
     capacity: parseInt(capacity) || 0,
-    stars: category === "hotel" ? parseInt(stars) || 4 : undefined,
+    stars: category === "hotel" && stars !== "0" ? Number(stars) : undefined,
     policies,
     amenities,
     location: [street, ward, province].filter(Boolean).join(", "),
@@ -1126,19 +1126,19 @@ export function ProviderCreateServicePage({
                   {category === "hotel" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Xếp hạng sao
+                        Số sao
                       </label>
                       <select
                         value={stars}
                         onChange={(e) => setStars(e.target.value)}
                         className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
                       >
-                        <option value="5">5 Sao ⭐⭐⭐⭐⭐ (Sang trọng quốc tế)</option>
-                        <option value="4">4 Sao ⭐⭐⭐⭐ (Cao cấp)</option>
-                        <option value="3">3 Sao ⭐⭐⭐ (Tiêu chuẩn)</option>
-                        <option value="2">2 Sao ⭐⭐ (Kinh tế)</option>
-                        <option value="1">1 Sao ⭐</option>
-                        <option value="0">Tiêu chuẩn du lịch (Chưa xếp sao)</option>
+                        <option value="0">Tiêu chuẩn du lịch</option>
+                        <option value="1">1 sao</option>
+                        <option value="2">2 sao</option>
+                        <option value="3">3 sao</option>
+                        <option value="4">4 sao</option>
+                        <option value="5">5 sao</option>
                       </select>
                     </div>
                   )}

@@ -144,7 +144,7 @@ export function CreateServiceForm({
       case "hotel":
         serviceData = {
           ...baseService,
-          stars: parseInt(stars),
+          stars: stars === "0" ? undefined : Number(stars),
           amenities,
           checkInTime,
           checkOutTime,
@@ -359,7 +359,7 @@ export function CreateServiceForm({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Xếp hạng sao
+                        Số sao
                       </label>
                       <select
                         value={stars}
@@ -368,6 +368,7 @@ export function CreateServiceForm({
                         }
                         className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                       >
+                        <option value="0">Tiêu chuẩn du lịch</option>
                         <option value="1">1 sao</option>
                         <option value="2">2 sao</option>
                         <option value="3">3 sao</option>
