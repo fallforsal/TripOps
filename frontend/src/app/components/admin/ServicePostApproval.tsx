@@ -250,7 +250,11 @@ export function ServicePostApproval({
     return (
       <div>
         <div className="font-bold text-gray-900 text-xs">
-          {(service.price || service.priceFrom || 0).toLocaleString("vi-VN")}đ
+          {service.priceFrom && service.priceFrom > 0
+            ? `${service.priceFrom.toLocaleString("vi-VN")}đ`
+            : service.price > 0
+              ? `${service.price.toLocaleString("vi-VN")}đ`
+              : "Liên hệ"}
         </div>
         <div className="text-[10px] text-gray-500">{unit}</div>
       </div>

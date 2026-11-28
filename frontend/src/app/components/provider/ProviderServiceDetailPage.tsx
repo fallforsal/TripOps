@@ -513,16 +513,16 @@ export function ProviderServiceDetailPage({
             <div className="mt-5 p-4 rounded-xl bg-[#F0F9FF] border border-blue-100">
               {(() => {
                 const isHotel = service.category === "hotel";
-                const pFrom = service.priceFrom ?? (isHotel ? Math.round((service.price || 1500000) * 0.8 / 10000) * 10000 : undefined);
-                const pTo = service.priceTo ?? (isHotel ? Math.round((service.price || 1500000) * 1.2 / 10000) * 10000 : undefined);
-                const hasRange = pFrom !== undefined && pTo !== undefined;
+                const pFrom = service.priceFrom;
+                const pTo = service.priceTo;
+                const hasRange = pFrom !== undefined && pTo !== undefined && pFrom > 0 && pTo > pFrom;
 
                 return (
                   <>
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                       {hasRange
                         ? `Khoảng giá dự kiến / ${isHotel ? "phòng" : "người"}`
-                        : "Đơn giá niêm yết"}
+                        : pFrom && pFrom > 0 ? "Giá từ" : "Đơn giá niêm yết"}
                     </span>
                     {hasRange ? (
                       <div>
@@ -543,7 +543,11 @@ export function ProviderServiceDetailPage({
                     ) : (
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-3xl font-extrabold text-[#075985]">
-                          {service.price?.toLocaleString("vi-VN")}đ
+                          {pFrom && pFrom > 0
+                            ? `${pFrom.toLocaleString("vi-VN")}đ`
+                            : service.price > 0
+                              ? `${service.price.toLocaleString("vi-VN")}đ`
+                              : "Liên hệ"}
                         </span>
                         <span className="text-xs font-medium text-gray-600">
                           {meta.unit}
@@ -554,14 +558,14 @@ export function ProviderServiceDetailPage({
                 );
               })()}
 
-              {service.pricePerPerson && !service.priceFrom && (
+              {service.pricePerPerson != null && service.pricePerPerson > 0 && !service.priceFrom && (
                 <div className="mt-2 pt-2 border-t border-[#CBD5E1]/50 flex justify-between text-xs text-gray-700">
                   <span>Giá tính theo người:</span>
                   <strong>{service.pricePerPerson.toLocaleString("vi-VN")}đ/người</strong>
                 </div>
               )}
 
-              {service.childPrice && (
+              {service.childPrice != null && service.childPrice > 0 && (
                 <div className="mt-1 flex justify-between text-xs text-gray-700">
                   <span>Giá vé trẻ em:</span>
                   <strong>{service.childPrice.toLocaleString("vi-VN")}đ/trẻ</strong>
