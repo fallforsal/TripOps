@@ -77,19 +77,23 @@ export function AgencySupplierDirectory() {
     try {
       const full = await getAgencySupplier(supplier.id);
       setEditing(full);
-      setDraft({ type: full.type, name: full.name, address: full.address || "", area: full.area || "",
+      setDraft({
+        type: full.type, name: full.name, address: full.address || "", area: full.area || "",
         contactName: full.contactName || "", contactPhone: full.contactPhone || "",
         contactEmail: full.contactEmail || "", starRating: full.starRating,
         referencePrice: full.referencePrice, conditions: full.conditions || "", notes: full.notes || "",
-        status: full.status });
+        status: full.status
+      });
       setViewing(null);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể tải nhà cung cấp."); }
     finally { setLoadingDetailId(null); }
   };
   const addSupplier = () => {
     setEditing(null);
-    setDraft({ type: "HOTEL", name: "", address: "", area: "", contactName: "", contactPhone: "",
-      contactEmail: "", starRating: null, referencePrice: null, conditions: "", notes: "", status: "ACTIVE" });
+    setDraft({
+      type: "HOTEL", name: "", address: "", area: "", contactName: "", contactPhone: "",
+      contactEmail: "", starRating: null, referencePrice: null, conditions: "", notes: "", status: "ACTIVE"
+    });
     setEditError("");
     setCreating(true);
   };
@@ -277,17 +281,11 @@ export function AgencySupplierDirectory() {
                   onChange={(value) => setDraft({ ...draft, area: value })}
                   placeholder="Gõ để tìm tỉnh/thành phố" className="mt-1" />
               ) : (
-                <>
-                  <Input required={field === "name" || field === "contactPhone"} className="mt-1"
-                    type={field === "contactEmail" ? "email" : field === "contactPhone" ? "tel" : "text"}
-                    inputMode={field === "contactPhone" ? "numeric" : undefined}
-                    aria-invalid={field === "contactPhone" && !!draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone)}
-                    value={draft[field] || ""}
-                    onChange={(e) => setDraft({ ...draft, [field]: field === "contactPhone" ? e.target.value.replace(/\D/g, "") : e.target.value })} />
-                  {field === "contactPhone" && <span className={`mt-1 block text-xs ${draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone) ? "text-rose-600" : "text-slate-500"}`}>
-                    {draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone) ? `Cần đúng 10 chữ số (hiện có ${draft.contactPhone.length}).` : "Nhập đúng 10 chữ số; dấu cách khi dán sẽ tự bỏ."}
-                  </span>}
-                </>
+                <Input required={field === "name" || field === "contactPhone"} className="mt-1"
+                  type={field === "contactEmail" ? "email" : field === "contactPhone" ? "tel" : "text"}
+                  inputMode={field === "contactPhone" ? "numeric" : undefined}
+                  value={draft[field] || ""}
+                  onChange={(e) => setDraft({ ...draft, [field]: field === "contactPhone" ? e.target.value.replace(/\D/g, "").slice(0, 10) : e.target.value })} />
               )}
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
