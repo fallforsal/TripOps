@@ -1,5 +1,5 @@
 import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
-import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
+import { serviceAddress, serviceGallery, serviceGoogleMapsUrl } from "@/app/lib/servicePresentation";
 import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1015,7 +1015,7 @@ export function AgencyServicesExplorer({
 
                   {/* Google Maps External Link Button */}
                   <a
-                    href={`https://www.google.com/maps?q=${lat},${lng}`}
+                    href={serviceGoogleMapsUrl(selectedService)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] font-semibold text-xs border border-[#CBD5E1] transition-colors shadow-2xs"

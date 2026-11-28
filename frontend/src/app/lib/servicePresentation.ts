@@ -1,4 +1,5 @@
 interface ServicePresentation {
+  name?: string;
   thumbnailUrl?: string;
   image?: string;
   images?: string[];
@@ -27,4 +28,10 @@ export function serviceAddress(service: ServicePresentation): string {
       .map(part => part?.trim()).filter(Boolean).join(", ");
   }
   return service.location?.trim() || service.province?.trim() || "Việt Nam";
+}
+
+export function serviceGoogleMapsUrl(service: ServicePresentation): string {
+  const query = [service.name?.trim(), serviceAddress(service)]
+    .filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }

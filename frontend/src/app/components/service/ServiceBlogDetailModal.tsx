@@ -1,4 +1,4 @@
-import { serviceAddress, serviceGallery } from "@/app/lib/servicePresentation";
+import { serviceAddress, serviceGallery, serviceGoogleMapsUrl } from "@/app/lib/servicePresentation";
 import { ChatWithButton } from "@/app/components/chat/ChatWithButton";
 import { useAuth } from "@/app/contexts/AuthContext";
 import React, { useState } from "react";
@@ -81,7 +81,7 @@ export function ServiceBlogDetailModal({
 
   const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=vi&z=15&output=embed`;
   const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03}%2C${lat - 0.02}%2C${lng + 0.03}%2C${lat + 0.02}&layer=mapnik&marker=${lat}%2C${lng}`;
-  const googleMapsExternalUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const googleMapsExternalUrl = serviceGoogleMapsUrl(service);
 
   const nextImage = () => {
     setActiveImageIndex((prev) => (prev + 1) % images.length);

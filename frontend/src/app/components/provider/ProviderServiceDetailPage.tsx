@@ -1,5 +1,5 @@
 import { confirmAction } from "@/app/lib/notificationDialogs";
-import { serviceGallery } from "@/app/lib/servicePresentation";
+import { serviceGallery, serviceGoogleMapsUrl } from "@/app/lib/servicePresentation";
 import { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -795,7 +795,7 @@ export function ProviderServiceDetailPage({
                 </div>
 
                 <a
-                  href={`https://www.google.com/maps?q=${service.latitude || 11.9404},${service.longitude || 108.4583}`}
+                  href={serviceGoogleMapsUrl(service)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#F0F9FF] text-[#075985] hover:bg-[#E0F2FE] font-medium text-xs border border-[#CBD5E1] transition-colors"
