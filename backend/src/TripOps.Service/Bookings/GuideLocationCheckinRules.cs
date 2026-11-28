@@ -17,37 +17,21 @@ public static class GuideLocationCheckinRules
             .SelectMany(d => d.Attractions.OrderBy(a => a.Time ?? DateTime.MaxValue)
                 .ThenBy(a => a.Id)).ToList();
 
+    // A stop is assigned only when Agency routing created an explicit guide/agency row.
+    // Operational progress must never grant or expand a guide's route.
+    public static bool IsAssignedStop(BookingTimelineAttraction attraction, string guideId, string agencyId, string? hostAgencyId) =>
+        (attraction.AgencyId ?? hostAgencyId) == agencyId &&
+        attraction.Checkins.Any(c => c.GuideId == guideId && c.AgencyId == agencyId);
+
     public static IReadOnlyList<BookingTimelineAttraction> OrderedStopsForGuide(
-        Booking booking, string guideId, string agencyId)
-    {
-        var host = booking.Tour?.AgencyId;
-        var agencyStops = OrderedStops(booking.Timelines)
-            .Where(a => (a.AgencyId ?? host) == agencyId)
+        Booking booking, string guideId, string agencyId) =>
+        OrderedStops(booking.Timelines)
+            .Where(a => IsAssignedStop(a, guideId, agencyId, booking.Tour?.AgencyId))
             .ToList();
-        var guideStops = agencyStops
-            .Where(a => a.Checkins.Any(c => c.GuideId == guideId))
-            .ToList();
-        if (guideStops.Count == 0) return agencyStops;
 
-        var hasDistinctRouting =
-            agencyStops.Any(a => a.Checkins.Any(c => c.GuideId != guideId)) ||
-            guideStops.Any(a => a.Checkins.Any(c => c.GuideId == guideId && c.AttendanceStatus == AttractionCheckinStatus.Pending));
-        if (hasDistinctRouting) return guideStops;
-
-        return agencyStops
-            .Where(a => a.Checkins.Any(c => c.GuideId == guideId) || a.Checkins.Count == 0)
-            .ToList();
-    }
-
-    public static string GuideStopStatus(BookingTimelineAttraction attraction, string guideId)
-    {
-        var own = attraction.Checkins.SingleOrDefault(c => c.GuideId == guideId);
-        if (own is not null)
-            return own.AttendanceStatus?.ToString() ?? "Pending";
-        return attraction.Checkins.Count == 0
-            ? (attraction.AttendanceStatus ?? "Pending")
-            : "Pending";
-    }
+    public static string GuideStopStatus(BookingTimelineAttraction attraction, string guideId) =>
+        attraction.Checkins.SingleOrDefault(c => c.GuideId == guideId)?.AttendanceStatus?.ToString()
+            ?? "Pending";
 
     public static void SyncAttractionStatus(BookingTimelineAttraction location)
     {
@@ -75,6 +59,7 @@ public static class GuideLocationCheckinRules
         booking.Status is BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress;
 
     public static bool CanCheckIn(Booking booking, string guideId, string agencyId, DateTime utcNow) =>
+        OrderedStopsForGuide(booking, guideId, agencyId).Count > 0 &&
         GuideBookingRules.Schedule(booking, guideId, agencyId).StartDate <= PaymentRules.VietnamDate(utcNow) &&
         booking.Status is BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress;
 }
