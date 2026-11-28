@@ -238,6 +238,7 @@ public static class GuideCheckinDemoSeed
 
                             Time = departure.AddHours(p.Hour),
                             AttendanceStatus = "Pending",
+                            Checkins = [new BookingAttractionCheckin { GuideId = guide.Id, AgencyId = agency.Id }],
                         }).ToList(),
                     },
                 ],
