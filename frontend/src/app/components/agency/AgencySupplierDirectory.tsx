@@ -284,8 +284,11 @@ export function AgencySupplierDirectory() {
               </select>
             </label>}
             <label className="text-sm">Giá tham khảo {draft.type === "HOTEL" ? "/ người / đêm" : "/ người / bữa"}
-              <Input type="number" min="1" className="mt-1" value={draft.referencePrice ?? ""}
-                onChange={(e) => setDraft({ ...draft, referencePrice: e.target.value ? Number(e.target.value) : null })} />
+              <Input type="text" inputMode="numeric" className="mt-1" value={draft.referencePrice?.toLocaleString("vi-VN") ?? ""}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "");
+                  setDraft({ ...draft, referencePrice: digits ? Number(digits) : null });
+                }} />
             </label>
             <label className="text-sm sm:col-span-2">Điều kiện tham khảo
               <textarea className="mt-1 w-full rounded-md border p-2" rows={3} value={draft.conditions || ""}
