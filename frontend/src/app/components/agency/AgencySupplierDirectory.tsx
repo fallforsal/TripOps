@@ -101,19 +101,21 @@ export function AgencySupplierDirectory() {
   };
   const saveSupplier = async () => {
     if ((!creating && !editing) || !draft || saving) return;
-    if (!draft.name?.trim() || (!draft.area?.trim() && !draft.address?.trim()) ||
-        (draft.referencePrice != null && draft.referencePrice <= 0)) {
-      setEditError("Cần tên, địa chỉ hoặc tỉnh/thành phố; giá tham khảo nếu nhập phải lớn hơn 0."); return;
-    }
+    const contactEmail = draft.contactEmail?.trim() ?? "";
+    const contactPhone = draft.contactPhone?.trim() ?? "";
+    if (!draft.name?.trim()) { setEditError("Vui lòng nhập tên nhà cung cấp."); return; }
+    if (!contactPhone) { setEditError("Vui lòng nhập số điện thoại."); return; }
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) { setEditError("Email liên hệ không đúng định dạng."); return; }
+    if (draft.referencePrice != null && draft.referencePrice <= 0) { setEditError("Giá tham khảo nếu nhập phải lớn hơn 0."); return; }
     setSaving(true); setEditError("");
     try {
       if (creating) {
-        const created = await createAgencySupplier({ ...draft, name: draft.name.trim(), status: "ACTIVE" });
+        const created = await createAgencySupplier({ ...draft, name: draft.name.trim(), contactPhone, contactEmail: contactEmail || null, status: "ACTIVE" });
         setSuppliers((items) => [created, ...items]);
         setSearch(""); setFilter("ALL");
         toast.success("Đã thêm nhà cung cấp vào danh bạ.");
       } else if (editing) {
-        const updated = await updateAgencySupplier(editing.id, draft);
+        const updated = await updateAgencySupplier(editing.id, { ...draft, contactPhone, contactEmail: contactEmail || null });
         setSuppliers((items) => updated.status === "ARCHIVED"
           ? items.filter((item) => item.id !== updated.id)
           : items.map((item) => item.id === updated.id ? updated : item));
@@ -264,27 +266,19 @@ export function AgencySupplierDirectory() {
                 <option value="HOTEL">Khách sạn / Lưu trú</option><option value="RESTAURANT">Nhà hàng / Ẩm thực</option>
               </select>
             </label>}
-            <label className="text-sm sm:col-span-2">Tên nhà cung cấp <span className="text-rose-600" aria-label="bắt buộc">*</span>
-              <Input required className="mt-1" value={draft.name || ""} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            </label>
-            <fieldset className="sm:col-span-2">
-              <legend className="text-sm">Tỉnh/thành phố hoặc Địa chỉ <span className="text-rose-600" aria-label="bắt buộc">*</span></legend>
-              <p className="mt-0.5 text-xs text-slate-500">Nhập ít nhất một trong hai trường bên dưới.</p>
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="text-sm">Tỉnh/thành phố
-                  <SearchableCombobox options={areaOptions} value={matchedProvince?.value ?? areaValue}
-                    onChange={(value) => setDraft({ ...draft, area: value })}
-                    placeholder="Gõ để tìm tỉnh/thành phố" className="mt-1" />
-                </label>
-                <label className="text-sm">Địa chỉ
-                  <Input className="mt-1" value={draft.address || ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
-                </label>
-              </div>
-            </fieldset>
             {([
+              ["name", "Tên nhà cung cấp"], ["area", "Tỉnh/thành phố"], ["address", "Địa chỉ"],
               ["contactName", "Người liên hệ"], ["contactPhone", "Số điện thoại"], ["contactEmail", "Email"],
             ] as const).map(([field, label]) => <label key={field} className="text-sm">{label}
-              <Input className="mt-1" type={field === "contactEmail" ? "email" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+              {(field === "name" || field === "contactPhone") &&
+                <> <span className="text-rose-600" aria-label="bắt buộc">*</span></>}
+              {field === "area" ? (
+                <SearchableCombobox options={areaOptions} value={matchedProvince?.value ?? areaValue}
+                  onChange={(value) => setDraft({ ...draft, area: value })}
+                  placeholder="Gõ để tìm tỉnh/thành phố" className="mt-1" />
+              ) : (
+                <Input required={field === "name" || field === "contactPhone"} className="mt-1" type={field === "contactEmail" ? "email" : field === "contactPhone" ? "tel" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+              )}
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
               <select className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" value={draft.starRating ?? ""}
@@ -308,8 +302,8 @@ export function AgencySupplierDirectory() {
               <textarea className="mt-1 w-full rounded-md border p-2" rows={3} value={draft.notes || ""}
                 onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
             </label>
-            {!creating && <label className="text-sm">Trạng thái <span className="text-rose-600" aria-label="bắt buộc">*</span>
-              <select required className="mt-1 w-full rounded-md border p-2" value={draft.status || "ACTIVE"}
+            {!creating && <label className="text-sm">Trạng thái
+              <select className="mt-1 w-full rounded-md border p-2" value={draft.status || "ACTIVE"}
                 onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
                 <option value="ACTIVE">Đang dùng</option><option value="ARCHIVED">Lưu trữ</option>
               </select>

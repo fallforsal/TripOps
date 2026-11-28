@@ -42,7 +42,7 @@ public sealed partial class TourFlowTests
         Assert.Equal(HttpStatusCode.NotFound, (await customer.GetAsync("/api/v1/bookings/2147483647/services")).StatusCode);
         // Selecting an Agency supplier must not keep displaying the old Provider's article.
         var own = await Read<SupplierDto>(await agency.PostAsJsonAsync("/api/v1/agency/suppliers",
-            new SupplierRequest("HOTEL", "Private hotel", "Private address", ReferencePrice: 500000)));
+            new SupplierRequest("HOTEL", "Private hotel", "Private address", ContactPhone: "0901000008", ReferencePrice: 500000)));
         await Read<BookingDto>(await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{b.Id}/service-changes",
             new BookingServiceChange("hotel", b.SnapshotHotels!.Single().Id, "Changed hotel", b.TotalAmount, AgencySupplierId: own.Id)));
         var updated = await customer.GetFromJsonAsync<JsonElement>(url);

@@ -33,7 +33,7 @@ public sealed partial class TourFlowTests
         Assert.True(b.HasBeenApproved);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{root}/price-adjustments", new BookingPriceChange(basePrice + 1, "Forbidden after approval", basePrice))).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agency.PostAsJsonAsync($"{root}/service-changes", new BookingServiceChange("hotel", b.SnapshotHotels!.Single().Id, "Cannot hide price change", basePrice, 1000, ServiceId: 102))).StatusCode);
-        var own = await Read<SupplierDto>(await agency.PostAsJsonAsync("/api/v1/agency/suppliers", new SupplierRequest("HOTEL", "Replacement private hotel", "Private address", ReferencePrice: 500000)));
+        var own = await Read<SupplierDto>(await agency.PostAsJsonAsync("/api/v1/agency/suppliers", new SupplierRequest("HOTEL", "Replacement private hotel", "Private address", ContactPhone: "0901000007", ReferencePrice: 500000)));
         b = await Read<BookingDto>(await agency.PostAsJsonAsync($"{root}/service-changes", new BookingServiceChange("hotel", b.SnapshotHotels!.Single().Id, "Agreed hotel replacement", basePrice, AgencySupplierId: own.Id)));
         Assert.Equal("Confirmed", b.Status); Assert.Equal(basePrice, b.TotalAmount);
         Assert.Equal(contractId, b.Contract!.Id);

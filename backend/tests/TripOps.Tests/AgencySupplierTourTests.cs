@@ -22,7 +22,7 @@ public sealed partial class TourFlowTests
         var hotel = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory,
             new SupplierRequest("HOTEL", "Archive hotel", "Hotel address", "Da Lat", ContactName: "Hotel contact", ContactPhone: "0901000001", ReferencePrice: 650000)));
         var restaurant = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory,
-            new SupplierRequest("RESTAURANT", "Archive restaurant", "Meal address", "Da Lat", ReferencePrice: 150000)));
+            new SupplierRequest("RESTAURANT", "Archive restaurant", "Meal address", "Da Lat", ContactPhone: "0901000002", ReferencePrice: 150000)));
         Assert.Equal(hotel, await Read<SupplierDto>(await agency.GetAsync($"{directory}/{hotel.Id}")));
         Assert.Equal(hotel.Id, Assert.Single(await Read<SupplierDto[]>(await agency.GetAsync($"{directory}?type=HOTEL&search=0901000001"))).Id);
         var config = Complete();
@@ -39,7 +39,7 @@ public sealed partial class TourFlowTests
             Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
             Assert.Equal(HttpStatusCode.NoContent, (await agency.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await agency.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await agency.PutAsJsonAsync($"{directory}/{supplier.Id}", new SupplierRequest(supplier.Type, "Cannot reactivate"))).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await agency.PutAsJsonAsync($"{directory}/{supplier.Id}", new SupplierRequest(supplier.Type, "Cannot reactivate", ContactPhone: "0901000003"))).StatusCode);
             Assert.DoesNotContain(await Read<SupplierDto[]>(await agency.GetAsync($"{directory}?type={supplier.Type}")), s => s.Id == supplier.Id);
         }
         Assert.Empty(await Read<SupplierDto[]>(await agency.GetAsync(directory)));
@@ -63,7 +63,8 @@ public sealed partial class TourFlowTests
         const string directory = "/api/v1/agency/suppliers";
         await using var app = new App(); await app.Initialize();
         using var agency = await app.Login("agency");
-        var supplier = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Owned supplier")));
+        Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Missing phone"))).StatusCode);
+        var supplier = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Owned supplier", ContactPhone: "0901000004")));
         using var anonymous = app.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"{directory}/{supplier.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.DeleteAsync($"{directory}/{supplier.Id}")).StatusCode);
@@ -99,11 +100,11 @@ public sealed partial class TourFlowTests
         await using var app = new App(); await app.Initialize();
         using var agency = await app.Login("agency"); using var other = await app.Login("other");
         var supplier = await Read<SupplierDto>(await agency.PostAsJsonAsync("/api/v1/agency/suppliers",
-            new SupplierRequest("HOTEL", "Private hotel", "Old address", "Da Lat", ReferencePrice: 100000, Conditions: "Breakfast")));
+            new SupplierRequest("HOTEL", "Private hotel", "Old address", "Da Lat", ContactPhone: "0901000005", ReferencePrice: 100000, Conditions: "Breakfast")));
         Assert.Single(await Read<SupplierDto[]>(await agency.GetAsync("/api/v1/agency/suppliers?type=HOTEL")));
         Assert.Empty(await Read<SupplierDto[]>(await other.GetAsync("/api/v1/agency/suppliers?type=HOTEL")));
         Assert.Equal(HttpStatusCode.NotFound, (await other.PutAsJsonAsync($"/api/v1/agency/suppliers/{supplier.Id}",
-            new SupplierRequest("HOTEL", "Changed"))).StatusCode);
+            new SupplierRequest("HOTEL", "Changed", ContactPhone: "0901000005"))).StatusCode);
 
         var snapshot = new SupplierSnapshotInput("Old address", "Da Lat", ReferencePrice: 100000, Conditions: "Breakfast");
         var baseConfig = Complete();
@@ -118,12 +119,12 @@ public sealed partial class TourFlowTests
         Assert.Equal("completed", published.Status);
         Assert.Equal(supplier.Id, published.Configuration.Timelines![0].Accommodations![0].AgencySupplierId);
         await Read<SupplierDto>(await agency.PutAsJsonAsync($"/api/v1/agency/suppliers/{supplier.Id}",
-            new SupplierRequest("HOTEL", "Private hotel", "New address", "Da Lat", ReferencePrice: 200000)));
+            new SupplierRequest("HOTEL", "Private hotel", "New address", "Da Lat", ContactPhone: "0901000005", ReferencePrice: 200000)));
         var loaded = await Read<TourDto>(await agency.GetAsync($"{Root}/{tour.Id}"));
         Assert.Equal("Old address", loaded.Configuration.Timelines![0].Accommodations![0].Supplier!.Address);
         Assert.Equal(100000, loaded.Configuration.Timelines![0].Accommodations![0].Supplier!.ReferencePrice);
         var restaurant = await Read<SupplierDto>(await agency.PostAsJsonAsync("/api/v1/agency/suppliers",
-            new SupplierRequest("RESTAURANT", "Private restaurant", "Market street", "Da Lat", ReferencePrice: 50000)));
+            new SupplierRequest("RESTAURANT", "Private restaurant", "Market street", "Da Lat", ContactPhone: "0901000006", ReferencePrice: 50000)));
         var second = config with { Name = "Second tour", Timelines = [days[0] with {
             Meals = [new MealInput("lunch", "Private restaurant", SupplierSource: SupplierSources.AgencySupplier,
                 AgencySupplierId: restaurant.Id, Supplier: new SupplierSnapshotInput("Market street", "Da Lat", ReferencePrice: 50000))],
