@@ -83,7 +83,7 @@ public sealed class GuideBookingRulesTests
     }
 
     [Fact]
-    public void Guide_route_and_schedule_do_not_expand_when_the_last_assignment_is_completed()
+    public void GuideLocationCheckin_RouteAndScheduleDoNotExpandWhenLastAssignmentIsCompleted()
     {
         var start = new DateTime(2026, 11, 19);
         var assigned = new BookingAttractionCheckin { GuideId = "guide", AgencyId = "host" };
