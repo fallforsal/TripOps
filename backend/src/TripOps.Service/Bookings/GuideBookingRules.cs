@@ -16,22 +16,13 @@ public static class GuideBookingRules
             .Where(x => (x.Attraction.AgencyId ?? host) == agencyId)
             .ToList();
         var guideRoutedDays = agencyStops
-            .Where(x => x.Attraction.Checkins.Any(c => c.GuideId == guideId))
+            .Where(x => GuideLocationCheckinRules.IsAssignedStop(x.Attraction, guideId, agencyId, booking.Tour?.AgencyId))
             .Select(x => x.DayNumber)
             .ToList();
         if (guideRoutedDays.Count > 0)
         {
-            var hasDistinctRouting =
-                agencyStops.Any(x => x.Attraction.Checkins.Any(c => c.GuideId != guideId)) ||
-                agencyStops.Any(x => x.Attraction.Checkins.Any(c => c.GuideId == guideId && c.AttendanceStatus == AttractionCheckinStatus.Pending));
-            var effectiveDays = hasDistinctRouting
-                ? guideRoutedDays
-                : agencyStops
-                    .Where(x => x.Attraction.Checkins.Any(c => c.GuideId == guideId) || x.Attraction.Checkins.Count == 0)
-                    .Select(x => x.DayNumber)
-                    .ToList();
-            var minDay = effectiveDays.Min();
-            var maxDay = effectiveDays.Max();
+            var minDay = guideRoutedDays.Min();
+            var maxDay = guideRoutedDays.Max();
             return new GuideSchedule(
                 booking.StartDate.Date.AddDays(Math.Max(0, minDay - 1)),
                 booking.StartDate.Date.AddDays(Math.Max(0, maxDay - 1)),
@@ -40,8 +31,11 @@ public static class GuideBookingRules
 
         var tourMaxDay = Math.Max(1, booking.Timelines.Select(t => t.DayNumber).DefaultIfEmpty(booking.Tour?.DurationDays ?? 1).Max());
         var tourEnd = booking.StartDate.Date.AddDays(tourMaxDay - 1);
+        // Booking-level dates remain available for display and attendance when no
+        // stop is routed. They must not grant start permission for an unrouted stage.
+        var hasAgencyStops = agencyStops.Count > 0;
         if (booking.BookingAgencies.Count <= 1)
-            return new GuideSchedule(booking.StartDate.Date, tourEnd, true);
+            return new GuideSchedule(booking.StartDate.Date, tourEnd, !hasAgencyStops);
 
         var ownedDays = booking.Timelines
             .Where(d =>
@@ -58,12 +52,12 @@ public static class GuideBookingRules
             .ToList();
         var allDates = dayDates.Concat(stayDates).ToList();
         if (allDates.Count == 0)
-            return new GuideSchedule(booking.StartDate.Date, tourEnd, agencyId == host);
+            return new GuideSchedule(booking.StartDate.Date, tourEnd, !hasAgencyStops && agencyId == host);
 
         var start = allDates.Min();
         var end = allDates.Max();
         var isDayOne = ownedDays.Contains(1) || (ownedDays.Count == 0 && start == booking.StartDate.Date && agencyId == host);
-        return new GuideSchedule(start, end, isDayOne);
+        return new GuideSchedule(start, end, !hasAgencyStops && isDayOne);
     }
 
     public static bool IsAssignedToDayOne(Booking booking, string guideId, string agencyId) =>
