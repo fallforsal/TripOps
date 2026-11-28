@@ -899,10 +899,10 @@ export function ProviderCreateServicePage({
                   <div>
                     <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                       <ImageIcon className="w-4 h-4 text-[#075985]" />
-                      Bộ sưu tập hình ảnh & Chọn ảnh đại diện (Thumbnail)
+                      Bộ sưu tập hình ảnh & Chọn ảnh đại diện
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      Tải lên hình ảnh từ máy tính. Bấm vào nút <strong>"Đặt làm Thumbnail"</strong> hoặc click trực tiếp vào ảnh để chọn làm ảnh bìa chính trên sàn.
+                      Tải lên hình ảnh từ máy tính.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1071,7 +1071,7 @@ export function ProviderCreateServicePage({
                   {/* Tên cơ sở / Dịch vụ */}
                   <div className="md:col-span-2 lg:col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Tên dịch vụ / Cơ sở đăng tải *
+                      Tên dịch vụ / Cơ sở đăng tải <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1086,7 +1086,7 @@ export function ProviderCreateServicePage({
                   {/* Phân loại chi tiết (subCategory) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Phân loại chi tiết *
+                      Phân loại chi tiết <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={subCategory}
@@ -1104,7 +1104,7 @@ export function ProviderCreateServicePage({
                   {/* Sức chứa / Quy mô (capacity) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {currentConfig.capacityLabel} *
+                      {currentConfig.capacityLabel} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1204,7 +1204,7 @@ export function ProviderCreateServicePage({
                   {/* Mức giá từ */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Mức giá từ (Tối thiểu / {category === "hotel" ? "phòng" : "người"}) *
+                      Mức giá từ (Tối thiểu / {category === "hotel" ? "phòng" : "người"}) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1507,7 +1507,7 @@ export function ProviderCreateServicePage({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="service-province" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Tỉnh / Thành phố *
+                      Tỉnh / Thành phố <span className="text-red-500">*</span>
                     </label>
                     <select
                       id="service-province"
@@ -1530,7 +1530,7 @@ export function ProviderCreateServicePage({
 
                   <div>
                     <label htmlFor="service-ward" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Phường / Xã *
+                      Phường / Xã <span className="text-red-500">*</span>
                     </label>
                     <select
                       id="service-ward"
