@@ -46,6 +46,11 @@ public sealed partial class BookingFlowTests
         Assert.Equal(10000000m, booking.TotalAmount);
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision", new BookingDecisionRequest("approve", null))).EnsureSuccessStatusCode();
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-assignments", new GuideAssignmentRequest("guide1", "lead_guide", null))).EnsureSuccessStatusCode();
+        var locations = booking.SnapshotDays?.SelectMany(d => d.Locations)
+            .Select(l => new { locationId = l.Id, guideIds = new[] { "guide1" } }).ToArray();
+        if (locations is { Length: > 0 })
+            (await agency.PutAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-routing",
+                new { locations })).EnsureSuccessStatusCode();
         (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start", null)).EnsureSuccessStatusCode();
         if (paid) await PayInFull(app, booking.Id);
         (await agency.PostAsync($"/api/v1/agency/bookings/{booking.Id}/complete", null)).EnsureSuccessStatusCode();
