@@ -34,6 +34,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { GoogleMapLocationPicker } from "./GoogleMapLocationPicker";
+import { SearchableCombobox } from "@/app/components/common/SearchableCombobox";
 import { ProviderServiceDetailPage } from "./ProviderServiceDetailPage";
 import { useAdministrativeAddress } from "@/app/hooks/useAdministrativeAddress";
 import { validServiceAddress } from "@/app/lib/administrativeLocations";
@@ -448,6 +449,14 @@ export function ProviderCreateServicePage({
   const keepOriginalAddress = !!initialService && !addressChanged;
   const legacyProvince = !!province && !address.provinceLoading && !address.provinceError && !address.selectedProvince;
   const legacyWard = !!ward && !address.wardLoading && !address.wardError && !address.wards.some(w => w.name === ward);
+  const provinceOptions = [
+    ...(legacyProvince ? [{ value: province, label: `${province} (địa chỉ đang lưu)` }] : []),
+    ...address.provinces.map(p => ({ value: p.name, label: p.fullName, keywords: p.name })),
+  ];
+  const wardOptions = [
+    ...(keepOriginalAddress && legacyWard ? [{ value: ward, label: `${ward} (địa chỉ đang lưu)` }] : []),
+    ...address.wards.map(w => ({ value: w.name, label: w.name })),
+  ];
 
   // GPS Map Coordinates
   const [latitude, setLatitude] = useState<number>(
@@ -1552,47 +1561,30 @@ export function ProviderCreateServicePage({
                     <label htmlFor="service-province" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Tỉnh / Thành phố <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <SearchableCombobox
                       id="service-province"
+                      options={provinceOptions}
                       value={address.selectedProvince?.name || province}
-                      disabled={saving || address.provinceLoading}
-                      aria-busy={address.provinceLoading}
-                      onChange={(e) => { setProvince(e.target.value); setWard(""); setAddressChanged(true); }}
-                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white font-medium"
-                      required
-                    >
-                      <option value="">{address.provinceLoading ? "Đang tải tỉnh/thành..." : "Chọn tỉnh/thành"}</option>
-                      {keepOriginalAddress && province && !address.selectedProvince && <option value={province}>{province} (địa chỉ đang lưu)</option>}
-                      {address.provinces.map((p) => (
-                        <option key={p.code} value={p.name}>
-                          {p.fullName}
-                        </option>
-                      ))}
-                    </select>
+                      disabled={saving}
+                      loading={address.provinceLoading}
+                      onChange={(value) => { setProvince(value); setWard(""); setAddressChanged(true); }}
+                      placeholder="Gõ để tìm tỉnh/thành phố"
+                    />
                   </div>
 
                   <div>
                     <label htmlFor="service-ward" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Phường / Xã <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <SearchableCombobox
                       id="service-ward"
+                      options={wardOptions}
                       value={ward}
-                      disabled={saving || address.provinceLoading || address.wardLoading || !address.selectedProvince || !!address.wardError}
-                      aria-busy={address.wardLoading}
-                      onChange={(e) => { setWard(e.target.value); setAddressChanged(true); }}
-                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white font-medium"
-                      required
-                    >
-                      <option value="">{address.wardLoading ? "Đang tải phường/xã..." : "Chọn phường/xã"}</option>
-                      {keepOriginalAddress && ward && !address.wards.some(w => w.name === ward) &&
-                        <option value={ward}>{ward} (địa chỉ đang lưu)</option>}
-                      {address.wards.map((w) => (
-                        <option key={w.code} value={w.name}>
-                          {w.name}
-                        </option>
-                      ))}
-                    </select>
+                      disabled={saving || address.provinceLoading || !address.selectedProvince || !!address.wardError}
+                      loading={address.wardLoading}
+                      onChange={(value) => { setWard(value); setAddressChanged(true); }}
+                      placeholder="Gõ để tìm phường/xã"
+                    />
                   </div>
 
                   {(address.provinceError || address.wardError) && <div role="alert" className="sm:col-span-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
