@@ -29,8 +29,10 @@ public sealed partial class BookingFlowTests
         Assert.Equal(3300000,booking.TotalAmount);Assert.Equal("Room A",booking.Participants[0].RoommateNote);Assert.Equal("Upgrade",booking.SnapshotHotels![0].Name);
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/decision",new BookingDecisionRequest("approve",null))).EnsureSuccessStatusCode();
         (await agency.PostAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-assignments",new GuideAssignmentRequest("guide1","lead_guide",null))).EnsureSuccessStatusCode();
-        (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start",null)).EnsureSuccessStatusCode();
         var stopId = booking.SnapshotDays![0].Locations[0].Id;
+        (await agency.PutAsJsonAsync($"/api/v1/agency/bookings/{booking.Id}/guide-routing",
+            new { locations = new[] { new { locationId = stopId, guideIds = new[] { "guide1" } } } })).EnsureSuccessStatusCode();
+        (await guide.PostAsync($"/api/v1/guide/bookings/{booking.Id}/start",null)).EnsureSuccessStatusCode();
         using (var form = PhotoForm(1))
             (await guide.PostAsync(
                 $"/api/v1/guide/bookings/{booking.Id}/locations/{stopId}/check-in-with-images", form))
