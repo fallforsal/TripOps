@@ -384,7 +384,7 @@ public sealed partial class BookingFlowTests
     }
 
     [Fact]
-    public async Task GuideRouting_EmptyOrFinishedRouteNeverGrantsUnassignedStops()
+    public async Task GuideLocationCheckin_EmptyOrFinishedRouteNeverGrantsUnassignedStops()
     {
         using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
