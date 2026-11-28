@@ -185,6 +185,8 @@ public sealed partial class BookingFlowTests
                 ]
             }]
         };
+        foreach (var stop in booking.Timelines.SelectMany(d => d.Attractions))
+            stop.Checkins.Add(new BookingAttractionCheckin { GuideId = "guide1", AgencyId = "agency1" });
         db.Bookings.Add(booking);
         await db.SaveChangesAsync();
         return booking.Id;
