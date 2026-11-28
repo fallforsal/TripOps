@@ -1,15 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../../../core/widgets/guide_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
+import '../../../core/widgets/guide_search_bar.dart';
+import '../../../core/widgets/guide_segmented_control.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../domain/attendance_filter.dart';
 import '../domain/passenger_contact.dart';
+import 'attendance_progress_card.dart';
+import 'guide_passenger_card.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key, required this.detail, required this.guides});
@@ -93,11 +101,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Future<void> update(Passenger passenger, String status, {String? note}) async {
     if (busy != null || !current.canRecordAttendance) return;
+    if (note == null && status == passenger.status) return;
     setState(() { busy = passenger.id; error = null; });
     try {
       await widget.guides.attendance(current.id, passenger.id, status, note: note);
       final updated = await widget.guides.detail(current.id);
-      if (mounted) setState(() => current = updated);
+      if (mounted) {
+        setState(() => current = updated);
+        if (status != passenger.status && updated.passengers.any(
+          (p) => p.id == passenger.id && p.status == status,
+        )) {
+          unawaited(HapticFeedback.selectionClick().catchError((Object _) {}));
+        }
+      }
     } catch (e) {
       // If midnight passed while this screen was open, refresh the flag from
       // the backend so all action buttons become disabled immediately.
@@ -124,8 +140,98 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final pending = all.where((p) => p.status == 'Pending').length;
     final canRecord = current.canRecordAttendance;
 
+    final header = <Widget>[
+      Text(current.name, style: const TextStyle(
+        color: muted, fontSize: 12, fontWeight: FontWeight.w600,
+      )),
+      space(14),
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: GuideGlassMetric(
+              icon: Icons.groups_outlined, value: all.length,
+              label: 'Tổng hành khách',
+              color: const Color(0xFF315F91),
+              tint: const Color(0xFFCFE0F7),
+            )),
+            const SizedBox(width: 9),
+            Expanded(child: GuideGlassMetric(
+              icon: Icons.check_circle_outline, value: checked,
+              label: 'Đã có mặt',
+              color: deepTeal,
+              tint: const Color(0xFFB9E1DE),
+            )),
+            const SizedBox(width: 9),
+            Expanded(child: GuideGlassMetric(
+              icon: Icons.hourglass_empty_rounded,
+              value: pending, label: 'Chưa điểm danh',
+              color: const Color(0xFF87601C),
+              tint: const Color(0xFFF2E1BE),
+            )),
+          ],
+        ),
+      ),
+      space(16),
+      AttendanceProgressCard(
+        key: const ValueKey('attendance-progress'),
+        total: all.length,
+        present: checked,
+        absent: absent,
+      ),
+      space(14),
+      if (!canRecord) ...[
+        GuideInfoBanner(
+          icon: Icons.lock_clock_outlined,
+          warning: true,
+          message: 'Chỉ được điểm danh vào ngày bắt đầu chặng được giao '
+              '${vnDate(current.attendanceDate ?? current.startDate)}. '
+              'Bạn vẫn có thể xem danh sách và trạng thái đã ghi nhận.',
+        ),
+        space(10),
+      ],
+      space(20),
+      const GuideSectionTitle('Danh sách hành khách'),
+      space(11),
+      GuideSearchBar(
+        value: query,
+        placeholder: 'Tìm tên hoặc SĐT',
+        fieldKey: const ValueKey('passenger-search'),
+        onChanged: (value) => setState(() => query = value),
+      ),
+      space(11),
+      GuideSegmentedControl<AttendanceFilter>(
+        key: const ValueKey('attendance-filter-segmented-control'),
+        value: filter,
+        labels: {
+          for (final option in AttendanceFilter.values)
+            option: attendanceFilterLabel(option),
+        },
+        onChanged: (option) => setState(() => filter = option),
+      ),
+      space(13),
+      if (error != null) ...[
+        GuideInfoBanner(message: error!,
+          icon: Icons.error_outline, warning: true),
+        space(10),
+      ],
+      if (passengers.isEmpty)
+        const GuideEmptyState(
+          title: 'Không tìm thấy hành khách',
+          message: 'Thử tìm kiếm hoặc chọn lại bộ lọc điểm danh.',
+          icon: Icons.person_search_outlined,
+        ),
+    ];
+
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
         title: const Text('Điểm danh hành khách'),
         actions: [
           IconButton(
@@ -135,241 +241,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
-        children: [
-          Text(current.name, style: const TextStyle(
-            color: muted, fontSize: 12, fontWeight: FontWeight.w600,
-          )),
-          space(14),
-          Row(children: [
-            Expanded(child: GuideMetric(icon: Icons.groups_outlined,
-              value: '${all.length}', label: 'Tổng hành khách')),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(icon: Icons.check_circle_outline,
-              value: '$checked', label: 'Đã có mặt')),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.hourglass_empty_rounded,
-              value: '$pending', label: 'Chưa điểm danh',
-              iconColor: const Color(0xFFB78330),
-              tint: const Color(0xFFFFF3DF),
-            )),
-          ]),
-          space(16),
-          Card(child: Padding(
-            padding: const EdgeInsets.all(15),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const Expanded(child: Text('Tiến độ điểm danh',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
-                    color: ink))),
-                Text('$checked / ${all.length}', style: const TextStyle(
-                  fontSize: 13, color: teal, fontWeight: FontWeight.w900,
-                )),
-              ]),
-              space(12),
-              LinearProgressIndicator(
-                value: all.isEmpty ? 0 : checked / all.length,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(8),
-                backgroundColor: paleTeal,
-              ),
-              space(9),
-              Text('$absent khách vắng mặt', style: const TextStyle(
-                fontSize: 11, color: muted,
-              )),
-            ]),
-          )),
-          space(14),
-          if (!canRecord) ...[
-            GuideInfoBanner(
-              icon: Icons.lock_clock_outlined,
-              warning: true,
-              message: 'Chỉ được điểm danh vào ngày bắt đầu chặng được giao '
-                  '${vnDate(current.attendanceDate ?? current.startDate)}. '
-                  'Bạn vẫn có thể xem danh sách và trạng thái đã ghi nhận.',
-            ),
-            space(10),
-          ],
-          space(20),
-          const GuideSectionTitle('Danh sách hành khách'),
-          space(11),
-          TextField(
-            key: const ValueKey('passenger-search'),
-            decoration: const InputDecoration(
-              hintText: 'Tìm theo tên hoặc số điện thoại...',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onChanged: (value) => setState(() => query = value),
-          ),
-          space(11),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: AttendanceFilter.values.map((option) =>
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(attendanceFilterLabel(option)),
-                  selected: filter == option,
-                  onSelected: (_) => setState(() => filter = option),
-                ),
-              ),
-            ).toList()),
-          ),
-          space(13),
-          if (error != null) ...[
-            GuideInfoBanner(message: error!,
-              icon: Icons.error_outline, warning: true),
-            space(10),
-          ],
-          if (passengers.isEmpty)
-            const GuideEmptyState(
-              title: 'Không tìm thấy hành khách',
-              message: 'Thử tìm kiếm hoặc chọn lại bộ lọc điểm danh.',
-              icon: Icons.person_search_outlined,
-            ),
-          ...passengers.map((p) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Card(child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Expanded(child: Text(
-                      p.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13, color: ink, fontWeight: FontWeight.w800,
-                      ),
-                    )),
-                    const SizedBox(width: 8),
-                    GuideStatusPill(
-                      p.status == 'CheckedIn' ? 'Có mặt'
-                        : p.status == 'Absent' ? 'Vắng' : 'Chưa rõ',
-                      background: p.status == 'CheckedIn'
-                        ? paleTeal : p.status == 'Absent'
-                          ? const Color(0xFFFFE8E8)
-                          : const Color(0xFFFFF3DF),
-                      foreground: p.status == 'CheckedIn'
-                        ? deepTeal : p.status == 'Absent'
-                          ? const Color(0xFFC05F5F)
-                          : const Color(0xFFB78330),
-                    ),
-                  ]),
-                  space(8),
-                  Row(children: [
-                    const Text('SĐT: ', style: TextStyle(
-                      fontSize: 12, color: muted, fontWeight: FontWeight.w600,
-                    )),
-                    Expanded(child: Text(
-                      passengerPhone(p.phone) ?? 'Chưa cập nhật',
-                      key: ValueKey('passenger-phone-${p.id}'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: passengerPhone(p.phone) == null ? muted : ink,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    )),
-                    if (passengerPhone(p.phone) != null) ...[
-                      IconButton(
-                        key: ValueKey('passenger-copy-${p.id}'),
-                        tooltip: 'Sao chép số điện thoại',
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 35,
-                        ),
-                        icon: const Icon(Icons.copy_rounded, size: 17),
-                        onPressed: () => copyPassengerPhone(
-                          passengerPhone(p.phone)!,
-                        ),
-                      ),
-                      IconButton(
-                        key: ValueKey('passenger-call-${p.id}'),
-                        tooltip: 'Gọi hành khách',
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 35,
-                        ),
-                        icon: const Icon(Icons.call_outlined, size: 19),
-                        color: teal,
-                        onPressed: dialablePassengerPhone(p.phone) == null
-                            ? null
-                            : () => callPassenger(p.phone!),
-                      ),
-                    ],
-                  ]),
-                  if (p.statusNote != null && p.statusNote!.trim().isNotEmpty) ...[
-                    space(6),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        'Ghi chú HDV: ${p.statusNote!.trim()}',
-                        style: const TextStyle(fontSize: 12, color: ink),
-                      ),
-                    ),
-                  ],
-                  space(12),
-                  if (busy == p.id) ...[
-                    const LinearProgressIndicator(),
-                    space(9),
-                  ],
-                  Row(children: [
-                    Expanded(child: OutlinedButton.icon(
-                      onPressed: busy != null || !canRecord ? null :
-                          () => update(p, 'CheckedIn'),
-                      style: p.status == 'CheckedIn'
-                          ? OutlinedButton.styleFrom(
-                              backgroundColor: paleTeal,
-                              foregroundColor: deepTeal,
-                              side: const BorderSide(color: teal),
-                            ) : null,
-                      icon: const Icon(Icons.check_circle_outline, size: 16),
-                      label: const Text('Có mặt'),
-                    )),
-                    const SizedBox(width: 9),
-                    Expanded(child: OutlinedButton.icon(
-                      onPressed: busy != null || !canRecord ? null :
-                          () => update(p, 'Absent'),
-                      style: p.status == 'Absent'
-                          ? OutlinedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFECEC),
-                              foregroundColor: const Color(0xFFAE5151),
-                            ) : null,
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Vắng mặt'),
-                    )),
-                  ]),
-                  Row(children: [
-                    TextButton.icon(
-                      onPressed: busy != null || !canRecord ? null : () => editNote(p),
-                      icon: const Icon(Icons.edit_note_rounded, size: 18),
-                      label: Text(
-                        p.statusNote != null && p.statusNote!.trim().isNotEmpty ? 'Sửa ghi chú' : 'Thêm ghi chú',
-                      ),
-                    ),
-                    const Spacer(),
-                    if (p.status != 'Pending')
-                      TextButton(
-                        onPressed: busy != null || !canRecord ? null :
-                            () => update(p, 'Pending'),
-                        child: const Text('Đặt lại: Chưa rõ'),
-                      ),
-                  ]),
-                ],
-              ),
-            )),
-          )),
-        ],
+        itemCount: header.length + passengers.length,
+        itemBuilder: (context, index) {
+          if (index < header.length) return header[index];
+          final p = passengers[index - header.length];
+          return GuidePassengerCard(
+            key: ValueKey('passenger-card-${p.id}'),
+            passenger: p,
+            canRecord: canRecord,
+            busy: busy == p.id,
+            actionsLocked: busy != null,
+            onStatusChanged: (status) => update(p, status),
+            onEditNote: () => editNote(p),
+            onCopyPhone: copyPassengerPhone,
+            onCallPhone: callPassenger,
+          );
+        },
       ),
     );
   }

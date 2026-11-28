@@ -1,18 +1,23 @@
-import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter/services.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../assigned_tours/data/guide_repository.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import '../../incidents/presentation/incident_screen.dart';
 import 'checkin_photo_dialog.dart';
+import 'guide_stop_card.dart';
+import 'location_evidence_gallery.dart';
+
+enum _StopAction { checkin, checkout, skip }
 
 class LocationScreen extends StatefulWidget {
   const LocationScreen({super.key, required this.detail, required this.guides});
-
   final BookingDetail detail;
   final GuideRepository guides;
 
@@ -24,511 +29,359 @@ class _LocationScreenState extends State<LocationScreen> {
   late BookingDetail current = widget.detail;
   int? busy;
   String? error;
-  final Map<String, Future<Uint8List>> photoDownloads = {};
+  int? errorStop;
+  _StopAction? _errorAction;
+  bool _openingSheet = false;
+  bool _refreshing = false;
+  final _scroll = ScrollController();
+  final _anchors = <int, GlobalKey>{};
+  final _expanded = <int>{};
+  final _drafts = <(int, _StopAction), CheckinSubmission>{};
+  late final _photos = LocationPhotoCache(widget.guides.imageBytes);
+  int _scrollGeneration = 0;
+
+  @override
+  void dispose() {
+    _scrollGeneration++;
+    _scroll.dispose();
+    _photos.clear();
+    super.dispose();
+  }
+
+  List<TourStop> get _stops => current.days.expand((day) => day.stops).toList();
+
+  bool _allowed(TourStop stop, _StopAction action) {
+    if (!current.canCheckInLocations || current.nextLocationCheckInId != stop.id) {
+      return false;
+    }
+    if (action == _StopAction.checkout) return stop.status == 'CheckedIn';
+    return stop.status != 'CheckedIn' && stop.status != 'CheckedOut' &&
+        stop.status != 'Skipped';
+  }
+
+  TourStop? _findStop(int id) {
+    for (final stop in _stops) {
+      if (stop.id == id) return stop;
+    }
+    return null;
+  }
+
+  void _accept(BookingDetail detail) {
+    current = detail;
+    final stops = {for (final stop in _stops) stop.id: stop};
+    _drafts.removeWhere((key, _) {
+      final stop = stops[key.$1];
+      if (stop == null) return true;
+      return key.$2 == _StopAction.checkout
+          ? stop.status == 'CheckedOut' || stop.status == 'Skipped'
+          : stop.status == 'CheckedIn' || stop.status == 'CheckedOut' || stop.status == 'Skipped';
+    });
+    _expanded.removeWhere((id) => !stops.containsKey(id));
+  }
 
   Future<void> refresh() async {
-    if (busy != null) return;
+    if (busy != null || _openingSheet || _refreshing) return;
+    setState(() => _refreshing = true);
     try {
       final updated = await widget.guides.detail(current.id);
       if (mounted) {
         setState(() {
-          current = updated;
+          _accept(updated);
           error = null;
+          errorStop = null;
+          _errorAction = null;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = readableError(e));
+      if (mounted) {
+        setState(() {
+          error = readableError(e);
+          errorStop = null;
+          _errorAction = null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
-  Future<void> check(TourStop stop) async {
-    if (busy != null ||
-        !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id ||
-        stop.status == 'CheckedIn' ||
-        stop.status == 'CheckedOut' ||
-        stop.status == 'Skipped') {
-      return;
+  Future<void> _perform(TourStop stop, _StopAction action) async {
+    if (busy != null || _openingSheet || _refreshing || !_allowed(stop, action)) return;
+    final draftKey = (stop.id, action);
+    _scrollGeneration++;
+    setState(() => _openingSheet = true);
+    CheckinSubmission? submission;
+    try {
+      submission = await showModalBottomSheet<CheckinSubmission>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        isDismissible: false,
+        enableDrag: false,
+        backgroundColor: Colors.transparent,
+        builder: (_) => CheckinPhotoDialog(
+          stopName: stop.name,
+          isCheckout: action == _StopAction.checkout,
+          isSkip: action == _StopAction.skip,
+          initialSubmission: _drafts[draftKey],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _openingSheet = false);
     }
-
-    final submission = await showDialog<CheckinSubmission>(
-      context: context,
-      builder: (context) => CheckinPhotoDialog(stopName: stop.name),
-    );
-    if (submission == null || !mounted) return;
+    if (!mounted || submission == null) return;
+    final latest = _findStop(stop.id);
+    if (latest == null || !_allowed(latest, action)) return;
+    final payload = submission;
+    final scrollGeneration = _scrollGeneration;
     setState(() {
+      _drafts[draftKey] = payload;
       busy = stop.id;
       error = null;
+      errorStop = null;
+      _errorAction = null;
     });
-
+    int? advanceTo;
     try {
-      final note = submission.note.isEmpty ? null : submission.note;
-      final updated = await widget.guides.checkInWithImages(
-              current.id, stop.id, note, submission.images);
+      final note = payload.note.isEmpty ? null : payload.note;
+      final updated = action == _StopAction.checkout
+          ? await widget.guides.checkOutWithImages(current.id, stop.id, note, payload.images)
+          : await widget.guides.checkInWithImages(current.id, stop.id, note, payload.images,
+              status: action == _StopAction.skip ? 'Skipped' : 'CheckedIn');
       if (!mounted) return;
-      setState(() => current = updated);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Check-in địa điểm thành công.')),
-      );
+      setState(() {
+        _accept(updated);
+        _drafts.remove(draftKey);
+        if (action != _StopAction.checkin) _expanded.remove(stop.id);
+      });
+      unawaited(HapticFeedback.lightImpact().catchError((Object _) {}));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(switch (action) {
+        _StopAction.checkin => 'Check-in địa điểm thành công.',
+        _StopAction.checkout => 'Check-out thành công.',
+        _StopAction.skip => 'Đã ghi nhận bỏ qua điểm dừng.',
+      })));
+      if (action != _StopAction.checkin && updated.canCheckInLocations &&
+          updated.nextLocationCheckInId != stop.id) {
+        advanceTo = updated.nextLocationCheckInId;
+      }
     } catch (e) {
-      // The backend checks actual eligibility again on each submission;
-      // refresh server state when a predecessor/date changes during the call.
-      if (e is ApiFailure && e.statusCode == 409) {
-        try {
-          final updated = await widget.guides.detail(current.id);
-          if (mounted) setState(() => current = updated);
-        } catch (_) {
-          // Preserve the original validation error.
+      // Reconcile even on transport errors: the server may have accepted
+      // the request before the connection dropped. Never auto-resubmit.
+      try {
+        final updated = await widget.guides.detail(current.id);
+        if (mounted) setState(() => _accept(updated));
+      } catch (_) {
+        // Keep the original error and draft if state cannot be refreshed.
+      }
+      if (mounted) {
+        final confirmedStatus = _findStop(stop.id)?.status;
+        final confirmed = switch (action) {
+          _StopAction.checkin => confirmedStatus == 'CheckedIn' || confirmedStatus == 'CheckedOut',
+          _StopAction.checkout => confirmedStatus == 'CheckedOut',
+          _StopAction.skip => confirmedStatus == 'Skipped',
+        };
+        if (confirmed) {
+          setState(() {
+            _drafts.remove(draftKey);
+            if (action != _StopAction.checkin) _expanded.remove(stop.id);
+          });
+          unawaited(HapticFeedback.lightImpact().catchError((Object _) {}));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Đã đồng bộ trạng thái ghi nhận từ hệ thống.'),
+          ));
+          if (action != _StopAction.checkin && current.canCheckInLocations &&
+              current.nextLocationCheckInId != stop.id) {
+            advanceTo = current.nextLocationCheckInId;
+          }
+        } else {
+          setState(() {
+            error = readableError(e);
+            errorStop = confirmedStatus == null ? null : stop.id;
+            _errorAction = action;
+          });
         }
       }
-      if (mounted) setState(() => error = readableError(e));
     } finally {
       if (mounted) setState(() => busy = null);
+    }
+    if (mounted && advanceTo != null && scrollGeneration == _scrollGeneration &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      unawaited(_scrollToNext(advanceTo, stop.id));
     }
   }
 
-  Future<void> skip(TourStop stop) async {
-    if (busy != null ||
-        !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id ||
-        stop.status == 'CheckedIn' ||
-        stop.status == 'CheckedOut' ||
-        stop.status == 'Skipped') {
-      return;
-    }
-
-    final submission = await showDialog<CheckinSubmission>(
-      context: context,
-      builder: (_) => CheckinPhotoDialog(stopName: stop.name, isSkip: true),
-    );
-    if (submission == null || !mounted) return;
-
-    setState(() {
-      busy = stop.id;
-      error = null;
-    });
-    try {
-      final note = submission.note.isEmpty ? null : submission.note;
-      final updated = await widget.guides.checkInWithImages(
-        current.id,
-        stop.id,
-        note,
-        submission.images,
-        status: 'Skipped',
-      );
-      if (!mounted) return;
-      setState(() => current = updated);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã ghi nhận bỏ qua điểm dừng.')),
-      );
-    } catch (e) {
-      if (e is ApiFailure && e.statusCode == 409) {
-        try {
-          final updated = await widget.guides.detail(current.id);
-          if (mounted) setState(() => current = updated);
-        } catch (_) {
-          // Preserve the original validation error.
-        }
+  Future<void> _scrollToNext(int id, int previous) async {
+    final generation = ++_scrollGeneration;
+    final stops = _stops;
+    final index = stops.indexWhere((stop) => stop.id == id);
+    final from = stops.indexWhere((stop) => stop.id == previous);
+    if (index < 0) return;
+    final direction = from >= 0 && index < from ? -1 : 1;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    await WidgetsBinding.instance.endOfFrame;
+    // A lazily-built target may not yet have a context. Move a viewport at
+    // a time until it is mounted. Any manual drag cancels this operation.
+    for (var attempt = 0; attempt <= stops.length + 2; attempt++) {
+      if (!mounted || generation != _scrollGeneration || !_scroll.hasClients ||
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
       }
-      if (mounted) setState(() => error = readableError(e));
-    } finally {
-      if (mounted) setState(() => busy = null);
-    }
-  }
-
-  Future<void> checkout(TourStop stop) async {
-    if (busy != null || !current.canCheckInLocations ||
-        current.nextLocationCheckInId != stop.id || stop.status != 'CheckedIn') { return; }
-    final submission = await showDialog<CheckinSubmission>(
-      context: context,
-      builder: (_) => CheckinPhotoDialog(stopName: stop.name, isCheckout: true),
-    );
-    if (submission == null || !mounted) return;
-    setState(() { busy = stop.id; error = null; });
-    try {
-      final updated = await widget.guides.checkOutWithImages(
-        current.id, stop.id, submission.note.isEmpty ? null : submission.note,
-        submission.images,
-      );
-      if (!mounted) return;
-      setState(() => current = updated);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Check-out thành công. Có thể đến điểm tiếp theo.')),
-      );
-    } catch (e) {
-      if (e is ApiFailure && e.statusCode == 409) {
-        try {
-          final updated = await widget.guides.detail(current.id);
-          if (mounted) setState(() => current = updated);
-        } catch (_) {}
+      final target = _anchors[id]?.currentContext;
+      if (target != null && target.mounted) {
+        await Scrollable.ensureVisible(target,
+          alignment: 0.06,
+          duration: reducedMotion ? Duration.zero : const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+        return;
       }
-      if (mounted) setState(() => error = readableError(e));
-    } finally {
-      if (mounted) setState(() => busy = null);
+      final position = _scroll.position;
+      final offset = (position.pixels + direction * position.viewportDimension * 0.8)
+          .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+      if ((offset - position.pixels).abs() < 1) return;
+      if (reducedMotion) {
+        _scroll.jumpTo(offset);
+      } else {
+        await _scroll.animateTo(offset, duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic);
+      }
+      await WidgetsBinding.instance.endOfFrame;
     }
   }
 
   Future<void> reportIncident() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => IncidentScreen(detail: current, guides: widget.guides),
-      ),
-    );
+    _scrollGeneration++;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => IncidentScreen(detail: current, guides: widget.guides),
+    ));
     if (mounted) await refresh();
-  }
-
-  Widget _buildProofSection({
-    required String title,
-    required List<String> urls,
-    required String? note,
-    required String notePrefix,
-  }) {
-    final trimmedNote = note?.trim() ?? '';
-    final hasNote = trimmedNote.isNotEmpty;
-    if (urls.isEmpty && !hasNote) return const SizedBox.shrink();
-
-    Widget noteBox() => Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        '$notePrefix: $trimmedNote',
-        style: const TextStyle(fontSize: 12, color: ink),
-      ),
-    );
-
-    Widget photoThumb(String url) => ClipRRect(
-      borderRadius: BorderRadius.circular(9),
-      child: FutureBuilder<Uint8List>(
-        future: photoDownloads.putIfAbsent(url, () => widget.guides.imageBytes(url)),
-        builder: (context, snapshot) => snapshot.hasData
-            ? Image.memory(snapshot.data!, width: 64, height: 64, fit: BoxFit.cover)
-            : Container(
-                width: 64,
-                height: 64,
-                color: paleTeal,
-                child: Icon(
-                  snapshot.hasError
-                      ? Icons.broken_image_outlined
-                      : Icons.hourglass_bottom_outlined,
-                  color: muted,
-                ),
-              ),
-      ),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        space(8),
-        if (urls.isNotEmpty) ...[
-          Text(title, style: const TextStyle(
-            fontSize: 11, color: ink, fontWeight: FontWeight.w700,
-          )),
-          space(6),
-        ],
-        if (urls.isNotEmpty && hasNote)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 140),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [for (final url in urls) photoThumb(url)],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: noteBox()),
-            ],
-          )
-        else if (urls.isNotEmpty)
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [for (final url in urls) photoThumb(url)],
-          )
-        else
-          noteBox(),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final stops = current.days.expand((d) => d.stops).toList();
-    final checked = stops
-        .where((s) => s.status == 'CheckedOut' || s.status == 'Skipped')
-        .length;
-    final nextId = current.nextLocationCheckInId;
+    final stops = _stops;
+    final checked = stops.where((s) => s.status == 'CheckedOut' || s.status == 'Skipped').length;
     final enabledByDate = current.canCheckInLocations;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Check-in / Check-out địa điểm'),
-        actions: [
-          IconButton(
-            tooltip: 'Tải lại trạng thái từ backend',
-            onPressed: busy == null ? refresh : null,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
-        children: [
+    final header = <Widget>[
           Text(current.name, style: const TextStyle(
             color: muted, fontSize: 12, fontWeight: FontWeight.w600,
           )),
           space(15),
-          Row(children: [
-            Expanded(child: GuideMetric(
-              icon: Icons.place_outlined, value: '${stops.length}',
-              label: 'Tổng điểm dừng',
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.check_circle_outline, value: '$checked',
-              label: 'Đã hoàn thành',
-            )),
-            const SizedBox(width: 9),
-            Expanded(child: GuideMetric(
-              icon: Icons.schedule_outlined,
-              value: '${stops.length - checked}',
-              label: 'Chưa hoàn thành',
-              iconColor: const Color(0xFFB78330),
-              tint: const Color(0xFFFFF3DF),
-            )),
-          ]),
-          if (!enabledByDate) ...[
-            space(15),
-            GuideInfoBanner(
-              icon: Icons.lock_clock_outlined,
-              warning: true,
-              message:
-                  'Chưa đến ngày khởi hành chặng được giao (${vnDate(current.startDate)}) hoặc tour không còn cho phép check-in.',
-            ),
-          ],
-          if (error != null) ...[
-            space(10),
-            GuideInfoBanner(
-              message: error!, icon: Icons.error_outline, warning: true,
-            ),
-          ],
-          space(22),
-          GuideSectionTitle('Lịch trình (${current.days.length} ngày)'),
-          space(10),
-          if (stops.isEmpty)
-            const GuideEmptyState(
-              title: 'Chưa có điểm dừng',
-              message: 'Backend chưa trả về lịch trình check-in.',
-            ),
-          ...current.days.map((day) => Padding(
-            padding: const EdgeInsets.only(bottom: 17),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: [
-                  Container(
-                    alignment: Alignment.center,
-                    height: 32, width: 32,
-                    decoration: BoxDecoration(
-                      color: paleTeal,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('${day.dayNumber}', style: const TextStyle(
-                      color: deepTeal, fontWeight: FontWeight.w900,
-                    )),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(child: Text(day.title, style: const TextStyle(
-                    fontSize: 14, color: ink, fontWeight: FontWeight.w800,
-                  ))),
-                ]),
-                space(12),
-                ...day.stops.map((stop) {
-                  final skipped = stop.status == 'Skipped';
-                  final checkedIn = stop.status == 'CheckedIn';
-                  final checkedOut = stop.status == 'CheckedOut';
-                  final isNext = nextId == stop.id && !checkedOut && !skipped;
-                  final canCheck = enabledByDate && isNext &&
-                      !checkedIn && busy == null;
-                  final canSkip = enabledByDate && isNext &&
-                      !checkedIn && busy == null;
-                  final canCheckout = enabledByDate && isNext && checkedIn && busy == null;
-                  final blockedReason = checkedOut
-                      ? 'Đã hoàn thành check-out'
-                      : skipped
-                          ? 'Đã bỏ qua điểm này'
-                          : checkedIn
-                              ? 'Đang ở điểm này · cần check-out'
-                              : !enabledByDate
-                                  ? 'Chưa đến ngày khởi hành chặng (${vnDate(current.startDate)})'
-                                  : !isNext
-                                      ? 'Cần check-out điểm trước đó'
-                                      : 'Sẵn sàng check-in hoặc bỏ qua';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Card(child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Container(
-                              height: 39, width: 39,
-                              decoration: BoxDecoration(
-                                color: checkedIn || checkedOut
-                                    ? paleTeal
-                                    : skipped
-                                        ? const Color(0xFFFFECEC)
-                                        : const Color(0xFFEEF2F8),
-                                borderRadius: BorderRadius.circular(11),
-                              ),
-                              child: Icon(
-                                checkedIn || checkedOut
-                                    ? Icons.check_circle_outline
-                                    : skipped
-                                        ? Icons.block_outlined
-                                        : Icons.location_on_outlined,
-                                size: 21,
-                                color: checkedIn || checkedOut
-                                    ? teal
-                                    : skipped
-                                        ? const Color(0xFFC05F5F)
-                                        : muted,
-                              ),
-                            ),
-                            const SizedBox(width: 11),
-                            Expanded(child: Text(stop.name,
-                              style: const TextStyle(
-                                fontSize: 13, color: ink,
-                                fontWeight: FontWeight.w800,
-                              ))),
-                            GuideStatusPill(
-                              checkedOut
-                                  ? 'Đã check-out'
-                                  : checkedIn
-                                      ? 'Đã check-in'
-                                  : skipped
-                                      ? 'Đã bỏ qua'
-                                      : isNext
-                                          ? 'Đến lượt'
-                                          : 'Đang khóa',
-                              background: checkedIn || checkedOut
-                                  ? paleTeal
-                                  : skipped
-                                      ? const Color(0xFFFFE8E8)
-                                      : const Color(0xFFEEF2F8),
-                              foreground: checkedIn || checkedOut
-                                  ? deepTeal
-                                  : skipped
-                                      ? const Color(0xFFC05F5F)
-                                      : muted,
-                            ),
-                            if (checkedOut || skipped) ...[
-                              const SizedBox(width: 4),
-                              IconButton(
-                                key: ValueKey('incident-${stop.id}'),
-                                tooltip: 'Báo cáo sự cố',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                                onPressed: reportIncident,
-                                icon: const Icon(
-                                  Icons.report_problem_outlined,
-                                  size: 20,
-                                  color: Color(0xFFB78330),
-                                ),
-                              ),
-                            ],
-                          ]),
-                          space(8),
-                          Text(blockedReason, style: const TextStyle(
-                            fontSize: 11, color: muted,
-                          )),
-                          _buildProofSection(
-                            title: skipped ? 'Ảnh bỏ qua đã gửi' : 'Ảnh check-in đã gửi',
-                            urls: stop.photoUrls,
-                            note: stop.checkinNote,
-                            notePrefix: skipped ? 'Lý do bỏ qua' : 'Ghi chú check-in',
-                          ),
-                          _buildProofSection(
-                            title: 'Ảnh check-out đã gửi',
-                            urls: stop.checkoutPhotoUrls,
-                            note: stop.checkoutNote,
-                            notePrefix: 'Ghi chú check-out',
-                          ),
-                          if (busy == stop.id) ...[
-                            space(9),
-                            const LinearProgressIndicator(),
-                          ],
-                          if (!checkedOut && !skipped) ...[
-                            space(10),
-                            if (!checkedIn)
-                              Row(children: [
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    key: ValueKey('checkin-${stop.id}'),
-                                    onPressed: canCheck ? () => check(stop) : null,
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                                    ),
-                                    icon: const Icon(Icons.check_circle_outline, size: 17),
-                                    label: const Text('Check-in điểm đến'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  key: ValueKey('skip-${stop.id}'),
-                                  onPressed: canSkip ? () => skip(stop) : null,
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  ),
-                                  icon: const Icon(Icons.skip_next_rounded, size: 18),
-                                  label: const Text('Bỏ qua'),
-                                ),
-                                const SizedBox(width: 4),
-                                IconButton(
-                                  key: ValueKey('incident-${stop.id}'),
-                                  tooltip: 'Báo cáo sự cố',
-                                  onPressed: reportIncident,
-                                  icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFB78330)),
-                                ),
-                              ])
-                            else
-                              Row(children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    key: ValueKey('checkout-${stop.id}'),
-                                    onPressed: canCheckout ? () => checkout(stop) : null,
-                                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                                    label: const Text('Check-out'),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                IconButton(
-                                  key: ValueKey('incident-${stop.id}'),
-                                  tooltip: 'Báo cáo sự cố',
-                                  onPressed: reportIncident,
-                                  icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFB78330)),
-                                ),
-                              ]),
-                          ],
-                        ],
-                      ),
-                    )),
-                  );
-                }),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.place_outlined, value: stops.length,
+                  label: 'Tổng điểm dừng',
+                  color: const Color(0xFF315F91),
+                  tint: const Color(0xFFCFE0F7),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.check_circle_outline, value: checked,
+                  label: 'Đã hoàn thành',
+                  color: deepTeal,
+                  tint: const Color(0xFFB9E1DE),
+                )),
+                const SizedBox(width: 9),
+                Expanded(child: GuideGlassMetric(
+                  icon: Icons.schedule_outlined,
+                  value: stops.length - checked,
+                  label: 'Chưa hoàn thành',
+                  color: const Color(0xFF87601C),
+                  tint: const Color(0xFFF2E1BE),
+                )),
               ],
             ),
-          )),
+          ),
+
+      if (!enabledByDate) ...[
+        space(15),
+        LocationWarningBanner(
+          icon: Icons.lock_clock_outlined,
+          title: 'Chưa thể check-in',
+          message: 'Chưa đến ngày khởi hành chặng được giao (${vnDate(current.startDate)}) hoặc tour không còn cho phép check-in.',
+        ),
+      ],
+      if (error != null && errorStop == null) ...[
+        space(10),
+        LocationWarningBanner(icon: Icons.error_outline, title: 'Không thể tải dữ liệu',
+          message: error!, isError: true),
+      ],
+      space(22),
+      GuideSectionTitle('Lịch trình (${current.days.length} ngày)'),
+      space(10),
+      if (stops.isEmpty)
+        const GuideEmptyState(title: 'Chưa có điểm dừng',
+          message: 'Backend chưa trả về lịch trình check-in.'),
+    ];
+    final rows = <({TourDay day, TourStop? stop, int order, bool last})>[];
+    var order = 0;
+    for (final day in current.days) {
+      rows.add((day: day, stop: null, order: 0, last: false));
+      for (var i = 0; i < day.stops.length; i++) {
+        rows.add((day: day, stop: day.stops[i], order: ++order, last: i == day.stops.length - 1));
+      }
+    }
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: const GuideGlass(radius: 0, shadow: false, blurSigma: 12, child: SizedBox.expand()),
+        leading: Navigator.canPop(context) ? IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ) : null,
+        title: const Text('Check-in / Check-out địa điểm'),
+        actions: [
+          IconButton(
+            tooltip: 'Tải lại trạng thái từ backend',
+            onPressed: busy == null && !_openingSheet && !_refreshing ? refresh : null,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
         ],
+      ),
+
+      body: NotificationListener<ScrollStartNotification>(
+        onNotification: (notification) {
+          if (notification.dragDetails != null) _scrollGeneration++;
+          return false;
+        },
+        child: ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          itemCount: header.length + rows.length,
+          itemBuilder: (context, index) {
+            if (index < header.length) return header[index];
+            final row = rows[index - header.length];
+            final stop = row.stop;
+            if (stop == null) return LocationDayHeading(day: row.day);
+            final canCheck = _allowed(stop, _StopAction.checkin);
+            final canCheckout = _allowed(stop, _StopAction.checkout);
+            final locked = busy != null || _openingSheet || _refreshing;
+            final retryAction = errorStop == stop.id ? _errorAction : null;
+            return GuideStopCard(
+              key: _anchors.putIfAbsent(stop.id, () => GlobalKey()),
+              stop: stop, order: row.order, last: row.last,
+              dateAllowed: enabledByDate, isNext: current.nextLocationCheckInId == stop.id,
+              canCheck: canCheck && !locked, canCheckout: canCheckout && !locked,
+              busy: busy == stop.id, expanded: _expanded.contains(stop.id),
+              onExpand: () => setState(() {
+                if (!_expanded.add(stop.id)) _expanded.remove(stop.id);
+              }),
+              onCheck: () => _perform(stop, _StopAction.checkin),
+              onCheckout: () => _perform(stop, _StopAction.checkout),
+              onSkip: () => _perform(stop, _StopAction.skip),
+              onIncident: reportIncident,
+              cache: _photos,
+              error: errorStop == stop.id ? error : null,
+              onRetry: retryAction != null && !locked &&
+                  _drafts.containsKey((stop.id, retryAction)) && _allowed(stop, retryAction)
+                  ? () => _perform(stop, retryAction) : null,
+            );
+          },
+        ),
       ),
     );
   }

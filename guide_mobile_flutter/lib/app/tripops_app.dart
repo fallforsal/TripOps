@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/guide_glass.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/guide_entry.dart';
 import '../features/assigned_tours/data/guide_repository.dart';
@@ -20,6 +21,7 @@ class _TripOpsGuideAppState extends State<TripOpsGuideApp> {
     title: 'TripOps Guide',
     debugShowCheckedModeBanner: false,
     theme: TripOpsTheme.light,
+    builder: (context, child) => GuideGlassBackground(child: child ?? const SizedBox.shrink()),
     home: FutureBuilder<TripOpsApi>(
       future: _api,
       builder: (context, snapshot) {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_segmented_control.dart';
+import '../../../core/widgets/guide_search_bar.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../domain/booking_models.dart';
 import '../domain/tour_catalog.dart';
@@ -29,37 +31,29 @@ class TourListScreen extends StatelessWidget {
     final visible = filterBookings(
       bookings, filter: filter, today: DateTime.now(), query: query,
     );
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 25),
-      children: [
+    final header = <Widget>[
         const Text('Các chuyến đi được giao', style: TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w900, color: ink,
+          fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.7, color: ink,
         )),
         space(5),
         const Text('Theo dõi các tour và lịch trình bạn đang phụ trách.',
-          style: TextStyle(fontSize: 12, color: muted)),
+          style: TextStyle(fontSize: 14, color: muted)),
         space(17),
-        TextFormField(
-          key: const ValueKey('tour-search'),
-          initialValue: query,
-          decoration: const InputDecoration(
-            hintText: 'Tìm tên tour, mã booking, tên khách...',
-            prefixIcon: Icon(Icons.search),
-          ),
+        GuideSearchBar(
+          value: query,
+          placeholder: 'Tìm kiếm tour',
+          fieldKey: const ValueKey('tour-search'),
           onChanged: onQueryChanged,
         ),
         space(12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: TourFilter.values.map((option) => Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(tourFilterLabel(option)),
-              selected: filter == option,
-              onSelected: (_) => onFilterChanged(option),
-            ),
-          )).toList()),
+        GuideSegmentedControl<TourFilter>(
+          key: const ValueKey('tour-filter-segmented-control'),
+          value: filter,
+          labels: {
+            for (final option in TourFilter.values)
+              option: tourFilterLabel(option),
+          },
+          onChanged: onFilterChanged,
         ),
         space(20),
         GuideSectionTitle('Danh sách tour (${visible.length})'),
@@ -70,10 +64,16 @@ class TourListScreen extends StatelessWidget {
             message: 'Hãy thử từ khóa hoặc bộ lọc trạng thái khác.',
             icon: Icons.search_off_outlined,
           ),
-        ...visible.map((tour) => TourCard(
-          tour: tour, onTap: () => onOpenTour(tour),
-        )),
-      ],
+    ];
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 25 + MediaQuery.paddingOf(context).bottom),
+      itemCount: header.length + visible.length,
+      itemBuilder: (context, index) {
+        if (index < header.length) return header[index];
+        final tour = visible[index - header.length];
+        return TourCard(key: ValueKey(tour.id), tour: tour, onTap: () => onOpenTour(tour));
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/guide_ui.dart';
+import '../../../core/widgets/guide_glass.dart';
 import '../../../core/widgets/view_helpers.dart';
 import '../../../core/utils/tour_image_url.dart';
 import '../../auth/domain/guide_account.dart';
@@ -16,19 +17,11 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     physics: const AlwaysScrollableScrollPhysics(),
-    padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+    padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 28 + MediaQuery.paddingOf(context).bottom),
     children: [
-      Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 19, vertical: 24,
-        ),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF183B54), Color(0xFF137D78)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
+      GuideGlass(
+        radius: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
         child: Column(children: [
           () {
             final avatarUrl = resolveGuideAvatarUrl(account.avatar);
@@ -55,13 +48,13 @@ class ProfileScreen extends StatelessWidget {
           space(12),
           Text(account.name, textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Colors.white, fontSize: 21,
-              fontWeight: FontWeight.w900,
+              color: ink, fontSize: 26,
+              fontWeight: FontWeight.w700,
             )),
           space(5),
           Text(account.email, textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Color(0xFFDBEFEE), fontSize: 12,
+              color: muted, fontSize: 14,
             )),
           space(12),
           const GuideStatusPill('HƯỚNG DẪN VIÊN',
@@ -77,7 +70,7 @@ class ProfileScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.badge_outlined, color: teal),
             title: const Text('Vai trò',
-              style: TextStyle(color: muted, fontSize: 11)),
+              style: TextStyle(color: muted, fontSize: 13)),
             subtitle: const Text('Hướng dẫn viên',
               style: TextStyle(color: ink, fontWeight: FontWeight.w800)),
           ),
@@ -85,7 +78,7 @@ class ProfileScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.mail_outline, color: teal),
             title: const Text('Email',
-              style: TextStyle(color: muted, fontSize: 11)),
+              style: TextStyle(color: muted, fontSize: 13)),
             subtitle: Text(account.email,
               style: const TextStyle(color: ink,
                 fontWeight: FontWeight.w800)),
@@ -94,7 +87,7 @@ class ProfileScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.phone_outlined, color: teal),
             title: const Text('Số điện thoại',
-              style: TextStyle(color: muted, fontSize: 11)),
+              style: TextStyle(color: muted, fontSize: 13)),
             subtitle: Text(account.phone ?? 'Chưa cập nhật',
               style: const TextStyle(color: ink,
                 fontWeight: FontWeight.w800)),

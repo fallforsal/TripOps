@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/network/api_client.dart';
 import '../core/notifications/guide_push_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/tour_image_url.dart';
 import '../core/widgets/view_helpers.dart';
+import '../core/widgets/guide_glass.dart';
 import '../features/assigned_tours/data/guide_repository.dart';
 import '../features/assigned_tours/domain/booking_models.dart';
 import '../features/assigned_tours/domain/tour_catalog.dart';
@@ -39,7 +41,7 @@ class _GuideShellState extends State<GuideShell> {
   String? error;
   List<BookingSummary> bookings = [];
   Map<int, DateTime> endDates = {};
-  int unreadNotices = 0;
+  final ValueNotifier<int> _unreadNotices = ValueNotifier<int>(0);
   Timer? _notificationsPoll;
   StreamSubscription<int?>? _openedPush;
   late final VoidCallback _inboxPushListener;
@@ -66,6 +68,7 @@ class _GuideShellState extends State<GuideShell> {
   @override
   void dispose() {
     _notificationsPoll?.cancel();
+    _unreadNotices.dispose();
     _openedPush?.cancel();
     GuidePushService.inboxRevision.removeListener(_inboxPushListener);
     super.dispose();
@@ -75,7 +78,7 @@ class _GuideShellState extends State<GuideShell> {
     try {
       final raw = await widget.guides.api.getList('notifications');
       final count = raw.where((n) => n is Map && n['readAt'] == null).length;
-      if (mounted) setState(() => unreadNotices = count);
+      if (mounted) _unreadNotices.value = count;
     } catch (_) {
       // Bookings remain usable even when notification fetching fails.
     }
@@ -142,101 +145,91 @@ class _GuideShellState extends State<GuideShell> {
   Widget build(BuildContext context) {
     const names = ['Trang chủ', 'Tour của tôi', 'Lịch sử', 'Cá nhân'];
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 64,
-        automaticallyImplyLeading: false,
-        titleSpacing: 17,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/TripOps_logo_transparent.png',
-              height: 25,
-              fit: BoxFit.contain,
-              semanticLabel: 'TripOps Logo',
-            ),
-            const SizedBox(width: 10),
-            Container(width: 1, height: 22, color: line),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    names[tab],
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15, color: ink, fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const Text(
-                    'Tour Guide',
-                    style: TextStyle(
-                      fontSize: 10, color: muted, fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                tooltip: 'Thông báo',
-                onPressed: openNotices,
-                icon: const Icon(Icons.notifications_none_rounded, color: ink, size: 23),
-              ),
-              if (unreadNotices > 0)
-                Positioned(
-                  right: 2, top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent, borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(unreadNotices > 99 ? '99+' : '$unreadNotices',
-                      style: const TextStyle(fontSize: 9, color: Colors.white)),
-                  ),
-                ),
-            ],
+      extendBody: true,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(80),
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
           ),
-          IconButton(
-            tooltip: 'Làm mới',
-            onPressed: loading ? null : refresh,
-            icon: const Icon(Icons.refresh_rounded, color: ink, size: 21),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 17, left: 4),
-            child: () {
-              final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
-              return CircleAvatar(
-                radius: 17,
-                backgroundColor: paleTeal,
-                child: avatarUrl == null
-                    ? const Icon(Icons.person_rounded, color: deepTeal, size: 19)
-                    : ClipOval(
-                        child: Image.network(
-                          avatarUrl,
-                          width: 34,
-                          height: 34,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.person_rounded,
-                            color: deepTeal,
-                            size: 19,
-                          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: GuideGlass(
+                    key: const ValueKey('floating-guide-header'),
+                    radius: 32,
+                    blurSigma: 14,
+                    highlightTint: const Color(0xC9FFFFFF),
+                    tint: const Color(0x80FFFFFF),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => Row(
+                          children: [
+                            Image.asset(
+                              'assets/images/TripOps_logo_transparent.png',
+                              height: 25,
+                              width: constraints.maxWidth < 300 ? 72 : 88,
+                              fit: BoxFit.contain,
+                              semanticLabel: 'TripOps Logo',
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(names[tab], maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 17, color: ink, fontWeight: FontWeight.w700)),
+                                  const Text('Tour Guide', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            ValueListenableBuilder<int>(
+                              valueListenable: _unreadNotices,
+                              builder: (context, count, _) => _headerAction(
+                                icon: Icons.notifications_none_rounded,
+                                tooltip: 'Thông báo',
+                                onPressed: openNotices,
+                                badge: count > 0 ? (count > 99 ? '99+' : '$count') : null,
+                              ),
+                            ),
+                            if (constraints.maxWidth >= 340) ...[
+                              const SizedBox(width: 4),
+                              _headerAction(
+                                icon: Icons.refresh_rounded,
+                                tooltip: 'Làm mới',
+                                onPressed: loading ? null : refresh,
+                              ),
+                            ],
+                            const SizedBox(width: 6),
+                            _headerAvatar(),
+                          ],
                         ),
                       ),
-              );
-            }(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
+        ),
       ),
-      body: loading ? const Center(child: CircularProgressIndicator())
-        : error != null ? ErrorState(message: error!, onRetry: refresh)
+      body: Builder(builder: (bodyContext) => loading
+        ? const SafeArea(child: Center(child: CircularProgressIndicator()))
+        : error != null ? SafeArea(child: ErrorState(message: error!, onRetry: refresh))
         : RefreshIndicator(
+            edgeOffset: MediaQuery.paddingOf(bodyContext).top,
             onRefresh: refresh,
             child: switch (tab) {
               0 => HomeScreen(
@@ -259,23 +252,28 @@ class _GuideShellState extends State<GuideShell> {
                 account: widget.account, onLogout: widget.onLogout,
               ),
             },
-          ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: line)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
-            child: Row(
-              children: [
-                _nav(0, Icons.home_outlined, Icons.home_rounded, 'Trang chủ'),
-                _nav(1, Icons.route_outlined, Icons.route_rounded, 'Tour'),
-                _nav(2, Icons.history_outlined, Icons.history_rounded, 'Lịch sử'),
-                _nav(3, Icons.person_outline, Icons.person_rounded, 'Cá nhân'),
-              ],
+          )),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: GuideGlass(
+              radius: 36,
+              blurSigma: 16,
+              tint: const Color(0xA6FFFFFF),
+              padding: const EdgeInsets.all(5),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Row(children: [
+                  _nav(0, Icons.home_outlined, Icons.home_rounded, 'Trang chủ'),
+                  _nav(1, Icons.route_outlined, Icons.route_rounded, 'Tour'),
+                  _nav(2, Icons.history_outlined, Icons.history_rounded, 'Lịch sử'),
+                  _nav(3, Icons.person_outline, Icons.person_rounded, 'Cá nhân'),
+                ]),
+              ),
             ),
           ),
         ),
@@ -283,31 +281,93 @@ class _GuideShellState extends State<GuideShell> {
     );
   }
 
+  Widget _headerAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    String? badge,
+  }) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Material(
+        color: const Color(0x80FFFFFF),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 23),
+          color: ink,
+        ),
+      ),
+      if (badge != null)
+        Positioned(
+          right: -2,
+          top: -3,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _headerAvatar() {
+    final avatarUrl = resolveGuideAvatarUrl(widget.account.avatar);
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: const BoxDecoration(color: Color(0xA6FFFFFF), shape: BoxShape.circle),
+      child: CircleAvatar(
+        radius: 19,
+        backgroundColor: paleTeal,
+        child: avatarUrl == null
+            ? const Icon(Icons.person_rounded, color: deepTeal, size: 20)
+            : ClipOval(
+                child: Image.network(
+                  avatarUrl, width: 38, height: 38, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: deepTeal, size: 20),
+                ),
+              ),
+      ),
+    );
+  }
+
   Widget _nav(int index, IconData normal, IconData selected, String label) {
     final active = tab == index;
     return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => tab = index),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              decoration: BoxDecoration(
-                color: active ? paleTeal : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(active ? selected : normal, size: 22,
-                color: active ? teal : muted),
+      child: Semantics(
+        selected: active,
+        button: true,
+        child: InkWell(
+          onTap: () => setState(() => tab = index),
+          borderRadius: BorderRadius.circular(30),
+          child: AnimatedContainer(
+            duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: active ? const LinearGradient(
+                colors: [Color(0xE6FFFFFF), Color(0xC9D4ECE8)],
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+              ) : null,
+              border: Border.all(color: active ? const Color(0xE6FFFFFF) : Colors.transparent),
+              borderRadius: BorderRadius.circular(30),
             ),
-            const SizedBox(height: 3),
-            Text(label, maxLines: 1, style: TextStyle(
-              fontSize: 10, fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-              color: active ? teal : muted,
-            )),
-          ]),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(active ? selected : normal, size: 24, color: active ? deepTeal : muted),
+              const SizedBox(height: 4),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? deepTeal : muted)),
+            ]),
+          ),
         ),
       ),
     );

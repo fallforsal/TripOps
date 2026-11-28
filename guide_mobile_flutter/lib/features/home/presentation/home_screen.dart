@@ -8,6 +8,7 @@ import '../../assigned_tours/presentation/tour_card.dart';
 import '../../auth/domain/guide_account.dart';
 import '../domain/home_trip_picker.dart';
 import 'schedule_calendar_card.dart';
+import '../../../core/widgets/guide_glass_metric.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -44,20 +45,20 @@ class HomeScreen extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      padding: EdgeInsets.fromLTRB(20, 16 + MediaQuery.paddingOf(context).top, 20, 24 + MediaQuery.paddingOf(context).bottom),
       children: [
         Text('CHÀO MỪNG TRỞ LẠI', style: const TextStyle(
-          fontSize: 10, fontWeight: FontWeight.w800,
+          fontSize: 12, fontWeight: FontWeight.w600,
           color: teal, letterSpacing: 1.1,
         )),
         space(5),
-        Text('Xin chào, ${account.name}! 👋',
+        Text('Xin chào, ${account.name}!',
           style: const TextStyle(
-            fontSize: 24, fontWeight: FontWeight.w900, color: ink,
+            fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.8, color: ink,
           )),
         const SizedBox(height: 5),
         const Text('Chúc bạn một ngày làm việc thật hiệu quả.',
-          style: TextStyle(fontSize: 12, color: muted)),
+          style: TextStyle(fontSize: 14, color: muted)),
         space(20),
         GuideHero(
           label: chosen == null ? 'KHÔNG CÓ TOUR' :
@@ -70,27 +71,36 @@ class HomeScreen extends StatelessWidget {
           onTap: chosen == null ? onTourTab : () => onOpenTour(chosen),
         ),
         space(15),
-        Row(children: [
-          Expanded(child: GuideMetric(
-            icon: Icons.route_outlined, value: '$active', label: 'Tour đang phụ trách',
-          )),
-          const SizedBox(width: 9),
-          Expanded(child: GuideMetric(
-            icon: Icons.event_outlined,
-            value: daysToGo == null ? '—' :
-              daysToGo > 0 ? '$daysToGo' : '0',
-            label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
-            iconColor: const Color(0xFFB78330),
-            tint: const Color(0xFFFFF3DF),
-          )),
-          const SizedBox(width: 9),
-          Expanded(child: GuideMetric(
-            icon: Icons.verified_outlined,
-            value: '$completed', label: 'Tour đã hoàn thành',
-            iconColor: const Color(0xFF477DB4),
-            tint: const Color(0xFFEAF3FC),
-          )),
-        ]),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: GuideGlassMetric(
+                icon: Icons.route_outlined,
+                value: active,
+                label: 'Tour đang phụ trách',
+                color: deepTeal,
+                tint: const Color(0xFFB9E1DE),
+              )),
+              const SizedBox(width: 9),
+              Expanded(child: GuideGlassMetric(
+                icon: Icons.event_outlined,
+                value: daysToGo == null ? null : (daysToGo > 0 ? daysToGo : 0),
+                label: isUpcoming ? 'Ngày tới khởi hành' : 'Cách ngày khởi hành',
+                color: const Color(0xFF87601C),
+                tint: const Color(0xFFF2E1BE),
+              )),
+              const SizedBox(width: 9),
+              Expanded(child: GuideGlassMetric(
+                icon: Icons.verified_outlined,
+                value: completed,
+                label: 'Tour đã hoàn thành',
+                color: const Color(0xFF315F91),
+                tint: const Color(0xFFCFE0F7),
+              )),
+            ],
+          ),
+        ),
         space(22),
         const GuideSectionTitle('Lịch dẫn tour'),
         space(10),

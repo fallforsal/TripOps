@@ -43,11 +43,11 @@ void main() {
     ));
     expect(find.textContaining('Chỉ được điểm danh vào ngày bắt đầu chặng được giao'),
       findsOneWidget);
-    final check = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Có mặt'),
+    final check = tester.widget<TextButton>(
+      find.byKey(const ValueKey('passenger-present-5')),
     );
-    final absent = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Vắng mặt'),
+    final absent = tester.widget<TextButton>(
+      find.byKey(const ValueKey('passenger-absent-5')),
     );
     expect(check.onPressed, isNull);
     expect(absent.onPressed, isNull);
@@ -69,8 +69,8 @@ void main() {
     ));
     expect(find.textContaining('Chỉ được điểm danh vào ngày bắt đầu chặng được giao'),
       findsNothing);
-    final check = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Có mặt'),
+    final check = tester.widget<TextButton>(
+      find.byKey(const ValueKey('passenger-present-5')),
     );
     expect(check.onPressed, isNotNull);
   });

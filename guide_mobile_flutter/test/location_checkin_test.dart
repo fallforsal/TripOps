@@ -93,24 +93,20 @@ Future<void> showScreen(WidgetTester tester, BookingDetail detail) async {
 void main() {
   testWidgets('before departure all check-in actions are disabled', (tester) async {
     await showScreen(tester, _detail(dateAllowed: false));
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
+    expect(find.byKey(const ValueKey('checkin-2')), findsNothing);
     expect(find.textContaining('Chưa đến ngày khởi hành'), findsWidgets);
   });
 
   testWidgets('on departure date pending stops show only checkin and skip',
       (tester) async {
     await showScreen(tester, _detail(dateAllowed: true));
-    expect(tester.widget<FilledButton>(
+    expect(tester.widget<TextButton>(
       find.byKey(const ValueKey('checkin-1'))).onPressed, isNotNull);
-    expect(tester.widget<OutlinedButton>(
+    expect(tester.widget<TextButton>(
       find.byKey(const ValueKey('skip-1'))).onPressed, isNotNull);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
-    expect(tester.widget<OutlinedButton>(
-      find.byKey(const ValueKey('skip-2'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkin-2')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-2')), findsNothing);
     expect(find.byKey(const ValueKey('checkout-1')), findsNothing);
     expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     expect(find.text('Cần check-out điểm trước đó'), findsWidgets);
@@ -120,19 +116,17 @@ void main() {
   testWidgets('server advancement unlocks the next stop even without GPS',
       (tester) async {
     await showScreen(tester, _detail(dateAllowed: true, nextId: 2));
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
+    expect(tester.widget<TextButton>(
       find.byKey(const ValueKey('checkin-2'))).onPressed, isNotNull);
   });
 
   testWidgets('later-day stop unlocks only when earlier stops completed',
       (tester) async {
     await showScreen(tester, _detail(dateAllowed: true, nextId: 3));
-    expect(tester.widget<FilledButton>(
+    expect(tester.widget<TextButton>(
       find.byKey(const ValueKey('checkin-3'))).onPressed, isNotNull);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
   });
 
   testWidgets('older backend without permission flag disables check-in',
@@ -148,8 +142,7 @@ void main() {
       ]
     });
     await showScreen(tester, dto);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-1'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
   });
   testWidgets('check-in offers camera and gallery photo options',
       (tester) async {
@@ -180,12 +173,10 @@ void main() {
     await showScreen(tester, active);
     expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
     expect(find.byKey(const ValueKey('skip-1')), findsNothing);
-    expect(tester.widget<OutlinedButton>(
+    expect(tester.widget<TextButton>(
       find.byKey(const ValueKey('checkout-1'))).onPressed, isNotNull);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const ValueKey('checkin-2'))).onPressed, isNull);
-    expect(tester.widget<OutlinedButton>(
-      find.byKey(const ValueKey('skip-2'))).onPressed, isNull);
+    expect(find.byKey(const ValueKey('checkin-2')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-2')), findsNothing);
     expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('checkout-1')));
     await tester.pumpAndSettle();
@@ -224,10 +215,17 @@ void main() {
     expect(find.byKey(const ValueKey('checkin-2')), findsNothing);
     expect(find.byKey(const ValueKey('checkout-2')), findsNothing);
     expect(find.byKey(const ValueKey('skip-2')), findsNothing);
+    expect(find.text('Ghi chú check-in: Đã tới'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('proof-toggle-1')));
+    await tester.pumpAndSettle();
     expect(find.text('Ghi chú check-in: Đã tới'), findsOneWidget);
     expect(find.text('Ghi chú check-out: Đã rời'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('proof-toggle-2')));
+    await tester.tap(find.byKey(const ValueKey('proof-toggle-2')));
+    await tester.pumpAndSettle();
     expect(find.text('Lý do bỏ qua: Đường sạt lở'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('skip-3')));
     await tester.tap(find.byKey(const ValueKey('skip-3')));
     await tester.pumpAndSettle();
     expect(find.text('Bỏ qua · Điểm C'), findsOneWidget);
