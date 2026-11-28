@@ -54,6 +54,8 @@ public sealed partial class BookingFlowTests
                     }
                 ]
             };
+            foreach (var stop in booking.Timelines.SelectMany(d => d.Attractions))
+                stop.Checkins.Add(new BookingAttractionCheckin { GuideId = "guide1", AgencyId = "agency1" });
             db.Bookings.Add(booking);
             await db.SaveChangesAsync();
             bookingId = booking.Id;
@@ -233,6 +235,8 @@ public sealed partial class BookingFlowTests
                     }
                 ]
             };
+            foreach (var stop in booking.Timelines.SelectMany(d => d.Attractions))
+                stop.Checkins.Add(new BookingAttractionCheckin { GuideId = "guide1", AgencyId = "agency1" });
             db.Bookings.Add(booking);
             await db.SaveChangesAsync();
             bookingId = booking.Id;
@@ -378,4 +382,102 @@ public sealed partial class BookingFlowTests
         Assert.Equal("G2 in", g2ViewAfter.SnapshotDays[0].Locations[0].CheckinNote);
         Assert.Equal("G2 out", g2ViewAfter.SnapshotDays[0].Locations[0].CheckoutNote);
     }
+
+    [Fact]
+    public async Task GuideRouting_EmptyOrFinishedRouteNeverGrantsUnassignedStops()
+    {
+        using var app = new App(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:UseLocal"] = "true" })));
+        await app.Initialize();
+        var bookingId = await MakeCheckinPhotoBooking(app);
+        int first, second;
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var days = await db.BookingTimelines.Include(d => d.Attractions)
+                .Where(d => d.BookingId == bookingId).ToListAsync();
+            var ordered = GuideLocationCheckinRules.OrderedStops(days);
+            first = ordered[0].Id;
+            second = ordered[1].Id;
+            var guide2 = await db.Users.SingleAsync(u => u.Id == "guide2");
+            guide2.AgencyId = "agency1";
+            await db.SaveChangesAsync();
+        }
+
+        using var agency = await app.Client("agency1@example.test");
+        using var guide = await app.Client("guide1@example.test");
+        var routeUrl = $"/api/v1/agency/bookings/{bookingId}/guide-routing";
+        var detailUrl = $"/api/v1/guide/bookings/{bookingId}";
+        var prefix = detailUrl + "/locations";
+
+        async Task Route(int locationId, params string[] guideIds)
+        {
+            (await agency.PutAsJsonAsync(routeUrl, new
+            {
+                locations = new[] { new { locationId, guideIds } }
+            })).EnsureSuccessStatusCode();
+        }
+        async Task<HttpStatusCode> Act(int locationId, string action, string status = "CheckedIn")
+        {
+            using var form = PhotoForm(1, status: status);
+            using var response = await guide.PostAsync($"{prefix}/{locationId}/{action}", form);
+            return response.StatusCode;
+        }
+        async Task AssertDenied(int locationId)
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, await Act(locationId, "check-in-with-images"));
+            Assert.Equal(HttpStatusCode.Forbidden, await Act(locationId, "check-in-with-images", "Skipped"));
+            Assert.Equal(HttpStatusCode.Forbidden, await Act(locationId, "check-out-with-images"));
+            Assert.Equal(HttpStatusCode.Forbidden, (await guide.PostAsJsonAsync(
+                $"{prefix}/{locationId}/check-in", new { status = "CheckedIn" })).StatusCode);
+        }
+
+        // Booking membership alone grants no location actions, including after all routes are removed.
+        await Route(first);
+        await Route(second);
+        var empty = (await guide.GetFromJsonAsync<BookingDto>(detailUrl))!;
+        Assert.Empty(empty.SnapshotDays!);
+        Assert.Null(empty.NextLocationCheckInId);
+        Assert.False(empty.CanCheckInLocations);
+        Assert.False(empty.CanStartTour);
+        await AssertDenied(first);
+        await AssertDenied(second);
+
+        // An explicit route allows only its assigned stop.
+        await Route(first, "guide1");
+        var assigned = (await guide.GetFromJsonAsync<BookingDto>(detailUrl))!;
+        Assert.Equal(first, Assert.Single(assigned.SnapshotDays!.SelectMany(d => d.Locations)).Id);
+        Assert.Equal(first, assigned.NextLocationCheckInId);
+        await AssertDenied(second);
+        Assert.Equal(HttpStatusCode.OK, await Act(first, "check-in-with-images"));
+        Assert.Equal(HttpStatusCode.OK, await Act(first, "check-out-with-images"));
+
+        // Completing the last assigned stop must not expand the route.
+        var finished = (await guide.GetFromJsonAsync<BookingDto>(detailUrl))!;
+        Assert.Null(finished.NextLocationCheckInId);
+        Assert.Equal(first, Assert.Single(finished.SnapshotDays!.SelectMany(d => d.Locations)).Id);
+        await AssertDenied(second);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            Assert.False(await db.BookingAttractionCheckins.AnyAsync(c => c.BookingTimelineAttractionId == second));
+            var unassigned = await db.BookingTimelineAttractions.SingleAsync(a => a.Id == second);
+            Assert.Null(unassigned.GuideId);
+            Assert.Equal("Pending", unassigned.AttendanceStatus);
+        }
+
+        // A different guide's assignment is also forbidden, and removing it grants nothing.
+        await Route(second, "guide2");
+        await AssertDenied(second);
+        await Route(second);
+        await AssertDenied(second);
+
+        // Only a new Agency assignment opens the next stop for this guide.
+        await Route(second, "guide1");
+        var updated = (await guide.GetFromJsonAsync<BookingDto>(detailUrl))!;
+        Assert.Equal(second, updated.NextLocationCheckInId);
+        Assert.Equal(HttpStatusCode.OK, await Act(second, "check-in-with-images"));
+        Assert.Equal(HttpStatusCode.OK, await Act(second, "check-out-with-images"));
+    }
+
 }
