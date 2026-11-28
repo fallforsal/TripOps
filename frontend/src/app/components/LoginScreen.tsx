@@ -112,7 +112,6 @@ export function LoginScreen({
                     autoComplete="current-password"
                     type={showPassword ? "text" : "password"}
                     required
-                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full h-9 pl-9 pr-9 bg-white border border-[#CBD5E1] rounded-[6px] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#075985]"
