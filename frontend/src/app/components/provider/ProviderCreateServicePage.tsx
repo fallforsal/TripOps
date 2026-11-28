@@ -339,6 +339,22 @@ const parseMoneyNumber = (formatted: string): number => {
   return clean ? parseInt(clean, 10) : 0;
 };
 
+const parseHotelHours = (hours: string) => {
+  const time = "([01]?\\d|2[0-3]):([0-5]\\d)";
+  const checkInMatch = hours.match(new RegExp(`(?:Nhận phòng|Check-?in)\\s*:\\s*${time}`, "i"));
+  const checkOutMatch = hours.match(new RegExp(`(?:Trả phòng|Check-?out)\\s*:\\s*${time}`, "i"));
+  const normalize = (match: RegExpMatchArray | null) => match
+    ? `${match[1].padStart(2, "0")}:${match[2]}` : "";
+  if (checkInMatch || checkOutMatch) {
+    return { checkIn: normalize(checkInMatch), checkOut: normalize(checkOutMatch) };
+  }
+  const times = [...hours.matchAll(new RegExp(time, "g"))];
+  return { checkIn: normalize(times[0] || null), checkOut: normalize(times[1] || null) };
+};
+
+const formatHotelHours = (checkIn: string, checkOut: string) =>
+  `Nhận phòng: ${checkIn} - Trả phòng: ${checkOut}`;
+
 export function ProviderCreateServicePage({
   currentUser,
   onSaveService,
@@ -382,6 +398,15 @@ export function ProviderCreateServicePage({
   const [operatingHours, setOperatingHours] = useState(
     initialService?.operatingHours || currentConfig.defaultOperatingHours
   );
+  const hotelHours = parseHotelHours(operatingHours);
+  const hasLegacyHotelHours = category === "hotel" && operatingHours.trim() &&
+    !hotelHours.checkIn && !hotelHours.checkOut;
+  const changeHotelHour = (field: "checkIn" | "checkOut", value: string) => {
+    setOperatingHours(formatHotelHours(
+      field === "checkIn" ? value : hotelHours.checkIn,
+      field === "checkOut" ? value : hotelHours.checkOut,
+    ));
+  };
 
   // Policies (stored as string[])
   const normalizePolicies = (raw: any): string[] => {
@@ -545,6 +570,12 @@ export function ProviderCreateServicePage({
       toast.warning("Vui lòng tải lên ít nhất 1 hình ảnh.");
       setViewMode("form");
       setCurrentStep(1);
+      return;
+    }
+
+    if (category === "hotel" && Boolean(hotelHours.checkIn) !== Boolean(hotelHours.checkOut)) {
+      setSaveError("Vui lòng chọn cả giờ nhận phòng và giờ trả phòng.");
+      setViewMode("form"); setCurrentStep(2);
       return;
     }
 
@@ -1145,21 +1176,33 @@ export function ProviderCreateServicePage({
 
                   {/* Khung giờ hoạt động / đón khách (operating_hours) */}
                   <div className={category === "hotel" ? "md:col-span-2 lg:col-span-3" : ""}>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-blue-600" />
                       {category === "hotel" ? "Khung giờ nhận / trả phòng" : "Khung giờ hoạt động & đón khách"}
-                    </label>
-                    <input
-                      type="text"
-                      value={operatingHours}
-                      onChange={(e) => setOperatingHours(e.target.value)}
-                      placeholder={
-                        category === "hotel"
-                          ? "VD: Nhận phòng: 14:00 - Trả phòng: 12:00"
-                          : "VD: 07:30 - 22:00 hàng ngày"
-                      }
-                      className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white"
-                    />
+                    </div>
+                    {category === "hotel" ? (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="hotel-check-in" className="block text-xs text-gray-600 mb-1">Giờ nhận phòng</label>
+                            <input id="hotel-check-in" type="time" value={hotelHours.checkIn}
+                              onChange={(e) => changeHotelHour("checkIn", e.target.value)}
+                              className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white" />
+                          </div>
+                          <div>
+                            <label htmlFor="hotel-check-out" className="block text-xs text-gray-600 mb-1">Giờ trả phòng</label>
+                            <input id="hotel-check-out" type="time" value={hotelHours.checkOut}
+                              onChange={(e) => changeHotelHour("checkOut", e.target.value)}
+                              className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white" />
+                          </div>
+                        </div>
+                        {hasLegacyHotelHours && <p className="mt-2 text-xs text-gray-500">Giờ đã lưu: {operatingHours}. Chọn lại giờ để cập nhật.</p>}
+                      </>
+                    ) : (
+                      <input type="text" value={operatingHours} onChange={(e) => setOperatingHours(e.target.value)}
+                        placeholder="VD: 07:30 - 22:00 hàng ngày"
+                        className="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#075985] focus:outline-none bg-white" />
+                    )}
                   </div>
 
                   {/* Mô tả giới thiệu */}
