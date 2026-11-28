@@ -21,8 +21,6 @@ import {
   Filter,
   Clock,
   PauseCircle,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -41,7 +39,7 @@ import { matchesServicePostFilter, servicePostCounts, servicePostState, serviceP
 
 const STATUS_FILTERS: ServicePostFilter[] = ["all", "pending", "approved", "paused", "hidden", "rejected"];
 const STATUS_ICONS = { pending: Clock, approved: CheckCircle2, paused: PauseCircle, hidden: EyeOff, rejected: XCircle };
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE = 10;
 const UI_TEST_LABEL = /\bui[\s_-]*test\b/i;
 
 interface ServicePostApprovalProps {
@@ -63,7 +61,6 @@ export function ServicePostApproval({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(10);
   const [selectedServiceForDetail, setSelectedServiceForDetail] = useState<Service | null>(null);
 
   // Modals state
@@ -107,12 +104,12 @@ export function ServicePostApproval({
   }, [visibleServices, selectedStatus, selectedCategory, searchQuery]);
 
   // Apply pagination after all filters so search, counts and page numbers stay consistent.
-  const totalPages = Math.max(1, Math.ceil(filteredServices.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredServices.length / PAGE_SIZE));
   const activePage = Math.min(currentPage, totalPages);
-  const firstIndex = (activePage - 1) * pageSize;
+  const firstIndex = (activePage - 1) * PAGE_SIZE;
   const paginatedServices = useMemo(
-    () => filteredServices.slice(firstIndex, firstIndex + pageSize),
-    [filteredServices, firstIndex, pageSize],
+    () => filteredServices.slice(firstIndex, firstIndex + PAGE_SIZE),
+    [filteredServices, firstIndex],
   );
   const visiblePages = useMemo(() => {
     const candidates = new Set([1, totalPages, activePage - 1, activePage, activePage + 1]);
@@ -556,37 +553,19 @@ export function ServicePostApproval({
         </div>
 
         {/* Pagination after filtering */}
-        <div className="p-4 border-t border-gray-100 flex flex-col lg:flex-row justify-between lg:items-center text-xs text-gray-500 gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span>
-              Hiển thị <strong>{filteredServices.length ? firstIndex + 1 : 0}–{firstIndex + paginatedServices.length}</strong>
-              {" / "}<strong>{filteredServices.length}</strong> bài đăng
-            </span>
-            <label className="inline-flex items-center gap-2">
-              Số bài/trang:
-              <select
-                aria-label="Số bài đăng mỗi trang"
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#075985]"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </label>
-          </div>
+        <footer className="flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50/50 px-5 py-3.5 text-xs text-slate-500">
+          <span aria-live="polite">{filteredServices.length ? firstIndex + 1 : 0}–{firstIndex + paginatedServices.length} / {filteredServices.length} bài đăng</span>
           {totalPages > 1 && (
-            <nav className="flex flex-wrap items-center gap-1" aria-label="Phân trang bài đăng dịch vụ">
+            <nav className="ml-auto flex flex-wrap items-center justify-end gap-1.5" aria-label="Phân trang bài đăng dịch vụ">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={activePage === 1}
                 onClick={() => setCurrentPage(activePage - 1)}
-                className="h-8 gap-1 px-2 text-xs"
                 aria-label="Trang trước"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Trước</span>
+                Trước
               </Button>
               {visiblePages.map((page, index) => (
                 <div key={page} className="inline-flex items-center gap-1">
@@ -600,7 +579,7 @@ export function ServicePostApproval({
                     aria-label={`Trang ${page}`}
                     aria-current={page === activePage ? "page" : undefined}
                     onClick={() => setCurrentPage(page)}
-                    className={`h-8 min-w-8 px-2 text-xs ${page === activePage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}`}
+                    className={page === activePage ? "bg-[#075985] text-white hover:bg-[#0369a1]" : ""}
                   >
                     {page}
                   </Button>
@@ -612,15 +591,13 @@ export function ServicePostApproval({
                 size="sm"
                 disabled={activePage === totalPages}
                 onClick={() => setCurrentPage(activePage + 1)}
-                className="h-8 gap-1 px-2 text-xs"
                 aria-label="Trang sau"
               >
-                <span className="hidden sm:inline">Sau</span>
-                <ChevronRight className="h-3.5 w-3.5" />
+                Sau
               </Button>
             </nav>
           )}
-        </div>
+        </footer>
       </div>
 
       <RejectServiceModal isOpen={!!rejectingService} onClose={() => setRejectingService(null)}
