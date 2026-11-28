@@ -277,8 +277,11 @@ export function AgencySupplierDirectory() {
               )}
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
-              <Input type="number" min="1" max="5" className="mt-1" value={draft.starRating ?? ""}
-                onChange={(e) => setDraft({ ...draft, starRating: e.target.value ? Number(e.target.value) : null })} />
+              <select className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900" value={draft.starRating ?? ""}
+                onChange={(e) => setDraft({ ...draft, starRating: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">Chọn số sao</option>
+                {[1, 2, 3, 4, 5].map((stars) => <option key={stars} value={stars}>{stars} sao</option>)}
+              </select>
             </label>}
             <label className="text-sm">Giá tham khảo {draft.type === "HOTEL" ? "/ người / đêm" : "/ người / bữa"}
               <Input type="number" min="1" className="mt-1" value={draft.referencePrice ?? ""}
