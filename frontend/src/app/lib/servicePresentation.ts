@@ -30,8 +30,16 @@ export function serviceAddress(service: ServicePresentation): string {
   return service.location?.trim() || service.province?.trim() || "Việt Nam";
 }
 
-export function serviceGoogleMapsUrl(service: ServicePresentation): string {
-  const query = [service.name?.trim(), serviceAddress(service)]
+function serviceGoogleMapsQuery(service: ServicePresentation): string {
+  return [service.name?.trim(), serviceAddress(service)]
     .filter(Boolean).join(", ");
+}
+
+export function serviceGoogleMapsUrl(service: ServicePresentation): string {
+  const query = serviceGoogleMapsQuery(service);
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+export function serviceGoogleMapsEmbedUrl(service: ServicePresentation): string {
+  return `https://maps.google.com/maps?q=${encodeURIComponent(serviceGoogleMapsQuery(service))}&hl=vi&z=17&output=embed`;
 }

@@ -1,5 +1,5 @@
 import { confirmAction } from "@/app/lib/notificationDialogs";
-import { serviceGallery, serviceGoogleMapsUrl } from "@/app/lib/servicePresentation";
+import { serviceGallery, serviceGoogleMapsEmbedUrl, serviceGoogleMapsUrl } from "@/app/lib/servicePresentation";
 import { useState } from "react";
 import { Service } from "@/app/types";
 import {
@@ -794,7 +794,7 @@ export function ProviderServiceDetailPage({
                     height="100%"
                     style={{ border: 0 }}
                     loading="lazy"
-                    src={`https://maps.google.com/maps?q=${service.latitude || 11.9404},${service.longitude || 108.4583}&hl=vi&z=15&output=embed`}
+                    src={serviceGoogleMapsEmbedUrl(service)}
                   />
                 </div>
 
