@@ -64,6 +64,9 @@ public sealed partial class TourFlowTests
         await using var app = new App(); await app.Initialize();
         using var agency = await app.Login("agency");
         Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Missing phone"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Short phone", ContactPhone: "090100000"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Long phone", ContactPhone: "02439449396"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Invalid email", ContactPhone: "0901000004", ContactEmail: "invalid"))).StatusCode);
         var supplier = await Read<SupplierDto>(await agency.PostAsJsonAsync(directory, new SupplierRequest("HOTEL", "Owned supplier", ContactPhone: "0901000004")));
         using var anonymous = app.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"{directory}/{supplier.Id}")).StatusCode);

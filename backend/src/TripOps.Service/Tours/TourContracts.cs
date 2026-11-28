@@ -59,7 +59,8 @@ public sealed record AccommodationInput([Required, StringLength(255)] string Hot
 
 public sealed record SupplierRequest([Required, AllowedValues("HOTEL", "RESTAURANT")] string Type,
     [Required, StringLength(255)] string Name, [StringLength(500)] string? Address = null, [StringLength(255)] string? Area = null,
-    [StringLength(150)] string? ContactName = null, [Required, StringLength(30)] string? ContactPhone = null,
+    [StringLength(150)] string? ContactName = null,
+    [Required, RegularExpression(@"^[0-9]{10}$", ErrorMessage = "Số điện thoại phải gồm đúng 10 chữ số.")] string? ContactPhone = null,
     [EmailAddress, StringLength(191)] string? ContactEmail = null, [Range(1, 5)] int? StarRating = null,
     [Range(typeof(decimal), "0", "9999999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal? ReferencePrice = null,
     [StringLength(2000)] string? Conditions = null, [StringLength(2000)] string? Notes = null,

@@ -104,7 +104,7 @@ export function AgencySupplierDirectory() {
     const contactEmail = draft.contactEmail?.trim() ?? "";
     const contactPhone = draft.contactPhone?.trim() ?? "";
     if (!draft.name?.trim()) { setEditError("Vui lòng nhập tên nhà cung cấp."); return; }
-    if (!contactPhone) { setEditError("Vui lòng nhập số điện thoại."); return; }
+    if (!/^\d{10}$/.test(contactPhone)) { setEditError("Số điện thoại phải gồm đúng 10 chữ số."); return; }
     if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) { setEditError("Email liên hệ không đúng định dạng."); return; }
     if (draft.referencePrice != null && draft.referencePrice <= 0) { setEditError("Giá tham khảo nếu nhập phải lớn hơn 0."); return; }
     setSaving(true); setEditError("");
@@ -277,7 +277,17 @@ export function AgencySupplierDirectory() {
                   onChange={(value) => setDraft({ ...draft, area: value })}
                   placeholder="Gõ để tìm tỉnh/thành phố" className="mt-1" />
               ) : (
-                <Input required={field === "name" || field === "contactPhone"} className="mt-1" type={field === "contactEmail" ? "email" : field === "contactPhone" ? "tel" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+                <>
+                  <Input required={field === "name" || field === "contactPhone"} className="mt-1"
+                    type={field === "contactEmail" ? "email" : field === "contactPhone" ? "tel" : "text"}
+                    inputMode={field === "contactPhone" ? "numeric" : undefined}
+                    aria-invalid={field === "contactPhone" && !!draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone)}
+                    value={draft[field] || ""}
+                    onChange={(e) => setDraft({ ...draft, [field]: field === "contactPhone" ? e.target.value.replace(/\D/g, "") : e.target.value })} />
+                  {field === "contactPhone" && <span className={`mt-1 block text-xs ${draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone) ? "text-rose-600" : "text-slate-500"}`}>
+                    {draft.contactPhone && !/^\d{10}$/.test(draft.contactPhone) ? `Cần đúng 10 chữ số (hiện có ${draft.contactPhone.length}).` : "Nhập đúng 10 chữ số; dấu cách khi dán sẽ tự bỏ."}
+                  </span>}
+                </>
               )}
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
