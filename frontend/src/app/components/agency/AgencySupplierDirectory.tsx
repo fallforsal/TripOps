@@ -1,4 +1,6 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
+import { SearchableCombobox } from "@/app/components/common/SearchableCombobox";
+import { VIETNAM_PROVINCES } from "@/app/data/vietnamProvinces";
 import { useEffect, useState } from "react";
 import { BookUser, Eye, Hotel, Loader2, MapPin, Pencil, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "@/app/lib/notifications";
@@ -20,6 +22,11 @@ const filters: { value: Filter; label: string }[] = [
   { value: "HOTEL", label: "Lưu trú" },
   { value: "RESTAURANT", label: "Ẩm thực" },
 ];
+const provinceOptions = VIETNAM_PROVINCES.map((province) => ({
+  value: province.name,
+  label: province.name,
+  keywords: province.popularDestinations.join(" "),
+}));
 
 function SupplierCategory({ type }: { type: AgencySupplier["type"] }) {
   const isHotel = type === "HOTEL";
@@ -96,7 +103,7 @@ export function AgencySupplierDirectory() {
     if ((!creating && !editing) || !draft || saving) return;
     if (!draft.name?.trim() || (!draft.area?.trim() && !draft.address?.trim()) ||
         (draft.referencePrice != null && draft.referencePrice <= 0)) {
-      setEditError("Cần tên, địa chỉ hoặc khu vực; giá tham khảo nếu nhập phải lớn hơn 0."); return;
+      setEditError("Cần tên, địa chỉ hoặc tỉnh/thành phố; giá tham khảo nếu nhập phải lớn hơn 0."); return;
     }
     setSaving(true); setEditError("");
     try {
@@ -136,6 +143,13 @@ export function AgencySupplierDirectory() {
   );
 
   const resetFilters = () => { setSearch(""); setFilter("ALL"); };
+  const areaValue = draft?.area?.trim() ?? "";
+  const matchedProvince = provinceOptions.find((province) =>
+    normalize(province.value) === normalize(areaValue) ||
+    normalize(province.value.replace(/^TP\.\s*/, "")) === normalize(areaValue));
+  const areaOptions = areaValue && !matchedProvince
+    ? [{ value: areaValue, label: areaValue, keywords: "" }, ...provinceOptions]
+    : provinceOptions;
 
   return (
     <div className="space-y-5 text-[#0F172A]">
@@ -155,7 +169,7 @@ export function AgencySupplierDirectory() {
         <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-3xl lg:flex-1">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input aria-label="Tìm nhà cung cấp" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm tên nhà cung cấp, khu vực, số điện thoại..." className="h-10 border-slate-300 pl-9 text-sm" />
+            <Input aria-label="Tìm nhà cung cấp" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm tên nhà cung cấp, tỉnh/thành phố, số điện thoại..." className="h-10 border-slate-300 pl-9 text-sm" />
           </div>
           <div role="group" aria-label="Lọc theo loại nhà cung cấp" className="flex shrink-0 flex-wrap gap-1 self-start rounded-lg bg-slate-100 p-1">
             {filters.map((item) => {
@@ -179,7 +193,7 @@ export function AgencySupplierDirectory() {
             <table className="w-full min-w-[1080px] table-fixed text-left text-sm">
               <colgroup><col className="w-[27%]" /><col className="w-[12%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[24%]" /><col className="w-[10%]" /></colgroup>
               <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>{["Nhà cung cấp", "Phân loại", "Khu vực", "Liên hệ", "Giá tham khảo", "Thao tác"].map((label) => <th key={label} scope="col" className={`px-5 py-3.5 ${label === "Thao tác" ? "text-center" : ""}`}>{label}</th>)}</tr>
+                <tr>{["Nhà cung cấp", "Phân loại", "Tỉnh/thành phố", "Liên hệ", "Giá tham khảo", "Thao tác"].map((label) => <th key={label} scope="col" className={`px-5 py-3.5 ${label === "Thao tác" ? "text-center" : ""}`}>{label}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visible.map((supplier) => (
@@ -222,7 +236,7 @@ export function AgencySupplierDirectory() {
             <div className="flex items-center gap-3"><SupplierCategory type={viewing.type} />{viewing.starRating && <span className="text-sm text-amber-700">{viewing.starRating} sao</span>}</div>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-5 rounded-xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2">
               {[
-                ["Khu vực", viewing.area], ["Địa chỉ", viewing.address],
+                ["Tỉnh/thành phố", viewing.area], ["Địa chỉ", viewing.address],
                 ["Người liên hệ", viewing.contactName], ["Số điện thoại", viewing.contactPhone],
                 ["Email", viewing.contactEmail], ["Giá tham khảo", `${money(viewing.referencePrice)}${viewing.referencePrice != null ? (viewing.type === "HOTEL" ? " / người / đêm" : " / người / bữa") : ""}`],
               ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1.5 break-words text-sm font-medium leading-6">{value || "Chưa cập nhật"}</dd></div>)}
@@ -251,10 +265,16 @@ export function AgencySupplierDirectory() {
               </select>
             </label>}
             {([
-              ["name", "Tên nhà cung cấp"], ["area", "Khu vực"], ["address", "Địa chỉ"],
+              ["name", "Tên nhà cung cấp"], ["area", "Tỉnh/thành phố"], ["address", "Địa chỉ"],
               ["contactName", "Người liên hệ"], ["contactPhone", "Số điện thoại"], ["contactEmail", "Email"],
             ] as const).map(([field, label]) => <label key={field} className="text-sm">{label}
-              <Input className="mt-1" type={field === "contactEmail" ? "email" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+              {field === "area" ? (
+                <SearchableCombobox options={areaOptions} value={matchedProvince?.value ?? areaValue}
+                  onChange={(value) => setDraft({ ...draft, area: value })}
+                  placeholder="Gõ để tìm tỉnh/thành phố" className="mt-1" />
+              ) : (
+                <Input className="mt-1" type={field === "contactEmail" ? "email" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+              )}
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
               <Input type="number" min="1" max="5" className="mt-1" value={draft.starRating ?? ""}
