@@ -296,7 +296,7 @@ class _LocationScreenState extends State<LocationScreen> {
             ),
           ),
 
-      if (!enabledByDate) ...[
+      if (stops.isNotEmpty && !enabledByDate) ...[
         space(15),
         LocationWarningBanner(
           icon: Icons.lock_clock_outlined,
@@ -313,8 +313,8 @@ class _LocationScreenState extends State<LocationScreen> {
       GuideSectionTitle('Lịch trình (${current.days.length} ngày)'),
       space(10),
       if (stops.isEmpty)
-        const GuideEmptyState(title: 'Chưa có điểm dừng',
-          message: 'Backend chưa trả về lịch trình check-in.'),
+        const GuideEmptyState(title: 'Chưa có điểm được phân công',
+          message: 'Agency chưa phân công điểm đến cho bạn. Vui lòng liên hệ điều hành hoặc làm mới sau khi được phân công.'),
     ];
     final rows = <({TourDay day, TourStop? stop, int order, bool last})>[];
     var order = 0;
