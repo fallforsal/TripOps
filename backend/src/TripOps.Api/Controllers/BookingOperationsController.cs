@@ -155,11 +155,11 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
         if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
             throw new BookingException(403, "HDV chỉ check-out điểm thuộc chặng công ty mình.");
+        var checkin = location.Checkins.SingleOrDefault(c => c.GuideId == Actor && c.AgencyId == agencyId)
+            ?? throw new BookingException(403, "Bạn chưa được phân công tại địa điểm này.");
         if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Tour chưa khởi hành hoặc đã đóng.");
-        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
-            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
-        if (checkin is null || checkin.AttendanceStatus != AttractionCheckinStatus.CheckedIn ||
+        if (checkin.AttendanceStatus != AttractionCheckinStatus.CheckedIn ||
             checkin.CheckoutTime.HasValue ||
             GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId) != locationId)
             throw new BookingException(409, "Chỉ được check-out điểm đang check-in.");
@@ -209,6 +209,8 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         var agencyId = booking.AssignedGuides.Single(a => a.GuideId == Actor).AgencyId;
         if ((location.AgencyId ?? booking.Tour!.AgencyId) != agencyId)
             throw new BookingException(403, "HDV chỉ check-in điểm thuộc chặng công ty mình.");
+        var checkin = location.Checkins.SingleOrDefault(c => c.GuideId == Actor && c.AgencyId == agencyId)
+            ?? throw new BookingException(403, "Bạn chưa được phân công tại địa điểm này.");
         if (images is null)
             throw new BookingException(422, request.Status == "Skipped"
                 ? "Bỏ qua điểm dừng bắt buộc có ảnh chụp camera."
@@ -217,11 +219,8 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
 
-        var checkin = await db.BookingAttractionCheckins.SingleOrDefaultAsync(
-            x => x.BookingTimelineAttractionId == locationId && x.GuideId == Actor, ct);
-        var guideAlreadyHandled = checkin is not null
-            ? checkin.AttendanceStatus is AttractionCheckinStatus.CheckedIn or AttractionCheckinStatus.CheckedOut or AttractionCheckinStatus.Skipped
-            : location.Checkins.Count == 0 && location.AttendanceStatus is "CheckedIn" or "CheckedOut" or "Skipped";
+        var guideAlreadyHandled = checkin.AttendanceStatus is
+            AttractionCheckinStatus.CheckedIn or AttractionCheckinStatus.CheckedOut or AttractionCheckinStatus.Skipped;
         if (guideAlreadyHandled)
             throw new BookingException(409, "Điểm đến này đã được xử lý.");
 
@@ -229,17 +228,8 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         if (nextId != locationId)
             throw new BookingException(409, "Phải check-out hoặc bỏ qua điểm trước khi xử lý điểm tiếp theo.");
 
+        // Only update the existing routing row; check-in must never create an assignment.
         // No GPS, coordinates, location permission, or device-location payload.
-        if (checkin is null)
-        {
-            checkin = new BookingAttractionCheckin
-            {
-                BookingTimelineAttractionId = locationId,
-                GuideId = Actor,
-                AgencyId = agencyId
-            };
-            db.BookingAttractionCheckins.Add(checkin);
-        }
         var skipped = request.Status == "Skipped";
         var photoUrls = new List<string>(images.Count);
         foreach (var file in images)
@@ -255,7 +245,6 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
         checkin.AttendanceStatus = skipped ? AttractionCheckinStatus.Skipped : AttractionCheckinStatus.CheckedIn;
         checkin.CheckinTime = DateTime.UtcNow;
         checkin.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
-        location.GuideId = Actor;
         GuideLocationCheckinRules.SyncAttractionStatus(location);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
