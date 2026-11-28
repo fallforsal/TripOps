@@ -236,7 +236,10 @@ public sealed record BookingLocationDto(int Id,string Name,DateTime? Time,string
     string? OriginalName = null, string? ChangeReason = null,string? AgencyId=null,
     IReadOnlyList<string>? PhotoUrls = null, string? CheckinNote = null,
     IReadOnlyList<string>? CheckoutPhotoUrls = null, string? CheckoutNote = null,
-    DateTime? CheckoutAt = null);
+    DateTime? CheckoutAt = null,
+    DateOnly? ScheduledDate = null, bool? IsDateAllowed = null,
+    bool? CanCheckIn = null, bool? CanCheckOut = null, bool? CanSkip = null,
+    string? ActionBlockedReason = null);
 public sealed record BookingSupplierDto(
     string? Address,
     string? ContactPhone,

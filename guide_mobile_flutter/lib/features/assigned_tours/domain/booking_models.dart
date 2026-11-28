@@ -68,7 +68,9 @@ class Passenger {
 
 class TourStop {
   const TourStop({required this.id, required this.name, required this.status, this.time, this.photoUrls = const [], this.checkinNote,
-    this.checkoutPhotoUrls = const [], this.checkoutNote, this.checkoutAt});
+    this.checkoutPhotoUrls = const [], this.checkoutNote, this.checkoutAt,
+    this.scheduledDate, this.isDateAllowed = true, this.canCheckIn,
+    this.canCheckOut, this.canSkip, this.actionBlockedReason});
   final int id;
   final String name;
   final String status;
@@ -78,6 +80,10 @@ class TourStop {
   final List<String> checkoutPhotoUrls;
   final String? checkoutNote;
   final DateTime? checkoutAt;
+  final DateTime? scheduledDate;
+  final bool isDateAllowed;
+  final bool? canCheckIn, canCheckOut, canSkip;
+  final String? actionBlockedReason;
   factory TourStop.fromJson(Map<String, dynamic> j) => TourStop(
     id: (j['id'] as num).toInt(),
     name: (j['name'] ?? '').toString(),
@@ -88,6 +94,13 @@ class TourStop {
     checkoutPhotoUrls: (j['checkoutPhotoUrls'] as List<dynamic>? ?? []).whereType<String>().toList(),
     checkoutNote: j['checkoutNote']?.toString(),
     checkoutAt: j['checkoutAt'] is String ? DateTime.tryParse(j['checkoutAt'] as String) : null,
+    scheduledDate: j['scheduledDate'] == null ? null : parseCalendarDate(j['scheduledDate']),
+    // API data without explicit per-stop permission is read-only.
+    isDateAllowed: j['isDateAllowed'] == true,
+    canCheckIn: j['canCheckIn'] == true,
+    canCheckOut: j['canCheckOut'] == true,
+    canSkip: j['canSkip'] == true,
+    actionBlockedReason: j['actionBlockedReason']?.toString(),
   );
 }
 

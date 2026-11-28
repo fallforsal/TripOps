@@ -122,6 +122,43 @@ public sealed partial class BookingFlowTests
         detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
         Assert.Equal(secondId, detail!.NextLocationCheckInId);
 
+        // Completing every assigned stop on day one cannot unlock a future day.
+        (await Check(secondId)).EnsureSuccessStatusCode();
+        (await Checkout(secondId)).EnsureSuccessStatusCode();
+        detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.Equal(thirdId, detail!.NextLocationCheckInId);
+        var future = detail.SnapshotDays!.Single(d => d.DayNumber == 2).Locations.Single();
+        Assert.Equal(DateOnly.FromDateTime(today.AddDays(1)), future.ScheduledDate);
+        Assert.False(future.IsDateAllowed);
+        Assert.False(future.CanCheckIn);
+        Assert.False(future.CanCheckOut);
+        Assert.False(future.CanSkip);
+        Assert.Equal(HttpStatusCode.Conflict, (await Check(thirdId)).StatusCode);
+        using (var skipForm = PhotoForm(1, status: "Skipped"))
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await guide.PostAsync($"/api/v1/guide/bookings/{bookingId}/locations/{thirdId}/check-in-with-images", skipForm)).StatusCode);
+
+        // Even an invalid previously checked-in future stop cannot be checked out early.
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var row = await db.BookingAttractionCheckins.SingleAsync(c => c.BookingTimelineAttractionId == thirdId && c.GuideId == "guide1");
+            Assert.Null(row.CheckinTime);
+            row.AttendanceStatus = AttractionCheckinStatus.CheckedIn;
+            row.CheckinTime = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Checkout(thirdId)).StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TripOpsDbContext>();
+            var row = await db.BookingAttractionCheckins.SingleAsync(c => c.BookingTimelineAttractionId == thirdId && c.GuideId == "guide1");
+            Assert.Null(row.CheckoutTime);
+            row.AttendanceStatus = AttractionCheckinStatus.Pending;
+            row.CheckinTime = null;
+            await db.SaveChangesAsync();
+        }
+
         // Multi-day tour: the guide may still check in after the departure day.
         using (var scope = app.Services.CreateScope())
         {
@@ -130,10 +167,15 @@ public sealed partial class BookingFlowTests
             booking.StartDate = today.AddDays(-1);
             await db.SaveChangesAsync();
         }
-        (await Check(secondId)).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Conflict, (await Check(thirdId)).StatusCode);
-        (await Checkout(secondId)).EnsureSuccessStatusCode();
+        detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        var due = detail!.SnapshotDays!.Single(d => d.DayNumber == 2).Locations.Single();
+        Assert.Equal(DateOnly.FromDateTime(today), due.ScheduledDate);
+        Assert.True(due.IsDateAllowed);
+        Assert.True(due.CanCheckIn);
+        Assert.True(due.CanSkip);
         (await Check(thirdId)).EnsureSuccessStatusCode();
+        detail = await guide.GetFromJsonAsync<BookingDto>($"/api/v1/guide/bookings/{bookingId}");
+        Assert.True(detail!.SnapshotDays!.Single(d => d.DayNumber == 2).Locations.Single().CanCheckOut);
         (await Checkout(thirdId)).EnsureSuccessStatusCode();
 
         detail = await customer.GetFromJsonAsync<BookingDto>($"/api/v1/bookings/{bookingId}");

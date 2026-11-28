@@ -83,6 +83,26 @@ public sealed class GuideBookingRulesTests
     }
 
     [Fact]
+    public void Stop_date_uses_original_booking_start_and_Vietnam_midnight()
+    {
+        var booking = new Booking
+        {
+            StartDate = new DateTime(2026, 11, 28),
+            Timelines = [
+                new BookingTimeline { DayNumber = 1, Attractions = [new BookingTimelineAttraction { Id = 1 }] },
+                new BookingTimeline { DayNumber = 2, Attractions = [new BookingTimelineAttraction { Id = 2 }] }
+            ]
+        };
+        var before = new DateTime(2026, 11, 28, 16, 59, 59, DateTimeKind.Utc);
+        Assert.Equal(new DateOnly(2026, 11, 29), GuideLocationCheckinRules.ScheduledDate(booking, 2));
+        Assert.True(GuideLocationCheckinRules.IsStopDateReached(booking, 1, before));
+        Assert.False(GuideLocationCheckinRules.IsStopDateReached(booking, 2, before));
+        Assert.True(GuideLocationCheckinRules.IsStopDateReached(booking, 2, before.AddSeconds(1)));
+        Assert.True(GuideLocationCheckinRules.IsStopDateReached(booking, 1, before.AddDays(1)));
+        Assert.False(GuideLocationCheckinRules.IsStopDateReached(booking, 999, before));
+    }
+
+    [Fact]
     public void GuideLocationCheckin_RouteAndScheduleDoNotExpandWhenLastAssignmentIsCompleted()
     {
         var start = new DateTime(2026, 11, 19);

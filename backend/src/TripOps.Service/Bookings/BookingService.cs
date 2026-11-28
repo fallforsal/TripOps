@@ -321,12 +321,26 @@ public sealed partial class BookingService(BookingRepository repository, Account
             var sourceDays = dto.SnapshotDays?.Select(d => d with
                 { Locations = d.Locations.Where(l => ownedStopIds.Contains(l.Id)).ToArray() })
                 .Where(d => d.Locations.Count > 0);
+            var now = UtcNow;
+            var canOperate = GuideLocationCheckinRules.CanCheckIn(booking, actorId, ownAgency, now);
+            var nextStopId = GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, actorId, ownAgency);
             var guideDays = sourceDays?.Select(d => d with
             {
                 Locations = d.Locations.Select(l =>
                 {
                     var own = guideCheckinsByLocation[l.Id];
                     var photos = proofPhotos.GetValueOrDefault(own.Id);
+                    var scheduledDate = GuideLocationCheckinRules.ScheduledDate(booking, d.DayNumber);
+                    var dateAllowed = GuideLocationCheckinRules.IsDateReached(scheduledDate, now);
+                    var status = own.AttendanceStatus?.ToString() ?? "Pending";
+                    var isPending = status is not ("CheckedIn" or "CheckedOut" or "Skipped");
+                    var isTerminal = status is "CheckedOut" or "Skipped";
+                    var canAct = canOperate && dateAllowed && nextStopId == l.Id;
+                    var blockedReason = isTerminal ? null
+                        : !dateAllowed ? "Chưa đến ngày thực hiện của điểm đến này."
+                        : !canOperate ? "Tour không còn cho phép thao tác hoặc chưa khởi hành."
+                        : nextStopId != l.Id ? "Cần check-out hoặc bỏ qua điểm trước đó."
+                        : null;
                     return l with
                     {
                         AttendanceStatus = own.AttendanceStatus?.ToString() ?? "Pending",
@@ -334,7 +348,13 @@ public sealed partial class BookingService(BookingRepository repository, Account
                         CheckinNote = own.Note,
                         CheckoutPhotoUrls = photos.Checkout ?? [],
                         CheckoutNote = own.CheckoutNote,
-                        CheckoutAt = own.CheckoutTime
+                        CheckoutAt = own.CheckoutTime,
+                        ScheduledDate = scheduledDate,
+                        IsDateAllowed = dateAllowed,
+                        CanCheckIn = canAct && isPending,
+                        CanCheckOut = canAct && status == "CheckedIn" && !own.CheckoutTime.HasValue,
+                        CanSkip = canAct && isPending,
+                        ActionBlockedReason = blockedReason
                     };
                 }).ToArray()
             }).ToArray();
@@ -345,11 +365,11 @@ public sealed partial class BookingService(BookingRepository repository, Account
                 StartDate=schedule.StartDate,EndDate=schedule.EndDate,AgencyName=ownAgencyName,SnapshotDays=guideDays,
                 AttractionCheckins=dto.AttractionCheckins?.Where(c=>c.GuideId==actorId && c.AgencyId==ownAgency && ownedStopIds.Contains(c.LocationId)).ToArray(),
                 Participants=dto.Participants.Where(p=>p.AgencyId==ownAgency).ToArray(),TotalGuests=BookingAlliance.GuestCount(booking,ownAgency),
-                CanStartTour=GuideBookingRules.CanStartTour(booking,actorId,ownAgency,UtcNow),
-                CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,actorId,ownAgency,UtcNow),
+                CanStartTour=GuideBookingRules.CanStartTour(booking,actorId,ownAgency,now),
+                CanRecordAttendance=GuideBookingRules.CanRecordAttendance(booking,actorId,ownAgency,now),
                 AttendanceDate=schedule.StartDate,
-                CanCheckInLocations=GuideLocationCheckinRules.CanCheckIn(booking,actorId,ownAgency,UtcNow),
-                NextLocationCheckInId=GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking,actorId,ownAgency)};
+                CanCheckInLocations=canOperate,
+                NextLocationCheckInId=nextStopId};
         } else if(isOwner && !isAgency && !isAdmin) {
             dto=dto with {Incidents=dto.Incidents?.Select(i=>i with {EvidenceUrls=[]}).ToArray(),
                 Participants=dto.Participants.GroupBy(p=>p.ParticipantIndex).Select(g=> {

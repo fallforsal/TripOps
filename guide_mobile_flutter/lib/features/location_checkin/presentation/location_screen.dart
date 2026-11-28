@@ -51,12 +51,17 @@ class _LocationScreenState extends State<LocationScreen> {
   List<TourStop> get _stops => current.days.expand((day) => day.stops).toList();
 
   bool _allowed(TourStop stop, _StopAction action) {
-    if (!current.canCheckInLocations || current.nextLocationCheckInId != stop.id) {
+    if (!current.canCheckInLocations || !stop.isDateAllowed ||
+        current.nextLocationCheckInId != stop.id) {
       return false;
     }
-    if (action == _StopAction.checkout) return stop.status == 'CheckedIn';
-    return stop.status != 'CheckedIn' && stop.status != 'CheckedOut' &&
+    if (action == _StopAction.checkout) {
+      return stop.status == 'CheckedIn' && stop.canCheckOut != false;
+    }
+    final pending = stop.status != 'CheckedIn' && stop.status != 'CheckedOut' &&
         stop.status != 'Skipped';
+    return pending && (action == _StopAction.skip
+        ? stop.canSkip != false : stop.canCheckIn != false);
   }
 
   TourStop? _findStop(int id) {
@@ -204,7 +209,10 @@ class _LocationScreenState extends State<LocationScreen> {
     } finally {
       if (mounted) setState(() => busy = null);
     }
-    if (mounted && advanceTo != null && scrollGeneration == _scrollGeneration &&
+    final next = advanceTo == null ? null : _findStop(advanceTo);
+    if (mounted && advanceTo != null && next != null &&
+        (_allowed(next, _StopAction.checkin) || _allowed(next, _StopAction.checkout) ||
+          _allowed(next, _StopAction.skip)) && scrollGeneration == _scrollGeneration &&
         ModalRoute.of(context)?.isCurrent == true) {
       unawaited(_scrollToNext(advanceTo, stop.id));
     }
@@ -359,13 +367,16 @@ class _LocationScreenState extends State<LocationScreen> {
             if (stop == null) return LocationDayHeading(day: row.day);
             final canCheck = _allowed(stop, _StopAction.checkin);
             final canCheckout = _allowed(stop, _StopAction.checkout);
+            final canSkip = _allowed(stop, _StopAction.skip);
             final locked = busy != null || _openingSheet || _refreshing;
             final retryAction = errorStop == stop.id ? _errorAction : null;
             return GuideStopCard(
               key: _anchors.putIfAbsent(stop.id, () => GlobalKey()),
               stop: stop, order: row.order, last: row.last,
-              dateAllowed: enabledByDate, isNext: current.nextLocationCheckInId == stop.id,
+              dateAllowed: enabledByDate && stop.isDateAllowed,
+              isNext: current.nextLocationCheckInId == stop.id,
               canCheck: canCheck && !locked, canCheckout: canCheckout && !locked,
+              canSkip: canSkip && !locked,
               busy: busy == stop.id, expanded: _expanded.contains(stop.id),
               onExpand: () => setState(() {
                 if (!_expanded.add(stop.id)) _expanded.remove(stop.id);

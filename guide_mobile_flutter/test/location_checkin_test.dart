@@ -129,6 +129,46 @@ void main() {
     expect(find.byKey(const ValueKey('checkin-1')), findsNothing);
   });
 
+  testWidgets('future next stop is locked even if guide stage already started', (tester) async {
+    final dto = BookingDetail.fromJson({
+      'id': 123, 'bookingCode': 'BK-123', 'tourName': 'Tour Demo',
+      'status': 'Confirmed', 'startDate': '2026-11-28', 'endDate': '2026-11-29',
+      'canCheckInLocations': true, 'nextLocationCheckInId': 3,
+      'snapshotDays': [
+        {'dayNumber': 2, 'title': 'Ngày 2', 'locations': [
+          {'id': 3, 'name': 'Thác Datanla', 'attendanceStatus': 'Pending',
+            'scheduledDate': '2026-11-29', 'isDateAllowed': false,
+            'canCheckIn': false, 'canCheckOut': false, 'canSkip': false}
+        ]}
+      ]
+    });
+    await showScreen(tester, dto);
+    expect(find.byKey(const ValueKey('checkin-3')), findsNothing);
+    expect(find.byKey(const ValueKey('skip-3')), findsNothing);
+    expect(find.byKey(const ValueKey('checkout-3')), findsNothing);
+    expect(find.textContaining('Khả dụng từ 29/11/2026'), findsOneWidget);
+  });
+
+  testWidgets('server date unlocks assigned day two without using guide start date', (tester) async {
+    final dto = BookingDetail.fromJson({
+      'id': 123, 'bookingCode': 'BK-123', 'tourName': 'Tour Demo',
+      'status': 'Confirmed', 'startDate': '2026-11-29', 'endDate': '2026-11-29',
+      'canCheckInLocations': true, 'nextLocationCheckInId': 3,
+      'snapshotDays': [
+        {'dayNumber': 2, 'title': 'Ngày 2', 'locations': [
+          {'id': 3, 'name': 'Thác Datanla', 'attendanceStatus': 'Pending',
+            'scheduledDate': '2026-11-29', 'isDateAllowed': true,
+            'canCheckIn': true, 'canCheckOut': false, 'canSkip': true}
+        ]}
+      ]
+    });
+    await showScreen(tester, dto);
+    expect(tester.widget<TextButton>(
+      find.byKey(const ValueKey('checkin-3'))).onPressed, isNotNull);
+    expect(tester.widget<TextButton>(
+      find.byKey(const ValueKey('skip-3'))).onPressed, isNotNull);
+  });
+
   testWidgets('older backend without permission flag disables check-in',
       (tester) async {
     final dto = BookingDetail.fromJson({

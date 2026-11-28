@@ -54,6 +54,19 @@ public static class GuideLocationCheckinRules
         OrderedStopsForGuide(booking, guideId, agencyId)
             .FirstOrDefault(a => GuideStopStatus(a, guideId) is not ("CheckedOut" or "Skipped"))?.Id;
 
+    // Calendar date comes from the original booking, never the guide's stage start.
+    public static DateOnly? ScheduledDate(Booking booking, int dayNumber) =>
+        dayNumber < 1 ? null : DateOnly.FromDateTime(booking.StartDate.Date.AddDays(dayNumber - 1));
+
+    public static bool IsDateReached(DateOnly? scheduledDate, DateTime utcNow) =>
+        scheduledDate is { } date && date <= DateOnly.FromDateTime(PaymentRules.VietnamDate(utcNow));
+
+    public static bool IsStopDateReached(Booking booking, int locationId, DateTime utcNow)
+    {
+        var day = booking.Timelines.SingleOrDefault(d => d.Attractions.Any(a => a.Id == locationId));
+        return day is not null && IsDateReached(ScheduledDate(booking, day.DayNumber), utcNow);
+    }
+
     public static bool CanCheckIn(Booking booking, DateTime utcNow) =>
         booking.StartDate.Date <= PaymentRules.VietnamDate(utcNow) &&
         booking.Status is BookingStatus.Confirmed or BookingStatus.Paid or BookingStatus.InProgress;

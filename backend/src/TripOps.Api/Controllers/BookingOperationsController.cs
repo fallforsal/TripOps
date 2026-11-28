@@ -157,8 +157,11 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
             throw new BookingException(403, "HDV chỉ check-out điểm thuộc chặng công ty mình.");
         var checkin = location.Checkins.SingleOrDefault(c => c.GuideId == Actor && c.AgencyId == agencyId)
             ?? throw new BookingException(403, "Bạn chưa được phân công tại địa điểm này.");
-        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
+        var now = DateTime.UtcNow;
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, now))
             throw new BookingException(409, "Tour chưa khởi hành hoặc đã đóng.");
+        if (!GuideLocationCheckinRules.IsStopDateReached(booking, locationId, now))
+            throw new BookingException(409, "Chưa đến ngày thực hiện của điểm đến này.");
         if (checkin.AttendanceStatus != AttractionCheckinStatus.CheckedIn ||
             checkin.CheckoutTime.HasValue ||
             GuideLocationCheckinRules.NextUncheckedStopIdForGuide(booking, Actor, agencyId) != locationId)
@@ -216,8 +219,11 @@ public sealed class GuideOperationsController(TripOpsDbContext db, BookingServic
                 ? "Bỏ qua điểm dừng bắt buộc có ảnh chụp camera."
                 : "Check-in bắt buộc có ảnh chụp camera.");
         // Check ownership before lifecycle rules, including before departure.
-        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, DateTime.UtcNow))
+        var now = DateTime.UtcNow;
+        if (!GuideLocationCheckinRules.CanCheckIn(booking, Actor, agencyId, now))
             throw new BookingException(409, "Chưa đến ngày khởi hành hoặc tour đã đóng, không thể check-in.");
+        if (!GuideLocationCheckinRules.IsStopDateReached(booking, locationId, now))
+            throw new BookingException(409, "Chưa đến ngày thực hiện của điểm đến này.");
 
         var guideAlreadyHandled = checkin.AttendanceStatus is
             AttractionCheckinStatus.CheckedIn or AttractionCheckinStatus.CheckedOut or AttractionCheckinStatus.Skipped;

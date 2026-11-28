@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/tripops_dates.dart';
 import '../../../core/widgets/guide_glass.dart';
 import '../../assigned_tours/domain/booking_models.dart';
 import 'location_evidence_gallery.dart';
@@ -59,7 +60,9 @@ class LocationDayHeading extends StatelessWidget {
       ),
       const SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Ngày ${day.dayNumber} · ${day.stops.length} điểm dừng',
+        Text('Ngày ${day.dayNumber}'
+          '${day.stops.isNotEmpty && day.stops.first.scheduledDate != null ? ' · ${vnDate(day.stops.first.scheduledDate!)}' : ''}'
+          ' · ${day.stops.length} điểm dừng',
           style: const TextStyle(fontSize: 12, color: muted)),
         Text(day.title, style: const TextStyle(
           fontSize: 16, fontWeight: FontWeight.w700, color: ink,
@@ -74,7 +77,7 @@ class GuideStopCard extends StatelessWidget {
     super.key,
     required this.stop, required this.order, required this.last,
     required this.dateAllowed, required this.isNext,
-    required this.canCheck, required this.canCheckout,
+    required this.canCheck, required this.canCheckout, this.canSkip,
     required this.busy, required this.expanded, required this.onExpand,
     required this.onCheck, required this.onCheckout, required this.onSkip,
     required this.onIncident, required this.cache, this.error, this.onRetry,
@@ -82,6 +85,7 @@ class GuideStopCard extends StatelessWidget {
   final TourStop stop;
   final int order;
   final bool last, dateAllowed, isNext, canCheck, canCheckout, busy, expanded;
+  final bool? canSkip;
   final VoidCallback onExpand, onCheck, onCheckout, onSkip, onIncident;
   final LocationPhotoCache cache;
   final String? error;
@@ -104,14 +108,18 @@ class GuideStopCard extends StatelessWidget {
     final hasNote = (stop.checkinNote?.trim().isNotEmpty ?? false) ||
         (stop.checkoutNote?.trim().isNotEmpty ?? false);
     final hasProof = photos > 0 || hasNote || stop.checkoutAt != null;
+    final scheduledDate = stop.scheduledDate;
+    final futureReason = !stop.isDateAllowed && scheduledDate != null
+        ? 'Chưa đến ngày thực hiện · Khả dụng từ ${vnDate(scheduledDate)}'
+        : null;
     final reason = switch (state) {
       _StopVisual.completed => 'Đã hoàn thành check-out',
       _StopVisual.skipped => 'Đã bỏ qua điểm này',
-      _StopVisual.visiting when !dateAllowed => 'Chỉ xem · Tour không cho phép check-out',
+      _StopVisual.visiting when !dateAllowed => futureReason ?? 'Chỉ xem · Tour không cho phép check-out',
       _StopVisual.visiting when !isNext => 'Chờ backend cho phép check-out',
       _StopVisual.visiting => 'Đang ở điểm này · cần check-out',
       _StopVisual.ready => 'Sẵn sàng check-in hoặc bỏ qua',
-      _StopVisual.waiting when !dateAllowed => 'Chưa đến ngày khởi hành hoặc tour đã khóa',
+      _StopVisual.waiting when !dateAllowed => futureReason ?? 'Chưa đến ngày khởi hành hoặc tour đã khóa',
       _StopVisual.waiting => 'Cần check-out điểm trước đó',
     };
     final time = stop.time;
@@ -192,7 +200,7 @@ class GuideStopCard extends StatelessWidget {
           Expanded(child: GlassStopAction(
             actionKey: ValueKey('skip-${stop.id}'), label: 'Bỏ qua',
             icon: Icons.skip_next_rounded, color: muted,
-            onPressed: canCheck ? onSkip : null,
+            onPressed: (canSkip ?? canCheck) ? onSkip : null,
           )),
           const SizedBox(width: 6),
         ],
