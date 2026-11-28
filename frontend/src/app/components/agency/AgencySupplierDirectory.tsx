@@ -1,9 +1,9 @@
 import { NotificationMessage } from "@/app/components/ui/NotificationMessage";
 import { useEffect, useState } from "react";
-import { BookUser, Eye, Hotel, Loader2, MapPin, Pencil, Search, Trash2, UtensilsCrossed } from "lucide-react";
+import { BookUser, Eye, Hotel, Loader2, MapPin, Pencil, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "@/app/lib/notifications";
 import type { AgencySupplier, SupplierInput } from "@/app/services/wf02Tours";
-import { agencySuppliers, deleteAgencySupplier, getAgencySupplier, updateAgencySupplier } from "@/app/services/wf02Tours";
+import { agencySuppliers, createAgencySupplier, deleteAgencySupplier, getAgencySupplier, updateAgencySupplier } from "@/app/services/wf02Tours";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -43,6 +43,7 @@ export function AgencySupplierDirectory() {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [viewing, setViewing] = useState<AgencySupplier | null>(null);
   const [editing, setEditing] = useState<AgencySupplier | null>(null);
+  const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<SupplierInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -78,20 +79,41 @@ export function AgencySupplierDirectory() {
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể tải nhà cung cấp."); }
     finally { setLoadingDetailId(null); }
   };
+  const addSupplier = () => {
+    setEditing(null);
+    setDraft({ type: "HOTEL", name: "", address: "", area: "", contactName: "", contactPhone: "",
+      contactEmail: "", starRating: null, referencePrice: null, conditions: "", notes: "", status: "ACTIVE" });
+    setEditError("");
+    setCreating(true);
+  };
+  const closeSupplierForm = () => {
+    setCreating(false);
+    setEditing(null);
+    setDraft(null);
+    setEditError("");
+  };
   const saveSupplier = async () => {
-    if (!editing || !draft || saving) return;
-    if (!draft.name?.trim() || !draft.area?.trim() && !draft.address?.trim() ||
-        !draft.referencePrice || draft.referencePrice <= 0) {
-      setEditError("Cần tên, địa chỉ hoặc khu vực, và giá tham khảo lớn hơn 0."); return;
+    if ((!creating && !editing) || !draft || saving) return;
+    if (!draft.name?.trim() || (!draft.area?.trim() && !draft.address?.trim()) ||
+        (draft.referencePrice != null && draft.referencePrice <= 0)) {
+      setEditError("Cần tên, địa chỉ hoặc khu vực; giá tham khảo nếu nhập phải lớn hơn 0."); return;
     }
     setSaving(true); setEditError("");
     try {
-      const updated = await updateAgencySupplier(editing.id, draft);
-      setSuppliers((items) => updated.status === "ARCHIVED"
-        ? items.filter((item) => item.id !== updated.id)
-        : items.map((item) => item.id === updated.id ? updated : item));
-      setEditing(null); setDraft(null); toast.success("Đã cập nhật nhà cung cấp.");
-    } catch (error) { setEditError(error instanceof Error ? error.message : "Không thể cập nhật nhà cung cấp."); }
+      if (creating) {
+        const created = await createAgencySupplier({ ...draft, name: draft.name.trim(), status: "ACTIVE" });
+        setSuppliers((items) => [created, ...items]);
+        setSearch(""); setFilter("ALL");
+        toast.success("Đã thêm nhà cung cấp vào danh bạ.");
+      } else if (editing) {
+        const updated = await updateAgencySupplier(editing.id, draft);
+        setSuppliers((items) => updated.status === "ARCHIVED"
+          ? items.filter((item) => item.id !== updated.id)
+          : items.map((item) => item.id === updated.id ? updated : item));
+        toast.success("Đã cập nhật nhà cung cấp.");
+      }
+      closeSupplierForm();
+    } catch (error) { setEditError(error instanceof Error ? error.message : "Không thể lưu nhà cung cấp."); }
     finally { setSaving(false); }
   };
   const confirmDelete = async () => {
@@ -124,6 +146,9 @@ export function AgencySupplierDirectory() {
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">Khách sạn và nhà hàng riêng của Agency, lưu lại để lựa chọn khi thiết kế tour.</p>
         </div>
+        <Button type="button" onClick={addSupplier} className="gap-2 bg-[#075985] text-white hover:bg-[#0369a1]">
+          <Plus className="h-4 w-4" />Thêm nhà cung cấp
+        </Button>
       </header>
 
       <section aria-label="Danh sách nhà cung cấp" className="overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white">
@@ -182,6 +207,7 @@ export function AgencySupplierDirectory() {
             <h2 className="font-semibold text-slate-800">{suppliers.length ? "Không tìm thấy nhà cung cấp" : "Danh bạ chưa có nhà cung cấp"}</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{suppliers.length ? "Thử đổi từ khóa hoặc chọn loại nhà cung cấp khác." : "Chưa có khách sạn hoặc nhà hàng nào trong danh bạ."}</p>
             {suppliers.length > 0 && <Button variant="outline" className="mt-5" onClick={resetFilters}>Xóa bộ lọc</Button>}
+            {suppliers.length === 0 && <Button type="button" className="mt-5 gap-2 bg-[#075985] text-white hover:bg-[#0369a1]" onClick={addSupplier}><Plus className="h-4 w-4" />Thêm nhà cung cấp</Button>}
           </div>
         )}
         <footer className="flex flex-wrap justify-between gap-2 border-t border-slate-200 bg-slate-50/50 px-5 py-3.5 text-xs text-slate-500">
@@ -211,15 +237,24 @@ export function AgencySupplierDirectory() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !saving) { setEditing(null); setDraft(null); } }}>
+      <Dialog open={creating || !!editing} onOpenChange={(open) => { if (!open && !saving) closeSupplierForm(); }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto bg-white text-slate-900 sm:max-w-2xl">
-          <DialogHeader><DialogTitle>Chỉnh sửa {editing?.name}</DialogTitle><DialogDescription>Thông tin này chỉ thuộc danh bạ Agency. Tour đã lưu giữ snapshot riêng.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{creating ? "Thêm nhà cung cấp" : `Chỉnh sửa ${editing?.name}`}</DialogTitle>
+            <DialogDescription>Thông tin này chỉ thuộc danh bạ Agency và có thể chọn khi thiết kế tour.</DialogDescription>
+          </DialogHeader>
           {draft && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {creating && <label className="text-sm sm:col-span-2">Loại nhà cung cấp
+              <select className="mt-1 w-full rounded-md border border-slate-300 bg-white p-2" value={draft.type}
+                onChange={(e) => setDraft({ ...draft, type: e.target.value as AgencySupplier["type"], starRating: e.target.value === "HOTEL" ? draft.starRating : null })}>
+                <option value="HOTEL">Khách sạn / Lưu trú</option><option value="RESTAURANT">Nhà hàng / Ẩm thực</option>
+              </select>
+            </label>}
             {([
               ["name", "Tên nhà cung cấp"], ["area", "Khu vực"], ["address", "Địa chỉ"],
               ["contactName", "Người liên hệ"], ["contactPhone", "Số điện thoại"], ["contactEmail", "Email"],
             ] as const).map(([field, label]) => <label key={field} className="text-sm">{label}
-              <Input className="mt-1" value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
+              <Input className="mt-1" type={field === "contactEmail" ? "email" : "text"} value={draft[field] || ""} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />
             </label>)}
             {draft.type === "HOTEL" && <label className="text-sm">Số sao
               <Input type="number" min="1" max="5" className="mt-1" value={draft.starRating ?? ""}
@@ -237,15 +272,15 @@ export function AgencySupplierDirectory() {
               <textarea className="mt-1 w-full rounded-md border p-2" rows={3} value={draft.notes || ""}
                 onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
             </label>
-            <label className="text-sm">Trạng thái
+            {!creating && <label className="text-sm">Trạng thái
               <select className="mt-1 w-full rounded-md border p-2" value={draft.status || "ACTIVE"}
                 onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
                 <option value="ACTIVE">Đang dùng</option><option value="ARCHIVED">Lưu trữ</option>
               </select>
-            </label>
+            </label>}
             {editError && <NotificationMessage tone="error" message={editError} />}
-            <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="outline" disabled={saving} onClick={() => { setEditing(null); setDraft(null); }}>Hủy</Button>
-              <Button disabled={saving} onClick={() => void saveSupplier()}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></div>
+            <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="outline" disabled={saving} onClick={closeSupplierForm}>Hủy</Button>
+              <Button type="button" disabled={saving} className="bg-[#075985] text-white hover:bg-[#0369a1]" onClick={() => void saveSupplier()}>{saving ? "Đang lưu..." : creating ? "Thêm vào danh bạ" : "Lưu thay đổi"}</Button></div>
           </div>}
         </DialogContent>
       </Dialog>
